@@ -62,17 +62,17 @@ public final class TenantProjectStore {
     }
 
     public Mono<Project> find(UUID id) {
-      return sql("SELECT * FROM taska.projects WHERE tenant_id=:tenant AND id=:id")
+      return sql("SELECT * FROM taska.projects WHERE tenant_id=:tenant AND admission_state='OPEN' AND id=:id")
           .bind("id", id).map((r,m) -> project(r)).one();
     }
 
     public Mono<Project> lock(UUID id) {
-      return sql("SELECT * FROM taska.projects WHERE tenant_id=:tenant AND id=:id FOR UPDATE")
+      return sql("SELECT * FROM taska.projects WHERE tenant_id=:tenant AND admission_state='OPEN' AND id=:id FOR UPDATE")
           .bind("id", id).map((r,m) -> project(r)).one();
     }
 
     public Mono<Project> findByKey(String key) {
-      return sql("SELECT * FROM taska.projects WHERE tenant_id=:tenant AND project_key=:key")
+      return sql("SELECT * FROM taska.projects WHERE tenant_id=:tenant AND admission_state='OPEN' AND project_key=:key")
           .bind("key", key).map((r,m) -> project(r)).one();
     }
 
@@ -80,14 +80,14 @@ public final class TenantProjectStore {
       return sql("""
           SELECT p.* FROM taska.projects p
           JOIN taska.project_members pm ON pm.tenant_id=p.tenant_id AND pm.project_id=p.id
-          WHERE p.tenant_id=:tenant AND pm.tenant_id=:tenant AND pm.user_id=:user AND p.archived_at IS NULL
+          WHERE p.tenant_id=:tenant AND pm.tenant_id=:tenant AND pm.user_id=:user AND p.archived_at IS NULL AND p.admission_state='OPEN'
           ORDER BY p.created_at,p.id
           """).bind("user", user).map((r,m) -> project(r)).all();
     }
 
     public Flux<ProjectInfo> infoBatch(Collection<UUID> ids) {
       if (ids.isEmpty()) return Flux.empty();
-      return sql("SELECT id,project_key,name FROM taska.projects WHERE tenant_id=:tenant AND id IN (:ids)")
+      return sql("SELECT id,project_key,name FROM taska.projects WHERE tenant_id=:tenant AND admission_state='OPEN' AND id IN (:ids)")
           .bind("ids", ids).map((r,m) -> new ProjectInfo(r.get("id",UUID.class),
               r.get("project_key",String.class),r.get("name",String.class))).all();
     }

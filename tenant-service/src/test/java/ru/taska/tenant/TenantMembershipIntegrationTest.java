@@ -853,6 +853,14 @@ class TenantMembershipIntegrationTest {
                         .setMaximumCreated("0")
                         .setVersion("1")
                         .setEntitlementVersion("1")
+                        .build()),
+            t ->
+                Mono.just(
+                    ru.taska.api.b2b.v1.QuotaUsage.newBuilder()
+                        .setKind(ru.taska.api.b2b.v1.QuotaUsage.KindValue.KIND_PROJECT)
+                        .setUsed("0")
+                        .setReserved("0")
+                        .setVersion("1")
                         .build()));
     var server =
         io.grpc.netty.shaded.io.grpc.netty.NettyServerBuilder.forAddress(

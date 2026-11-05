@@ -70,7 +70,7 @@ class TenantProjectStorageIntegrationTest {
   }
   static void sql(String text) { operator.sql(text).fetch().rowsUpdated().block(WAIT); }
   @AfterAll static void close() { if(pool!=null)pool.disposeLater().block(WAIT); }
-  @BeforeEach void reset() { sql("TRUNCATE "+TABLES.stream().map(t->"taska."+t).collect(java.util.stream.Collectors.joining(","))+" CASCADE"); }
+  @BeforeEach void reset() { sql("TRUNCATE taska.resource_operation_receipts"); sql("TRUNCATE "+TABLES.stream().map(t->"taska."+t).collect(java.util.stream.Collectors.joining(","))+" CASCADE"); }
 
   Project create(UUID tenant,String key) {
     return as(tenant,ACTOR,store.execute(s -> s.insertProject(UUID.randomUUID(),key,"Test",ACTOR)
@@ -187,7 +187,7 @@ class TenantProjectStorageIntegrationTest {
     for(String statement:List.of("SET ROLE taska_project_migrator","TRUNCATE taska.projects","ALTER TABLE taska.projects DISABLE ROW LEVEL SECURITY",
         "CREATE TABLE taska.unsafe(id int)","UPDATE taska.outbox_events SET status='PUBLISHED'"))
       assertThrows(Exception.class,()->raw.sql(statement).then().block(WAIT));
-    assertEquals((long) TABLES.size()+2,operator.sql("SELECT count(*) n FROM pg_class WHERE relnamespace='taska'::regnamespace AND relrowsecurity AND relforcerowsecurity")
+    assertEquals((long) TABLES.size()+3,operator.sql("SELECT count(*) n FROM pg_class WHERE relnamespace='taska'::regnamespace AND relrowsecurity AND relforcerowsecurity")
         .map((r,m)->r.get("n",Long.class)).one().block(WAIT));
     for(String table:TABLES) assertEquals(0L,raw.sql("SELECT count(*) n FROM taska."+table).map((r,m)->r.get("n",Long.class)).one().block(WAIT));
   }

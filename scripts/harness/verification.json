@@ -589,7 +589,8 @@
           "TenantCreationLifecycleIntegrationTest",
           "TenantProvisioningIntegrationTest",
           "TenantProvisioningRpcIntegrationTest",
-          "SeatQuotaIntegrationTest"
+          "SeatQuotaIntegrationTest",
+          "ProjectQuotaIntegrationTest"
         ],
         "noTestsReason": null
       },
