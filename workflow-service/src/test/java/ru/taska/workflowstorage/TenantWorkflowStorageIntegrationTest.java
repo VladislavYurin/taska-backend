@@ -348,9 +348,9 @@ class TenantWorkflowStorageIntegrationTest {
 
   @Test void tenantProfileStartsHealthyWithoutLegacyRepositoriesOrResolvers() throws Exception {
     try(var app=new SpringApplicationBuilder(WorkflowServiceApplication.class).web(WebApplicationType.REACTIVE).profiles("tenant-storage").run(
-        "--server.port=0","--spring.r2dbc.url=r2dbc:postgresql://"+pg.getHost()+":"+pg.getMappedPort(5432)+"/"+pg.getDatabaseName(),
+        "--server.port=0","--server.address=127.0.0.1","--spring.r2dbc.url=r2dbc:postgresql://"+pg.getHost()+":"+pg.getMappedPort(5432)+"/"+pg.getDatabaseName(),
         "--spring.r2dbc.username=taska_workflow_app","--spring.r2dbc.password="+APP,"--spring.liquibase.url="+pg.getJdbcUrl(),
-        "--spring.liquibase.user=taska_workflow_deployer","--spring.liquibase.password="+DEPLOY,"--spring.grpc.server.port=0")) {
+        "--spring.liquibase.user=taska_workflow_deployer","--spring.liquibase.password="+DEPLOY,"--spring.grpc.server.port=0","--spring.grpc.server.host=127.0.0.1")) {
       assertNotNull(app.getBean(TenantWorkflowStore.class));
       assertTrue(app.getBeansOfType(ru.taska.repository.WorkflowRepository.class).isEmpty());
       assertTrue(app.getBeansOfType(ru.taska.service.WorkflowResolver.class).isEmpty());
