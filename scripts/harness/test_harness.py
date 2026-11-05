@@ -262,6 +262,7 @@ class HarnessTest(unittest.TestCase):
         self.assertEqual(len(self.manifest['modules']), 16)
         billing = next(c for c in self.manifest['checks'] if c['id'] == 'billing-service.verify')
         self.assertIn('BillingCatalogIntegrationTest', billing['reports']['selectors'])
+        self.assertIn('SubscriptionIntegrationTest', billing['reports']['selectors'])
         tenant = next(c for c in self.manifest['checks'] if c['id'] == 'tenant-service.verify')
         self.assertIn('TenantRegistryIntegrationTest', tenant['reports']['selectors'])
 

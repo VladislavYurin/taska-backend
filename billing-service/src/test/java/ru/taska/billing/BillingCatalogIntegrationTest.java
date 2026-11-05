@@ -870,7 +870,10 @@ class BillingCatalogIntegrationTest {
                     .clientAuth(io.grpc.netty.shaded.io.netty.handler.ssl.ClientAuth.REQUIRE)
                     .build())
             .addService(
-                io.grpc.ServerInterceptors.intercept(new BillingCatalogRpc(catalog), interceptor))
+                io.grpc.ServerInterceptors.intercept(
+                    new BillingCatalogRpc(
+                        catalog, org.mockito.Mockito.mock(SubscriptionStore.class)),
+                    interceptor))
             .build()
             .start();
     var channel =

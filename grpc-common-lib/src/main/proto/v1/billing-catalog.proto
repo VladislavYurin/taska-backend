@@ -75,7 +75,56 @@ message PublishPlanVersionRpcRequest {
 // Catalog only. Subscription/payment RPCs are separate implementations.
 message ResolvePublishedPlanRpcRequest { RequestContext context = 1; string plan_version_id = 2; }
 
+message Subscription {
+  enum AutopayStateValue { AUTOPAY_STATE_UNSPECIFIED = 0; AUTOPAY_STATE_DISABLED = 1; AUTOPAY_STATE_CONSENTED = 2; AUTOPAY_STATE_SUSPENDED = 3; }
+  string tenant_id = 1;
+  string plan_version_id = 2;
+  string version = 3;
+  optional string current_period_id = 4;
+  // Exclusive end of current paid coverage; absent for FREE/before first payment.
+  // Expired history may retain a past end; field presence is not authorization.
+  optional string paid_through = 5;
+  optional int64 anchor_day = 6;
+  bool renewal_cancelled = 7;
+  optional string scheduled_plan_version_id = 8;
+  optional string scheduled_effective_at = 9;
+  AutopayStateValue autopay_state = 10;
+}
+
+message SubscriptionPeriod {
+  enum StateValue { STATE_UNSPECIFIED = 0; STATE_GRANTED = 1; STATE_REVOKED = 2; STATE_SUPERSEDED = 3; }
+  enum PaymentSourceValue { PAYMENT_SOURCE_UNSPECIFIED = 0; PAYMENT_SOURCE_PSP = 1; PAYMENT_SOURCE_WIRE = 2; }
+  string id = 1;
+  string tenant_id = 2;
+  string invoice_id = 3;
+  string plan_version_id = 4;
+  string starts_at = 5;
+  string ends_at = 6;
+  int64 anchor_day = 7;
+  StateValue state = 8;
+  string confirmed_at = 9;
+  PaymentSourceValue payment_source = 10;
+}
+
+message SubscriptionPeriodPage {
+  repeated SubscriptionPeriod items = 1;
+  optional string next_cursor = 2;
+}
+
+message GetSubscriptionRpcRequest {
+  RequestContext context = 1;
+  string tenant_id = 2;
+}
+
+message ListSubscriptionPeriodsRpcRequest {
+  RequestContext context = 1;
+  string tenant_id = 2;
+  PageRequest page = 3;
+}
+
 service BillingService {
+ rpc GetSubscription(GetSubscriptionRpcRequest) returns (Subscription);
+ rpc ListSubscriptionPeriods(ListSubscriptionPeriodsRpcRequest) returns (SubscriptionPeriodPage);
  rpc ResolvePublishedPlan(ResolvePublishedPlanRpcRequest) returns (PlanVersion);
  rpc ListBillingPlans(ListBillingPlansRpcRequest) returns (PlanVersionPage);
  rpc CreatePlanVersion(CreatePlanVersionRpcRequest) returns (PlanVersion);

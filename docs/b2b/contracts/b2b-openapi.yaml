@@ -5598,6 +5598,7 @@ components:
           type: string
           format: uuid
         paidThrough:
+          description: Exclusive end instant of current paid coverage. Absent for FREE and before first payment. Expired history may retain a past end; presence alone grants no access.
           type: string
           format: date-time
         anchorDay:

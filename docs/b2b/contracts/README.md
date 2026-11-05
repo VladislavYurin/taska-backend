@@ -180,3 +180,7 @@ TAS-310 implements the additive `TenantService.CreateTenant/GetTenant` subset in
 ### Implemented catalog subset (TAS-313)
 
 [billing-catalog.proto](../../../grpc-common-lib/src/main/proto/v1/billing-catalog.proto) implements draft/publish/list plus internal published-version resolution; [runtime boundaries](../../../billing-service/README.md). Catalog list selects only the latest published version per code. Additive `kind` fields distinguish FREE/PAID without a price-based eligibility rule (TAS-501 A16). Existing numbers are preserved. Public REST adapters and invoice/entitlement/payment activation remain separate from this catalog backend.
+
+### Subscription/coverage backend (TAS-314)
+
+The existing BillingService now implements `GetSubscription` and `ListSubscriptionPeriods` with unchanged blueprint field numbers. [Stored model, internal evidence ports, read semantics and activation prerequisites](../../../billing-service/SUBSCRIPTIONS.md). `paidThrough` is the exclusive end instant of the current paid coverage, absent for FREE/before first payment; future renewals do not apply early. Expired history can retain the past end and never authorizes access by field presence alone.

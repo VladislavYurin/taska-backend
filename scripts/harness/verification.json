@@ -1059,7 +1059,8 @@
         "directory": "billing-service/target/surefire-reports",
         "selectors": [
           "*",
-          "BillingCatalogIntegrationTest"
+          "BillingCatalogIntegrationTest",
+          "SubscriptionIntegrationTest"
         ],
         "noTestsReason": null
       },

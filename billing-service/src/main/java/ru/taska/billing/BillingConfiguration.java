@@ -9,13 +9,23 @@ import io.r2dbc.spi.ConnectionFactory;
 import java.time.Clock;
 import java.time.Duration;
 import java.util.Map;
+import java.util.UUID;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.DependsOn;
 import org.springframework.grpc.server.GlobalServerInterceptor;
+import org.springframework.r2dbc.core.DatabaseClient;
+import reactor.core.publisher.Mono;
 import ru.taska.api.b2b.v1.BillingServiceGrpc;
+import ru.taska.billing.SubscriptionDependencies.CoverageEvidence;
+import ru.taska.billing.SubscriptionDependencies.FinancialReadAuthority;
+import ru.taska.billing.SubscriptionDependencies.RevocationEvidence;
+import ru.taska.billing.SubscriptionDependencies.SettlementEvidenceAuthority;
+import ru.taska.exception.DomainStatus;
+import ru.taska.r2dbc.TenantTransactionExecutor;
 import ru.taska.security.tenant.RpcContextSecurity;
 import ru.taska.security.tenant.TenantServerInterceptor;
 
@@ -86,6 +96,43 @@ public class BillingConfiguration {
   }
 
   @Bean
+  @ConditionalOnMissingBean
+  FinancialReadAuthority subscriptionReadAuthority() {
+    return context ->
+        Mono.error(CatalogErrors.fail(DomainStatus.UNAVAILABLE, "DEPENDENCY_UNAVAILABLE"));
+  }
+
+  @Bean
+  @ConditionalOnMissingBean
+  SettlementEvidenceAuthority subscriptionSettlementAuthority() {
+    return new SettlementEvidenceAuthority() {
+      public Mono<CoverageEvidence> confirmed(DatabaseClient db, UUID tenant, UUID evidence) {
+        return Mono.error(CatalogErrors.fail(DomainStatus.UNAVAILABLE, "DEPENDENCY_UNAVAILABLE"));
+      }
+
+      public Mono<RevocationEvidence> reversed(DatabaseClient db, UUID tenant, UUID evidence) {
+        return Mono.error(CatalogErrors.fail(DomainStatus.UNAVAILABLE, "DEPENDENCY_UNAVAILABLE"));
+      }
+    };
+  }
+
+  @Bean
+  @DependsOn("safeRuntimeRole")
+  SubscriptionStore subscriptions(
+      ConnectionFactory factory,
+      FinancialReadAuthority readers,
+      SettlementEvidenceAuthority evidence,
+      @Value("${BILLING_CATALOG_CURSOR_KEY:}") String cursorKey) {
+    var clock = Clock.systemUTC();
+    return new SubscriptionStore(
+        new TenantTransactionExecutor(factory),
+        readers,
+        evidence,
+        clock,
+        new PeriodCursor(cursorKey, clock));
+  }
+
+  @Bean
   @GlobalServerInterceptor
   ServerInterceptor registrySecurity(
       ObjectProvider<RpcContextSecurity> provider,
@@ -95,6 +142,10 @@ public class BillingConfiguration {
       return new TenantServerInterceptor(
           security,
           Map.of(
+              BillingServiceGrpc.getGetSubscriptionMethod().getFullMethodName(),
+                  new RpcContextSecurity.Policy(true, false),
+              BillingServiceGrpc.getListSubscriptionPeriodsMethod().getFullMethodName(),
+                  new RpcContextSecurity.Policy(true, false),
               BillingServiceGrpc.getResolvePublishedPlanMethod().getFullMethodName(),
                   new RpcContextSecurity.Policy(false, false),
               BillingServiceGrpc.getListBillingPlansMethod().getFullMethodName(),
