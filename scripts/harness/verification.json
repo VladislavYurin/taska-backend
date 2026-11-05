@@ -1073,6 +1073,7 @@
           "SubscriptionIntegrationTest",
           "EntitlementIntegrationTest",
           "SubscriptionCalendarTest",
+          "RenewalSchedulingTest",
           "RenewalCalendarIntegrationTest",
           "InvoiceIntegrationTest",
           "FinancialLedgerIntegrationTest",

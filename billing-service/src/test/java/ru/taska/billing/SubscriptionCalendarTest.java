@@ -17,6 +17,9 @@ class SubscriptionCalendarTest {
       var next = SubscriptionCalendar.next(first.endsAt(), first.anchor());
       assertEquals(year + "-03-31T12:34:56Z", next.endsAt().toString());
       assertEquals(31, next.anchor().day());
+      assertEquals(
+          year == 2024 ? 29 : 28, Duration.between(first.startsAt(), first.endsAt()).toDays());
+      assertEquals(31, Duration.between(next.startsAt(), next.endsAt()).toDays());
     }
   }
 
