@@ -221,7 +221,7 @@ class InvoiceIntegrationTest {
     assertEquals(1, count("invoices"));
     assertEquals(1, count("invoice_lines"));
     assertEquals(12, count("invoice_command_receipts"));
-    assertEquals(3, count("outbox_events"));
+    assertEquals(5, count("outbox_events"));
     assertEquals(Invoice.StateValue.STATE_OPEN, first.getState());
     assertEquals("0", first.getAllocated().getAmountMinor());
     assertEquals("2000", first.getRemaining().getAmountMinor());

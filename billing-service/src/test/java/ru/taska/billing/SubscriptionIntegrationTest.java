@@ -309,7 +309,7 @@ class SubscriptionIntegrationTest {
   void reset() {
     sql(
         "TRUNCATE"
-            + " taska.payment_facts,taska.payment_allocations,taska.invoice_payment_matches,taska.financial_command_receipts,taska.invoices,taska.invoice_lines,taska.invoice_command_receipts,taska.subscriptions,taska.subscription_periods,taska.subscription_command_receipts,taska.outbox_events,taska.idempotency_records,taska.processed_events");
+            + " taska.entitlement_snapshots,taska.payment_facts,taska.payment_allocations,taska.invoice_payment_matches,taska.financial_command_receipts,taska.invoices,taska.invoice_lines,taska.invoice_command_receipts,taska.subscriptions,taska.subscription_periods,taska.subscription_command_receipts,taska.outbox_events,taska.idempotency_records,taska.processed_events");
     sql("ALTER TABLE taska.catalog_plan_versions DISABLE TRIGGER immutable_plan");
     sql("DELETE FROM taska.catalog_plan_versions WHERE version>1");
     sql("ALTER TABLE taska.catalog_plan_versions ENABLE TRIGGER immutable_plan");
@@ -547,7 +547,7 @@ class SubscriptionIntegrationTest {
     assertEquals(1, results.stream().distinct().count());
     assertEquals(1, count("subscriptions"));
     assertEquals(1, count("subscription_command_receipts"));
-    assertEquals(1, count("outbox_events"));
+    assertEquals(2, count("outbox_events"));
     assertThrows(
         DomainException.class,
         () ->
@@ -668,7 +668,7 @@ class SubscriptionIntegrationTest {
             .block(WAIT);
     assertEquals(1, results.stream().map(Subscription::getVersion).distinct().count());
     assertEquals(1, count("subscriptions"));
-    assertEquals(1, count("outbox_events"));
+    assertEquals(2, count("outbox_events"));
     assertEquals(0, count("subscription_periods"));
   }
 
@@ -712,7 +712,7 @@ class SubscriptionIntegrationTest {
             .map(Subscription::getVersion)
             .collect(java.util.stream.Collectors.toSet()));
     assertEquals(1, count("subscription_periods"));
-    assertEquals(2, count("outbox_events"));
+    assertEquals(4, count("outbox_events"));
     assertEquals("2026-02-28T12:34:56Z", get(OWNER_A, A).getPaidThrough());
   }
 
@@ -908,7 +908,7 @@ class SubscriptionIntegrationTest {
         () -> asWorker(A, "applySubscriptionCoverage", "billing-service", work).block(WAIT));
     assertEquals("1", get(OWNER_A, A).getVersion());
     assertEquals(0, count("subscription_periods"));
-    assertEquals(1, count("outbox_events"));
+    assertEquals(2, count("outbox_events"));
     assertEquals(1, count("subscription_command_receipts"));
     grant(A, p, "rollback").block(WAIT);
     assertEquals("2", get(OWNER_A, A).getVersion());

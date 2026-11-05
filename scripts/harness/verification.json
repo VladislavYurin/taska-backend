@@ -1071,6 +1071,7 @@
           "*",
           "BillingCatalogIntegrationTest",
           "SubscriptionIntegrationTest",
+          "EntitlementIntegrationTest",
           "InvoiceIntegrationTest",
           "FinancialLedgerIntegrationTest",
           "CommercialReadinessIntegrationTest"

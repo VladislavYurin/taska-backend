@@ -917,6 +917,7 @@ message Entitlement {
   repeated QuotaLimit limits = 8;
   repeated string features = 9;
   string issued_at = 10;
+  optional string paid_through = 11; // exclusive end of the selected GRANTED period, including expired history
 }
 
 message Capability {

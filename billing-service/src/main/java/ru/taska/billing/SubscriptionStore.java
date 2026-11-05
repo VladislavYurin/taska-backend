@@ -41,6 +41,7 @@ public final class SubscriptionStore {
   private final SettlementEvidenceAuthority evidence;
   private final Clock clock;
   private final PeriodCursor cursor;
+  private final EntitlementStore entitlements;
   private final JsonMapper json = JsonMapper.builder().build();
 
   public SubscriptionStore(
@@ -49,11 +50,35 @@ public final class SubscriptionStore {
       SettlementEvidenceAuthority evidence,
       Clock clock,
       PeriodCursor cursor) {
+    this(
+        transactions,
+        readers,
+        evidence,
+        clock,
+        cursor,
+        new EntitlementStore(
+            transactions,
+            context -> Mono.error(fail(DomainStatus.UNAVAILABLE, "DEPENDENCY_UNAVAILABLE")),
+            clock));
+  }
+
+  public SubscriptionStore(
+      TenantTransactionExecutor transactions,
+      FinancialReadAuthority readers,
+      SettlementEvidenceAuthority evidence,
+      Clock clock,
+      PeriodCursor cursor,
+      EntitlementStore entitlements) {
     this.transactions = transactions;
     this.readers = readers;
     this.evidence = evidence;
     this.clock = clock;
     this.cursor = cursor;
+    this.entitlements = entitlements;
+  }
+
+  EntitlementStore entitlements() {
+    return entitlements;
   }
 
   private static UUID uuid(String s) {
@@ -543,7 +568,7 @@ public final class SubscriptionStore {
         .bind("operation", UUID.randomUUID())
         .fetch()
         .rowsUpdated()
-        .then();
+        .then(entitlements.changed(db, tenant));
   }
 
   private Mono<Subscription> view(DatabaseClient db, UUID tenant) {

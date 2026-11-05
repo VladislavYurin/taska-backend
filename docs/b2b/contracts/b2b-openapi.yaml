@@ -6968,6 +6968,10 @@ components:
             minLength: 1
             maxLength: 80
           maxItems: 100
+        paidThrough:
+          type: string
+          format: date-time
+          description: Exclusive end of selected GRANTED paid coverage; may be in the past.
         issuedAt:
           type: string
           format: date-time

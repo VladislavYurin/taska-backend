@@ -122,14 +122,29 @@ public class BillingConfiguration {
       ConnectionFactory factory,
       FinancialReadAuthority readers,
       SettlementEvidenceAuthority evidence,
-      @Value("${BILLING_CATALOG_CURSOR_KEY:}") String cursorKey) {
+      @Value("${BILLING_CATALOG_CURSOR_KEY:}") String cursorKey,
+      EntitlementStore entitlements) {
     var clock = Clock.systemUTC();
     return new SubscriptionStore(
         new TenantTransactionExecutor(factory),
         readers,
         evidence,
         clock,
-        new PeriodCursor(cursorKey, clock));
+        new PeriodCursor(cursorKey, clock),
+        entitlements);
+  }
+
+  @Bean
+  @ConditionalOnMissingBean
+  EntitlementStore.ReadAuthority entitlementReadAuthority() {
+    return context ->
+        Mono.error(CatalogErrors.fail(DomainStatus.UNAVAILABLE, "DEPENDENCY_UNAVAILABLE"));
+  }
+
+  @Bean
+  @DependsOn("safeRuntimeRole")
+  EntitlementStore entitlements(ConnectionFactory factory, EntitlementStore.ReadAuthority readers) {
+    return new EntitlementStore(new TenantTransactionExecutor(factory), readers, Clock.systemUTC());
   }
 
   @Bean
@@ -249,28 +264,46 @@ public class BillingConfiguration {
     if (security != null)
       return new TenantServerInterceptor(
           security,
-          Map.of(
-              ru.taska.api.b2b.v1.BillingProvisioningServiceGrpc.getInitializeSubscriptionMethod()
+          Map.ofEntries(
+              Map.entry(
+                  BillingServiceGrpc.getGetEntitlementMethod().getFullMethodName(),
+                  new RpcContextSecurity.Policy(true, false)),
+              Map.entry(
+                  ru.taska.api.b2b.v1.EntitlementServiceGrpc.getGetEntitlementSnapshotMethod()
                       .getFullMethodName(),
-                  new RpcContextSecurity.Policy(true, true),
-              BillingServiceGrpc.getListInvoicesMethod().getFullMethodName(),
-                  new RpcContextSecurity.Policy(true, false),
-              BillingServiceGrpc.getGetInvoiceMethod().getFullMethodName(),
-                  new RpcContextSecurity.Policy(true, false),
-              BillingServiceGrpc.getCreateInvoiceMethod().getFullMethodName(),
-                  new RpcContextSecurity.Policy(true, true),
-              BillingServiceGrpc.getGetSubscriptionMethod().getFullMethodName(),
-                  new RpcContextSecurity.Policy(true, false),
-              BillingServiceGrpc.getListSubscriptionPeriodsMethod().getFullMethodName(),
-                  new RpcContextSecurity.Policy(true, false),
-              BillingServiceGrpc.getResolvePublishedPlanMethod().getFullMethodName(),
-                  new RpcContextSecurity.Policy(false, false),
-              BillingServiceGrpc.getListBillingPlansMethod().getFullMethodName(),
-                  new RpcContextSecurity.Policy(false, false),
-              BillingServiceGrpc.getCreatePlanVersionMethod().getFullMethodName(),
-                  new RpcContextSecurity.Policy(false, true),
-              BillingServiceGrpc.getPublishPlanVersionMethod().getFullMethodName(),
+                  new RpcContextSecurity.Policy(true, false)),
+              Map.entry(
+                  ru.taska.api.b2b.v1.BillingProvisioningServiceGrpc
+                      .getInitializeSubscriptionMethod()
+                      .getFullMethodName(),
+                  new RpcContextSecurity.Policy(true, true)),
+              Map.entry(
+                  BillingServiceGrpc.getListInvoicesMethod().getFullMethodName(),
+                  new RpcContextSecurity.Policy(true, false)),
+              Map.entry(
+                  BillingServiceGrpc.getGetInvoiceMethod().getFullMethodName(),
+                  new RpcContextSecurity.Policy(true, false)),
+              Map.entry(
+                  BillingServiceGrpc.getCreateInvoiceMethod().getFullMethodName(),
+                  new RpcContextSecurity.Policy(true, true)),
+              Map.entry(
+                  BillingServiceGrpc.getGetSubscriptionMethod().getFullMethodName(),
+                  new RpcContextSecurity.Policy(true, false)),
+              Map.entry(
+                  BillingServiceGrpc.getListSubscriptionPeriodsMethod().getFullMethodName(),
+                  new RpcContextSecurity.Policy(true, false)),
+              Map.entry(
+                  BillingServiceGrpc.getResolvePublishedPlanMethod().getFullMethodName(),
+                  new RpcContextSecurity.Policy(false, false)),
+              Map.entry(
+                  BillingServiceGrpc.getListBillingPlansMethod().getFullMethodName(),
+                  new RpcContextSecurity.Policy(false, false)),
+              Map.entry(
+                  BillingServiceGrpc.getCreatePlanVersionMethod().getFullMethodName(),
                   new RpcContextSecurity.Policy(false, true)),
+              Map.entry(
+                  BillingServiceGrpc.getPublishPlanVersionMethod().getFullMethodName(),
+                  new RpcContextSecurity.Policy(false, true))),
           environment);
     // No permissive bootstrap. Keys/replay/online-authority adapters must be explicitly supplied.
     return new ServerInterceptor() {

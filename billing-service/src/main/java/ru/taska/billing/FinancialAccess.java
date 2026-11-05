@@ -14,9 +14,15 @@ import ru.taska.security.tenant.VerifiedTenantContext;
 /** Shared shape checks plus mandatory primary current owner/admin authority. */
 final class FinancialAccess {
   private final FinancialReadAuthority readers;
+  private final String denial;
 
   FinancialAccess(FinancialReadAuthority readers) {
+    this(readers, "OWNER_REQUIRED");
+  }
+
+  FinancialAccess(FinancialReadAuthority readers, String denial) {
     this.readers = readers;
+    this.denial = denial;
   }
 
   Mono<VerifiedTenantContext> authorize(UUID tenant, String action, boolean mutation) {
@@ -82,7 +88,7 @@ final class FinancialAccess {
                       ok ->
                           ok
                               ? Mono.just(v)
-                              : Mono.error(fail(DomainStatus.PERMISSION_DENIED, "OWNER_REQUIRED")));
+                              : Mono.error(fail(DomainStatus.PERMISSION_DENIED, denial)));
             });
   }
 }

@@ -240,7 +240,26 @@ message GetInvoiceRpcRequest {
   string invoice_id = 3;
 }
 
+message Entitlement {
+  string tenant_id = 1;
+  string version = 2;
+  string plan_version_id = 3;
+  optional string coverage_period_id = 4;
+  string valid_from = 5;
+  optional string valid_until = 6;
+  repeated RestrictionCode restrictions = 7;
+  repeated QuotaLimit limits = 8;
+  repeated string features = 9;
+  string issued_at = 10;
+  // Exclusive end of the selected GRANTED paid period, including expired history.
+  optional string paid_through = 11;
+}
+message GetEntitlementRpcRequest {
+  RequestContext context = 1;
+  string tenant_id = 2;
+}
 service BillingService {
+ rpc GetEntitlement(GetEntitlementRpcRequest) returns (Entitlement);
  rpc ListInvoices(ListInvoicesRpcRequest) returns (InvoicePage);
  rpc CreateInvoice(CreateInvoiceRpcRequest) returns (Invoice);
  rpc GetInvoice(GetInvoiceRpcRequest) returns (Invoice);
