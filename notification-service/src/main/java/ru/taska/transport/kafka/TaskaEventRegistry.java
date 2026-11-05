@@ -83,9 +83,11 @@ final class TaskaEventRegistry {
 
     private static void require(
             TaskaEvent event, String producer, EventScopeKind scope, Set<EventType> allowedTypes) {
+        EventType eventType = EventType.fromValue(event.eventType());
         if (!producer.equals(event.producerService())
                 || scope != event.scopeKind()
-                || !allowedTypes.contains(EventType.fromValue(event.eventType()))) {
+                || eventType == EventType.UNSUPPORTED
+                || !allowedTypes.contains(eventType)) {
             throw new IllegalArgumentException("Event producer, topic and scope do not match registry");
         }
     }

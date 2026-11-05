@@ -60,6 +60,17 @@ class TaskaEventRegistryTest {
         assertThat(registry.validate("user.events", event)).isSameAs(event);
     }
 
+    @Test
+    void rejectsUnknownEventTypeWithRegistryError() {
+        UUID tenantId = UUID.randomUUID();
+        TaskaEvent event = event(
+                "issue-service", EventScopeKind.TENANT, tenantId, tenantId, "UnknownEvent");
+
+        assertThatThrownBy(() -> registry.validate("issue.events", event))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Event producer, topic and scope do not match registry");
+    }
+
     private static TaskaEvent event(
             String producer, EventScopeKind scopeKind, UUID tenantId, UUID scopeId) {
         return event(producer, scopeKind, tenantId, scopeId, "IssueCreated");
