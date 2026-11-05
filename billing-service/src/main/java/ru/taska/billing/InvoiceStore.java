@@ -112,10 +112,10 @@ public final class InvoiceStore {
 
   private static void address(BillingAddress a) {
     if (!a.getCountry().matches("[A-Z]{2}")) throw invalid();
-    text(a.getPostalCode(), 30);
+    text(a.getPostalCode(), 32);
     text(a.getCity(), 120);
-    text(a.getLine1(), 300);
-    if (a.hasLine2()) text(a.getLine2(), 300);
+    text(a.getLine1(), 200);
+    if (a.hasLine2()) text(a.getLine2(), 200);
   }
 
   private static void validate(CreateInvoiceRequest p) {
@@ -182,7 +182,7 @@ public final class InvoiceStore {
     text(q.seller().getLegalName(), 200);
     text(q.seller().getRegistrationId(), 100);
     address(q.seller().getAddress());
-    if (q.seller().hasTaxId()) text(q.seller().getTaxId(), 80);
+    if (q.seller().hasTaxId()) text(q.seller().getTaxId(), 100);
     if (q.validity() == null
         || q.validity().compareTo(java.time.Duration.ofDays(1)) < 0
         || q.validity().compareTo(java.time.Duration.ofDays(30)) > 0
@@ -195,10 +195,11 @@ public final class InvoiceStore {
       if (currency == Money.CurrencyValue.CURRENCY_USD) {
         var fx = q.fxQuote();
         if (fx == null) throw fail(DomainStatus.UNAVAILABLE, "POLICY_NOT_CONFIGURED");
-        text(fx.getSource(), 120);
+        text(fx.getSource(), 100);
         if (fx.getBaseCurrency() != FxQuote.BaseCurrencyValue.BASE_CURRENCY_EUR
             || fx.getQuoteCurrency() != FxQuote.QuoteCurrencyValue.QUOTE_CURRENCY_USD
-            || !fx.getRate().matches("[0-9]{1,18}(\\.[0-9]{1,18})?")
+            || fx.getRate().length() > 40
+            || !fx.getRate().matches("[0-9]+(\\.[0-9]{1,18})?")
             || new BigDecimal(fx.getRate()).signum() <= 0
             || Instant.parse(fx.getObservedAt()).isAfter(now)
             || !Instant.parse(fx.getExpiresAt()).isAfter(now)
@@ -226,8 +227,9 @@ public final class InvoiceStore {
         if (line.getQuantity() < 1 || line.getTaxesCount() > 20) throw invalid();
         long n = minor(line.getNet(), currency), t = 0, g = minor(line.getTotal(), currency);
         for (var item : line.getTaxesList()) {
-          text(item.getLabel(), 120);
-          if (!item.getRate().matches("[0-9]{1,3}(\\.[0-9]{1,6})?")) throw invalid();
+          text(item.getLabel(), 100);
+          if (item.getRate().length() > 20 || !item.getRate().matches("[0-9]+(\\.[0-9]{1,8})?"))
+            throw invalid();
           t = Math.addExact(t, minor(item.getAmount(), currency));
         }
         if (Math.addExact(n, t) != g) throw invalid();

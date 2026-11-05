@@ -535,6 +535,9 @@ class InvoiceIntegrationTest {
     assertTrue(first.hasNextCursor());
     assertTrue(second.hasNextCursor());
     assertFalse(third.hasNextCursor());
+    assertEquals(NOW.toString(), first.getItems(0).getIssuedAt());
+    assertEquals(first.getItems(0).getIssuedAt(), second.getItems(0).getIssuedAt());
+    assertEquals(second.getItems(0).getIssuedAt(), third.getItems(0).getIssuedAt());
     assertEquals(
         3,
         Set.of(first.getItems(0).getId(), second.getItems(0).getId(), third.getItems(0).getId())
@@ -887,5 +890,89 @@ class InvoiceIntegrationTest {
     assertEquals(0, count("invoices"));
     assertEquals(0, count("invoice_lines"));
     assertEquals(0, count("invoice_command_receipts"));
+  }
+
+  @Test
+  void sameKeyChangedPaymentMethodOrCurrencyAlwaysConflicts() {
+    Invoice first = create("fixed-key").block(WAIT);
+    for (var changed :
+        List.of(
+            payload().toBuilder()
+                .setPaymentMethod(CreateInvoiceRequest.PaymentMethodValue.PAYMENT_METHOD_WIRE)
+                .build(),
+            payload().toBuilder()
+                .setCurrency(CreateInvoiceRequest.CurrencyValue.CURRENCY_USD)
+                .build())) {
+      rejects(
+          DomainStatus.ALREADY_EXISTS,
+          "IDEMPOTENCY_CONFLICT",
+          as("createInvoice", invoices.create(request("fixed-key", changed))));
+    }
+    assertEquals(1, count("invoices"));
+    assertEquals(1, count("invoice_lines"));
+    assertEquals(1, count("invoice_command_receipts"));
+    assertEquals(first, get(first.getId()));
+  }
+
+  @Test
+  void buyerAndCommercialFieldLimitsFollowBlueprint() {
+    var original = payload();
+    for (var invalidAddress :
+        List.of(
+            address().toBuilder().setLine1("a".repeat(201)).build(),
+            address().toBuilder().setLine2("b".repeat(201)).build(),
+            address().toBuilder().setPostalCode("1".repeat(33)).build())) {
+      var bad =
+          original.toBuilder()
+              .setBuyer(original.getBuyer().toBuilder().setAddress(invalidAddress))
+              .build();
+      rejects(
+          DomainStatus.INVALID_ARGUMENT,
+          "VALIDATION_FAILED",
+          as("createInvoice", invoices.create(request("limits", bad))));
+    }
+    var q = quote.get();
+    quote.set(
+        new CommercialQuote(
+            q.profileVersion(),
+            q.seller(),
+            List.of(
+                q.lines().getFirst().toBuilder()
+                    .setTaxes(
+                        0, q.lines().getFirst().getTaxes(0).toBuilder().setLabel("t".repeat(101)))
+                    .build()),
+            null,
+            null,
+            q.validity()));
+    rejects(DomainStatus.INVALID_ARGUMENT, "VALIDATION_FAILED", create("bad-label"));
+    quote.set(
+        new CommercialQuote(
+            q.profileVersion(),
+            q.seller().toBuilder().setTaxId("t".repeat(100)).build(),
+            List.of(
+                q.lines().getFirst().toBuilder()
+                    .setTaxes(
+                        0, q.lines().getFirst().getTaxes(0).toBuilder().setRate("10.12345678"))
+                    .build()),
+            null,
+            null,
+            q.validity()));
+    var valid =
+        original.toBuilder()
+            .setBuyer(
+                original.getBuyer().toBuilder()
+                    .setAddress(
+                        address().toBuilder()
+                            .setPostalCode("1".repeat(32))
+                            .setLine1("a".repeat(200))
+                            .setLine2("b".repeat(200))))
+            .build();
+    assertEquals(
+        "1".repeat(32),
+        as("createInvoice", invoices.create(request("limits", valid)))
+            .block(WAIT)
+            .getBuyer()
+            .getAddress()
+            .getPostalCode());
   }
 }
