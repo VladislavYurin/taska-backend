@@ -86,7 +86,8 @@
         "directory": "common-lib/target/surefire-reports",
         "selectors": [
           "*",
-          "TenantIsolationContractIntegrationTest"
+          "TenantIsolationContractIntegrationTest",
+          "TenantRlsTemplatesIntegrationTest"
         ],
         "noTestsReason": null
       },
@@ -330,7 +331,8 @@
       "reports": {
         "directory": "workflow-service/target/surefire-reports",
         "selectors": [
-          "*"
+          "*",
+          "TenantWorkflowStorageIntegrationTest"
         ],
         "noTestsReason": null
       },

@@ -2,6 +2,8 @@
 
 Шаблоны находятся в `common-lib/src/main/resources/db/tenant/`. SQL cores пригодны для включения в НОВЫЕ Liquibase changesets; psql wrappers обеспечивают параметризацию и транзакцию для оператора. Ничего не регистрируется автоматически в существующих сервисных changelog. Внедрение таблиц/перенос данных — TAS-329/330/332, расширенная проверка executor/pool — TAS-309.
 
+TAS-330 добавляет versioned `db/tenant/v2/protect-table.sql` и `v2/audit.sql` с одноимёнными psql wrappers. V2 принимает lowercase ASCII имена таблиц до63 символов (schema по-прежнему до32), включая существующую `issue_type_creation_workflow_receipts`. Для длинных имён защитный индекс получает ограниченное детерминированное имя с digest; проверка совпадения relation/tenant column сохраняется. Имена длиннее63 отвергаются. V1 остаётся байт-в-байт прежней: её ресурсы участвуют в checksum уже применённых Liquibase changesets. Новые workflow changesets явно включают v2; старые потребители автоматически не переключаются. Bootstrap используется прежний, `db/tenant/bootstrap.psql`.
+
 | Файл | Назначение |
 |---|---|
 | bootstrap.sql / bootstrap.psql | Cluster bootstrap: роли, schema owner, минимальные database/schema/default privileges |
@@ -9,7 +11,7 @@
 | audit.sql / audit.psql | Fail-closed проверка ролей, memberships, owner, grants, policy predicates и tenant FK |
 | example-migration.sql / example-migration.psql | Только fixture/example: tenant-leading unique/index и composite FK; не production migration |
 
-Bootstrap выполняется контролируемым администратором кластера на выделенной БД сервиса. Он отзывает PUBLIC CONNECT/CREATE/TEMPORARY для этой БД; совместная с другими приложениями БД требует отдельного плана. Разрешённые short names: auth, tenant, billing, project, workflow, issue, notification, admin, oauth. Schema/table identifiers ограничены lowercase ASCII длиной до32. Пароли скрипт не устанавливает; новые LOGIN-роли получают credentials отдельно из secret store. Bootstrap запрещает несовместимые существующие role attributes/memberships, а не исправляет их молча. Повторный bootstrap безопасен для штатной конфигурации.
+Bootstrap выполняется контролируемым администратором кластера на выделенной БД сервиса. Он отзывает PUBLIC CONNECT/CREATE/TEMPORARY для этой БД; совместная с другими приложениями БД требует отдельного плана. Разрешённые short names: auth, tenant, billing, project, workflow, issue, notification, admin, oauth. В v1 schema/table identifiers ограничены lowercase ASCII длиной до32; v2 расширяет только table identifiers до63. Пароли скрипт не устанавливает; новые LOGIN-роли получают credentials отдельно из secret store. Bootstrap запрещает несовместимые существующие role attributes/memberships, а не исправляет их молча. Повторный bootstrap безопасен для штатной конфигурации.
 
 | Роль taska_SERVICE_SUFFIX | Привилегии |
 |---|---|
