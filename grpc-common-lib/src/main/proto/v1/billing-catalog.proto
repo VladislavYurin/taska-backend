@@ -122,7 +122,128 @@ message ListSubscriptionPeriodsRpcRequest {
   PageRequest page = 3;
 }
 
+message FxQuote {
+  enum BaseCurrencyValue { BASE_CURRENCY_UNSPECIFIED = 0; BASE_CURRENCY_EUR = 1; }
+  enum QuoteCurrencyValue { QUOTE_CURRENCY_UNSPECIFIED = 0; QUOTE_CURRENCY_USD = 1; }
+  BaseCurrencyValue base_currency = 1;
+  QuoteCurrencyValue quote_currency = 2;
+  string rate = 3;
+  string source = 4;
+  string observed_at = 5;
+  string expires_at = 6;
+}
+
+message BillingAddress {
+  string country = 1;
+  string postal_code = 2;
+  string city = 3;
+  string line1 = 4;
+  optional string line2 = 5;
+}
+
+message BuyerDetails {
+  enum KindValue { KIND_UNSPECIFIED = 0; KIND_BUSINESS = 1; KIND_CONSUMER = 2; }
+  KindValue kind = 1;
+  string name = 2;
+  string email = 3;
+  BillingAddress address = 4;
+  optional string tax_id = 5;
+}
+
+message SellerSnapshot {
+  string legal_name = 1;
+  string registration_id = 2;
+  optional string tax_id = 3;
+  BillingAddress address = 4;
+}
+
+message TaxLine {
+  string label = 1;
+  string rate = 2;
+  Money amount = 3;
+}
+
+message InvoiceLine {
+  string description = 1;
+  int64 quantity = 2;
+  Money net = 3;
+  repeated TaxLine taxes = 4;
+  Money total = 5;
+}
+
+message WireInstructions {
+  string beneficiary_name = 1;
+  string iban = 2;
+  string bic = 3;
+  string bank_name = 4;
+  string reference = 5;
+}
+
+message Invoice {
+  enum PurposeValue { PURPOSE_UNSPECIFIED = 0; PURPOSE_INITIAL = 1; PURPOSE_RENEWAL = 2; PURPOSE_PLAN_CHANGE = 3; }
+  enum StateValue { STATE_UNSPECIFIED = 0; STATE_DRAFT = 1; STATE_OPEN = 2; STATE_PARTIALLY_PAID = 3; STATE_PAID = 4; STATE_EXPIRED = 5; STATE_VOID = 6; }
+  enum PaymentMethodValue { PAYMENT_METHOD_UNSPECIFIED = 0; PAYMENT_METHOD_PSP = 1; PAYMENT_METHOD_WIRE = 2; }
+  string id = 1;
+  string tenant_id = 2;
+  string number = 3;
+  PurposeValue purpose = 4;
+  StateValue state = 5;
+  string plan_version_id = 6;
+  BuyerDetails buyer = 7;
+  SellerSnapshot seller = 8;
+  repeated InvoiceLine lines = 9;
+  Money total = 10;
+  Money allocated = 11;
+  Money remaining = 12;
+  string issued_at = 13;
+  string due_at = 14;
+  optional FxQuote fx_quote = 15;
+  PaymentMethodValue payment_method = 16;
+  optional WireInstructions wire_instructions = 17;
+  string version = 18;
+  optional string replaces_invoice_id = 19;
+  Money matched_unallocated = 20;
+}
+
+message InvoicePage {
+  repeated Invoice items = 1;
+  optional string next_cursor = 2;
+}
+
+message CreateInvoiceRequest {
+  enum PurposeValue { PURPOSE_UNSPECIFIED = 0; PURPOSE_INITIAL = 1; PURPOSE_RENEWAL = 2; PURPOSE_PLAN_CHANGE = 3; }
+  enum CurrencyValue { CURRENCY_UNSPECIFIED = 0; CURRENCY_EUR = 1; CURRENCY_USD = 2; }
+  enum PaymentMethodValue { PAYMENT_METHOD_UNSPECIFIED = 0; PAYMENT_METHOD_PSP = 1; PAYMENT_METHOD_WIRE = 2; }
+  string plan_version_id = 1;
+  PurposeValue purpose = 2;
+  CurrencyValue currency = 3;
+  PaymentMethodValue payment_method = 4;
+  BuyerDetails buyer = 5;
+}
+
+message ListInvoicesRpcRequest {
+  RequestContext context = 1;
+  string tenant_id = 2;
+  PageRequest page = 3;
+}
+
+message CreateInvoiceRpcRequest {
+  RequestContext context = 1;
+  string tenant_id = 2;
+  CreateInvoiceRequest payload = 3;
+  MutationOptions mutation = 4;
+}
+
+message GetInvoiceRpcRequest {
+  RequestContext context = 1;
+  string tenant_id = 2;
+  string invoice_id = 3;
+}
+
 service BillingService {
+ rpc ListInvoices(ListInvoicesRpcRequest) returns (InvoicePage);
+ rpc CreateInvoice(CreateInvoiceRpcRequest) returns (Invoice);
+ rpc GetInvoice(GetInvoiceRpcRequest) returns (Invoice);
  rpc GetSubscription(GetSubscriptionRpcRequest) returns (Subscription);
  rpc ListSubscriptionPeriods(ListSubscriptionPeriodsRpcRequest) returns (SubscriptionPeriodPage);
  rpc ResolvePublishedPlan(ResolvePublishedPlanRpcRequest) returns (PlanVersion);

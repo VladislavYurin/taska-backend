@@ -147,7 +147,7 @@ class SubscriptionIntegrationTest {
               "db/changelog/db.changelog-master.yaml",
               new liquibase.resource.ClassLoaderResourceAccessor(),
               database)) {
-        runner.update(1, new liquibase.Contexts(), new liquibase.LabelExpression());
+        runner.update(2, new liquibase.Contexts(), new liquibase.LabelExpression());
       }
     }
     String checksum =
@@ -165,8 +165,50 @@ class SubscriptionIntegrationTest {
             .map((r, m) -> r.get("n", Long.class))
             .one()
             .block(WAIT));
+    UUID upgradeTenant = UUID.randomUUID();
+    sql(
+        "INSERT INTO"
+            + " taska.subscriptions(tenant_id,selected_plan_version_id,selected_terms_snapshot,mode)"
+            + " VALUES('"
+            + upgradeTenant
+            + "','"
+            + PAID
+            + "','{\"upgrade\":true}','AWAITING_PAYMENT')");
+    String subscriptionChecksum =
+        operator
+            .sql(
+                "SELECT md5sum FROM billing_liquibase.databasechangelog WHERE"
+                    + " id='billing-subscriptions-0002'")
+            .map((r, m) -> r.get("md5sum", String.class))
+            .one()
+            .block(WAIT);
     migrate();
     migrate();
+    assertEquals(
+        subscriptionChecksum,
+        operator
+            .sql(
+                "SELECT md5sum FROM billing_liquibase.databasechangelog WHERE"
+                    + " id='billing-subscriptions-0002'")
+            .map((r, m) -> r.get("md5sum", String.class))
+            .one()
+            .block(WAIT));
+    assertEquals(
+        "AWAITING_PAYMENT",
+        operator
+            .sql("SELECT mode FROM taska.subscriptions WHERE tenant_id='" + upgradeTenant + "'")
+            .map((r, m) -> r.get("mode", String.class))
+            .one()
+            .block(WAIT));
+    assertEquals(
+        1L,
+        operator
+            .sql(
+                "SELECT count(*) n FROM pg_constraint WHERE"
+                    + " conname='subscription_period_invoice_fk'")
+            .map((r, m) -> r.get("n", Long.class))
+            .one()
+            .block(WAIT));
     assertEquals(
         checksum,
         operator
@@ -213,7 +255,7 @@ class SubscriptionIntegrationTest {
   void reset() {
     sql(
         "TRUNCATE"
-            + " taska.subscriptions,taska.subscription_periods,taska.subscription_command_receipts,taska.outbox_events,taska.idempotency_records,taska.processed_events");
+            + " taska.invoices,taska.invoice_lines,taska.invoice_command_receipts,taska.subscriptions,taska.subscription_periods,taska.subscription_command_receipts,taska.outbox_events,taska.idempotency_records,taska.processed_events");
     sql("ALTER TABLE taska.catalog_plan_versions DISABLE TRIGGER immutable_plan");
     sql("DELETE FROM taska.catalog_plan_versions WHERE version>1");
     sql("ALTER TABLE taska.catalog_plan_versions ENABLE TRIGGER immutable_plan");
@@ -380,6 +422,7 @@ class SubscriptionIntegrationTest {
   }
 
   UUID proof(UUID tenant, UUID invoice, UUID fact, Instant start, Instant end) {
+    InvoiceTestFixtures.ensure(operator, tenant, invoice, PAID);
     UUID key = UUID.randomUUID();
     confirmed.put(
         key,
@@ -1094,7 +1137,10 @@ class SubscriptionIntegrationTest {
                     .build())
             .addService(
                 io.grpc.ServerInterceptors.intercept(
-                    new BillingCatalogRpc(org.mockito.Mockito.mock(BillingCatalog.class), store),
+                    new BillingCatalogRpc(
+                        org.mockito.Mockito.mock(BillingCatalog.class),
+                        store,
+                        org.mockito.Mockito.mock(InvoiceStore.class)),
                     interceptor))
             .build()
             .start();

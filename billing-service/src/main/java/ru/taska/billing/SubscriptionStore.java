@@ -19,8 +19,6 @@ import java.util.function.Function;
 import org.springframework.r2dbc.core.DatabaseClient;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
-import ru.taska.api.b2b.v1.AdminGrant;
-import ru.taska.api.b2b.v1.AdminScope;
 import ru.taska.api.b2b.v1.CredentialKind;
 import ru.taska.api.b2b.v1.GetSubscriptionRpcRequest;
 import ru.taska.api.b2b.v1.ListSubscriptionPeriodsRpcRequest;
@@ -95,61 +93,7 @@ public final class SubscriptionStore {
   }
 
   private Mono<VerifiedTenantContext> read(UUID tenant, String action) {
-    return context(tenant, action)
-        .flatMap(
-            v -> {
-              var c = RpcContextBridge.details(v).getContext();
-              boolean ordinary =
-                  switch (c.getCredentialKind()) {
-                    case CREDENTIAL_KIND_WEB_TENANT ->
-                        c.hasSessionId()
-                            && !c.getSessionId().isBlank()
-                            && c.hasMembershipGeneration()
-                            && !c.getMembershipGeneration().isBlank();
-                    case CREDENTIAL_KIND_USER_PAT, CREDENTIAL_KIND_USER_OAUTH ->
-                        c.hasCredentialId()
-                            && !c.getCredentialId().isBlank()
-                            && c.hasMembershipGeneration()
-                            && !c.getMembershipGeneration().isBlank();
-                    default -> false;
-                  };
-              boolean admin =
-                  switch (c.getCredentialKind()) {
-                    case CREDENTIAL_KIND_WEB_GLOBAL ->
-                        c.hasSessionId() && !c.getSessionId().isBlank();
-                    case CREDENTIAL_KIND_ADMIN_PAT, CREDENTIAL_KIND_ADMIN_OAUTH ->
-                        c.hasCredentialId()
-                            && !c.getCredentialId().isBlank()
-                            && c.hasGrantId()
-                            && !c.getGrantId().isBlank()
-                            && c.hasGrantGeneration()
-                            && !c.getGrantGeneration().isBlank();
-                    default -> false;
-                  };
-              if (admin) {
-                var scope = c.getAdministrativeScope();
-                admin =
-                    (c.getAdministrativeLevel() == AdminGrant.LevelValue.LEVEL_READ
-                            || c.getAdministrativeLevel() == AdminGrant.LevelValue.LEVEL_MODIFY)
-                        && (scope.getKind() == AdminScope.KindValue.KIND_PLATFORM
-                            || (scope.getKind() == AdminScope.KindValue.KIND_TENANT_SET
-                                && scope.getTenantIdsList().contains(tenant.toString())));
-              }
-              if (v.actorId() == null
-                  || c.getActorGeneration().isBlank()
-                  || !v.scopes().contains("read")
-                  || (!ordinary && !admin))
-                return Mono.error(fail(DomainStatus.PERMISSION_DENIED, "SCOPE_DENIED"));
-              return readers
-                  .allowed(v)
-                  .switchIfEmpty(
-                      Mono.error(fail(DomainStatus.UNAVAILABLE, "DEPENDENCY_UNAVAILABLE")))
-                  .flatMap(
-                      ok ->
-                          ok
-                              ? Mono.just(v)
-                              : Mono.error(fail(DomainStatus.PERMISSION_DENIED, "OWNER_REQUIRED")));
-            });
+    return new FinancialAccess(readers).authorize(tenant, action, false);
   }
 
   private static byte[] digest(String s) {

@@ -1,6 +1,6 @@
 # Billing catalog — TAS-313
 
-Implemented backend subset of the [B2B contracts](../docs/b2b/contracts/README.md): a separate service/database, global versioned plan catalog, draft creation, explicit publication and internal resolution of current published offers. [Tenant-scoped subscriptions and coverage TAS-314](SUBSCRIPTIONS.md) extend this catalog. Invoice issuance, FX/tax calculations, ledger and PSP calls belong to subsequent tasks. This module does not charge money or activate tenant entitlements.
+Implemented backend subset of the [B2B contracts](../docs/b2b/contracts/README.md): a separate service/database, global versioned plan catalog, draft creation, explicit publication and internal resolution of current published offers. [Tenant-scoped subscriptions and coverage TAS-314](SUBSCRIPTIONS.md) extend this catalog. [Immutable invoice issuance TAS-475](INVOICES.md) adds tenant-scoped documents and protected RPCs. Commercial policy provisioning, ledger and PSP calls remain separate. This module does not charge money or activate tenant entitlements.
 
 ## Catalog and contracts
 
@@ -26,7 +26,7 @@ Gateway REST routing, production key/JWKS/online-authority adapters and tenant p
 
 The paid price is tax-inclusive (D135); tax breakdown and commercial readiness are subsequent invoice work. No multiplication by seats. EUR is the base catalog currency; USD conversion belongs to invoice snapshots, not an independently priced USD catalog. Missing task limit means unlimited only when explicitly requested for PAID. Numeric fields are exact nonnegative int64 values; members/projects must be positive. The per-attachment default is 20000000 bytes in the version row; this DTO's four quota dimensions do not add a separate attachment quota enum. Capability strings are bounded, distinct and sorted; empty seed capabilities do not grant optional channels, which require the global flags/capability evaluator.
 
-`catalog_plans`/`catalog_plan_versions` are global nonpersonal configuration. Content is immutable from creation; publication is the only permitted update and published rows cannot be updated/deleted. Old invoice/period references can continue pointing to old UUIDs. No invoice table is introduced as a placeholder.
+`catalog_plans`/`catalog_plan_versions` are global nonpersonal configuration. Content is immutable from creation; publication is the only permitted update and published rows cannot be updated/deleted. Old invoice/period references can continue pointing to old UUIDs. Invoice tables are introduced by [TAS-475](INVOICES.md), separately from the catalog changeset.
 
 Global catalog mutations use a separate `catalog_mutation_receipts` table, keyed by actor/action/idempotency key. A transaction advisory lock serializes same-intent races; request hashes distinguish conflicts, and the exact protobuf response is durably replayed. Retry authority is checked **before** receipt lookup. Receipts retain the actor UUID and response, never credentials; cleanup/retention integration is future work (retention exceeds the required 24-hour retry window).
 

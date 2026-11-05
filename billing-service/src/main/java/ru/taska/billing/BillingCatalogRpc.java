@@ -22,16 +22,37 @@ public final class BillingCatalogRpc extends ReactorBillingServiceGrpc.BillingSe
   private final BillingCatalog catalog;
 
   private final SubscriptionStore subscriptions;
+  private final InvoiceStore invoices;
 
-  public BillingCatalogRpc(BillingCatalog catalog, SubscriptionStore subscriptions) {
+  public BillingCatalogRpc(
+      BillingCatalog catalog, SubscriptionStore subscriptions, InvoiceStore invoices) {
     this.catalog = catalog;
     this.subscriptions = subscriptions;
+    this.invoices = invoices;
   }
 
   private static <T> Mono<T> inbound(Mono<T> work) {
     return RpcContextBridge.inbound(work)
         .onErrorMap(DomainException.class, GrpcExceptionMapper::toStatusRuntimeException)
         .onErrorMap(GrpcExceptionMapper::toGrpcStatus);
+  }
+
+  @Override
+  public Mono<ru.taska.api.b2b.v1.Invoice> createInvoice(
+      Mono<ru.taska.api.b2b.v1.CreateInvoiceRpcRequest> request) {
+    return inbound(request.flatMap(invoices::create));
+  }
+
+  @Override
+  public Mono<ru.taska.api.b2b.v1.Invoice> getInvoice(
+      Mono<ru.taska.api.b2b.v1.GetInvoiceRpcRequest> request) {
+    return inbound(request.flatMap(invoices::get));
+  }
+
+  @Override
+  public Mono<ru.taska.api.b2b.v1.InvoicePage> listInvoices(
+      Mono<ru.taska.api.b2b.v1.ListInvoicesRpcRequest> request) {
+    return inbound(request.flatMap(invoices::list));
   }
 
   @Override
