@@ -114,6 +114,21 @@
           }
         ]
       }
+    },
+    {
+      "changeSet": {
+        "id": "tenant-free-eligibility-0005",
+        "author": "taska",
+        "changes": [
+          {
+            "sqlFile": {
+              "path": "0005-free-eligibility.sql",
+              "relativeToChangelogFile": true,
+              "splitStatements": false
+            }
+          }
+        ]
+      }
     }
   ]
 }

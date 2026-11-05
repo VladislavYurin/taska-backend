@@ -167,11 +167,17 @@ public final class TenantRegistryService {
                                                     fail(
                                                         DomainStatus.UNAVAILABLE,
                                                         "DEPENDENCY_UNAVAILABLE"));
-                                              return creations.execute(
-                                                  tenant,
-                                                  db ->
-                                                      insert(
-                                                          db, tenant, actor, name, key, hash, p));
+                                              return (p.free()
+                                                      ? free.prepare(actor)
+                                                      : Mono.just(free))
+                                                  .flatMap(
+                                                      admission ->
+                                                          creations.execute(
+                                                              tenant,
+                                                              db ->
+                                                                  insert(
+                                                                      db, tenant, actor, name, key,
+                                                                      hash, p, admission)));
                                             }));
                   });
         });
@@ -184,9 +190,12 @@ public final class TenantRegistryService {
       String name,
       String key,
       byte[] hash,
-      PublishedPlan plan) {
+      PublishedPlan plan,
+      FreeAdmission admission) {
     return (plan.free() ? Mono.just(Duration.ZERO) : creationWindows.apply(db))
-        .flatMap(window -> insertWithWindow(db, tenant, actor, name, key, hash, plan, window));
+        .flatMap(
+            window ->
+                insertWithWindow(db, tenant, actor, name, key, hash, plan, window, admission));
   }
 
   private Mono<CreateTenantResponse> insertWithWindow(
@@ -197,7 +206,8 @@ public final class TenantRegistryService {
       String key,
       byte[] hash,
       PublishedPlan plan,
-      Duration window) {
+      Duration window,
+      FreeAdmission preparedAdmission) {
     Instant now = clock.instant();
     UUID operation = UUID.randomUUID();
     var sql =
@@ -226,7 +236,8 @@ public final class TenantRegistryService {
             id -> {
               // FREE claim and registry insert must roll back together; unavailable admission never
               // creates a tenant.
-              Mono<Void> admission = plan.free() ? free.reserve(db, actor, tenant) : Mono.empty();
+              Mono<Void> admission =
+                  plan.free() ? preparedAdmission.reserve(db, actor, tenant) : Mono.empty();
               return admission
                   .then(
                       db.sql(

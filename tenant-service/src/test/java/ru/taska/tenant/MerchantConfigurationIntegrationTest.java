@@ -117,7 +117,7 @@ class MerchantConfigurationIntegrationTest {
             MerchantConfigurationIntegrationTest.class.getResourceAsStream(
                 "/db/changelog/db.changelog-master.yaml"));
     var changes = (tools.jackson.databind.node.ArrayNode) log.get("databaseChangeLog");
-    changes.remove(changes.size() - 1);
+    while (changes.size() > 3) changes.remove(changes.size() - 1);
     for (var entry : changes)
       for (var change : entry.get("changeSet").get("changes")) {
         if (change.has("sqlFile") && change.get("sqlFile").has("relativeToChangelogFile")) {
@@ -149,14 +149,15 @@ class MerchantConfigurationIntegrationTest {
     lb.setChangeLog("classpath:/db/changelog/db.changelog-master.yaml");
     lb.afterPropertiesSet();
     lb.afterPropertiesSet();
+    var priorIds =
+        checksums.stream().map(r -> r.get("id")).collect(java.util.stream.Collectors.toSet());
     assertEquals(
         checksums,
         operator
-            .sql(
-                "SELECT id,md5sum FROM tenant_liquibase.databasechangelog WHERE"
-                    + " id<>'tenant-merchant-configuration-0004' ORDER BY id")
+            .sql("SELECT id,md5sum FROM tenant_liquibase.databasechangelog ORDER BY id")
             .fetch()
             .all()
+            .filter(r -> priorIds.contains(r.get("id")))
             .collectList()
             .block(WAIT));
     pool =
