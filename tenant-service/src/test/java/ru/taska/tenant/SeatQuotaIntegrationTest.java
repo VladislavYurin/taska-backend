@@ -169,7 +169,8 @@ class SeatQuotaIntegrationTest {
                     ? Mono.just(entitlement(tenant))
                     : Mono.error(new DomainException(DomainStatus.UNAVAILABLE, "billing down")),
             clock,
-            t -> Mono.just(taskSummary(t, 0, 1)));
+            t -> Mono.just(taskSummary(t, 0, 1)),
+            t -> Mono.just(projectUsage()));
   }
 
   SeatQuotaStore withTasks(ru.taska.entitlement.TenantTaskQuotaSource source) {
@@ -178,14 +179,15 @@ class SeatQuotaIntegrationTest {
         (c, command) -> Mono.just(new SeatQuotaStore.Grant(false)),
         (t, min) -> Mono.just(entitlement(t)),
         clock,
-        source);
+        source,
+        t -> Mono.just(projectUsage()));
   }
 
   @Test
   void tenantSnapshotExposesMaximumTaskCountAndVersionsAreMonotonic() {
     store = withTasks(t -> Mono.just(taskSummary(t, 51, 7)));
     var first = getSnapshot(A);
-    assertEquals(2, first.getQuotasCount());
+    assertEquals(3, first.getQuotasCount());
     var task = first.getQuotas(1);
     assertEquals(QuotaUsage.KindValue.KIND_TASK_LIFETIME, task.getKind());
     assertEquals("51", task.getUsed());
@@ -243,6 +245,15 @@ class SeatQuotaIntegrationTest {
     assertEquals(
         DomainStatus.UNAVAILABLE,
         assertThrows(DomainException.class, () -> getSnapshot(A)).getStatus());
+  }
+
+  static QuotaUsage projectUsage() {
+    return QuotaUsage.newBuilder()
+        .setKind(QuotaUsage.KindValue.KIND_PROJECT)
+        .setUsed("0")
+        .setReserved("0")
+        .setVersion("1")
+        .build();
   }
 
   static TenantTaskQuotaSummary taskSummary(UUID tenant, long maximum, long version) {
@@ -574,7 +585,8 @@ class SeatQuotaIntegrationTest {
               (c, command) -> Mono.just(new SeatQuotaStore.Grant(false)),
               (tenant, minimum) -> Mono.just(snapshot),
               clock,
-              t -> Mono.just(taskSummary(t, 0, 1)));
+              t -> Mono.just(taskSummary(t, 0, 1)),
+              t -> Mono.just(projectUsage()));
       assertThrows(DomainException.class, () -> reserve(A, UUID.randomUUID()));
     }
     store =
@@ -583,7 +595,8 @@ class SeatQuotaIntegrationTest {
             (c, command) -> Mono.just(new SeatQuotaStore.Grant(false)),
             (tenant, minimum) -> Mono.empty(),
             clock,
-            t -> Mono.just(taskSummary(t, 0, 1)));
+            t -> Mono.just(taskSummary(t, 0, 1)),
+            t -> Mono.just(projectUsage()));
     assertThrows(DomainException.class, () -> reserve(A, UUID.randomUUID()));
     assertEquals(0, count("quota_reservations"));
     assertEquals(0, count("quota_effects"));
@@ -603,7 +616,8 @@ class SeatQuotaIntegrationTest {
             (c, command) -> Mono.just(new SeatQuotaStore.Grant(false)),
             (tenant, minimum) -> Mono.just(explicit.build()),
             clock,
-            t -> Mono.just(taskSummary(t, 0, 1)));
+            t -> Mono.just(taskSummary(t, 0, 1)),
+            t -> Mono.just(projectUsage()));
     for (int i = 0; i < 4; i++) reserve(A, UUID.randomUUID());
     assertEquals("4", usage(A).getReserved());
     assertTrue(usage(A).getUnlimited());

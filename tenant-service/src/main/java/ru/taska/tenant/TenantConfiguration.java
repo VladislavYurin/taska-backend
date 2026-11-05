@@ -342,13 +342,71 @@ public class TenantConfiguration {
   }
 
   @Bean
+  @ConditionalOnMissingBean
+  ProjectQuotaStore.Policy projectQuotaPolicy() {
+    return (c, command, operation) ->
+        Mono.error(
+            TenantRegistryService.fail(DomainStatus.UNAVAILABLE, "PROJECT_POLICY_NOT_CONFIGURED"));
+  }
+
+  @Bean
+  @ConditionalOnMissingBean
+  ru.taska.quota.ProjectQuotaProtocol.Owner projectQuotaOwner(
+      ObjectProvider<
+              ru.taska.api.b2b.v1.ReactorProjectQuotaOwnerServiceGrpc
+                  .ReactorProjectQuotaOwnerServiceStub>
+          stubs,
+      ObjectProvider<RpcContextSecurity> security) {
+    var stub = stubs.getIfAvailable();
+    var trust = security.getIfAvailable();
+    if (stub != null && trust != null)
+      return new ru.taska.quota.GrpcProjectQuotaOwner(
+          stub, trust, Clock.systemUTC(), "tenant-service");
+    return new ru.taska.quota.ProjectQuotaProtocol.Owner() {
+      public Mono<ru.taska.quota.ProjectQuotaProtocol.Receipt> inspect(
+          ru.taska.quota.ProjectQuotaProtocol.Reservation r) {
+        return Mono.error(
+            TenantRegistryService.fail(DomainStatus.UNAVAILABLE, "PROJECT_OWNER_UNAVAILABLE"));
+      }
+
+      public Mono<ru.taska.quota.ProjectQuotaProtocol.Receipt> cancel(
+          ru.taska.quota.ProjectQuotaProtocol.Reservation r) {
+        return Mono.error(
+            TenantRegistryService.fail(DomainStatus.UNAVAILABLE, "PROJECT_OWNER_UNAVAILABLE"));
+      }
+
+      public Mono<ru.taska.quota.ProjectQuotaProtocol.Receipt> open(
+          ru.taska.quota.ProjectQuotaProtocol.Reservation r) {
+        return Mono.error(
+            TenantRegistryService.fail(DomainStatus.UNAVAILABLE, "PROJECT_OWNER_UNAVAILABLE"));
+      }
+
+      public Mono<ru.taska.quota.ProjectQuotaProtocol.Inventory> inventory(java.util.UUID tenant) {
+        return Mono.error(
+            TenantRegistryService.fail(DomainStatus.UNAVAILABLE, "PROJECT_OWNER_UNAVAILABLE"));
+      }
+    };
+  }
+
+  @Bean
+  @DependsOn("safeRuntimeRole")
+  ProjectQuotaStore projectQuotas(
+      TenantTransactionExecutor tx,
+      ProjectQuotaStore.Policy policy,
+      ru.taska.quota.ProjectQuotaProtocol.Owner owner,
+      ru.taska.entitlement.EntitlementProjection.Source billing) {
+    return new ProjectQuotaStore(tx, policy, owner, billing, Clock.systemUTC());
+  }
+
+  @Bean
   @DependsOn("safeRuntimeRole")
   SeatQuotaStore seatQuotas(
       TenantTransactionExecutor transactions,
       SeatQuotaStore.Authority authority,
       ru.taska.entitlement.EntitlementProjection.Source source,
-      ru.taska.entitlement.TenantTaskQuotaSource tasks) {
-    return new SeatQuotaStore(transactions, authority, source, Clock.systemUTC(), tasks);
+      ru.taska.entitlement.TenantTaskQuotaSource tasks,
+      ProjectQuotaStore projects) {
+    return new SeatQuotaStore(transactions, authority, source, Clock.systemUTC(), tasks, projects);
   }
 
   @Bean
@@ -361,6 +419,22 @@ public class TenantConfiguration {
       return new TenantServerInterceptor(
           security,
           Map.ofEntries(
+              java.util.Map.entry(
+                  ru.taska.api.b2b.v1.QuotaAuthorityServiceGrpc.getReserveQuotaMethod()
+                      .getFullMethodName(),
+                  new RpcContextSecurity.Policy(true, false)),
+              java.util.Map.entry(
+                  ru.taska.api.b2b.v1.QuotaAuthorityServiceGrpc.getCommitQuotaMethod()
+                      .getFullMethodName(),
+                  new RpcContextSecurity.Policy(true, false)),
+              java.util.Map.entry(
+                  ru.taska.api.b2b.v1.QuotaAuthorityServiceGrpc.getReleaseQuotaMethod()
+                      .getFullMethodName(),
+                  new RpcContextSecurity.Policy(true, false)),
+              java.util.Map.entry(
+                  ru.taska.api.b2b.v1.QuotaAuthorityServiceGrpc.getGetQuotaReservationMethod()
+                      .getFullMethodName(),
+                  new RpcContextSecurity.Policy(true, false)),
               java.util.Map.entry(
                   TenantServiceGrpc.getGetTenantQuotasMethod().getFullMethodName(),
                   new RpcContextSecurity.Policy(true, false)),

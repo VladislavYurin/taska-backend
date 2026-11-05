@@ -48,6 +48,7 @@ public final class SeatQuotaStore {
   private final EntitlementProjection.Source billing;
   private final Clock clock;
   private final ru.taska.entitlement.TenantTaskQuotaSource tasks;
+  private final ru.taska.quota.ProjectQuotaProtocol.UsageSource projects;
 
   public SeatQuotaStore(
       TenantTransactionExecutor transactions,
@@ -68,6 +69,23 @@ public final class SeatQuotaStore {
       EntitlementProjection.Source billing,
       Clock clock,
       ru.taska.entitlement.TenantTaskQuotaSource tasks) {
+    this(
+        transactions,
+        authority,
+        billing,
+        clock,
+        tasks,
+        t -> Mono.error(fail(DomainStatus.UNAVAILABLE, "PROJECT_QUOTA_UNAVAILABLE")));
+  }
+
+  public SeatQuotaStore(
+      TenantTransactionExecutor transactions,
+      Authority authority,
+      EntitlementProjection.Source billing,
+      Clock clock,
+      ru.taska.entitlement.TenantTaskQuotaSource tasks,
+      ru.taska.quota.ProjectQuotaProtocol.UsageSource projects) {
+    this.projects = Objects.requireNonNull(projects);
     this.tasks = Objects.requireNonNull(tasks);
     this.transactions = Objects.requireNonNull(transactions);
     this.authority = Objects.requireNonNull(authority);
@@ -337,11 +355,12 @@ public final class SeatQuotaStore {
                 return Mono.error(fail(DomainStatus.PERMISSION_DENIED, "SCOPE_DENIED"));
               return transactions
                   .execute(db -> reader(db, tenant, context.actorId()).thenReturn(true))
-                  .then(Mono.zip(terms(tenant), taskSummary(tenant)))
+                  .then(Mono.zip(terms(tenant), taskSummary(tenant), projectUsage(tenant)))
                   .flatMap(
                       pair -> {
                         var terms = pair.getT1();
                         var task = pair.getT2();
+                        var project = pair.getT3();
                         if (terms.version() < Long.parseLong(task.getEntitlementVersion()))
                           return Mono.error(fail(DomainStatus.UNAVAILABLE, "ENTITLEMENT_STALE"));
                         return transactions.execute(
@@ -361,6 +380,11 @@ public final class SeatQuotaStore {
                                                       db,
                                                       tenant,
                                                       Long.parseLong(task.getVersion())))
+                                              .then(
+                                                  observeProjects(
+                                                      db,
+                                                      tenant,
+                                                      Long.parseLong(project.getVersion())))
                                               .then(refresh(db, tenant));
                                         })
                                     .map(
@@ -379,11 +403,64 @@ public final class SeatQuotaStore {
                                               .setVersion(Long.toString(counter.version()))
                                               .addQuotas(usage)
                                               .addQuotas(taskUsage(terms.snapshot(), task))
+                                              .addQuotas(
+                                                  projectUsageWithTerms(project, terms.snapshot()))
                                               .setAsOf(clock.instant().toString())
                                               .build();
                                         }));
                       });
             });
+  }
+
+  private Mono<QuotaUsage> projectUsage(UUID tenant) {
+    return projects
+        .current(tenant)
+        .timeout(Duration.ofSeconds(5))
+        .switchIfEmpty(Mono.error(fail(DomainStatus.UNAVAILABLE, "PROJECT_QUOTA_UNAVAILABLE")))
+        .map(
+            usage -> {
+              try {
+                if (usage.getKind() != QuotaUsage.KindValue.KIND_PROJECT
+                    || usage.hasProjectId()
+                    || !usage.getUsed().matches("0|[1-9][0-9]{0,18}")
+                    || !usage.getReserved().matches("0|[1-9][0-9]{0,18}")
+                    || !usage.getVersion().matches("[1-9][0-9]{0,18}"))
+                  throw new IllegalArgumentException();
+                Long.parseLong(usage.getUsed());
+                Long.parseLong(usage.getReserved());
+                Long.parseLong(usage.getVersion());
+              } catch (RuntimeException e) {
+                throw fail(DomainStatus.UNAVAILABLE, "INVALID_PROJECT_QUOTA");
+              }
+              return usage;
+            });
+  }
+
+  private static QuotaUsage projectUsageWithTerms(QuotaUsage usage, Entitlement terms) {
+    var limit =
+        terms.getLimitsList().stream()
+            .filter(l -> l.getKind() == QuotaLimit.KindValue.KIND_PROJECT)
+            .findFirst()
+            .orElseThrow();
+    var b = usage.toBuilder().clearLimit().setUnlimited(limit.getUnlimited());
+    if (limit.hasLimit()) b.setLimit(limit.getLimit());
+    return b.build();
+  }
+
+  private Mono<Void> observeProjects(DatabaseClient db, UUID tenant, long version) {
+    return db.sql(
+            "UPDATE taska.quota_counters SET project_quota_version=:v,version=version+CASE WHEN"
+                + " project_quota_version<>:v THEN 1 ELSE 0 END WHERE tenant_id=:t AND"
+                + " resource='SEAT' AND project_quota_version<=:v AND version<9223372036854775807")
+        .bind("t", tenant)
+        .bind("v", version)
+        .fetch()
+        .rowsUpdated()
+        .flatMap(
+            n ->
+                n == 1
+                    ? Mono.<Void>empty()
+                    : Mono.error(fail(DomainStatus.UNAVAILABLE, "PROJECT_QUOTA_STALE")));
   }
 
   private Mono<TenantTaskQuotaSummary> taskSummary(UUID tenant) {

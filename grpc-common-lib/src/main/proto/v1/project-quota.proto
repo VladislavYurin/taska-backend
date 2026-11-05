@@ -1,0 +1,41 @@
+syntax = "proto3";
+package ru.taska.b2b.v1;
+import "v1/tenant-context.proto";
+import "v1/tenant-registry.proto";
+option java_multiple_files = true;
+option java_package = "ru.taska.api.b2b.v1";
+message QuotaReservation {
+ enum KindValue { KIND_UNSPECIFIED=0; KIND_SEAT=1; KIND_PROJECT=2; KIND_STORAGE_BYTES=3; }
+ enum StateValue { STATE_UNSPECIFIED=0; STATE_ACTIVE=1; STATE_COMMITTED=2; STATE_RELEASED=3; STATE_EXPIRED=4; }
+ string id=1; string operation_id=2; string tenant_id=3; KindValue kind=4; optional string project_id=5; string quantity=6; StateValue state=7; string expires_at=8; string version=9;
+ string fence=10; string resource_id=11; bool cancel_requested=12;
+}
+message ReserveQuotaRequest {
+ enum KindValue { KIND_UNSPECIFIED=0; KIND_SEAT=1; KIND_PROJECT=2; KIND_STORAGE_BYTES=3; }
+ string operation_id=1; KindValue kind=2; optional string project_id=3; string quantity=4; string resource_id=5;
+ // Internal bounded deadline, validated against primary server policy and frozen in reservation.
+ string expires_at=6;
+}
+message FinalizeQuotaRequest {string operation_id=1;string resource_id=2;optional string actual_quantity=3;}
+message ReserveQuotaRpcRequest {RequestContext context=1;ReserveQuotaRequest payload=2;MutationOptions mutation=3;}
+message FinalizeQuotaRpcRequest {RequestContext context=1;string reservation_id=2;FinalizeQuotaRequest payload=3;MutationOptions mutation=4;string fence=5;}
+message GetQuotaReservationRequest {RequestContext context=1;string operation_id=2;}
+message ProjectQuotaOwnerRequest {RequestContext context=1;QuotaReservation reservation=2;}
+message ProjectQuotaOwnerInventoryRequest {RequestContext context=1;string tenant_id=2;}
+message ProjectQuotaOwnerReceipt {
+ enum StateValue {STATE_UNSPECIFIED=0;STATE_PROVISIONING=1;STATE_OPEN=2;STATE_CANCELLED=3;STATE_DELETED=4;}
+ QuotaReservation reservation=1;StateValue state=2;
+}
+message ProjectQuotaOwnerInventory {string tenant_id=1;repeated string resource_ids=2;bool complete=3;}
+service QuotaAuthorityService {
+ rpc ReserveQuota(ReserveQuotaRpcRequest) returns(QuotaReservation);
+ rpc CommitQuota(FinalizeQuotaRpcRequest) returns(QuotaReservation);
+ rpc ReleaseQuota(FinalizeQuotaRpcRequest) returns(QuotaReservation);
+ rpc GetQuotaReservation(GetQuotaReservationRequest) returns(QuotaReservation);
+}
+service ProjectQuotaOwnerService {
+ rpc Inspect(ProjectQuotaOwnerRequest) returns(ProjectQuotaOwnerReceipt);
+ rpc Cancel(ProjectQuotaOwnerRequest) returns(ProjectQuotaOwnerReceipt);
+ rpc Open(ProjectQuotaOwnerRequest) returns(ProjectQuotaOwnerReceipt);
+ rpc Inventory(ProjectQuotaOwnerInventoryRequest) returns(ProjectQuotaOwnerInventory);
+}

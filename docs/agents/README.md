@@ -24,6 +24,7 @@ Harness объединяет инструкции, доступные инстр
 | Entitlement-проекция | [Versioned projection](../data/entitlement-projection.md), `grpc-common-lib` | Monotonic events, reconciliation, bounded cache, current authority and owner migrations |
 | Внутренний RPC | [proto/v1](../../grpc-common-lib/src/main/proto/v1/) | производителей и потребителей, совместимость полей/enum, request context |
 | Lifetime-квота задач | [TASK admission](../../issue-service/TASK-QUOTAS.md), `issue-service` | Атомарность create/idempotency, current billing, 50/>50, counter tombstones и scoped reads |
+| Квоты проектов | [PROJECT saga](../../tenant-service/PROJECT-QUOTAS.md), `tenant-service` / `project-service` | Hidden provision, owner-confirmed expiry, durable effects и current policy |
 | Квоты мест | [SEAT admission](../../tenant-service/SEAT-QUOTAS.md), `tenant-service` | Membership + reservation atomicity, replay/fence/expiry, scoped admin bypass and safe quota read |
 | Пользователь и доступ | `auth-service` | сессии, refresh rotation, статус пользователя, PAT scopes; [приглашения](../tas-204-invitations-and-directory.md) |
 | Проекты и роли | `project-service` | ADMIN/MEMBER/VIEWER, последний ADMIN, собственность типов задач |

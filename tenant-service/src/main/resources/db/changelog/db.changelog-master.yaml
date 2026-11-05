@@ -342,6 +342,21 @@
           }
         ]
       }
+    },
+    {
+      "changeSet": {
+        "id": "tenant-project-quota-0011",
+        "author": "taska",
+        "changes": [
+          {
+            "sqlFile": {
+              "path": "0011-project-quota.sql",
+              "relativeToChangelogFile": true,
+              "splitStatements": false
+            }
+          }
+        ]
+      }
     }
   ]
 }
