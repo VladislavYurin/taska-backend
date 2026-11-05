@@ -25,7 +25,12 @@ different bodies fail and roll back. Duplicate/old events do not renew freshness
 `resolve(READ)` calls mandatory `Access.current` on every subscription before using
 commercial facts. That adapter checks current membership/role/project ACL and returns
 current independent lifecycle reasons; denial must fail, and empty means unavailable.
-Actor authorization is never cached. Pause/block reasons are unioned with financial
+Actor authorization is never cached. `GrpcMembershipAccess` supplies the concrete
+primary membership adapter: every call performs signed mTLS BatchValidateMemberships,
+checks exact tenant/user/generation, ACTIVE membership and current role, then calls
+mandatory domain/channel/lifecycle `Policy` with that live snapshot. Suspension,
+removal and role changes therefore do not wait for the billing TTL. Service-only
+worklist jobs require their separately scoped Access authority. Pause/block reasons are unioned with financial
 reasons and cannot be cleared by a payment event. Cache keys are tenant UUIDs, capacity
 is bounded and TTL must be positive and at most 30 seconds. Neither cache hits nor a
 process restart extend the durable observation time. Committed events invalidate the
@@ -47,7 +52,7 @@ from disputed money or subtract periods themselves. A newer payment can select a
 independent full period while a replayed older revoke remains inert. PAYMENT_DISPUTE,
 pause and block are independently preserved according to their owning authorities.
 
-Activation requires the owning service to compose the projection with real `Access`,
+Activation requires the owning service to compose the projection with real `Access` (including `GrpcMembershipAccess` and current domain policy),
 `EventAuthority`, `Source` and its local `TenantTransactionExecutor`, and register the
 trusted billing outbox delivery adapter. There are no permissive default beans, fake
 tenant identities or automatic activation of legacy RPC paths. Production identity/
