@@ -33,7 +33,7 @@ with a previous key conflicts. Retries always require current verified service c
 A payment may match at most one invoice. `match` locks invoice then source and records
 `min(available principal, unmatched invoice total)`. This does not allocate money or confer
 paid rights. For 12 EUR received against 20 EUR, matched=12, allocated=0 and unallocated=12.
-Returned principal is excluded from the pending matched amount; the original match is retained.
+For 25 EUR received and a pending match20, unallocated is still25 and matchedUnallocated is20; only final allocation20 leaves unallocated5. Subtracting the pending match here would lose money in the conservation equation. Returned principal is excluded from the pending matched amount; the original match is retained.
 
 `allocate` accepts match IDs, not a client price. It requires the mandatory
 `EligibilityAuthority` decision from the settlement owner, locks invoice and sorted source

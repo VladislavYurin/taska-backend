@@ -55,6 +55,7 @@ CREATE INDEX payment_allocations_source_idx ON taska.payment_allocations(tenant_
 CREATE INDEX invoice_payment_matches_invoice_idx ON taska.invoice_payment_matches(tenant_id,invoice_id);
 
 -- Invoker rights are essential: view reads must retain the runtime tenant's FORCE RLS.
+-- Matches remain unallocated principal until final allocation; do not subtract them twice.
 CREATE VIEW taska.financial_balances WITH(security_invoker=true) AS
  SELECT p.tenant_id,p.id,p.currency,p.amount_minor AS received,
    coalesce(a.allocated,0)-coalesce(r.allocated_returns,0) AS net_allocated,

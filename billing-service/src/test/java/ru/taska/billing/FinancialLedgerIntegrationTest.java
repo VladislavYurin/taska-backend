@@ -232,6 +232,7 @@ class FinancialLedgerIntegrationTest {
     eligible.set(true);
     var result = allocate(List.of(ma.id(), mb.id()), "full").block(WAIT);
     assertEquals(2, result.size());
+    long allocatedEvents = count("outbox_events");
     assertEquals(2000, result.stream().mapToLong(FinancialLedger.Allocation::amountMinor).sum());
     assertEquals(
         new HashSet<>(result),
@@ -239,6 +240,7 @@ class FinancialLedgerIntegrationTest {
     assertEquals(
         new HashSet<>(result),
         new HashSet<>(allocate(List.of(ma.id(), mb.id()), "duplicate").block(WAIT)));
+    assertEquals(allocatedEvents, count("outbox_events"));
     assertEquals(2, count("payment_allocations"));
     conserves(balance(a.id()));
     conserves(balance(b.id()));
@@ -662,5 +664,51 @@ class FinancialLedgerIntegrationTest {
                     + "ab".repeat(32)
                     + "','hex'))"));
     assertEquals(1, count("payment_facts"));
+  }
+
+  @Test
+  void twoHalfAllocationsOnDifferentInvoicesDoNotMakeOneFullCoverage() {
+    var a = payment(1200, "invoice-a-source");
+    var ma = match(a.id(), "match-a").block(WAIT);
+    f.nextTarget("second-invoice");
+    UUID second = UUID.fromString(f.create("second-invoice").block(WAIT).getId());
+    var b = payment(800, "invoice-b-source");
+    var mb = worker("matchInvoicePayment", ledger.match(A, b.id(), second, "match-b")).block(WAIT);
+    assertThrows(
+        Exception.class,
+        () ->
+            worker(
+                    "allocateInvoicePayments",
+                    f.f.transactions.execute(
+                        db ->
+                            db.sql(
+                                    "INSERT INTO"
+                                        + " taska.payment_allocations(id,tenant_id,payment_fact_id,invoice_id,match_id,amount_minor,operation_id,eligibility_evidence)"
+                                        + " VALUES(:id,:tenant,:source,:invoice,:match,1200,:operation,'{}')")
+                                .bind("id", UUID.randomUUID())
+                                .bind("tenant", A)
+                                .bind("source", a.id())
+                                .bind("invoice", invoice)
+                                .bind("match", ma.id())
+                                .bind("operation", UUID.randomUUID())
+                                .fetch()
+                                .rowsUpdated()
+                                .then(
+                                    db.sql(
+                                            "INSERT INTO"
+                                                + " taska.payment_allocations(id,tenant_id,payment_fact_id,invoice_id,match_id,amount_minor,operation_id,eligibility_evidence)"
+                                                + " VALUES(:id,:tenant,:source,:invoice,:match,800,:operation,'{}')")
+                                        .bind("id", UUID.randomUUID())
+                                        .bind("tenant", A)
+                                        .bind("source", b.id())
+                                        .bind("invoice", second)
+                                        .bind("match", mb.id())
+                                        .bind("operation", UUID.randomUUID())
+                                        .fetch()
+                                        .rowsUpdated())))
+                .block(WAIT));
+    assertEquals(0, count("payment_allocations"));
+    assertEquals(1200, balance(a.id()).unallocatedRemaining());
+    assertEquals(800, balance(b.id()).unallocatedRemaining());
   }
 }
