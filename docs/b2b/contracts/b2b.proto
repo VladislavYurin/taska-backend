@@ -570,6 +570,8 @@ message Subscription {
   string plan_version_id = 2;
   string version = 3;
   optional string current_period_id = 4;
+  // Exclusive end of current paid coverage; absent for FREE/before first payment.
+  // Expired history may retain a past end; field presence is not authorization.
   optional string paid_through = 5;
   optional int64 anchor_day = 6;
   bool renewal_cancelled = 7;

@@ -91,7 +91,7 @@ flowchart LR
 | `issue-service` | задачи, поиск, история, комментарии, связи, метки, вложения и наблюдатели |
 | `notification-service` | Kafka consumer, дедупликация событий, inbox и email-доставка |
 | `admin-service` | глобальный административный read-only API, маскирование, аудит и мониторинг outbox |
-| `billing-service` | [Версионированный каталог тарифов TAS-313](billing-service/README.md), защищённые gRPC draft/publish/list/resolve; подписки и платежи — следующие задачи |
+| `billing-service` | [Версионированный каталог тарифов TAS-313](billing-service/README.md), защищённые gRPC каталога и [модель подписок/покрытия TAS-314](billing-service/SUBSCRIPTIONS.md); реальные платежи — следующие задачи |
 | `tenant-service` | [реестр компаний TAS-310](tenant-service/README.md), защищённые CreateTenant/GetTenant; self-service activation требует следующих B2B-задач |
 | `common-lib` | общие доменные типы, события, исключения и R2DBC-конвертеры |
 | `grpc-common-lib` | protobuf-контракты и сгенерированные gRPC/Reactor stubs |

@@ -1,6 +1,6 @@
 # Billing catalog — TAS-313
 
-Implemented backend subset of the [B2B contracts](../docs/b2b/contracts/README.md): a separate service/database, global versioned plan catalog, draft creation, explicit publication and internal resolution of current published offers. Subscriptions, billing accounts, invoices, FX/tax calculations, ledger and PSP calls belong to subsequent tasks. This module does not charge money or activate tenant entitlements.
+Implemented backend subset of the [B2B contracts](../docs/b2b/contracts/README.md): a separate service/database, global versioned plan catalog, draft creation, explicit publication and internal resolution of current published offers. [Tenant-scoped subscriptions and coverage TAS-314](SUBSCRIPTIONS.md) extend this catalog. Invoice issuance, FX/tax calculations, ledger and PSP calls belong to subsequent tasks. This module does not charge money or activate tenant entitlements.
 
 ## Catalog and contracts
 
@@ -30,7 +30,7 @@ The paid price is tax-inclusive (D135); tax breakdown and commercial readiness a
 
 Global catalog mutations use a separate `catalog_mutation_receipts` table, keyed by actor/action/idempotency key. A transaction advisory lock serializes same-intent races; request hashes distinguish conflicts, and the exact protobuf response is durably replayed. Retry authority is checked **before** receipt lookup. Receipts retain the actor UUID and response, never credentials; cleanup/retention integration is future work (retention exceeds the required 24-hour retry window).
 
-The plan mutation, receipt and metadata-only global outbox event commit atomically. No global event uses a fake or nullable tenant ID. Separate tenant `idempotency_records`, `outbox_events` and `processed_events` are prepared with FORCE RLS for subsequent billing tasks; neither null context nor another tenant can read/write them. Billing accounts are implemented in TAS-314, rather than being simulated inside the catalog. Dispatcher, durable event application and retention workers remain their own tasks.
+The plan mutation, receipt and metadata-only global outbox event commit atomically. No global event uses a fake or nullable tenant ID. Separate tenant `idempotency_records`, `outbox_events` and `processed_events` are prepared with FORCE RLS for subsequent billing tasks; neither null context nor another tenant can read/write them. Tenant-scoped subscription/coverage state is implemented in TAS-314, separately from the global catalog. Dispatcher, durable event application and retention workers remain their own tasks.
 
 ## Local runtime
 

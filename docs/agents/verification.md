@@ -159,4 +159,6 @@ TAS-311: `tenant-service.verify` также требует свежий `TenantM
 
 ## Billing catalog
 
-`python3 scripts/harness.py check --module billing-service` requires a fresh nonempty `BillingCatalogIntegrationTest` report. It exercises real PostgreSQL 16, Liquibase, app role/RLS, concurrent catalog mutations and mTLS/JWS production policies. See [billing-service](../../billing-service/README.md) for the delivered RPCs and activation boundaries. Public REST/PSP E2E is not established by these checks.
+`python3 scripts/harness.py check --module billing-service` requires fresh nonempty `BillingCatalogIntegrationTest` and `SubscriptionIntegrationTest` reports. It exercises real PostgreSQL 16, Liquibase, app role/RLS, concurrent catalog mutations and mTLS/JWS production policies. See [billing-service](../../billing-service/README.md) for the delivered RPCs and activation boundaries. Public REST/PSP E2E is not established by these checks.
+
+TAS-314 adds [subscription model verification](../../billing-service/SUBSCRIPTIONS.md): upgrade with unchanged catalog checksum, transactional coverage/idempotency/outbox, immutable terms, financial owner/admin guards, A/B isolation and real mTLS read RPCs. This does not establish external settlement/calendar/gateway readiness.
