@@ -132,7 +132,7 @@ class TenantProvisioningIntegrationTest {
   void reset() {
     sql(
         "TRUNCATE"
-            + " taska.tenant_provisioning_dispatch,taska.tenant_operations,taska.tenants,taska.tenant_memberships,taska.idempotency_records,taska.outbox_events");
+            + " taska.tenant_creation_receipts,taska.tenant_provisioning_dispatch,taska.tenant_operations,taska.tenants,taska.tenant_memberships,taska.idempotency_records,taska.outbox_events");
     now = new AtomicReference<>(Instant.parse("2026-11-05T12:00:00Z"));
     clock =
         new Clock() {
@@ -434,10 +434,114 @@ class TenantProvisioningIntegrationTest {
           assertFalse(rows.next());
         }
         try (var rows =
-            sql.executeQuery("SELECT operation_id FROM taska.tenant_provisioning_dispatch")) {
+            sql.executeQuery(
+                "SELECT operation_id,creation_deadline_at FROM"
+                    + " taska.tenant_provisioning_dispatch")) {
           assertTrue(rows.next());
           assertEquals(operation, rows.getObject(1, UUID.class));
+          assertTrue(rows.getObject(2) != null);
           assertFalse(rows.next());
+        }
+      }
+    }
+  }
+
+  @Test
+  void upgradeBackfillsDistinctLegacyClosureReasonsAndRestoresRls() throws Exception {
+    try (var oldPg = new PostgreSQLContainer<>("postgres:16")) {
+      oldPg.start();
+      for (String ext : List.of("sql", "psql"))
+        oldPg.copyFileToContainer(
+            MountableFile.forClasspathResource("db/tenant/bootstrap." + ext),
+            "/tmp/bootstrap." + ext);
+      var boot =
+          oldPg.execInContainer(
+              "psql",
+              "-X",
+              "-v",
+              "ON_ERROR_STOP=1",
+              "-U",
+              oldPg.getUsername(),
+              "-d",
+              oldPg.getDatabaseName(),
+              "-v",
+              "service=tenant",
+              "-v",
+              "schema=taska",
+              "-f",
+              "/tmp/bootstrap.psql");
+      assertEquals(0, boot.getExitCode(), boot.getStderr());
+      try (var connection =
+              java.sql.DriverManager.getConnection(
+                  oldPg.getJdbcUrl(), oldPg.getUsername(), oldPg.getPassword());
+          var sql = connection.createStatement()) {
+        sql.execute("CREATE SCHEMA tenant_liquibase AUTHORIZATION taska_tenant_migrator");
+        sql.execute("ALTER ROLE taska_tenant_deployer PASSWORD '" + DEPLOY + "'");
+        var migration =
+            new TenantConfiguration()
+                .registryLiquibase(oldPg.getJdbcUrl(), "taska_tenant_deployer", DEPLOY);
+        try (var deployer = migration.getDataSource().getConnection()) {
+          var database = new liquibase.database.core.PostgresDatabase();
+          database.setConnection(new liquibase.database.jvm.JdbcConnection(deployer));
+          database.setLiquibaseSchemaName("tenant_liquibase");
+          try (var old =
+              new liquibase.Liquibase(
+                  "db/changelog/db.changelog-master.yaml",
+                  new liquibase.resource.ClassLoaderResourceAccessor(),
+                  database)) {
+            old.update(6, new liquibase.Contexts(), new liquibase.LabelExpression());
+          }
+        }
+        connection.setAutoCommit(false);
+        for (String state : List.of("AUTO_CLOSED", "OWNER_CANCELLED")) {
+          UUID tenant = UUID.randomUUID();
+          sql.execute(
+              "INSERT INTO"
+                  + " taska.tenants(id,name,owner_id,lifecycle,creation_kind,creation_deadline_at,plan_version_id,creation_actor_id,creation_request_hash,creation_operation_id)"
+                  + " VALUES ('"
+                  + tenant
+                  + "','Legacy','"
+                  + OWNER
+                  + "','"
+                  + state
+                  + "','PAID',now()-interval '1 day','"
+                  + PAID
+                  + "','"
+                  + OWNER
+                  + "',decode(repeat('00',32),'hex'),'"
+                  + UUID.randomUUID()
+                  + "')");
+          sql.execute(
+              "INSERT INTO taska.tenant_memberships(tenant_id,user_id,role,status) VALUES('"
+                  + tenant
+                  + "','"
+                  + OWNER
+                  + "','TENANT_ADMIN','ACTIVE')");
+        }
+        connection.commit();
+        connection.setAutoCommit(true);
+        migration.afterPropertiesSet();
+        migration.afterPropertiesSet();
+        try (var rows =
+            sql.executeQuery(
+                "SELECT lifecycle,creation_closure_reason,creation_closed_at=updated_at same_time"
+                    + " FROM taska.tenants ORDER BY lifecycle")) {
+          assertTrue(rows.next());
+          assertEquals("AUTO_CLOSED", rows.getString(1));
+          assertEquals("AUTO_EXPIRED", rows.getString(2));
+          assertTrue(rows.getBoolean(3));
+          assertTrue(rows.next());
+          assertEquals("OWNER_CANCELLED", rows.getString(1));
+          assertEquals("OWNER_CANCELLED", rows.getString(2));
+          assertTrue(rows.getBoolean(3));
+          assertFalse(rows.next());
+        }
+        try (var rows =
+            sql.executeQuery(
+                "SELECT bool_and(relrowsecurity AND relforcerowsecurity) FROM pg_class WHERE oid IN"
+                    + " ('taska.tenants'::regclass,'taska.tenant_creation_receipts'::regclass)")) {
+          assertTrue(rows.next());
+          assertTrue(rows.getBoolean(1));
         }
       }
     }

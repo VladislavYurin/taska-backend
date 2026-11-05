@@ -73,8 +73,9 @@ public final class TenantProvisioning {
         .then(
             db.sql(
                     "INSERT INTO"
-                        + " taska.tenant_provisioning_dispatch(tenant_id,operation_id,next_attempt_at)"
-                        + " VALUES(:tenant,:op,:now)")
+                        + " taska.tenant_provisioning_dispatch(tenant_id,operation_id,next_attempt_at,creation_deadline_at)"
+                        + " SELECT :tenant,:op,:now,creation_deadline_at FROM taska.tenants WHERE"
+                        + " id=:tenant")
                 .bind("tenant", tenant)
                 .bind("op", operation)
                 .bind("now", at(now))
@@ -187,7 +188,7 @@ public final class TenantProvisioning {
                     UPDATE taska.tenant_operations o SET state='RUNNING', fence=fence+1, lease_until=:lease, updated_at=:now
                     FROM taska.tenants t WHERE o.tenant_id=:tenant AND o.id=:id AND t.id=o.tenant_id
                     AND o.state IN ('ACCEPTED','RUNNING') AND (o.lease_until IS NULL OR o.lease_until<=:now)
-                    AND t.lifecycle IN ('PROVISIONING','AWAITING_PAYMENT')
+                    AND (t.lifecycle IN ('PROVISIONING','AWAITING_PAYMENT') OR (t.lifecycle='AUTO_CLOSED' AND t.creation_kind='PAID'))
                     RETURNING o.*,o.payload->>'planVersionId' plan,o.payload->>'templateId' template,o.payload->>'creationKind' creation_kind
                     """)
                 .bind("tenant", tenant)
@@ -252,22 +253,28 @@ public final class TenantProvisioning {
     return transactions
         .execute(
             db ->
-                db.sql(
-                        "SELECT id FROM taska.tenant_operations WHERE tenant_id=:tenant AND id=:id"
-                            + " AND fence=:fence AND state='RUNNING' AND completed_steps=2 AND"
-                            + " lease_until>:now FOR UPDATE")
-                    .bind("tenant", c.tenant())
-                    .bind("id", c.id())
-                    .bind("fence", c.fence())
-                    .bind("now", at(now))
-                    .fetch()
-                    .one()
-                    .switchIfEmpty(Mono.error(fail(DomainStatus.ABORTED, "VERSION_CONFLICT")))
+                TenantCreationLifecycle.lock(db, c.tenant())
+                    .then(
+                        db.sql(
+                                "SELECT id FROM taska.tenant_operations WHERE tenant_id=:tenant AND"
+                                    + " id=:id AND fence=:fence AND state='RUNNING' AND"
+                                    + " completed_steps=2 AND lease_until>:now FOR UPDATE")
+                            .bind("tenant", c.tenant())
+                            .bind("id", c.id())
+                            .bind("fence", c.fence())
+                            .bind("now", at(now))
+                            .fetch()
+                            .one()
+                            .switchIfEmpty(
+                                Mono.error(fail(DomainStatus.ABORTED, "VERSION_CONFLICT"))))
                     .then(
                         db.sql(
                                 """
-                                UPDATE taska.tenants t SET lifecycle=:state,version=version+1,updated_at=:now
-                                WHERE id=:tenant AND lifecycle=:previous AND EXISTS(SELECT 1 FROM taska.tenant_memberships m
+                                UPDATE taska.tenants t SET lifecycle=CASE
+                                  WHEN lifecycle='AUTO_CLOSED' THEN lifecycle
+                                  WHEN creation_kind='PAID' AND first_payment_fact_id IS NOT NULL THEN 'ACTIVE'
+                                  ELSE :state END,version=version+1,updated_at=:now
+                                WHERE id=:tenant AND (lifecycle=:previous OR (lifecycle='AUTO_CLOSED' AND creation_kind='PAID')) AND EXISTS(SELECT 1 FROM taska.tenant_memberships m
                                 WHERE m.tenant_id=t.id AND m.user_id=t.owner_id AND m.status='ACTIVE' AND m.role='TENANT_ADMIN')
                                 RETURNING version
                                 """)

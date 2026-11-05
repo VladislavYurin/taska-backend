@@ -271,6 +271,37 @@ public class TenantConfiguration {
   }
 
   @Bean
+  @ConditionalOnMissingBean
+  TenantCreationDecisions.Authority initialPaymentDecisions() {
+    return (tenant, decision) ->
+        Mono.error(TenantRegistryService.fail(DomainStatus.UNAVAILABLE, "DEPENDENCY_UNAVAILABLE"));
+  }
+
+  @Bean
+  @DependsOn("safeRuntimeRole")
+  TenantCreationLifecycle creationLifecycle(
+      TenantTransactionExecutor transactions, TenantCreationDecisions.Authority decisions) {
+    return new TenantCreationLifecycle(transactions, decisions, Clock.systemUTC());
+  }
+
+  @Bean
+  TenantCreationExpiryWorker creationExpiryWorker(
+      ConnectionFactory factory,
+      ObjectProvider<RpcContextSecurity> security,
+      TenantCreationLifecycle lifecycle) {
+    return new TenantCreationExpiryWorker(
+        org.springframework.r2dbc.core.DatabaseClient.create(factory),
+        () -> {
+          var trust = security.getIfAvailable();
+          return trust == null
+              ? null
+              : new ru.taska.security.tenant.TenantLifecycleAuthority(trust, Clock.systemUTC());
+        },
+        lifecycle,
+        Clock.systemUTC());
+  }
+
+  @Bean
   @GlobalServerInterceptor
   ServerInterceptor registrySecurity(
       ObjectProvider<RpcContextSecurity> provider,
@@ -280,6 +311,19 @@ public class TenantConfiguration {
       return new TenantServerInterceptor(
           security,
           Map.ofEntries(
+              java.util.Map.entry(
+                  TenantServiceGrpc.getCancelTenantCreationMethod().getFullMethodName(),
+                  new RpcContextSecurity.Policy(false, true)),
+              java.util.Map.entry(
+                  ru.taska.api.b2b.v1.TenantCreationLifecycleServiceGrpc
+                      .getExpireTenantCreationMethod()
+                      .getFullMethodName(),
+                  new RpcContextSecurity.Policy(true, true)),
+              java.util.Map.entry(
+                  ru.taska.api.b2b.v1.TenantCreationLifecycleServiceGrpc
+                      .getApplyTenantInitialPaymentDecisionMethod()
+                      .getFullMethodName(),
+                  new RpcContextSecurity.Policy(true, true)),
               java.util.Map.entry(
                   ru.taska.api.b2b.v1.TenantProvisioningServiceGrpc
                       .getResumeTenantProvisioningMethod()

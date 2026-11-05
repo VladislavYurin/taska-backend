@@ -1,0 +1,25 @@
+syntax = "proto3";
+package ru.taska.b2b.v1;
+import "v1/tenant-context.proto";
+import "v1/tenant-registry.proto";
+option java_multiple_files = true;
+option java_package = "ru.taska.api.b2b.v1";
+message ExpireTenantCreationRequest {
+ RequestContext context = 1;
+ string tenant_id = 2;
+}
+// No browser-supplied money, timestamps or success booleans: resolve an immutable primary decision.
+message ApplyTenantInitialPaymentDecisionRequest {
+ RequestContext context = 1;
+ string tenant_id = 2;
+ string decision_id = 3;
+}
+message TenantInitialPaymentResult {
+ enum Outcome { OUTCOME_UNSPECIFIED = 0; OUTCOME_APPLIED = 1; OUTCOME_ALREADY_APPLIED = 2; OUTCOME_NOT_ELIGIBLE = 3; OUTCOME_NEEDS_EVIDENCE = 4; OUTCOME_WAITING_PROVISIONING = 5; }
+ Tenant tenant = 1;
+ Outcome outcome = 2;
+}
+service TenantCreationLifecycleService {
+ rpc ExpireTenantCreation(ExpireTenantCreationRequest) returns (Tenant);
+ rpc ApplyTenantInitialPaymentDecision(ApplyTenantInitialPaymentDecisionRequest) returns (TenantInitialPaymentResult);
+}

@@ -305,7 +305,7 @@ public final class TenantRegistryService {
         .one();
   }
 
-  private static byte[] binary(Object value) {
+  static byte[] binary(Object value) {
     if (value instanceof byte[] bytes) return bytes;
     var buffer = ((ByteBuffer) value).duplicate();
     var bytes = new byte[buffer.remaining()];
@@ -368,7 +368,16 @@ public final class TenantRegistryService {
         });
   }
 
-  private static Tenant tenant(Map<String, Object> row) {
+  public Mono<Tenant> cancelCreation(ru.taska.api.b2b.v1.CancelTenantCreationRpcRequest request) {
+    return new TenantCreationLifecycle(
+            transactions,
+            (tenant, decision) ->
+                Mono.error(fail(DomainStatus.UNAVAILABLE, "DEPENDENCY_UNAVAILABLE")),
+            clock)
+        .cancel(request);
+  }
+
+  static Tenant tenant(Map<String, Object> row) {
     var result =
         Tenant.newBuilder()
             .setId(row.get("id").toString())
@@ -382,6 +391,11 @@ public final class TenantRegistryService {
             .setCreationOperationId(row.get("creation_operation_id").toString())
             .setCreationKind(
                 Tenant.CreationKindValue.valueOf("CREATION_KIND_" + row.get("creation_kind")));
+    if (row.get("creation_closure_reason") instanceof String reason)
+      result.setCreationClosureReason(
+          Tenant.CreationClosureReason.valueOf("CREATION_CLOSURE_REASON_" + reason));
+    if (row.get("creation_closed_at") instanceof OffsetDateTime closed)
+      result.setCreationClosedAt(closed.toInstant().toString());
     if (row.get("creation_deadline_at") instanceof OffsetDateTime d)
       result.setCreationDeadline(d.toInstant().toString());
     if (row.get("creation_kind").equals("PAID") && row.get("first_payment_fact_id") == null)
