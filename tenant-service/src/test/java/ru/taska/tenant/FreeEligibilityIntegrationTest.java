@@ -214,7 +214,7 @@ class FreeEligibilityIntegrationTest {
   void reset() {
     sql(
         "TRUNCATE"
-            + " taska.free_eligibility_ledger,taska.free_eligibility_dispositions,taska.tenants,taska.tenant_memberships,taska.idempotency_records,taska.outbox_events,taska.global_outbox_events");
+            + " taska.free_eligibility_ledger,taska.free_eligibility_dispositions,taska.tenant_provisioning_dispatch,taska.tenant_operations,taska.tenants,taska.tenant_memberships,taska.idempotency_records,taska.outbox_events,taska.global_outbox_events");
     emails = new ConcurrentHashMap<>();
     cases = new ConcurrentHashMap<>();
     secretKeys = new ConcurrentHashMap<>();

@@ -250,6 +250,9 @@ public class BillingConfiguration {
       return new TenantServerInterceptor(
           security,
           Map.of(
+              ru.taska.api.b2b.v1.BillingProvisioningServiceGrpc.getInitializeSubscriptionMethod()
+                      .getFullMethodName(),
+                  new RpcContextSecurity.Policy(true, true),
               BillingServiceGrpc.getListInvoicesMethod().getFullMethodName(),
                   new RpcContextSecurity.Policy(true, false),
               BillingServiceGrpc.getGetInvoiceMethod().getFullMethodName(),

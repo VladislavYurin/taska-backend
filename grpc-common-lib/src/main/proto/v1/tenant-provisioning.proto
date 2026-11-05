@@ -1,0 +1,40 @@
+syntax = "proto3";
+package ru.taska.b2b.v1;
+import "v1/tenant-context.proto";
+import "v1/tenant-registry.proto";
+option java_multiple_files = true;
+option java_package = "ru.taska.api.b2b.v1";
+// Internal service-only commands; tenant and immutable operation inputs are signed together.
+message InitializeSubscriptionRequest {
+  RequestContext context = 1;
+  string tenant_id = 2;
+  string operation_id = 3;
+  string plan_version_id = 4;
+}
+message ProvisionTenantWorkflowRequest {
+  RequestContext context = 1;
+  string tenant_id = 2;
+  string operation_id = 3;
+  string template_id = 4;
+}
+message ProvisionTenantWorkflowResponse { string template_copy_id = 1; }
+message ResumeTenantProvisioningRequest {
+  RequestContext context = 1;
+  string tenant_id = 2;
+  string operation_id = 3;
+}
+message ProvisionedBillingAccount {
+  string tenant_id = 1;
+  string plan_version_id = 2;
+  enum Mode { MODE_UNSPECIFIED = 0; MODE_FREE = 1; MODE_AWAITING_PAYMENT = 2; }
+  Mode mode = 3;
+}
+service BillingProvisioningService {
+  rpc InitializeSubscription(InitializeSubscriptionRequest) returns (ProvisionedBillingAccount);
+}
+service WorkflowProvisioningService {
+  rpc ProvisionTenantWorkflow(ProvisionTenantWorkflowRequest) returns (ProvisionTenantWorkflowResponse);
+}
+service TenantProvisioningService {
+  rpc ResumeTenantProvisioning(ResumeTenantProvisioningRequest) returns (Operation);
+}

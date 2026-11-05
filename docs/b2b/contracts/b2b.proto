@@ -162,6 +162,10 @@ message Tenant {
   optional string creation_deadline = 7;
   string version = 8;
   string owner_version = 9;
+  optional string plan_version_id = 10;
+  optional string creation_operation_id = 11;
+  enum CreationKindValue { CREATION_KIND_UNSPECIFIED = 0; CREATION_KIND_FREE = 1; CREATION_KIND_PAID = 2; }
+  optional CreationKindValue creation_kind = 12;
 }
 
 message TenantPage {

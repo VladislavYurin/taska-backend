@@ -33,7 +33,7 @@ Create принимает только проверенный контекст `
 
 В tenant row сохраняются immutable `creation_actor_id`, `creation_request_hash` (SHA-256 canonical JSON name/planVersionId/operationId), `creation_operation_id`, `plan_version_id`, kind и deadline. `INSERT ON CONFLICT` сериализует параллельные попытки: разные payload с тем же ключом дают IDEMPOTENCY_CONFLICT, один payload возвращает один tenant/operation. Replay проверяет текущую ACTIVE membership, работает при retirement/недоступности каталога и после удаления response-cache. TTL idempotency cache24h не удаляет durable creation facts; их purge должен учитывать доменный dedupe в TAS-520.
 
-В одной транзакции создаются tenant, ACTIVE/TENANT_ADMIN owner membership, outbox `TenantCreationRequested` и idempotency response. Циклический composite FK owner→membership проверяется на commit. Event содержит IDs/planVersion, не название компании или credentials. Publisher и возобновляемая saga — TAS-318/337. Операция возвращается PENDING: readiness/ACTIVE этим модулем не выставляется.
+В одной транзакции создаются tenant, ACTIVE/TENANT_ADMIN owner membership, outbox `TenantCreationRequested` и idempotency response. Циклический composite FK owner→membership проверяется на commit. Event содержит IDs/planVersion, не название компании или credentials. Kafka publisher — TAS-318; возобновляемая saga, durable worker и фактическое чтение операции реализованы TAS-337. Первый ответ возвращает PENDING; ACTIVE выставляется только после готовности обязательных шагов.
 
 Paid начинается AWAITING_PAYMENT с `creationDeadline=createdAt+30d`, `PENDING_FIRST_PAYMENT`, без покрытия/рабочих прав. FREE остаётся PROVISIONING после атомарного admission, без paid deadline. Retrying не продлевает deadline. Trigger запрещает изменение исходных creation facts даже прямым SQL. Get требует совпадение signed tenant и request tenant, action getTenant и ACTIVE membership; чужой/удалённый tenant скрывается как TENANT_NOT_FOUND. Это чтение metadata, оно не обходит ограничения рабочих операций. Административный bypass — отдельный доверенный путь TAS-346, обычный GLOBAL_ADMIN не даёт его автоматически.
 
@@ -76,3 +76,7 @@ The [commercial configuration authority](../billing-service/COMMERCIAL-READINESS
 ## FREE eligibility — TAS-472
 
 [Atomic FREE eligibility](FREE-ELIGIBILITY.md) implements the creation admission and protected billing admission, WEB_GLOBAL creation options and internal lawful-disposition RPCs. Identity/KMS/purpose preparation happens outside SQL; the marker commits with creation or an admission receipt. Deletion minimization retains only purpose-bound matching data. Real primary providers, gateway and offboarding/plan orchestration remain separate activation dependencies.
+
+## Durable provisioning — TAS-337
+
+[Durable saga, operation lookup, recovery, protected RPCs and local service-path E2E](PROVISIONING.md). Registry creation now stores the actual operation and dispatch entry atomically; FREE activates only after workflow/billing preparation. Public gateway integration and deployment activation remain separate.

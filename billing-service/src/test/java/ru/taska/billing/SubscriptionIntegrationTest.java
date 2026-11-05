@@ -530,6 +530,43 @@ class SubscriptionIntegrationTest {
   }
 
   @Test
+  void provisioningAccountRetriesHaveOneRowAndRejectAlteredInputOrUntrustedCaller() {
+    UUID operation = UUID.randomUUID();
+    var first =
+        asWorker(A, "initializeSubscription", "tenant-service", store.provision(A, PAID, operation))
+            .block(WAIT);
+    assertEquals(
+        ru.taska.api.b2b.v1.ProvisionedBillingAccount.Mode.MODE_AWAITING_PAYMENT, first.getMode());
+    assertEquals(
+        first,
+        asWorker(A, "initializeSubscription", "tenant-service", store.provision(A, PAID, operation))
+            .block(WAIT));
+    assertThrows(
+        DomainException.class,
+        () ->
+            asWorker(
+                    A,
+                    "initializeSubscription",
+                    "tenant-service",
+                    store.provision(A, FREE, operation))
+                .block(WAIT));
+    assertThrows(
+        DomainException.class,
+        () ->
+            asWorker(
+                    B, "initializeSubscription", "api-gateway", store.provision(B, FREE, operation))
+                .block(WAIT));
+    var free =
+        asWorker(B, "initializeSubscription", "tenant-service", store.provision(B, FREE, operation))
+            .block(WAIT);
+    assertEquals(ru.taska.api.b2b.v1.ProvisionedBillingAccount.Mode.MODE_FREE, free.getMode());
+    assertEquals(2, count("subscriptions"));
+    assertEquals(0, count("subscription_periods"));
+    assertFalse(get(OWNER_A, A).hasPaidThrough());
+    assertFalse(get(OWNER_B, B).hasPaidThrough());
+  }
+
+  @Test
   void freeAndAwaitingPaymentAreDistinctWithoutFabricatedCoverage() {
     init(A, FREE, "free").block(WAIT);
     init(B, PAID, "paid").block(WAIT);

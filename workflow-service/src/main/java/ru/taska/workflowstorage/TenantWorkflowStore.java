@@ -44,6 +44,45 @@ public final class TenantWorkflowStore {
       return new WorkflowBindingChangeRepository(db,tenant,()->RecoveryStamp.from(context),json);
     }
 
+    /**
+     * Operation receipt prevents a retry with altered template input from creating a second copy.
+     */
+    public Mono<TemplateCopy> provision(UUID operation, UUID template) {
+      return sql("SELECT"
+                     + " pg_advisory_xact_lock(hashtextextended(:tenant::text||':provision:'||:key,0))")
+          .bind("key", operation.toString())
+          .fetch()
+          .all()
+          .then(
+              sql("SELECT template_id,template_copy_id FROM taska.workflow_provisioning_receipts"
+                      + " WHERE tenant_id=:tenant AND operation_id=:operation")
+                  .bind("operation", operation)
+                  .fetch()
+                  .one()
+                  .flatMap(
+                      row -> {
+                        if (!template.equals(row.get("template_id")))
+                          return Mono.error(
+                              new DomainException(
+                                  DomainStatus.ALREADY_EXISTS, "IDEMPOTENCY_CONFLICT"));
+                        return copy((UUID) row.get("template_copy_id"));
+                      })
+                  .switchIfEmpty(
+                      Mono.defer(
+                          () ->
+                              provisionTemplate(template)
+                                  .flatMap(
+                                      copy ->
+                                          sql("INSERT INTO"
+                                                  + " taska.workflow_provisioning_receipts(tenant_id,operation_id,template_id,template_copy_id)"
+                                                  + " VALUES(:tenant,:operation,:template,:copy)")
+                                              .bind("operation", operation)
+                                              .bind("template", template)
+                                              .bind("copy", copy.id())
+                                              .then()
+                                              .thenReturn(copy)))));
+    }
+
     /** One immutable private copy per tenant/published version; concurrent repeats share its UUID. */
     public Mono<TemplateCopy> provisionTemplate(UUID template) {
       return db.sql("SELECT graph::text graph,graph_schema_version FROM taska.workflow_templates WHERE id=:id AND published_at IS NOT NULL")

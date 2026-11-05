@@ -18,6 +18,9 @@
     <dependency><groupId>io.projectreactor</groupId><artifactId>reactor-test</artifactId><scope>test</scope></dependency>
     <dependency><groupId>org.testcontainers</groupId><artifactId>postgresql</artifactId><scope>test</scope></dependency>
     <dependency><groupId>org.testcontainers</groupId><artifactId>junit-jupiter</artifactId><scope>test</scope></dependency>
+    <!-- Local cross-service provisioning fixture uses production handlers and separate databases. -->
+    <dependency><groupId>ru.taska</groupId><artifactId>billing-service</artifactId><version>${project.version}</version><classifier>provisioning-fixture</classifier><scope>test</scope></dependency>
+    <dependency><groupId>ru.taska</groupId><artifactId>workflow-service</artifactId><version>${project.version}</version><classifier>provisioning-fixture</classifier><scope>test</scope></dependency>
   </dependencies>
   <build><plugins><plugin><groupId>org.springframework.boot</groupId><artifactId>spring-boot-maven-plugin</artifactId><executions><execution><goals><goal>repackage</goal></goals></execution></executions></plugin></plugins></build>
 </project>
