@@ -334,6 +334,52 @@ class BillingCatalogIntegrationTest {
     publish(three, "pub3");
     publish(two, "pub2");
     assertEquals("3", list(100, null).getItems(1).getVersion());
+    var service =
+        claims("resolvePublishedPlan").toBuilder()
+            .setCredentialKind(CredentialKind.CREDENTIAL_KIND_SERVICE)
+            .setIssuerService("tenant-service")
+            .addScopes("catalog:resolve")
+            .build();
+    assertEquals(
+        three.getId(),
+        RegistryTestContext.withClaims(
+                service,
+                catalog.resolve(
+                    ResolvePublishedPlanRpcRequest.newBuilder()
+                        .setPlanVersionId(three.getId())
+                        .build()))
+            .block(WAIT)
+            .getId());
+    rejects(
+        DomainStatus.NOT_FOUND,
+        "RESOURCE_NOT_FOUND",
+        RegistryTestContext.withClaims(
+            service,
+            catalog.resolve(
+                ResolvePublishedPlanRpcRequest.newBuilder()
+                    .setPlanVersionId(two.getId())
+                    .build())));
+  }
+
+  @Test
+  void cursorDoesNotRequireTheAnchorToRemainAnActiveOffer() {
+    var page = list(1, null);
+    assertEquals("FREE", page.getItems(0).getCode());
+    // Operator-only fixture: the runtime API cannot archive/delete product identity.
+    sql("ALTER TABLE taska.catalog_plans DISABLE TRIGGER immutable_product");
+    try {
+      sql("UPDATE taska.catalog_plans SET archived_at=now() WHERE plan_code='FREE'");
+      var next = list(1, page.getNextCursor());
+      assertEquals(
+          List.of("PAID"), next.getItemsList().stream().map(PlanVersion::getCode).toList());
+      assertFalse(next.hasNextCursor());
+      assertEquals(
+          List.of("PAID"),
+          list(100, null).getItemsList().stream().map(PlanVersion::getCode).toList());
+    } finally {
+      sql("UPDATE taska.catalog_plans SET archived_at=NULL WHERE plan_code='FREE'");
+      sql("ALTER TABLE taska.catalog_plans ENABLE TRIGGER immutable_product");
+    }
   }
 
   @Test
