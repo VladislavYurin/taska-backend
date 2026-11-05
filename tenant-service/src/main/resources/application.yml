@@ -28,6 +28,6 @@ management:
       show-details: never
 taska:
   tenant:
-    creation-window: 30d
+    platform-flags-cursor-key: ${TENANT_PLATFORM_FLAGS_CURSOR_KEY:}
     membership-cursor-key: ${TENANT_MEMBERSHIP_CURSOR_KEY:}
     membership-readers: ${TENANT_MEMBERSHIP_READERS:auth-service,api-gateway,project-service,workflow-service,issue-service}

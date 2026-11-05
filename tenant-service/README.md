@@ -64,3 +64,7 @@ python3 scripts/harness.py check --module tenant-service
 ```
 
 PostgreSQL16/Testcontainers, фактический Liquibase с deployer→migrator, app LOGIN и повтор применения changelog. Проверяются atomic create, конкурентный retry/conflict, immutable deadline, cache eviction и catalog retirement, независимые actors, FREE/paid separation, cancellation rollback, membership isolation, отсутствующая trust и запуск Spring Boot/HTTP health на чистой миграции. `RegistryTestContext` существует только в test sources; production не принимает body context за verified authority. Дополнительно сам registry adapter проверяется по настоящему loopback mTLS/JWS: create/get, payload tampering, replay и чужой actor; openssl создаёт временные credentials. Базовые security-инварианты повторяются grpc-common-lib suite. Runtime jar не содержит test helper. Планы и service repository контракты будущих сущностей проверяются задачами их реализации.
+
+## Platform configuration — TAS-462
+
+[Typed global business flags](PLATFORM-FLAGS.md) add protected ListPlatformFlags/UpdatePlatformFlag RPCs, immutable version/audit history, idempotent optimistic updates and transactional global events. Paid creation now snapshots its 30-day default from the DB registry; existing deadlines and retries retain their original value. Public capabilities and flag enforcement in other domains remain separate tasks.

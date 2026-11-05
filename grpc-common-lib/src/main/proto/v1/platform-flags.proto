@@ -1,0 +1,34 @@
+syntax = "proto3";
+package ru.taska.b2b.v1;
+import "v1/tenant-context.proto";
+import "v1/tenant-registry.proto";
+option java_multiple_files = true;
+option java_package = "ru.taska.api.b2b.v1";
+// TAS-462 implemented subset. Blueprint field numbers are preserved.
+message PlatformFlag {
+  enum TypeValue { TYPE_UNSPECIFIED = 0; TYPE_BOOLEAN = 1; TYPE_INTEGER = 2; TYPE_DURATION_SECONDS = 3; }
+  string key = 1;
+  TypeValue type = 2;
+  optional bool boolean_value = 3;
+  optional string integer_value = 4;
+  string version = 5;
+  string effective_at = 6;
+  string owner = 7;
+  optional bool default_boolean_value = 8;
+  optional string default_integer_value = 9;
+  optional string minimum_value = 10;
+  optional string maximum_value = 11;
+}
+message PlatformFlagPage { repeated PlatformFlag items = 1; optional string next_cursor = 2; }
+message UpdateFlagRequest { optional bool boolean_value = 1; optional string integer_value = 2; }
+message ListPlatformFlagsRpcRequest { RequestContext context = 1; PageRequest page = 2; }
+message UpdatePlatformFlagRpcRequest {
+  RequestContext context = 1;
+  string flag_key = 2;
+  UpdateFlagRequest payload = 3;
+  MutationOptions mutation = 4;
+}
+service PlatformService {
+  rpc ListPlatformFlags(ListPlatformFlagsRpcRequest) returns (PlatformFlagPage);
+  rpc UpdatePlatformFlag(UpdatePlatformFlagRpcRequest) returns (PlatformFlag);
+}
