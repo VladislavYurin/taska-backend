@@ -187,7 +187,7 @@ class TenantProjectStorageIntegrationTest {
     for(String statement:List.of("SET ROLE taska_project_migrator","TRUNCATE taska.projects","ALTER TABLE taska.projects DISABLE ROW LEVEL SECURITY",
         "CREATE TABLE taska.unsafe(id int)","UPDATE taska.outbox_events SET status='PUBLISHED'"))
       assertThrows(Exception.class,()->raw.sql(statement).then().block(WAIT));
-    assertEquals(8L,operator.sql("SELECT count(*) n FROM pg_class WHERE relnamespace='taska'::regnamespace AND relrowsecurity AND relforcerowsecurity")
+    assertEquals((long) TABLES.size()+2,operator.sql("SELECT count(*) n FROM pg_class WHERE relnamespace='taska'::regnamespace AND relrowsecurity AND relforcerowsecurity")
         .map((r,m)->r.get("n",Long.class)).one().block(WAIT));
     for(String table:TABLES) assertEquals(0L,raw.sql("SELECT count(*) n FROM taska."+table).map((r,m)->r.get("n",Long.class)).one().block(WAIT));
   }

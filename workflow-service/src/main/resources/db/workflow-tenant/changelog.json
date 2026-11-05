@@ -267,6 +267,69 @@
           }
         ]
       }
+    },
+    {
+      "changeSet": {
+        "id": "workflow-entitlement-0014",
+        "author": "taska",
+        "changes": [
+          {
+            "sql": {
+              "sql": "SET LOCAL ROLE taska_workflow_migrator;"
+            }
+          },
+          {
+            "sqlFile": {
+              "path": "db/tenant/entitlement-projection.sql",
+              "splitStatements": false
+            }
+          },
+          {
+            "sql": {
+              "sql": "SELECT set_config('taska.guard_service','workflow',true),set_config('taska.guard_schema','taska',true),set_config('taska.guard_table','entitlement_projections',true),set_config('taska.guard_column','tenant_id',true),set_config('taska.guard_app_access','read_write',true);"
+            }
+          },
+          {
+            "sqlFile": {
+              "path": "db/tenant/protect-table.sql",
+              "splitStatements": false
+            }
+          },
+          {
+            "sql": {
+              "sql": "SELECT set_config('taska.audit_service','workflow',true),set_config('taska.audit_schema','taska',true),set_config('taska.audit_table','entitlement_projections',true),set_config('taska.audit_column','tenant_id',true),set_config('taska.audit_app_access','read_write',true);"
+            }
+          },
+          {
+            "sqlFile": {
+              "path": "db/tenant/audit.sql",
+              "splitStatements": false
+            }
+          },
+          {
+            "sql": {
+              "sql": "SELECT set_config('taska.guard_service','workflow',true),set_config('taska.guard_schema','taska',true),set_config('taska.guard_table','entitlement_projection_events',true),set_config('taska.guard_column','tenant_id',true),set_config('taska.guard_app_access','append_only',true);"
+            }
+          },
+          {
+            "sqlFile": {
+              "path": "db/tenant/protect-table.sql",
+              "splitStatements": false
+            }
+          },
+          {
+            "sql": {
+              "sql": "SELECT set_config('taska.audit_service','workflow',true),set_config('taska.audit_schema','taska',true),set_config('taska.audit_table','entitlement_projection_events',true),set_config('taska.audit_column','tenant_id',true),set_config('taska.audit_app_access','append_only',true);"
+            }
+          },
+          {
+            "sqlFile": {
+              "path": "db/tenant/audit.sql",
+              "splitStatements": false
+            }
+          }
+        ]
+      }
     }
   ]
 }
