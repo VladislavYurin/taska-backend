@@ -32,6 +32,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
@@ -496,100 +497,121 @@ class TenantProvisioningRpcIntegrationTest {
 
   @Test
   void signedCreationResumesAcrossLostRemoteAcksAndReadsFinalOperation() {
-    for (UUID plan : List.of(FREE, PAID)) {
-      String key = UUID.randomUUID().toString();
-      var base =
-          CreateTenantRpcRequest.newBuilder()
-              .setPayload(
-                  ru.taska.api.b2b.v1.CreateTenantRequest.newBuilder()
-                      .setName("RPC fixture")
-                      .setPlanVersionId(plan.toString()))
-              .setMutation(ru.taska.api.b2b.v1.MutationOptions.newBuilder().setIdempotencyKey(key));
-      var request = base.setContext(context("createTenant")).build();
-      assertEquals(
-          Status.Code.UNAUTHENTICATED,
-          assertThrows(StatusRuntimeException.class, () -> tenant.createTenant(request))
-              .getStatus()
-              .getCode());
-      var signed =
-          tenant.withInterceptors(
-              MetadataUtils.newAttachHeadersInterceptor(
-                  signature(
-                      request,
-                      TenantServiceGrpc.getCreateTenantMethod().getFullMethodName(),
-                      true)));
-      assertEquals(
-          Status.Code.UNAUTHENTICATED,
-          assertThrows(
-                  StatusRuntimeException.class,
-                  () ->
-                      signed.createTenant(
-                          request.toBuilder()
-                              .setPayload(request.getPayload().toBuilder().setName("tampered"))
-                              .build()))
-              .getStatus()
-              .getCode());
-      var created = signed.createTenant(request);
-      assertEquals(Operation.StateValue.STATE_PENDING, created.getOperation().getState());
-      for (int i = 0; i < 3; i++) {
-        worker.poll().block(WAIT);
-        tenantDb
-            .sql(
-                "UPDATE taska.tenant_provisioning_dispatch SET next_attempt_at=now()-interval '1"
-                    + " second' WHERE completed_at IS NULL")
-            .then()
-            .block(WAIT);
-      }
-      var read =
-          GetTenantOperationRpcRequest.newBuilder()
-              .setContext(context("getTenantOperation"))
-              .setTenantId(created.getTenant().getId())
-              .setOperationId(created.getOperation().getId())
-              .build();
-      var operation =
-          tenant
-              .withInterceptors(
-                  MetadataUtils.newAttachHeadersInterceptor(
-                      signature(
-                          read,
-                          TenantServiceGrpc.getGetTenantOperationMethod().getFullMethodName(),
-                          false)))
-              .getTenantOperation(read);
-      assertEquals(Operation.StateValue.STATE_SUCCEEDED, operation.getState());
-      var repeat = base.setContext(context("createTenant")).build();
-      var replay =
-          tenant
-              .withInterceptors(
-                  MetadataUtils.newAttachHeadersInterceptor(
-                      signature(
-                          repeat,
-                          TenantServiceGrpc.getCreateTenantMethod().getFullMethodName(),
-                          true)))
-              .createTenant(repeat);
-      assertEquals(operation, replay.getOperation());
-      assertEquals(created.getTenant().getId(), replay.getTenant().getId());
-      assertEquals(
-          plan.equals(FREE)
-              ? Tenant.LifecycleValue.LIFECYCLE_ACTIVE
-              : Tenant.LifecycleValue.LIFECYCLE_AWAITING_PAYMENT,
-          replay.getTenant().getLifecycle());
-      if (plan.equals(PAID)) {
+    try (var scheduler =
+        new org.springframework.context.annotation.AnnotationConfigApplicationContext()) {
+      scheduler
+          .getEnvironment()
+          .getPropertySources()
+          .addFirst(
+              new org.springframework.core.env.MapPropertySource(
+                  "fixture", Map.of("taska.tenant.provisioning-poll-ms", "20")));
+      scheduler.register(SchedulingFixture.class);
+      scheduler.registerBean(TenantProvisioningWorker.class, () -> worker);
+      scheduler.refresh();
+      for (UUID plan : List.of(FREE, PAID)) {
+        String key = UUID.randomUUID().toString();
+        var base =
+            CreateTenantRpcRequest.newBuilder()
+                .setPayload(
+                    ru.taska.api.b2b.v1.CreateTenantRequest.newBuilder()
+                        .setName("RPC fixture")
+                        .setPlanVersionId(plan.toString()))
+                .setMutation(
+                    ru.taska.api.b2b.v1.MutationOptions.newBuilder().setIdempotencyKey(key));
+        var request = base.setContext(context("createTenant")).build();
         assertEquals(
-            created.getTenant().getCreationDeadline(), replay.getTenant().getCreationDeadline());
-        assertEquals(1, replay.getTenant().getRestrictionsCount());
+            Status.Code.UNAUTHENTICATED,
+            assertThrows(StatusRuntimeException.class, () -> tenant.createTenant(request))
+                .getStatus()
+                .getCode());
+        var signed =
+            tenant.withInterceptors(
+                MetadataUtils.newAttachHeadersInterceptor(
+                    signature(
+                        request,
+                        TenantServiceGrpc.getCreateTenantMethod().getFullMethodName(),
+                        true)));
+        assertEquals(
+            Status.Code.UNAUTHENTICATED,
+            assertThrows(
+                    StatusRuntimeException.class,
+                    () ->
+                        signed.createTenant(
+                            request.toBuilder()
+                                .setPayload(request.getPayload().toBuilder().setName("tampered"))
+                                .build()))
+                .getStatus()
+                .getCode());
+        var created = signed.createTenant(request);
+        assertEquals(Operation.StateValue.STATE_PENDING, created.getOperation().getState());
+        org.awaitility.Awaitility.await()
+            .atMost(Duration.ofSeconds(25))
+            .pollInterval(Duration.ofMillis(100))
+            .until(
+                () ->
+                    "SUCCEEDED"
+                        .equals(
+                            tenantDb
+                                .sql("SELECT state FROM taska.tenant_operations WHERE id=:id")
+                                .bind("id", UUID.fromString(created.getOperation().getId()))
+                                .map((r, m) -> r.get("state", String.class))
+                                .one()
+                                .block(WAIT)));
+        var read =
+            GetTenantOperationRpcRequest.newBuilder()
+                .setContext(context("getTenantOperation"))
+                .setTenantId(created.getTenant().getId())
+                .setOperationId(created.getOperation().getId())
+                .build();
+        var operation =
+            tenant
+                .withInterceptors(
+                    MetadataUtils.newAttachHeadersInterceptor(
+                        signature(
+                            read,
+                            TenantServiceGrpc.getGetTenantOperationMethod().getFullMethodName(),
+                            false)))
+                .getTenantOperation(read);
+        assertEquals(Operation.StateValue.STATE_SUCCEEDED, operation.getState());
+        var repeat = base.setContext(context("createTenant")).build();
+        var replay =
+            tenant
+                .withInterceptors(
+                    MetadataUtils.newAttachHeadersInterceptor(
+                        signature(
+                            repeat,
+                            TenantServiceGrpc.getCreateTenantMethod().getFullMethodName(),
+                            true)))
+                .createTenant(repeat);
+        assertEquals(operation, replay.getOperation());
+        assertEquals(created.getTenant().getId(), replay.getTenant().getId());
+        assertEquals(
+            plan.equals(FREE)
+                ? Tenant.LifecycleValue.LIFECYCLE_ACTIVE
+                : Tenant.LifecycleValue.LIFECYCLE_AWAITING_PAYMENT,
+            replay.getTenant().getLifecycle());
+        if (plan.equals(PAID)) {
+          assertEquals(
+              created.getTenant().getCreationDeadline(), replay.getTenant().getCreationDeadline());
+          assertEquals(1, replay.getTenant().getRestrictionsCount());
+        }
       }
+      assertEquals(2, count(tenantDb, "tenants"));
+      assertEquals(2, count(tenantDb, "tenant_memberships"));
+      assertEquals(2, count(billingDb, "subscriptions"));
+      assertEquals(0, count(billingDb, "subscription_periods"));
+      assertEquals(2, count(workflowDb, "tenant_workflow_templates"));
+      assertEquals(2, count(workflowDb, "workflow_provisioning_receipts"));
+      assertEquals(0, count(workflowDb, "workflows"));
+      assertEquals(4, count(tenantDb, "outbox_events"));
+      assertFalse(loseWorkflow.get());
+      assertFalse(loseBilling.get());
     }
-    assertEquals(2, count(tenantDb, "tenants"));
-    assertEquals(2, count(tenantDb, "tenant_memberships"));
-    assertEquals(2, count(billingDb, "subscriptions"));
-    assertEquals(0, count(billingDb, "subscription_periods"));
-    assertEquals(2, count(workflowDb, "tenant_workflow_templates"));
-    assertEquals(2, count(workflowDb, "workflow_provisioning_receipts"));
-    assertEquals(0, count(workflowDb, "workflows"));
-    assertEquals(4, count(tenantDb, "outbox_events"));
-    assertFalse(loseWorkflow.get());
-    assertFalse(loseBilling.get());
   }
+
+  @org.springframework.context.annotation.Configuration(proxyBeanMethods = false)
+  @org.springframework.scheduling.annotation.EnableScheduling
+  static class SchedulingFixture {}
 
   @AfterAll
   static void cleanup() throws Exception {

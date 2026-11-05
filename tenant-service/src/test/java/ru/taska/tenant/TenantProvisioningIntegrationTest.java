@@ -251,6 +251,37 @@ class TenantProvisioningIntegrationTest {
   }
 
   @Test
+  void ambiguousGrpcRejectionsKeepRetryingAndCanRecover() {
+    var healthy = dependencies();
+    for (var status :
+        List.of(
+            io.grpc.Status.INVALID_ARGUMENT,
+            io.grpc.Status.FAILED_PRECONDITION,
+            io.grpc.Status.ALREADY_EXISTS)) {
+      var created = create("rpc-status-" + status.getCode(), PAID);
+      saga =
+          new TenantProvisioning(
+              tx,
+              new TenantProvisioning.Dependencies() {
+                public Mono<Void> workflow(UUID t, UUID o, UUID template) {
+                  return Mono.error(status.withDescription("private").asRuntimeException());
+                }
+
+                public Mono<Void> billing(UUID t, UUID o, UUID plan, boolean free) {
+                  throw new AssertionError();
+                }
+              },
+              clock);
+      assertEquals(Operation.StateValue.STATE_RUNNING, resume(created).block(WAIT).getState());
+      assertEquals(
+          ru.taska.api.b2b.v1.ErrorCode.ERROR_CODE_DEPENDENCY_UNAVAILABLE,
+          read(created, OWNER, null, CredentialKind.CREDENTIAL_KIND_WEB_GLOBAL).getFailureCode());
+      saga = new TenantProvisioning(tx, healthy, clock);
+      assertEquals(Operation.StateValue.STATE_SUCCEEDED, resume(created).block(WAIT).getState());
+    }
+  }
+
+  @Test
   void nameBoundaryMatchesBlueprintAndRejectedCreationLeavesNoState() {
     var invalid = TenantRegistryIntegrationTest.request("invalid-name", FREE, "x".repeat(121));
     var error =
@@ -332,7 +363,7 @@ class TenantProvisioningIntegrationTest {
           }
         }
         connection.setAutoCommit(false);
-        sql.execute(
+        String tenantSeed =
             "INSERT INTO"
                 + " taska.tenants(id,name,owner_id,lifecycle,creation_kind,creation_deadline_at,plan_version_id,creation_actor_id,creation_request_hash,creation_operation_id)"
                 + " VALUES ('"
@@ -345,13 +376,48 @@ class TenantProvisioningIntegrationTest {
                 + OWNER
                 + "',decode(repeat('00',32),'hex'),'"
                 + operation
-                + "')");
-        sql.execute(
+                + "')";
+        sql.execute(tenantSeed);
+        String memberSeed =
             "INSERT INTO taska.tenant_memberships(tenant_id,user_id,role,status) VALUES('"
                 + tenant
                 + "','"
                 + OWNER
+                + "','TENANT_ADMIN','ACTIVE')";
+        sql.execute(memberSeed);
+        connection.commit();
+        connection.setAutoCommit(true);
+        UUID duplicate = UUID.randomUUID();
+        connection.setAutoCommit(false);
+        sql.execute(
+            "INSERT INTO taska.tenants SELECT"
+                + " (jsonb_populate_record(NULL::taska.tenants,to_jsonb(t)||jsonb_build_object('id','"
+                + duplicate
+                + "'))).* FROM taska.tenants t WHERE id='"
+                + tenant
+                + "'");
+        sql.execute(
+            "INSERT INTO taska.tenant_memberships(tenant_id,user_id,role,status) VALUES('"
+                + duplicate
+                + "','"
+                + OWNER
                 + "','TENANT_ADMIN','ACTIVE')");
+        connection.commit();
+        connection.setAutoCommit(true);
+        assertThrows(liquibase.exception.LiquibaseException.class, migration::afterPropertiesSet);
+        try (var rows =
+            sql.executeQuery(
+                "SELECT relforcerowsecurity,to_regclass('taska.tenant_operations') IS NULL"
+                    + " rolled_back FROM pg_class WHERE oid='taska.tenants'::regclass")) {
+          assertTrue(rows.next());
+          assertTrue(rows.getBoolean(1));
+          assertTrue(rows.getBoolean(2));
+        }
+        connection.setAutoCommit(false);
+        // Reset only this private pre-upgrade fault fixture; RESTRICT protects the cyclic FK.
+        sql.execute("TRUNCATE taska.tenants,taska.tenant_memberships");
+        sql.execute(tenantSeed);
+        sql.execute(memberSeed);
         connection.commit();
         connection.setAutoCommit(true);
         migration.afterPropertiesSet();

@@ -255,21 +255,27 @@ public final class SubscriptionStore {
   /** Durable account for the accepted registry operation; no PSP customer or paid coverage. */
   public Mono<ru.taska.api.b2b.v1.ProvisionedBillingAccount> provision(
       UUID tenant, UUID plan, UUID operation) {
-    return initialize(tenant, plan, operation + ":BILLING")
-        .then(
-            transactions.execute(
-                db ->
-                    lock(db, tenant)
-                        .map(
-                            row ->
-                                ru.taska.api.b2b.v1.ProvisionedBillingAccount.newBuilder()
-                                    .setTenantId(tenant.toString())
-                                    .setPlanVersionId(
-                                        row.get("selected_plan_version_id").toString())
-                                    .setMode(
-                                        ru.taska.api.b2b.v1.ProvisionedBillingAccount.Mode.valueOf(
-                                            "MODE_" + row.get("mode")))
-                                    .build())));
+    return service(tenant, "initializeSubscription", "tenant-service")
+        .flatMap(
+            verified ->
+                transactions.execute(
+                    db ->
+                        initialize(tenant, plan, operation + ":BILLING")
+                            .then(lock(db, tenant))
+                            .map(
+                                row -> {
+                                  if (!plan.equals(row.get("selected_plan_version_id"))
+                                      || !java.util.Set.of("FREE", "AWAITING_PAYMENT")
+                                          .contains(row.get("mode")))
+                                    throw fail(DomainStatus.FAILED_PRECONDITION, "INVALID_STATE");
+                                  return ru.taska.api.b2b.v1.ProvisionedBillingAccount.newBuilder()
+                                      .setTenantId(tenant.toString())
+                                      .setPlanVersionId(plan.toString())
+                                      .setMode(
+                                          ru.taska.api.b2b.v1.ProvisionedBillingAccount.Mode
+                                              .valueOf("MODE_" + row.get("mode")))
+                                      .build();
+                                })));
   }
 
   private Mono<Map<String, Object>> lock(DatabaseClient db, UUID tenant) {

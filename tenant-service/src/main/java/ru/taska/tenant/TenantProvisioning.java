@@ -3,7 +3,6 @@ package ru.taska.tenant;
 import static ru.taska.tenant.TenantRegistryService.fail;
 import static ru.taska.tenant.TenantRegistryService.uuid;
 
-import io.grpc.Status;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -328,13 +327,8 @@ public final class TenantProvisioning {
       code = "INVALID_STATE";
       terminal = true;
     }
-    var status = Status.fromThrowable(error).getCode();
-    if (status == Status.Code.INVALID_ARGUMENT
-        || status == Status.Code.FAILED_PRECONDITION
-        || status == Status.Code.ALREADY_EXISTS) {
-      code = "INVALID_STATE";
-      terminal = true;
-    }
+    // A bare RPC status does not establish a deterministic business rejection. Retain
+    // the durable operation and retry rather than permanently stopping on an ambiguous peer error.
     String failure = code;
     boolean stop = terminal;
     Instant now = clock.instant();
