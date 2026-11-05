@@ -241,6 +241,44 @@ class TenantIssueStorageIntegrationTest {
   }
 
   @Test
+  void expiryMetadataDoesNotReuseAKeyBeforeExplicitCleanup() {
+    var original = create(A, "expired");
+    var future =
+        Clock.fixed(Clock.systemUTC().instant().plus(Duration.ofDays(2)), java.time.ZoneOffset.UTC);
+    assertTrue(
+        operator
+            .sql("SELECT expires_at FROM taska.idempotency_keys")
+            .map((r, m) -> r.get("expires_at", java.time.OffsetDateTime.class))
+            .one()
+            .block(WAIT)
+            .toInstant()
+            .isBefore(future.instant()));
+    var later = new TenantIssueStore(tx, json, future);
+    assertEquals(
+        original,
+        as(
+                A,
+                ACTOR,
+                later.execute(
+                    session -> session.create("expired", command(PROJECT, "Private summary"))))
+            .block(WAIT));
+    assertEquals(
+        DomainStatus.ALREADY_EXISTS,
+        assertThrows(
+                DomainException.class,
+                () ->
+                    as(
+                            A,
+                            ACTOR,
+                            later.execute(
+                                session -> session.create("expired", command(PROJECT, "Changed"))))
+                        .block(WAIT))
+            .getStatus());
+    for (String table : TABLES) assertEquals(1, count(table));
+    assertEquals(2, create(A, "fresh-key").number());
+  }
+
+  @Test
   void actorAndVerifiedOperationHaveSeparateIdempotencyNamespaces() {
     var c = command(PROJECT, "Same");
     var first = create(A, ACTOR, "createIssue", "same", c).block(WAIT);
