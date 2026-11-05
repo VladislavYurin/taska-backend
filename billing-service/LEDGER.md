@@ -72,8 +72,8 @@ are implemented by their respective policy/orchestration tasks.
 
 ## Access, migration and verification
 
-[0004-financial-ledger.sql](src/main/resources/db/changelog/0004-financial-ledger.sql) appends
-four FORCE RLS tables and a security-invoker balance view. Applied 0001/0002/0003 remain
+[0005-financial-ledger.sql](src/main/resources/db/changelog/0005-financial-ledger.sql) appends
+four FORCE RLS tables and a security-invoker balance view. Applied 0001/0002/0003 and commercial 0004 remain
 unchanged. Composite foreign keys prohibit foreign-tenant roots, parents, matches, invoices
 and allocation references. Runtime has SELECT/INSERT, plus UPDATE(id) on payment facts only
 for PostgreSQL row locks; triggers prohibit every actual fact/link UPDATE or DELETE.
@@ -93,9 +93,9 @@ python3 scripts/harness.py check --module billing-service
 runtime LOGIN: concurrent duplicate facts, source conflict/environment isolation, 25→20+5,
 partial/full allocation, PSP/WIRE races, concurrent excess returns, compensation bounds,
 RLS/ACL, exact/DAY evidence, int64 limits, direct SQL guards, outbox and enclosing-transaction
-rollback. The shared subscription fixture upgrades 0003→0004 with an issued invoice and
+rollback. The shared subscription fixture upgrades 0003/0004→0005 with an issued invoice and
 checks preservation/checksums; the catalog fixture exercises a fresh full migration.
 
 These are database/storage-boundary integration checks, not external PSP/REST/stage E2E.
-Apply 0004 before enabling ledger adapters. Downgrade needs a consistent backup or a reviewed
+Apply 0005 before enabling ledger adapters. Downgrade needs a consistent backup or a reviewed
 forward migration; original financial history must survive operational recovery.

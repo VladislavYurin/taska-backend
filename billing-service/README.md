@@ -44,3 +44,7 @@ python3 scripts/harness.py check --module billing-service
 ```
 
 `BillingCatalogIntegrationTest` uses its own PostgreSQL 16, real Liquibase/app LOGIN/RLS and real mTLS/JWS RPCs. It covers repeat bootstrap, draft/public selection, current-offer resolution, numeric validation, concurrency, idempotency conflicts, rollback on outbox failure, immutable SQL, tenant A/B isolation and administrative scope denials. It does not prove external gateway/PSP or shared-stage E2E.
+
+## Commercial configuration — TAS-519
+
+[Commercial readiness](COMMERCIAL-READINESS.md) supplies the private versioned seller/market/Stripe/FX policy, exact EUR→USD invoice terms and a guard before provider invocation. Default live readiness is false; operator configuration, credential attestation and real FX/provider adapters remain required. Tenant-service owns policy history; billing-service owns immutable FX quotes.

@@ -193,6 +193,7 @@ class SubscriptionIntegrationTest {
             .map((r, m) -> r.get("md5sum", String.class))
             .one()
             .block(WAIT);
+    migrateNext(); // Preserve the independently delivered commercial 0004 before ledger 0005.
     migrate();
     migrate();
     assertEquals(

@@ -575,7 +575,8 @@
           "*",
           "TenantRegistryIntegrationTest",
           "TenantMembershipIntegrationTest",
-          "PlatformFlagsIntegrationTest"
+          "PlatformFlagsIntegrationTest",
+          "MerchantConfigurationIntegrationTest"
         ],
         "noTestsReason": null
       },
@@ -1064,7 +1065,8 @@
           "BillingCatalogIntegrationTest",
           "SubscriptionIntegrationTest",
           "InvoiceIntegrationTest",
-          "FinancialLedgerIntegrationTest"
+          "FinancialLedgerIntegrationTest",
+          "CommercialReadinessIntegrationTest"
         ],
         "noTestsReason": null
       },

@@ -146,12 +146,27 @@
     },
     {
       "changeSet": {
-        "id": "billing-ledger-0004",
+        "id": "billing-commercial-fx-0004",
         "author": "taska",
         "changes": [
           {
             "sqlFile": {
-              "path": "0004-financial-ledger.sql",
+              "path": "0004-commercial-fx.sql",
+              "relativeToChangelogFile": true,
+              "splitStatements": false
+            }
+          }
+        ]
+      }
+    },
+    {
+      "changeSet": {
+        "id": "billing-ledger-0005",
+        "author": "taska",
+        "changes": [
+          {
+            "sqlFile": {
+              "path": "0005-financial-ledger.sql",
               "relativeToChangelogFile": true,
               "splitStatements": false
             }
