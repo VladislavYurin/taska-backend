@@ -711,4 +711,82 @@ class FinancialLedgerIntegrationTest {
     assertEquals(1200, balance(a.id()).unallocatedRemaining());
     assertEquals(800, balance(b.id()).unallocatedRemaining());
   }
+
+  @Test
+  void partialExcessReturnsRetainPendingMatchedPrincipal() {
+    var p = payment(2500, "pending-source");
+    var m = match(p.id(), "pending-match").block(WAIT);
+    record(
+            proof(
+                movement(
+                    Kind.REFUND, p.id(), null, 300, Currency.EUR, Method.PSP, "excess-part-one")),
+            "first-return")
+        .block(WAIT);
+    var first = balance(p.id());
+    assertEquals(0, first.netAllocated());
+    assertEquals(2200, first.unallocatedRemaining());
+    assertEquals(2000, first.matchedUnallocated());
+    assertEquals(300, first.confirmedNetReturned());
+    conserves(first);
+    record(
+            proof(
+                movement(
+                    Kind.REFUND, p.id(), null, 200, Currency.EUR, Method.PSP, "excess-part-two")),
+            "second-return")
+        .block(WAIT);
+    var second = balance(p.id());
+    assertEquals(2000, second.unallocatedRemaining());
+    assertEquals(2000, second.matchedUnallocated());
+    conserves(second);
+    allocate(List.of(m.id()), "allocate-after-excess-return").block(WAIT);
+    var finalBalance = balance(p.id());
+    assertEquals(2000, finalBalance.netAllocated());
+    assertEquals(0, finalBalance.unallocatedRemaining());
+    assertEquals(0, finalBalance.matchedUnallocated());
+    assertEquals(500, finalBalance.confirmedNetReturned());
+    conserves(finalBalance);
+  }
+
+  @Test
+  void matchAndAllocationCommitOnTheSameOuterTransactionConnection() {
+    var p = payment(2000, "single-transaction-source");
+    var results =
+        worker(
+                "matchInvoicePayment",
+                f.f.transactions.execute(
+                    db ->
+                        db.sql("SELECT pg_backend_pid() pid")
+                            .map((r, meta) -> r.get("pid", Integer.class))
+                            .one()
+                            .flatMap(
+                                before ->
+                                    ledger
+                                        .match(A, p.id(), invoice, "single-match")
+                                        .flatMap(
+                                            m ->
+                                                worker(
+                                                    "allocateInvoicePayments",
+                                                    ledger.allocate(
+                                                        A,
+                                                        invoice,
+                                                        List.of(m.id()),
+                                                        "single-allocation")))
+                                        .flatMap(
+                                            allocations ->
+                                                db.sql("SELECT pg_backend_pid() pid")
+                                                    .map((r, meta) -> r.get("pid", Integer.class))
+                                                    .one()
+                                                    .map(
+                                                        after -> {
+                                                          assertEquals(before, after);
+                                                          return allocations;
+                                                        })))))
+            .block(WAIT);
+    assertEquals(1, results.size());
+    assertEquals(1, count("invoice_payment_matches"));
+    assertEquals(1, count("payment_allocations"));
+    assertEquals(2000, balance(p.id()).netAllocated());
+    assertEquals(0, balance(p.id()).unallocatedRemaining());
+    assertEquals(0, count("subscription_periods"));
+  }
 }
