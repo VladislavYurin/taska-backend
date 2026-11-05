@@ -530,6 +530,121 @@ class SubscriptionIntegrationTest {
   }
 
   @Test
+  void concurrentProvisionCallsUseOneReceiptAndRejectDifferentPlan() {
+    UUID operation = UUID.randomUUID();
+    var results =
+        Flux.range(0, 12)
+            .flatMap(
+                i ->
+                    asWorker(
+                        A,
+                        "initializeSubscription",
+                        "tenant-service",
+                        store.provision(A, PAID, operation)),
+                12)
+            .collectList()
+            .block(WAIT);
+    assertEquals(1, results.stream().distinct().count());
+    assertEquals(1, count("subscriptions"));
+    assertEquals(1, count("subscription_command_receipts"));
+    assertEquals(1, count("outbox_events"));
+    assertThrows(
+        DomainException.class,
+        () ->
+            asWorker(
+                    A,
+                    "initializeSubscription",
+                    "tenant-service",
+                    store.provision(A, FREE, operation))
+                .block(WAIT));
+    assertThrows(
+        DomainException.class,
+        () ->
+            asWorker(
+                    A,
+                    "initializeSubscription",
+                    "tenant-service",
+                    store.provision(A, FREE, UUID.randomUUID()))
+                .block(WAIT));
+    assertEquals(1, count("subscription_command_receipts"));
+    assertEquals(PAID.toString(), get(OWNER_A, A).getPlanVersionId());
+  }
+
+  @Test
+  void acceptedHistoricalPlanRemainsUsableButNewOfferResolutionRejectsIt() {
+    UUID next = UUID.randomUUID();
+    sql(
+        "INSERT INTO taska.catalog_plan_versions SELECT"
+            + " (jsonb_populate_record(NULL::taska.catalog_plan_versions,to_jsonb(p)||jsonb_build_object('id','"
+            + next
+            + "','version',2))).* FROM taska.catalog_plan_versions p WHERE id='"
+            + PAID
+            + "'");
+    var current = new BillingCatalog(db, tx, null);
+    var claims =
+        worker(A, "resolvePublishedPlan", "tenant-service").toBuilder()
+            .addScopes("read")
+            .addScopes("catalog:resolve")
+            .build();
+    assertThrows(
+        DomainException.class,
+        () ->
+            RegistryTestContext.withClaims(
+                    claims,
+                    current.resolve(
+                        ru.taska.api.b2b.v1.ResolvePublishedPlanRpcRequest.newBuilder()
+                            .setPlanVersionId(PAID.toString())
+                            .build()))
+                .block(WAIT));
+    assertEquals(
+        PAID.toString(),
+        asWorker(
+                A,
+                "initializeSubscription",
+                "tenant-service",
+                store.provision(A, PAID, UUID.randomUUID()))
+            .block(WAIT)
+            .getPlanVersionId());
+  }
+
+  @Test
+  void provisioningAccountRetriesHaveOneRowAndRejectAlteredInputOrUntrustedCaller() {
+    UUID operation = UUID.randomUUID();
+    var first =
+        asWorker(A, "initializeSubscription", "tenant-service", store.provision(A, PAID, operation))
+            .block(WAIT);
+    assertEquals(
+        ru.taska.api.b2b.v1.ProvisionedBillingAccount.Mode.MODE_AWAITING_PAYMENT, first.getMode());
+    assertEquals(
+        first,
+        asWorker(A, "initializeSubscription", "tenant-service", store.provision(A, PAID, operation))
+            .block(WAIT));
+    assertThrows(
+        DomainException.class,
+        () ->
+            asWorker(
+                    A,
+                    "initializeSubscription",
+                    "tenant-service",
+                    store.provision(A, FREE, operation))
+                .block(WAIT));
+    assertThrows(
+        DomainException.class,
+        () ->
+            asWorker(
+                    B, "initializeSubscription", "api-gateway", store.provision(B, FREE, operation))
+                .block(WAIT));
+    var free =
+        asWorker(B, "initializeSubscription", "tenant-service", store.provision(B, FREE, operation))
+            .block(WAIT);
+    assertEquals(ru.taska.api.b2b.v1.ProvisionedBillingAccount.Mode.MODE_FREE, free.getMode());
+    assertEquals(2, count("subscriptions"));
+    assertEquals(0, count("subscription_periods"));
+    assertFalse(get(OWNER_A, A).hasPaidThrough());
+    assertFalse(get(OWNER_B, B).hasPaidThrough());
+  }
+
+  @Test
   void freeAndAwaitingPaymentAreDistinctWithoutFabricatedCoverage() {
     init(A, FREE, "free").block(WAIT);
     init(B, PAID, "paid").block(WAIT);

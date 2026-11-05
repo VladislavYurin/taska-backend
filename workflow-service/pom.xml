@@ -134,7 +134,11 @@
                     <changeLogFile>src/main/resources/db/changelog/db.changelog-master.yaml</changeLogFile>
                 </configuration>
             </plugin>
-        </plugins>
+        <plugin><groupId>org.apache.maven.plugins</groupId><artifactId>maven-jar-plugin</artifactId>
+  <executions><execution><id>provisioning-fixture</id><phase>process-classes</phase><goals><goal>jar</goal></goals>
+  <configuration><classifier>provisioning-fixture</classifier><outputDirectory>${project.build.directory}/provisioning-fixture</outputDirectory><includes><include>ru/taska/**</include></includes></configuration>
+  </execution></executions></plugin>
+</plugins>
     </build>
 
 </project>

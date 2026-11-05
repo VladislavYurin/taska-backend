@@ -241,6 +241,32 @@
           }
         ]
       }
+    },
+    {
+      "changeSet": {
+        "id": "workflow-provisioning-0013",
+        "author": "taska",
+        "changes": [
+          {
+            "sqlFile": {
+              "path": "provisioning.sql",
+              "relativeToChangelogFile": true,
+              "splitStatements": false
+            }
+          },
+          {
+            "sql": {
+              "sql": "SELECT set_config('taska.guard_service','workflow',true),set_config('taska.guard_schema','taska',true),set_config('taska.guard_table','workflow_provisioning_receipts',true),set_config('taska.guard_column','tenant_id',true),set_config('taska.guard_app_access','append_only',true);"
+            }
+          },
+          {
+            "sqlFile": {
+              "path": "db/tenant/v2/protect-table.sql",
+              "splitStatements": false
+            }
+          }
+        ]
+      }
     }
   ]
 }

@@ -580,7 +580,9 @@
           "TenantMembershipIntegrationTest",
           "PlatformFlagsIntegrationTest",
           "MerchantConfigurationIntegrationTest",
-          "FreeEligibilityIntegrationTest"
+          "FreeEligibilityIntegrationTest",
+          "TenantProvisioningIntegrationTest",
+          "TenantProvisioningRpcIntegrationTest"
         ],
         "noTestsReason": null
       },

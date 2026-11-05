@@ -630,6 +630,17 @@
 
 **Очистка:** отозвать только PAT RUN; не трогать чужие активные токены. Оставшееся время ограничения общего тестового аккаунта указать во внешнем журнале.
 
+## E2E-45. Возобновляемое создание компании (TAS-337)
+
+Локальный service-path tier: `TenantProvisioningRpcIntegrationTest` (входит в `tenant-service.verify`). Реальные production gRPC handlers, mTLS/JWS и отдельные PostgreSQL БД tenant/billing/workflow; свои Testcontainers fixtures и cleanup в finally/AfterAll. Общий harness HTTP runner этот сценарий не выбирает.
+
+1. Создать FREE и paid через подписанный CreateTenant; неподписанный и подменённый payload получают отказ без нового tenant.
+2. Потерять ответ после успешной записи workflow, затем billing; запустить worker повторно по сохранённой операции.
+3. Прочитать GetTenantOperation и повторить CreateTenant с исходным ключом: один tenant/membership/account/template, прежний operationId, фактический SUCCEEDED. FREE активна; paid ожидает первую оплату с прежним deadline, без paid periods и рабочих прав.
+4. Компонентный `TenantProvisioningIntegrationTest` дополнительно проверяет чужого actor/tenant/PAT, RLS, истечение lease/устаревший fence и rollback activation+operation+outbox.
+
+Граница: это проверка внутреннего service path. Публичный HTTP/session flow, живой PSP и deployment стенда проверяются отдельно после подключения соответствующих adapters; их отсутствие не объявляется успешным E2E.
+
 ## Как фиксировать расхождение
 
 Результаты прогонов и доказательства хранить вне репозитория. В Jira для подтверждённого бага указывать: BASE/версию deployment и время, ID сценария, предусловия/роли, минимальные запросы с безопасными placeholders, фактический HTTP/domain code и поля, ожидаемое поведение со ссылкой на контракт/требование, requestId и влияние. Секреты и чужие данные удалить из доказательств. Проверять отсутствие дубля и связывать баг с TAS-439. Недоступная почта/бот/провайдер или неготовая фикстура — ограничение проверки, а не автоматически баг продукта.

@@ -29,6 +29,7 @@ import ru.taska.tenant.RegistryDependencies.FreeAdmission;
 import ru.taska.tenant.RegistryDependencies.PublishedPlans;
 
 @Configuration
+@org.springframework.scheduling.annotation.EnableScheduling
 public class TenantConfiguration {
   @Bean
   liquibase.integration.spring.SpringLiquibase registryLiquibase(
@@ -65,7 +66,13 @@ public class TenantConfiguration {
 
   @Bean
   @ConditionalOnMissingBean
-  PublishedPlans publishedPlans() {
+  PublishedPlans publishedPlans(
+      ObjectProvider<ru.taska.api.b2b.v1.ReactorBillingServiceGrpc.ReactorBillingServiceStub> stubs,
+      ObjectProvider<RpcContextSecurity> security) {
+    var stub = stubs.getIfAvailable();
+    var trust = security.getIfAvailable();
+    if (stub != null && trust != null)
+      return new GrpcPublishedPlans(stub, trust, Clock.systemUTC());
     return id ->
         Mono.error(TenantRegistryService.fail(DomainStatus.UNAVAILABLE, "DEPENDENCY_UNAVAILABLE"));
   }
@@ -209,6 +216,61 @@ public class TenantConfiguration {
   }
 
   @Bean
+  @ConditionalOnMissingBean
+  TenantProvisioning.Dependencies provisioningDependencies(
+      ObjectProvider<
+              ru.taska.api.b2b.v1.ReactorBillingProvisioningServiceGrpc
+                  .ReactorBillingProvisioningServiceStub>
+          billing,
+      ObjectProvider<
+              ru.taska.api.b2b.v1.ReactorWorkflowProvisioningServiceGrpc
+                  .ReactorWorkflowProvisioningServiceStub>
+          workflow,
+      ObjectProvider<RpcContextSecurity> trust) {
+    var b = billing.getIfAvailable();
+    var w = workflow.getIfAvailable();
+    var security = trust.getIfAvailable();
+    if (b != null && w != null && security != null)
+      return new GrpcProvisioningDependencies(b, w, security, Clock.systemUTC());
+    return new TenantProvisioning.Dependencies() {
+      public Mono<Void> workflow(
+          java.util.UUID tenant, java.util.UUID operation, java.util.UUID template) {
+        return Mono.error(
+            TenantRegistryService.fail(DomainStatus.UNAVAILABLE, "DEPENDENCY_UNAVAILABLE"));
+      }
+
+      public Mono<Void> billing(
+          java.util.UUID tenant, java.util.UUID operation, java.util.UUID plan, boolean free) {
+        return Mono.error(
+            TenantRegistryService.fail(DomainStatus.UNAVAILABLE, "DEPENDENCY_UNAVAILABLE"));
+      }
+    };
+  }
+
+  @Bean
+  @DependsOn("safeRuntimeRole")
+  TenantProvisioning tenantProvisioning(
+      TenantTransactionExecutor transactions, TenantProvisioning.Dependencies dependencies) {
+    return new TenantProvisioning(transactions, dependencies, Clock.systemUTC());
+  }
+
+  @Bean
+  TenantProvisioningWorker provisioningWorker(
+      ConnectionFactory factory,
+      ObjectProvider<RpcContextSecurity> security,
+      TenantProvisioning provisioning) {
+    return new TenantProvisioningWorker(
+        org.springframework.r2dbc.core.DatabaseClient.create(factory),
+        () -> {
+          var trust = security.getIfAvailable();
+          return trust == null
+              ? null
+              : new ru.taska.security.tenant.ProvisioningAuthority(trust, Clock.systemUTC());
+        },
+        provisioning);
+  }
+
+  @Bean
   @GlobalServerInterceptor
   ServerInterceptor registrySecurity(
       ObjectProvider<RpcContextSecurity> provider,
@@ -218,6 +280,14 @@ public class TenantConfiguration {
       return new TenantServerInterceptor(
           security,
           Map.ofEntries(
+              java.util.Map.entry(
+                  ru.taska.api.b2b.v1.TenantProvisioningServiceGrpc
+                      .getResumeTenantProvisioningMethod()
+                      .getFullMethodName(),
+                  new RpcContextSecurity.Policy(true, true)),
+              java.util.Map.entry(
+                  TenantServiceGrpc.getGetTenantOperationMethod().getFullMethodName(),
+                  new RpcContextSecurity.Policy(false, false)),
               java.util.Map.entry(
                   MerchantConfigurationServiceGrpc.getGetMerchantConfigurationMethod()
                       .getFullMethodName(),

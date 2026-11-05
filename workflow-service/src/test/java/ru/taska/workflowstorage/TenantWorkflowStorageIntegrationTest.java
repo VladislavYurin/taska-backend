@@ -34,7 +34,7 @@ class TenantWorkflowStorageIntegrationTest {
   static final Duration WAIT=Duration.ofSeconds(20);
   static final List<String> TABLES=List.of("workflows","statuses","transitions","validator_rules","workflow_bindings",
       "issue_type_move_workflow_pins","workflow_binding_changes","issue_type_creation_workflow_receipts",
-      "tenant_workflow_templates","workflow_template_instances");
+      "tenant_workflow_templates","workflow_template_instances","workflow_provisioning_receipts");
   static ConnectionPool pool;
   static DatabaseClient raw,operator;
   static TenantTransactionExecutor tx;
@@ -86,6 +86,45 @@ class TenantWorkflowStorageIntegrationTest {
         .bind("query","%INSERT INTO taska."+table+"%").map((r,m)->r.get("n",Long.class)).one())
         .repeatWhen(done->done.delayElements(Duration.ofMillis(25))).filter(n->n>0).next().block(WAIT);
     assertNotNull(waiting);assertTrue(waiting>0);assertFalse(loser.isDone());
+  }
+
+  @Test
+  void provisioningReceiptIsAtomicTenantScopedAndRejectsChangedTemplate() {
+    UUID operation = UUID.randomUUID();
+    var copies =
+        Flux.range(0, 8)
+            .flatMap(i -> as(A, ACTOR, store.execute(s -> s.provision(operation, DEFAULT))), 8)
+            .collectList()
+            .block(WAIT);
+    assertEquals(1, copies.stream().map(TenantWorkflowStore.TemplateCopy::id).distinct().count());
+    assertEquals(
+        copies.get(0),
+        as(
+                A,
+                ACTOR,
+                new TenantWorkflowStore(new TenantTransactionExecutor(pool), json)
+                    .execute(s -> s.provision(operation, DEFAULT)))
+            .block(WAIT));
+    assertThrows(
+        DomainException.class,
+        () ->
+            as(A, ACTOR, store.execute(s -> s.provision(operation, UUID.randomUUID())))
+                .block(WAIT));
+    var other = as(B, ACTOR, store.execute(s -> s.provision(operation, DEFAULT))).block(WAIT);
+    assertNotEquals(copies.get(0).id(), other.id());
+    assertEquals(
+        2L,
+        operator
+            .sql("SELECT count(*) n FROM taska.workflow_provisioning_receipts")
+            .map((r, m) -> r.get("n", Long.class))
+            .one()
+            .block(WAIT));
+    assertEquals(
+        0L,
+        raw.sql("SELECT count(*) n FROM taska.workflow_provisioning_receipts")
+            .map((r, m) -> r.get("n", Long.class))
+            .one()
+            .block(WAIT));
   }
 
   @Test void copyWaitsForUncommittedWinnerAndReadsItsCommittedIdentity() throws Exception {
@@ -302,7 +341,7 @@ class TenantWorkflowStorageIntegrationTest {
     assertThrows(Exception.class,()->new TenantStorageConfiguration().safeWorkflowRuntime(factory(pg.getUsername(),pg.getPassword())).afterPropertiesSet());
     for(String statement:List.of("SET ROLE taska_workflow_migrator","ALTER TABLE taska.workflows DISABLE ROW LEVEL SECURITY","CREATE TABLE taska.unsafe(id int)","TRUNCATE taska.workflows"))
       assertThrows(Exception.class,()->raw.sql(statement).then().block(WAIT));
-    assertEquals(10L,operator.sql("SELECT count(*) n FROM pg_class WHERE relnamespace='taska'::regnamespace AND relrowsecurity AND relforcerowsecurity")
+    assertEquals((long)TABLES.size(),operator.sql("SELECT count(*) n FROM pg_class WHERE relnamespace='taska'::regnamespace AND relrowsecurity AND relforcerowsecurity")
         .map((r,m)->r.get("n",Long.class)).one().block(WAIT));
     UUID globalId=UUID.randomUUID();
     as(A,ACTOR,store.execute(s->s.insertWorkflow(globalId,UUID.randomUUID(),"Global UUID"))).block(WAIT);

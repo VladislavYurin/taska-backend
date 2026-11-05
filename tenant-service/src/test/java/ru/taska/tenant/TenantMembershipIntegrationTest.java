@@ -114,7 +114,7 @@ class TenantMembershipIntegrationTest {
     operator
         .sql(
             "TRUNCATE"
-                + " taska.tenants,taska.tenant_memberships,taska.outbox_events,taska.idempotency_records")
+                + " taska.tenant_provisioning_dispatch,taska.tenant_operations,taska.tenants,taska.tenant_memberships,taska.outbox_events,taska.idempotency_records")
         .fetch()
         .rowsUpdated()
         .block(WAIT);

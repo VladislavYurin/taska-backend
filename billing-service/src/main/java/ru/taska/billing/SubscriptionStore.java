@@ -208,7 +208,7 @@ public final class SubscriptionStore {
                     key,
                     planVersionId.toString(),
                     db ->
-                        plan(db, planVersionId, true)
+                        plan(db, planVersionId, false)
                             .flatMap(
                                 plan ->
                                     db.sql(
@@ -250,6 +250,32 @@ public final class SubscriptionStore {
                                                                           planVersionId.toString()))
                                                                   .then(view(db, tenant));
                                                         })))));
+  }
+
+  /** Durable account for the accepted registry operation; no PSP customer or paid coverage. */
+  public Mono<ru.taska.api.b2b.v1.ProvisionedBillingAccount> provision(
+      UUID tenant, UUID plan, UUID operation) {
+    return service(tenant, "initializeSubscription", "tenant-service")
+        .flatMap(
+            verified ->
+                transactions.execute(
+                    db ->
+                        initialize(tenant, plan, operation + ":BILLING")
+                            .then(lock(db, tenant))
+                            .map(
+                                row -> {
+                                  if (!plan.equals(row.get("selected_plan_version_id"))
+                                      || !java.util.Set.of("FREE", "AWAITING_PAYMENT")
+                                          .contains(row.get("mode")))
+                                    throw fail(DomainStatus.FAILED_PRECONDITION, "INVALID_STATE");
+                                  return ru.taska.api.b2b.v1.ProvisionedBillingAccount.newBuilder()
+                                      .setTenantId(tenant.toString())
+                                      .setPlanVersionId(plan.toString())
+                                      .setMode(
+                                          ru.taska.api.b2b.v1.ProvisionedBillingAccount.Mode
+                                              .valueOf("MODE_" + row.get("mode")))
+                                      .build();
+                                })));
   }
 
   private Mono<Map<String, Object>> lock(DatabaseClient db, UUID tenant) {

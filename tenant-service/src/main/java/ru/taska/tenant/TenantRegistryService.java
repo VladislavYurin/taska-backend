@@ -107,9 +107,13 @@ public final class TenantRegistryService {
           uuid(key);
           if (name.isBlank()
               || !name.equals(name.strip())
-              || name.codePointCount(0, name.length()) > 128
-              || name.codePoints().anyMatch(Character::isISOControl)
-              || key.isBlank()
+              || name.codePointCount(0, name.length()) > 120
+              || name.codePoints().anyMatch(Character::isISOControl))
+            throw new DomainException(
+                DomainStatus.INVALID_ARGUMENT,
+                "VALIDATION_FAILED",
+                Map.of("code", "VALIDATION_FAILED", "field", "name", "reason", "INVALID_NAME"));
+          if (key.isBlank()
               || key.length() > 128
               || key.codePoints().anyMatch(c -> c < 33 || c > 126)
               || request.getMutation().hasExpectedVersion())
@@ -260,6 +264,9 @@ public final class TenantRegistryService {
                           .bind("created", now.atOffset(ZoneOffset.UTC))
                           .fetch()
                           .rowsUpdated())
+                  .then(
+                      TenantProvisioning.insert(
+                          db, tenant, actor, operation, key, hash, plan.id(), plan.free(), now))
                   .then(existing(db, tenant))
                   .flatMap(
                       row ->
@@ -370,7 +377,11 @@ public final class TenantRegistryService {
             .setLifecycle(Tenant.LifecycleValue.valueOf("LIFECYCLE_" + row.get("lifecycle")))
             .setCreatedAt(((OffsetDateTime) row.get("created_at")).toInstant().toString())
             .setVersion(row.get("version").toString())
-            .setOwnerVersion(row.get("owner_version").toString());
+            .setOwnerVersion(row.get("owner_version").toString())
+            .setPlanVersionId(row.get("plan_version_id").toString())
+            .setCreationOperationId(row.get("creation_operation_id").toString())
+            .setCreationKind(
+                Tenant.CreationKindValue.valueOf("CREATION_KIND_" + row.get("creation_kind")));
     if (row.get("creation_deadline_at") instanceof OffsetDateTime d)
       result.setCreationDeadline(d.toInstant().toString());
     if (row.get("creation_kind").equals("PAID") && row.get("first_payment_fact_id") == null)
@@ -378,18 +389,17 @@ public final class TenantRegistryService {
     return result.build();
   }
 
+  public Mono<Operation> getOperation(ru.taska.api.b2b.v1.GetTenantOperationRpcRequest request) {
+    return new TenantProvisioning(transactions, null, clock).get(request);
+  }
+
   private Mono<CreateTenantResponse> response(Map<String, Object> row) {
     var t = tenant(row);
-    var op =
-        Operation.newBuilder()
-            .setId(row.get("creation_operation_id").toString())
-            .setType("TENANT_PROVISION")
-            .setState(Operation.StateValue.STATE_PENDING)
-            .setTenantId(t.getId())
-            .setResourceId(t.getId())
-            .setCreatedAt(t.getCreatedAt())
-            .setUpdatedAt(t.getCreatedAt())
-            .build();
-    return Mono.just(CreateTenantResponse.newBuilder().setTenant(t).setOperation(op).build());
+    return transactions
+        .execute(
+            db ->
+                TenantProvisioning.operation(
+                    db, (UUID) row.get("id"), (UUID) row.get("creation_operation_id")))
+        .map(op -> CreateTenantResponse.newBuilder().setTenant(t).setOperation(op).build());
   }
 }
