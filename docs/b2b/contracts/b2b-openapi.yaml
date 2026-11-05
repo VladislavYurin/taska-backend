@@ -5454,6 +5454,9 @@ components:
       type: object
       additionalProperties: false
       properties:
+        kind:
+          type: string
+          enum: [FREE, PAID]
         id:
           type: string
           format: uuid
@@ -5499,6 +5502,7 @@ components:
           type: string
           format: date-time
       required:
+      - kind
       - id
       - code
       - version
@@ -5527,6 +5531,9 @@ components:
       type: object
       additionalProperties: false
       properties:
+        kind:
+          type: string
+          enum: [FREE, PAID]
         code:
           type: string
           minLength: 1
@@ -5555,6 +5562,7 @@ components:
             maxLength: 80
           maxItems: 100
       required:
+      - kind
       - code
       - name
       - price

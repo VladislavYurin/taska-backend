@@ -259,7 +259,9 @@ class HarnessTest(unittest.TestCase):
                     'WorkflowCreatedTypeBindingIT', 'WorkflowScopeCheckIT'}
         actual = {s for c in self.manifest['checks'] if c['id'].endswith('.it') for s in c['reports']['selectors']}
         self.assertEqual(expected, actual)
-        self.assertEqual(len(self.manifest['modules']), 15)
+        self.assertEqual(len(self.manifest['modules']), 16)
+        billing = next(c for c in self.manifest['checks'] if c['id'] == 'billing-service.verify')
+        self.assertIn('BillingCatalogIntegrationTest', billing['reports']['selectors'])
         tenant = next(c for c in self.manifest['checks'] if c['id'] == 'tenant-service.verify')
         self.assertIn('TenantRegistryIntegrationTest', tenant['reports']['selectors'])
 

@@ -15,7 +15,8 @@
     "admin-service",
     "mcp-server",
     "oauth-server",
-    "tenant-service"
+    "tenant-service",
+    "billing-service"
   ],
   "capabilities": {
     "git": {
@@ -1031,6 +1032,42 @@
       "timeout": 30,
       "requires": [],
       "writeScope": []
+    },
+    {
+      "id": "billing-service.verify",
+      "module": "billing-service",
+      "group": "java",
+      "tier": "integration",
+      "argv": [
+        "./mvnw",
+        "-B",
+        "-ntp",
+        "-pl",
+        "billing-service",
+        "-am",
+        "clean",
+        "verify"
+      ],
+      "workdir": ".",
+      "prerequisites": [
+        "git",
+        "java",
+        "docker"
+      ],
+      "timeout": 1800,
+      "reports": {
+        "directory": "billing-service/target/surefire-reports",
+        "selectors": [
+          "*",
+          "BillingCatalogIntegrationTest"
+        ],
+        "noTestsReason": null
+      },
+      "requires": [],
+      "writeScope": [
+        "*/target/",
+        "local Maven cache"
+      ]
     }
   ],
   "impactRules": [

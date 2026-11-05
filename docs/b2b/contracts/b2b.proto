@@ -528,6 +528,7 @@ message OAuthConsentResult {
 }
 
 message PlanVersion {
+  enum KindValue { KIND_UNSPECIFIED = 0; KIND_FREE = 1; KIND_PAID = 2; }
   enum PeriodValue { PERIOD_UNSPECIFIED = 0; PERIOD_CALENDAR_MONTH = 1; PERIOD_NONE = 2; }
   enum StateValue { STATE_UNSPECIFIED = 0; STATE_DRAFT = 1; STATE_PUBLISHED = 2; STATE_RETIRED = 3; }
   string id = 1;
@@ -540,6 +541,7 @@ message PlanVersion {
   repeated string capabilities = 8;
   StateValue state = 9;
   optional string published_at = 10;
+  KindValue kind = 11;
 }
 
 message PlanVersionPage {
@@ -548,6 +550,7 @@ message PlanVersionPage {
 }
 
 message CreatePlanVersionRequest {
+  PlanVersion.KindValue kind = 7;
   enum PeriodValue { PERIOD_UNSPECIFIED = 0; PERIOD_CALENDAR_MONTH = 1; PERIOD_NONE = 2; }
   string code = 1;
   string name = 2;
@@ -1754,3 +1757,6 @@ service TenantMembershipService {
   rpc GetMembership(GetMembershipRpcRequest) returns (MembershipSnapshot);
   rpc BatchValidateMemberships(BatchValidateMembershipsRpcRequest) returns (MembershipValidationBatch);
 }
+
+// Internal current-offer lookup for tenant provisioning; historical invoice/period references remain stored unchanged.
+message ResolvePublishedPlanRpcRequest { RequestContext context = 1; string plan_version_id = 2; }

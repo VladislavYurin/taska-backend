@@ -1,0 +1,118 @@
+package ru.taska.billing;
+
+import io.grpc.Metadata;
+import io.grpc.ServerCall;
+import io.grpc.ServerCallHandler;
+import io.grpc.ServerInterceptor;
+import io.grpc.Status;
+import io.r2dbc.spi.ConnectionFactory;
+import java.time.Clock;
+import java.time.Duration;
+import java.util.Map;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.DependsOn;
+import org.springframework.grpc.server.GlobalServerInterceptor;
+import ru.taska.api.b2b.v1.BillingServiceGrpc;
+import ru.taska.security.tenant.RpcContextSecurity;
+import ru.taska.security.tenant.TenantServerInterceptor;
+
+@Configuration
+public class BillingConfiguration {
+  @Bean
+  liquibase.integration.spring.SpringLiquibase registryLiquibase(
+      @Value("${spring.liquibase.url}") String url,
+      @Value("${spring.liquibase.user}") String user,
+      @Value("${spring.liquibase.password}") String password) {
+    var source =
+        new org.springframework.jdbc.datasource.DriverManagerDataSource(url, user, password);
+    var owner =
+        new org.springframework.jdbc.datasource.DelegatingDataSource(source) {
+          @Override
+          public java.sql.Connection getConnection() throws java.sql.SQLException {
+            var connection = super.getConnection();
+            try (var statement = connection.createStatement()) {
+              statement.execute("SET ROLE taska_billing_migrator");
+              return connection;
+            } catch (java.sql.SQLException error) {
+              connection.close();
+              throw error;
+            }
+          }
+        };
+    var liquibase = new liquibase.integration.spring.SpringLiquibase();
+    liquibase.setDataSource(owner);
+    liquibase.setChangeLog("classpath:/db/changelog/db.changelog-master.yaml");
+    liquibase.setLiquibaseSchema("billing_liquibase");
+    return liquibase;
+  }
+
+  @Bean
+  @DependsOn("registryLiquibase")
+  org.springframework.beans.factory.InitializingBean safeRuntimeRole(ConnectionFactory factory) {
+    return () -> {
+      Boolean safe =
+          org.springframework.r2dbc.core.DatabaseClient.create(factory)
+              .sql(
+                  "SELECT current_user='taska_billing_app' AND NOT (rolsuper OR rolinherit OR"
+                      + " rolbypassrls OR rolcreatedb OR rolcreaterole OR rolreplication) AND NOT"
+                      + " EXISTS (SELECT 1 FROM pg_auth_members WHERE member=r.oid OR roleid=r.oid)"
+                      + " AND NOT EXISTS (SELECT 1 FROM pg_class c WHERE c.relowner=r.oid AND"
+                      + " c.relnamespace='taska'::regnamespace) AS safe FROM pg_roles r WHERE"
+                      + " rolname=current_user")
+              .map((row, metadata) -> row.get("safe", Boolean.class))
+              .one()
+              .block(Duration.ofSeconds(10));
+      if (!Boolean.TRUE.equals(safe))
+        throw new IllegalStateException("Unsafe billing runtime database role");
+    };
+  }
+
+  @Bean
+  CatalogCursor catalogCursor(@Value("${BILLING_CATALOG_CURSOR_KEY:}") String key) {
+    return new CatalogCursor(key, Clock.systemUTC());
+  }
+
+  @Bean
+  @DependsOn("safeRuntimeRole")
+  BillingCatalog catalog(ConnectionFactory factory, CatalogCursor cursor) {
+    return new BillingCatalog(
+        org.springframework.r2dbc.core.DatabaseClient.create(factory),
+        org.springframework.transaction.reactive.TransactionalOperator.create(
+            new org.springframework.r2dbc.connection.R2dbcTransactionManager(factory)),
+        cursor);
+  }
+
+  @Bean
+  @GlobalServerInterceptor
+  ServerInterceptor registrySecurity(
+      ObjectProvider<RpcContextSecurity> provider,
+      @Value("${DEPLOY_ENVIRONMENT:local}") String environment) {
+    RpcContextSecurity security = provider.getIfAvailable();
+    if (security != null)
+      return new TenantServerInterceptor(
+          security,
+          Map.of(
+              BillingServiceGrpc.getResolvePublishedPlanMethod().getFullMethodName(),
+                  new RpcContextSecurity.Policy(false, false),
+              BillingServiceGrpc.getListBillingPlansMethod().getFullMethodName(),
+                  new RpcContextSecurity.Policy(false, false),
+              BillingServiceGrpc.getCreatePlanVersionMethod().getFullMethodName(),
+                  new RpcContextSecurity.Policy(false, true),
+              BillingServiceGrpc.getPublishPlanVersionMethod().getFullMethodName(),
+                  new RpcContextSecurity.Policy(false, true)),
+          environment);
+    // No permissive bootstrap. Keys/replay/online-authority adapters must be explicitly supplied.
+    return new ServerInterceptor() {
+      public <Q, S> ServerCall.Listener<Q> interceptCall(
+          ServerCall<Q, S> call, Metadata headers, ServerCallHandler<Q, S> next) {
+        call.close(
+            Status.UNAVAILABLE.withDescription("Billing trust provider unavailable"),
+            new Metadata());
+        return new ServerCall.Listener<>() {};
+      }
+    };
+  }
+}
