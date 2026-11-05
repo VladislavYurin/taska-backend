@@ -20,6 +20,7 @@ Harness объединяет инструкции, доступные инстр
 | Область | Владелец и точки входа | При изменении проверить |
 |---|---|---|
 | Внешний REST | `api-gateway`; [OpenAPI](../../api-gateway/src/main/resources/static/openapi.yml) | YAML/JSON parity, валидация, ошибки, ACL, downstream mapping |
+| Entitlement-проекция | [Versioned projection](../data/entitlement-projection.md), `grpc-common-lib` | Monotonic events, reconciliation, bounded cache, current authority and owner migrations |
 | Внутренний RPC | [proto/v1](../../grpc-common-lib/src/main/proto/v1/) | производителей и потребителей, совместимость полей/enum, request context |
 | Пользователь и доступ | `auth-service` | сессии, refresh rotation, статус пользователя, PAT scopes; [приглашения](../tas-204-invitations-and-directory.md) |
 | Проекты и роли | `project-service` | ADMIN/MEMBER/VIEWER, последний ADMIN, собственность типов задач |

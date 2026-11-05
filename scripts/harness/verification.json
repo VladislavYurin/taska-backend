@@ -122,7 +122,9 @@
       "reports": {
         "directory": "grpc-common-lib/target/surefire-reports",
         "selectors": [
-          "*"
+          "*",
+          "EntitlementProjectionIntegrationTest",
+          "GrpcEntitlementSourceTest"
         ],
         "noTestsReason": null
       },

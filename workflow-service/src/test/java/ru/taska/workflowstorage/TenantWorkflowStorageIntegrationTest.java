@@ -341,7 +341,7 @@ class TenantWorkflowStorageIntegrationTest {
     assertThrows(Exception.class,()->new TenantStorageConfiguration().safeWorkflowRuntime(factory(pg.getUsername(),pg.getPassword())).afterPropertiesSet());
     for(String statement:List.of("SET ROLE taska_workflow_migrator","ALTER TABLE taska.workflows DISABLE ROW LEVEL SECURITY","CREATE TABLE taska.unsafe(id int)","TRUNCATE taska.workflows"))
       assertThrows(Exception.class,()->raw.sql(statement).then().block(WAIT));
-    assertEquals((long)TABLES.size(),operator.sql("SELECT count(*) n FROM pg_class WHERE relnamespace='taska'::regnamespace AND relrowsecurity AND relforcerowsecurity")
+    assertEquals((long)TABLES.size()+2,operator.sql("SELECT count(*) n FROM pg_class WHERE relnamespace='taska'::regnamespace AND relrowsecurity AND relforcerowsecurity")
         .map((r,m)->r.get("n",Long.class)).one().block(WAIT));
     UUID globalId=UUID.randomUUID();
     as(A,ACTOR,store.execute(s->s.insertWorkflow(globalId,UUID.randomUUID(),"Global UUID"))).block(WAIT);
