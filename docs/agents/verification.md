@@ -55,6 +55,11 @@ OAuth overlays имеют отдельные требования; см. [OAuth 
 
 `-am` собирает зависимости выбранного модуля, но не все зависящие от него модули. Изменения общих библиотек требуют отдельной проверки потребителей. CI использует `clean verify` для каждой записи своей матрицы.
 
+`StorageQuotaIntegrationTest` в tenant-service использует test-only `quota-fixture` issue-service,
+два PostgreSQL и versioned S3 Testcontainer; это проверка production stores через mTLS/JWS.
+Добавленная test dependency включает issue-service в Maven reactor `-am`. Проверка legacy
+storage-lib `S3StorageClientIT` по-прежнему запускается явно, чтобы сохранить avatar contract.
+
 Обычный Surefire выбирает в том числе `*IntegrationTest`, но не `*IT`. Для выбранных IT использовать точные имена классов, например:
 
 ```sh

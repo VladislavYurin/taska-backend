@@ -134,6 +134,7 @@
 
     <build>
         <plugins>
+        <plugin><groupId>org.apache.maven.plugins</groupId><artifactId>maven-jar-plugin</artifactId><executions><execution><id>quota-fixture</id><phase>process-classes</phase><goals><goal>jar</goal></goals><configuration><classifier>quota-fixture</classifier><outputDirectory>${project.build.directory}/quota-fixture</outputDirectory><includes><include>ru/taska/issuestorage/**</include><include>ru/taska/issuebootstrap/**</include><include>ru/taska/domain/**</include><include>db/issue-tenant/**</include></includes></configuration></execution></executions></plugin>
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>

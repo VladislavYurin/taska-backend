@@ -126,6 +126,81 @@ public class TenantStorageConfiguration {
         new TenantTransactionExecutor(factory), json, java.time.Clock.systemUTC(), quota);
   }
 
+  @Bean
+  @org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
+  ru.taska.issuestorage.StorageQuotaOwner.Policy storageQuotaPolicy() {
+    return (c, use, r, mime) ->
+        reactor.core.publisher.Mono.error(
+            new ru.taska.exception.DomainException(
+                ru.taska.exception.DomainStatus.UNAVAILABLE, "STORAGE_POLICY_UNAVAILABLE"));
+  }
+
+  @Bean
+  @org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
+  ru.taska.quota.StorageQuotaProtocol.Authority storageQuotaAuthority(
+      org.springframework.beans.factory.ObjectProvider<
+              ru.taska.api.b2b.v1.ReactorQuotaAuthorityServiceGrpc.ReactorQuotaAuthorityServiceStub>
+          stubs,
+      org.springframework.beans.factory.ObjectProvider<ru.taska.security.tenant.RpcContextSecurity>
+          security) {
+    var stub = stubs.getIfAvailable();
+    var trust = security.getIfAvailable();
+    if (stub != null && trust != null)
+      return new ru.taska.quota.GrpcStorageQuotaAuthority(
+          stub, trust, java.time.Clock.systemUTC(), "issue-service");
+    return new ru.taska.quota.StorageQuotaProtocol.Authority() {
+      private <T> reactor.core.publisher.Mono<T> unavailable() {
+        return reactor.core.publisher.Mono.error(
+            new ru.taska.exception.DomainException(
+                ru.taska.exception.DomainStatus.UNAVAILABLE, "STORAGE_AUTHORITY_UNAVAILABLE"));
+      }
+
+      public reactor.core.publisher.Mono<ru.taska.quota.StorageQuotaProtocol.Reservation> reserve(
+          ru.taska.quota.StorageQuotaProtocol.Request r) {
+        return unavailable();
+      }
+
+      public reactor.core.publisher.Mono<ru.taska.quota.StorageQuotaProtocol.Reservation> get(
+          java.util.UUID op) {
+        return unavailable();
+      }
+
+      public reactor.core.publisher.Mono<ru.taska.quota.StorageQuotaProtocol.Reservation> commit(
+          ru.taska.quota.StorageQuotaProtocol.Reservation r) {
+        return unavailable();
+      }
+
+      public reactor.core.publisher.Mono<ru.taska.quota.StorageQuotaProtocol.Reservation> release(
+          ru.taska.quota.StorageQuotaProtocol.Reservation r) {
+        return unavailable();
+      }
+    };
+  }
+
+  @Bean
+  @org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
+  ru.taska.storage.versioned.VersionedObjects versionedAttachmentObjects(
+      software.amazon.awssdk.services.s3.S3AsyncClient client,
+      ru.taska.storage.config.StorageProperties properties) {
+    return new ru.taska.storage.versioned.S3VersionedObjects(
+        client, properties.getBucket(), java.time.Duration.ofSeconds(5));
+  }
+
+  @Bean
+  @DependsOn("safeIssueRuntime")
+  ru.taska.issuestorage.StorageQuotaOwner storageQuotaOwner(
+      ConnectionFactory factory,
+      ru.taska.quota.StorageQuotaProtocol.Authority authority,
+      ru.taska.storage.versioned.VersionedObjects objects,
+      ru.taska.issuestorage.StorageQuotaOwner.Policy policy) {
+    return new ru.taska.issuestorage.StorageQuotaOwner(
+        new TenantTransactionExecutor(factory),
+        authority,
+        objects,
+        policy,
+        java.time.Clock.systemUTC());
+  }
+
   /** TAS-343 supplies verified transport and ACL. Old RPC headers cannot mint tenant authority. */
   @Bean
   @GlobalServerInterceptor
@@ -134,27 +209,30 @@ public class TenantStorageConfiguration {
           security,
       @Value("${DEPLOY_ENVIRONMENT:local}") String environment) {
     var trust = security.getIfAvailable();
+    var policies =
+        new java.util.HashMap<String, ru.taska.security.tenant.RpcContextSecurity.Policy>();
+    for (var method :
+        java.util.List.of(
+            ru.taska.api.b2b.v1.StorageQuotaOwnerServiceGrpc.getInspectMethod().getFullMethodName(),
+            ru.taska.api.b2b.v1.StorageQuotaOwnerServiceGrpc.getCancelMethod().getFullMethodName(),
+            ru.taska.api.b2b.v1.StorageQuotaOwnerServiceGrpc.getActivateMethod()
+                .getFullMethodName(),
+            ru.taska.api.b2b.v1.StorageQuotaOwnerServiceGrpc.getManifestsMethod()
+                .getFullMethodName(),
+            ru.taska.api.b2b.v1.ProjectQuotaReadServiceGrpc.getGetProjectTaskQuotaMethod()
+                .getFullMethodName(),
+            ru.taska.api.b2b.v1.ProjectQuotaReadServiceGrpc.getGetTenantTaskQuotaSummaryMethod()
+                .getFullMethodName()))
+      policies.put(method, new ru.taska.security.tenant.RpcContextSecurity.Policy(true, false));
     ServerInterceptor quotaSecurity =
         trust == null
             ? null
-            : new ru.taska.security.tenant.TenantServerInterceptor(
-                trust,
-                java.util.Map.of(
-                    ru.taska.api.b2b.v1.ProjectQuotaReadServiceGrpc.getGetProjectTaskQuotaMethod()
-                            .getFullMethodName(),
-                        new ru.taska.security.tenant.RpcContextSecurity.Policy(true, false),
-                    ru.taska.api.b2b.v1.ProjectQuotaReadServiceGrpc
-                            .getGetTenantTaskQuotaSummaryMethod()
-                            .getFullMethodName(),
-                        new ru.taska.security.tenant.RpcContextSecurity.Policy(true, false)),
-                environment);
+            : new ru.taska.security.tenant.TenantServerInterceptor(trust, policies, environment);
     return new ServerInterceptor() {
       public <Q, S> ServerCall.Listener<Q> interceptCall(
           ServerCall<Q, S> call, Metadata headers, ServerCallHandler<Q, S> next) {
         if (quotaSecurity != null
-            && call.getMethodDescriptor()
-                .getServiceName()
-                .equals(ru.taska.api.b2b.v1.ProjectQuotaReadServiceGrpc.SERVICE_NAME))
+            && policies.containsKey(call.getMethodDescriptor().getFullMethodName()))
           return quotaSecurity.interceptCall(call, headers, next);
         call.close(
             Status.UNAVAILABLE.withDescription("Issue tenant API is not activated"),

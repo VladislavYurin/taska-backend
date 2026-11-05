@@ -82,3 +82,5 @@ The [commercial configuration authority](../billing-service/COMMERCIAL-READINESS
 [Durable saga, operation lookup, recovery, protected RPCs and local service-path E2E](PROVISIONING.md). Registry creation now stores the actual operation and dispatch entry atomically; FREE activates only after workflow/billing preparation. Public gateway integration and deployment activation remain separate.
 
 [Atomic seat quotas and GetTenantQuotas](SEAT-QUOTAS.md) describe TAS-322 transactional primitives, authorization requirements and activation limits.
+
+[Storage reservations and primary manifests](STORAGE-QUOTAS.md) describe TAS-347 byte accounting, pinned S3 proof, bounded recovery and the TAS-365/TAS-367 integration boundaries.

@@ -861,6 +861,14 @@ class TenantMembershipIntegrationTest {
                         .setUsed("0")
                         .setReserved("0")
                         .setVersion("1")
+                        .build()),
+            t ->
+                Mono.just(
+                    QuotaUsage.newBuilder()
+                        .setKind(QuotaUsage.KindValue.KIND_STORAGE_BYTES)
+                        .setUsed("0")
+                        .setReserved("0")
+                        .setVersion("1")
                         .build()));
     var server =
         io.grpc.netty.shaded.io.grpc.netty.NettyServerBuilder.forAddress(
