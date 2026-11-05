@@ -63,6 +63,62 @@ class TenantIssueStorageIntegrationTest {
   static DatabaseClient raw, operator;
   static TenantTransactionExecutor tx;
   static TenantIssueStore store;
+  static final AtomicBoolean missingTaskLimit = new AtomicBoolean();
+  static final java.util.concurrent.atomic.AtomicBoolean
+      unlimited = new java.util.concurrent.atomic.AtomicBoolean(true),
+      bypass = new java.util.concurrent.atomic.AtomicBoolean(),
+      online = new java.util.concurrent.atomic.AtomicBoolean(true),
+      permitted = new java.util.concurrent.atomic.AtomicBoolean(true),
+      retirement = new java.util.concurrent.atomic.AtomicBoolean();
+  static final java.util.concurrent.atomic.AtomicLong
+      entitlementVersion = new java.util.concurrent.atomic.AtomicLong(1),
+      catalogLimit = new java.util.concurrent.atomic.AtomicLong(50),
+      billingReads = new java.util.concurrent.atomic.AtomicLong();
+  static final java.util.concurrent.atomic.AtomicReference<
+          java.util.List<ru.taska.api.b2b.v1.RestrictionCode>>
+      restrictions = new java.util.concurrent.atomic.AtomicReference<>(java.util.List.of());
+
+  static LifetimeTaskQuota quota(Clock clock) {
+    return new LifetimeTaskQuota(
+        tx,
+        (c, use, project) ->
+            permitted.get() && (use != LifetimeTaskQuota.Use.RETIRE || retirement.get())
+                ? Mono.just(new LifetimeTaskQuota.Grant(bypass.get()))
+                : Mono.error(
+                    new DomainException(DomainStatus.PERMISSION_DENIED, "current policy denied")),
+        (tenant, min) ->
+            Mono.defer(
+                () -> {
+                  billingReads.incrementAndGet();
+                  if (!online.get())
+                    return Mono.error(new DomainException(DomainStatus.UNAVAILABLE, "offline"));
+                  var e =
+                      ru.taska.api.b2b.v1.Entitlement.newBuilder()
+                          .setTenantId(tenant.toString())
+                          .setVersion(Long.toString(entitlementVersion.get()))
+                          .setPlanVersionId("30000000-0000-0000-0000-000000000001")
+                          .setValidFrom("2020-01-01T00:00:00Z")
+                          .setIssuedAt(clock.instant().toString())
+                          .addAllRestrictions(restrictions.get());
+                  for (var kind :
+                      java.util.List.of(
+                          ru.taska.api.b2b.v1.QuotaLimit.KindValue.KIND_SEAT,
+                          ru.taska.api.b2b.v1.QuotaLimit.KindValue.KIND_PROJECT,
+                          ru.taska.api.b2b.v1.QuotaLimit.KindValue.KIND_STORAGE_BYTES,
+                          ru.taska.api.b2b.v1.QuotaLimit.KindValue.KIND_TASK_LIFETIME)) {
+                    if (missingTaskLimit.get()
+                        && kind == ru.taska.api.b2b.v1.QuotaLimit.KindValue.KIND_TASK_LIFETIME)
+                      continue;
+                    var limit = ru.taska.api.b2b.v1.QuotaLimit.newBuilder().setKind(kind);
+                    if (unlimited.get()) limit.setUnlimited(true);
+                    else limit.setLimit(Long.toString(catalogLimit.get()));
+                    e.addLimits(limit);
+                  }
+                  return Mono.just(e.build());
+                }),
+        clock);
+  }
+
   static final ObjectMapper json = new ObjectMapper();
 
   static ConnectionFactory factory(String user, String password) {
@@ -101,7 +157,7 @@ class TenantIssueStorageIntegrationTest {
                 .build());
     raw = DatabaseClient.create(pool);
     tx = new TenantTransactionExecutor(pool);
-    store = new TenantIssueStore(tx, json, Clock.systemUTC());
+    store = new TenantIssueStore(tx, json, Clock.systemUTC(), quota(Clock.systemUTC()));
     new TenantStorageConfiguration().safeIssueRuntime(pool).afterPropertiesSet();
   }
 
@@ -143,6 +199,17 @@ class TenantIssueStorageIntegrationTest {
 
   @BeforeEach
   void reset() {
+    unlimited.set(true);
+    missingTaskLimit.set(false);
+    bypass.set(false);
+    online.set(true);
+    permitted.set(true);
+    retirement.set(false);
+    entitlementVersion.set(1);
+    catalogLimit.set(50);
+    billingReads.set(0);
+    restrictions.set(java.util.List.of());
+    sql("TRUNCATE taska.task_lifetime_quota_state,taska.task_quota_outbox");
     sql(
         "TRUNCATE "
             + String.join(",", TABLES.stream().map(t -> "taska." + t).toList())
@@ -191,7 +258,11 @@ class TenantIssueStorageIntegrationTest {
   }
 
   void assertEmpty() {
-    for (String table : TABLES) assertEquals(0, count(table), table);
+    for (String table :
+        java.util.stream.Stream.concat(
+                TABLES.stream(),
+                java.util.stream.Stream.of("task_lifetime_quota_state", "task_quota_outbox"))
+            .toList()) assertEquals(0, count(table), table);
   }
 
   void awaitBlocked(java.util.concurrent.CompletableFuture<?> loser) {
@@ -253,7 +324,7 @@ class TenantIssueStorageIntegrationTest {
             .block(WAIT)
             .toInstant()
             .isBefore(future.instant()));
-    var later = new TenantIssueStore(tx, json, future);
+    var later = new TenantIssueStore(tx, json, future, quota(future));
     assertEquals(
         original,
         as(
@@ -568,7 +639,11 @@ class TenantIssueStorageIntegrationTest {
             .map((r, m) -> r.get("u", String.class))
             .one()
             .block(WAIT));
-    for (String table : TABLES) {
+    for (String table :
+        java.util.stream.Stream.concat(
+                TABLES.stream(),
+                java.util.stream.Stream.of("task_lifetime_quota_state", "task_quota_outbox"))
+            .toList()) {
       assertTrue(
           operator
               .sql(
@@ -590,7 +665,7 @@ class TenantIssueStorageIntegrationTest {
                 .safeIssueRuntime(factory(pg.getUsername(), pg.getPassword()))
                 .afterPropertiesSet());
     assertEquals(
-        2L,
+        3L,
         operator
             .sql("SELECT count(*) n FROM issue_liquibase.databasechangelog")
             .map((r, m) -> r.get("n", Long.class))
@@ -602,9 +677,13 @@ class TenantIssueStorageIntegrationTest {
   void counterExhaustionRefusesWithoutPartialState() {
     create(A, "initial");
     sql("UPDATE taska.project_counters SET next_issue_number=2147483647");
-    assertEquals(
-        DomainStatus.RESOURCE_EXHAUSTED,
-        assertThrows(DomainException.class, () -> create(A, "full")).getStatus());
+    for (boolean admin : List.of(false, true)) {
+      bypass.set(admin);
+      assertEquals(
+          DomainStatus.RESOURCE_EXHAUSTED,
+          assertThrows(DomainException.class, () -> create(A, "full")).getStatus());
+      assertEquals(1, lifetime(A, PROJECT));
+    }
     for (String table : TABLES) assertEquals(1, count(table));
     assertEquals(
         2147483647,
@@ -770,6 +849,342 @@ class TenantIssueStorageIntegrationTest {
                   () -> create(A, ACTOR, "createIssue", "invalid", c).block(WAIT))
               .getStatus());
     assertEmpty();
+  }
+
+  long lifetime(UUID tenant, UUID project) {
+    return operator
+        .sql(
+            "SELECT lifetime_created n FROM taska.project_counters WHERE tenant_id=:t AND"
+                + " project_id=:p")
+        .bind("t", tenant)
+        .bind("p", project)
+        .map((r, m) -> r.get("n", Long.class))
+        .one()
+        .block(WAIT);
+  }
+
+  ru.taska.api.b2b.v1.TenantTaskQuotaSummary quotaSummary(UUID tenant) {
+    return as(
+            tenant,
+            ACTOR,
+            "getTenantTaskQuotaSummary",
+            quota(Clock.systemUTC())
+                .summary(
+                    ru.taska.api.b2b.v1.GetTenantTaskQuotaSummaryRequest.newBuilder()
+                        .setTenantId(tenant.toString())
+                        .build()))
+        .block(WAIT);
+  }
+
+  @Test
+  void lastSlotIsAtomicAndReplayNeedsCurrentAuthorityButNoBilling() {
+    unlimited.set(false);
+    create(A, "seed");
+    sql("UPDATE taska.project_counters SET lifetime_created=49,next_issue_number=50");
+    var outcomes =
+        Flux.range(0, 2)
+            .flatMap(
+                i ->
+                    create(A, ACTOR, "createIssue", "last-" + i, command(PROJECT, "Last"))
+                        .materialize(),
+                2)
+            .collectList()
+            .block(WAIT);
+    assertEquals(1, outcomes.stream().filter(reactor.core.publisher.Signal::isOnNext).count());
+    assertEquals(50, lifetime(A, PROJECT));
+    assertEquals(2, count("issues"));
+    assertEquals(2, count("idempotency_keys"));
+    assertEquals(2, count("task_quota_outbox"));
+    var winning =
+        outcomes.stream()
+            .filter(reactor.core.publisher.Signal::isOnNext)
+            .findFirst()
+            .orElseThrow()
+            .get();
+    String winningKey =
+        operator
+            .sql("SELECT key FROM taska.idempotency_keys WHERE resource_id=:id")
+            .bind("id", winning.id())
+            .map((r, m) -> r.get("key", String.class))
+            .one()
+            .block(WAIT);
+    long reads = billingReads.get();
+    online.set(false);
+    assertEquals(
+        winning, create(A, ACTOR, "createIssue", winningKey, command(PROJECT, "Last")).block(WAIT));
+    assertEquals(reads, billingReads.get());
+    assertEquals(50, lifetime(A, PROJECT));
+    permitted.set(false);
+    assertEquals(
+        DomainStatus.PERMISSION_DENIED,
+        assertThrows(
+                DomainException.class,
+                () ->
+                    create(A, ACTOR, "createIssue", winningKey, command(PROJECT, "Last"))
+                        .block(WAIT))
+            .getStatus());
+  }
+
+  @Test
+  void paidCountsAllTypesAndDeletionNeverRestoresQuotaOrResetsTheMonth() {
+    for (String type : List.of("TASK", "BUG", "EPIC")) {
+      var c = command(PROJECT, type);
+      c =
+          new TenantIssueStore.CreateIssue(
+              c.projectId(),
+              c.projectKey(),
+              type,
+              c.summary(),
+              c.description(),
+              c.statusKey(),
+              c.priority(),
+              c.assigneeId(),
+              c.storyPoints(),
+              c.startDate(),
+              c.dueDate(),
+              c.originalEstimateMinutes(),
+              c.remainingEstimateMinutes());
+      create(A, ACTOR, "createIssue", type, c).block(WAIT);
+    }
+    sql("UPDATE taska.issues SET deleted_at=now(),issue_type='BUG',status_key='DONE'");
+    assertEquals(3, lifetime(A, PROJECT));
+    var future =
+        Clock.fixed(
+            Clock.systemUTC().instant().plus(Duration.ofDays(400)), java.time.ZoneOffset.UTC);
+    var later = new TenantIssueStore(tx, json, future, quota(future));
+    assertEquals(
+        4,
+        as(A, ACTOR, later.execute(s -> s.create("next-year", command(PROJECT, "Later"))))
+            .block(WAIT)
+            .number());
+    assertEquals(4, lifetime(A, PROJECT));
+    assertEquals(4, Long.parseLong(quotaSummary(A).getMaximumCreated()));
+  }
+
+  @Test
+  void equalityOnlyStopsThisProjectAndExcessDowngradeIsTenantWideUntilPaidOrRetired() {
+    create(A, "seed");
+    sql("UPDATE taska.project_counters SET lifetime_created=50");
+    unlimited.set(false);
+    entitlementVersion.set(2);
+    assertFalse(quotaSummary(A).getOverLimit());
+    UUID other = UUID.randomUUID();
+    create(
+            A,
+            ACTOR,
+            "createIssue",
+            "other",
+            new TenantIssueStore.CreateIssue(
+                other, "OT", "TASK", "Other", null, "OPEN", "MEDIUM", null, null, null, null, null,
+                null))
+        .block(WAIT);
+    assertEquals(
+        DomainStatus.FAILED_PRECONDITION,
+        assertThrows(DomainException.class, () -> create(A, "limit")).getStatus());
+    bypass.set(true);
+    create(A, "admin");
+    bypass.set(false);
+    assertEquals(51, lifetime(A, PROJECT));
+    assertTrue(quotaSummary(A).getOverLimit());
+    assertEquals(
+        DomainStatus.FAILED_PRECONDITION,
+        assertThrows(
+                DomainException.class,
+                () ->
+                    create(
+                            A,
+                            ACTOR,
+                            "createIssue",
+                            "other2",
+                            new TenantIssueStore.CreateIssue(
+                                other, "OT", "TASK", "Other", null, "OPEN", "MEDIUM", null, null,
+                                null, null, null, null))
+                        .block(WAIT))
+            .getStatus());
+    assertEquals(1, lifetime(A, other));
+    unlimited.set(true);
+    entitlementVersion.set(3);
+    assertFalse(quotaSummary(A).getOverLimit());
+    create(A, "paid");
+    assertEquals(52, lifetime(A, PROJECT));
+    unlimited.set(false);
+    entitlementVersion.set(4);
+    assertThrows(
+        DomainException.class,
+        () ->
+            as(A, ACTOR, tx.execute(db -> quota(Clock.systemUTC()).retire(db, PROJECT)))
+                .block(WAIT));
+    retirement.set(true);
+    online.set(false);
+    as(A, ACTOR, tx.execute(db -> quota(Clock.systemUTC()).retire(db, PROJECT))).block(WAIT);
+    online.set(true);
+    assertFalse(quotaSummary(A).getOverLimit());
+    assertEquals(52, lifetime(A, PROJECT));
+    assertThrows(
+        Exception.class,
+        () ->
+            sql(
+                "UPDATE taska.project_counters SET retired_at=NULL WHERE project_id='"
+                    + PROJECT
+                    + "'"));
+    assertThrows(
+        Exception.class,
+        () -> sql("DELETE FROM taska.project_counters WHERE project_id='" + PROJECT + "'"));
+    assertThrows(
+        Exception.class,
+        () ->
+            sql(
+                "UPDATE taska.project_counters SET lifetime_created=0 WHERE project_id='"
+                    + PROJECT
+                    + "'"));
+    assertThrows(DomainException.class, () -> create(A, "resurrect"));
+    UUID fresh = UUID.randomUUID();
+    assertEquals(
+        1,
+        create(
+                A,
+                ACTOR,
+                "createIssue",
+                "new-project",
+                new TenantIssueStore.CreateIssue(
+                    fresh, "NP", "TASK", "New", null, "OPEN", "MEDIUM", null, null, null, null,
+                    null, null))
+            .block(WAIT)
+            .number());
+  }
+
+  @Test
+  void quotaFailuresRollbackAllStateAndReadOnlyReasonsRemainIndependent() {
+    unlimited.set(false);
+    create(A, "seed");
+    long outbox = count("task_quota_outbox");
+    assertThrows(
+        Exception.class,
+        () ->
+            as(
+                    A,
+                    ACTOR,
+                    store.execute(
+                        s ->
+                            s.create("rollback", command(PROJECT, "Fail"))
+                                .then(Mono.error(new IllegalStateException("abort")))))
+                .block(WAIT));
+    assertEquals(1, lifetime(A, PROJECT));
+    assertEquals(outbox, count("task_quota_outbox"));
+    assertEquals(1, count("idempotency_keys"));
+    entitlementVersion.set(0);
+    assertThrows(DomainException.class, () -> create(A, "invalid-snapshot"));
+    entitlementVersion.set(2);
+    restrictions.set(List.of(ru.taska.api.b2b.v1.RestrictionCode.RESTRICTION_CODE_PAYMENT_DISPUTE));
+    assertFalse(quotaSummary(A).getOverLimit());
+    assertThrows(DomainException.class, () -> create(A, "dispute"));
+    unlimited.set(true);
+    entitlementVersion.set(3);
+    assertFalse(quotaSummary(A).getOverLimit());
+    assertThrows(DomainException.class, () -> create(A, "paid-dispute"));
+    bypass.set(true);
+    create(A, "admin-dispute");
+    assertEquals(2, lifetime(A, PROJECT));
+    online.set(false);
+    assertThrows(DomainException.class, () -> create(A, "offline"));
+    assertEquals(2, lifetime(A, PROJECT));
+  }
+
+  @Test
+  void liveCounterKeysCannotMoveAndMaximumUsesAPartialIndex() {
+    sql(
+        "INSERT INTO taska.project_counters(tenant_id,project_id) VALUES('"
+            + A
+            + "','"
+            + PROJECT
+            + "')");
+    assertThrows(
+        Exception.class,
+        () -> sql("UPDATE taska.project_counters SET project_id='" + UUID.randomUUID() + "'"));
+    assertThrows(
+        Exception.class, () -> sql("UPDATE taska.project_counters SET tenant_id='" + B + "'"));
+    assertEquals(0, lifetime(A, PROJECT));
+    var plan =
+        as(
+                A,
+                ACTOR,
+                tx.execute(
+                    db ->
+                        db.sql("SET LOCAL enable_seqscan=off")
+                            .then()
+                            .then(
+                                db.sql(
+                                        "EXPLAIN SELECT max(lifetime_created) FROM"
+                                            + " taska.project_counters WHERE tenant_id=:t AND"
+                                            + " retired_at IS NULL")
+                                    .bind("t", A)
+                                    .map((row, m) -> row.get(0, String.class))
+                                    .all()
+                                    .collectList()
+                                    .map(lines -> String.join("\n", lines)))))
+            .block(WAIT);
+    assertTrue(plan.contains("project_lifetime_max_live_idx"), plan);
+    missingTaskLimit.set(true);
+    assertEquals(
+        DomainStatus.INVALID_ARGUMENT,
+        assertThrows(DomainException.class, () -> create(A, "missing-limit")).getStatus());
+    assertEquals(0, lifetime(A, PROJECT));
+    assertEquals(0, count("idempotency_keys"));
+    assertEquals(0, count("task_quota_outbox"));
+  }
+
+  @Test
+  void emptyDeletedProjectRetainsATombstoneEvenWithoutBilling() {
+    online.set(false);
+    retirement.set(true);
+    as(A, ACTOR, tx.execute(db -> quota(Clock.systemUTC()).retire(db, PROJECT))).block(WAIT);
+    assertEquals(0, lifetime(A, PROJECT));
+    var event =
+        operator
+            .sql("SELECT entitlement_version,over_limit FROM taska.task_quota_outbox")
+            .fetch()
+            .one()
+            .block(WAIT);
+    assertEquals(0L, event.get("entitlement_version"));
+    assertNull(event.get("over_limit"));
+    online.set(true);
+    assertEquals(
+        DomainStatus.NOT_FOUND,
+        assertThrows(DomainException.class, () -> create(A, "recreate")).getStatus());
+    assertEquals(0, lifetime(A, PROJECT));
+    assertEquals(0, count("issues"));
+  }
+
+  @Test
+  void projectQuotaReadsAreScopedCurrentAndNewProjectStartsAtZero() {
+    UUID empty = UUID.randomUUID();
+    var request =
+        ru.taska.api.b2b.v1.GetProjectTaskQuotaRpcRequest.newBuilder()
+            .setTenantId(A.toString())
+            .setProjectId(empty.toString())
+            .build();
+    var q = quota(Clock.systemUTC());
+    assertEquals(
+        "0", as(A, ACTOR, "getProjectTaskQuota", q.project(request)).block(WAIT).getUsed());
+    create(B, "other-tenant");
+    assertThrows(
+        DomainException.class,
+        () -> as(B, ACTOR, "getProjectTaskQuota", q.project(request)).block(WAIT));
+    permitted.set(false);
+    assertThrows(
+        DomainException.class,
+        () -> as(A, ACTOR, "getProjectTaskQuota", q.project(request)).block(WAIT));
+    permitted.set(true);
+    var closed = new TenantIssueStore(tx, json, Clock.systemUTC());
+    assertEquals(
+        DomainStatus.UNAVAILABLE,
+        assertThrows(
+                DomainException.class,
+                () ->
+                    as(A, ACTOR, closed.execute(s -> s.create("closed", command(PROJECT, "No"))))
+                        .block(WAIT))
+            .getStatus());
+    assertEquals(0, Long.parseLong(quotaSummary(A).getMaximumCreated()));
   }
 
   @Test

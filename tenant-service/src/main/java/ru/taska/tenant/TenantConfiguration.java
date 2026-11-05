@@ -325,12 +325,30 @@ public class TenantConfiguration {
   }
 
   @Bean
+  @ConditionalOnMissingBean
+  ru.taska.entitlement.TenantTaskQuotaSource taskQuotaSource(
+      ObjectProvider<
+              ru.taska.api.b2b.v1.ReactorProjectQuotaReadServiceGrpc
+                  .ReactorProjectQuotaReadServiceStub>
+          stubs,
+      ObjectProvider<RpcContextSecurity> security) {
+    var stub = stubs.getIfAvailable();
+    var trust = security.getIfAvailable();
+    if (stub != null && trust != null)
+      return new ru.taska.entitlement.GrpcTenantTaskQuotaSource(
+          stub, trust, Clock.systemUTC(), "tenant-service");
+    return t ->
+        Mono.error(TenantRegistryService.fail(DomainStatus.UNAVAILABLE, "TASK_QUOTA_UNAVAILABLE"));
+  }
+
+  @Bean
   @DependsOn("safeRuntimeRole")
   SeatQuotaStore seatQuotas(
       TenantTransactionExecutor transactions,
       SeatQuotaStore.Authority authority,
-      ru.taska.entitlement.EntitlementProjection.Source source) {
-    return new SeatQuotaStore(transactions, authority, source, Clock.systemUTC());
+      ru.taska.entitlement.EntitlementProjection.Source source,
+      ru.taska.entitlement.TenantTaskQuotaSource tasks) {
+    return new SeatQuotaStore(transactions, authority, source, Clock.systemUTC(), tasks);
   }
 
   @Bean

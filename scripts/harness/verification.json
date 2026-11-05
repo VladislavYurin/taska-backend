@@ -126,7 +126,8 @@
           "EntitlementProjectionIntegrationTest",
           "GrpcEntitlementSourceTest",
           "CapabilityEvaluatorTest",
-          "CapabilityEvaluatorTransportTest"
+          "CapabilityEvaluatorTransportTest",
+          "GrpcTaskQuotaSourceTest"
         ],
         "noTestsReason": null
       },

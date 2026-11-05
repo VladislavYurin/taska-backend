@@ -327,6 +327,21 @@
           }
         ]
       }
+    },
+    {
+      "changeSet": {
+        "id": "tenant-task-quota-0010",
+        "author": "taska",
+        "changes": [
+          {
+            "sqlFile": {
+              "path": "0010-task-quota-version.sql",
+              "relativeToChangelogFile": true,
+              "splitStatements": false
+            }
+          }
+        ]
+      }
     }
   ]
 }
