@@ -8,18 +8,18 @@ message QuotaReservation {
  enum KindValue { KIND_UNSPECIFIED=0; KIND_SEAT=1; KIND_PROJECT=2; KIND_STORAGE_BYTES=3; }
  enum StateValue { STATE_UNSPECIFIED=0; STATE_ACTIVE=1; STATE_COMMITTED=2; STATE_RELEASED=3; STATE_EXPIRED=4; }
  string id=1; string operation_id=2; string tenant_id=3; KindValue kind=4; optional string project_id=5; string quantity=6; StateValue state=7; string expires_at=8; string version=9;
- string fence=10; string resource_id=11; bool cancel_requested=12;
+ string fence=10; string resource_id=11; bool cancel_requested=12; optional string actual_quantity=13; optional string issue_id=14; optional string maximum_attachment_bytes=15; optional string policy_version=16; optional string original_actor_user_id=17;
 }
 message ReserveQuotaRequest {
  enum KindValue { KIND_UNSPECIFIED=0; KIND_SEAT=1; KIND_PROJECT=2; KIND_STORAGE_BYTES=3; }
  string operation_id=1; KindValue kind=2; optional string project_id=3; string quantity=4; string resource_id=5;
  // Internal bounded deadline, validated against primary server policy and frozen in reservation.
- string expires_at=6;
+ string expires_at=6; optional string issue_id=7;
 }
 message FinalizeQuotaRequest {string operation_id=1;string resource_id=2;optional string actual_quantity=3;}
 message ReserveQuotaRpcRequest {RequestContext context=1;ReserveQuotaRequest payload=2;MutationOptions mutation=3;}
-message FinalizeQuotaRpcRequest {RequestContext context=1;string reservation_id=2;FinalizeQuotaRequest payload=3;MutationOptions mutation=4;string fence=5;}
-message GetQuotaReservationRequest {RequestContext context=1;string operation_id=2;}
+message FinalizeQuotaRpcRequest {RequestContext context=1;string reservation_id=2;FinalizeQuotaRequest payload=3;MutationOptions mutation=4;string fence=5;QuotaReservation.KindValue kind=6;}
+message GetQuotaReservationRequest {RequestContext context=1;string operation_id=2;QuotaReservation.KindValue kind=3;}
 message ProjectQuotaOwnerRequest {RequestContext context=1;QuotaReservation reservation=2;}
 message ProjectQuotaOwnerInventoryRequest {RequestContext context=1;string tenant_id=2;}
 message ProjectQuotaOwnerReceipt {
@@ -38,4 +38,19 @@ service ProjectQuotaOwnerService {
  rpc Cancel(ProjectQuotaOwnerRequest) returns(ProjectQuotaOwnerReceipt);
  rpc Open(ProjectQuotaOwnerRequest) returns(ProjectQuotaOwnerReceipt);
  rpc Inventory(ProjectQuotaOwnerInventoryRequest) returns(ProjectQuotaOwnerInventory);
+}
+
+// Metadata only. Object keys and presigned capabilities never cross the quota boundary.
+message StorageQuotaOwnerRequest {RequestContext context=1;QuotaReservation reservation=2;}
+message StorageQuotaManifestRequest {RequestContext context=1;string tenant_id=2;optional string after=3;string snapshot_version=4;}
+message StorageQuotaOwnerReceipt {
+ enum StateValue {STATE_UNSPECIFIED=0;STATE_MATERIALIZED=1;STATE_CONFIRMED=2;STATE_CANCELLED=3;STATE_DELETED=4;}
+ QuotaReservation reservation=1;StateValue state=2;optional string actual_bytes=3;
+}
+message StorageQuotaManifestPage {string tenant_id=1;string version=2;repeated StorageQuotaOwnerReceipt items=3;optional string next=4;bool complete=5;}
+service StorageQuotaOwnerService {
+ rpc Inspect(StorageQuotaOwnerRequest) returns(StorageQuotaOwnerReceipt);
+ rpc Cancel(StorageQuotaOwnerRequest) returns(StorageQuotaOwnerReceipt);
+ rpc Activate(StorageQuotaOwnerRequest) returns(StorageQuotaOwnerReceipt);
+ rpc Manifests(StorageQuotaManifestRequest) returns(StorageQuotaManifestPage);
 }

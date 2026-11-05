@@ -15,8 +15,22 @@ public final class ProjectQuotaGrpcService
     extends ReactorQuotaAuthorityServiceGrpc.QuotaAuthorityServiceImplBase {
   private final ProjectQuotaStore store;
 
-  public ProjectQuotaGrpcService(ProjectQuotaStore store) {
+  private final StorageQuotaStore storage;
+
+  @org.springframework.beans.factory.annotation.Autowired
+  public ProjectQuotaGrpcService(ProjectQuotaStore store, StorageQuotaStore storage) {
     this.store = store;
+    this.storage = storage;
+  }
+
+  public ProjectQuotaGrpcService(ProjectQuotaStore store) {
+    this(store, null);
+  }
+
+  private StorageQuotaStore storage() {
+    if (storage == null)
+      throw new DomainException(DomainStatus.UNAVAILABLE, "STORAGE_NOT_CONFIGURED");
+    return storage;
   }
 
   @Override
@@ -26,7 +40,21 @@ public final class ProjectQuotaGrpcService
             requests.flatMap(
                 r -> {
                   var p = r.getPayload();
-                  if (p.getKind() != ReserveQuotaRequest.KindValue.KIND_PROJECT
+                  if (p.getKind() == ReserveQuotaRequest.KindValue.KIND_STORAGE_BYTES) {
+                    if (!p.hasProjectId() || !p.hasIssueId()) return Mono.error(invalid());
+                    return storage()
+                        .reserve(
+                            new ru.taska.quota.StorageQuotaProtocol.Request(
+                                uuid(p.getOperationId()),
+                                uuid(p.getResourceId()),
+                                uuid(p.getProjectId()),
+                                uuid(p.getIssueId()),
+                                number(p.getQuantity()),
+                                instant(p.getExpiresAt())))
+                        .map(ru.taska.quota.StorageQuotaWire::encode);
+                  }
+                  if (p.hasIssueId()
+                      || p.getKind() != ReserveQuotaRequest.KindValue.KIND_PROJECT
                       || !"1".equals(p.getQuantity())
                       || p.hasProjectId()) return Mono.error(invalid());
                   return store
@@ -43,10 +71,18 @@ public final class ProjectQuotaGrpcService
     return errors(
         RpcContextBridge.inbound(
             requests.flatMap(
-                r ->
-                    store
+                r -> {
+                  if (r.getKind() == QuotaReservation.KindValue.KIND_STORAGE_BYTES)
+                    return storage()
                         .get(uuid(r.getOperationId()))
-                        .map(ru.taska.quota.ProjectQuotaWire::encode))));
+                        .map(ru.taska.quota.StorageQuotaWire::encode);
+                  if (r.getKind() != QuotaReservation.KindValue.KIND_UNSPECIFIED
+                      && r.getKind() != QuotaReservation.KindValue.KIND_PROJECT)
+                    return Mono.error(invalid());
+                  return store
+                      .get(uuid(r.getOperationId()))
+                      .map(ru.taska.quota.ProjectQuotaWire::encode);
+                })));
   }
 
   @Override
@@ -64,6 +100,30 @@ public final class ProjectQuotaGrpcService
         RpcContextBridge.inbound(
             requests.flatMap(
                 r -> {
+                  if (r.getKind() == QuotaReservation.KindValue.KIND_STORAGE_BYTES) {
+                    if (r.getPayload().hasActualQuantity())
+                      return Mono.error(invalid()); // Primary owner supplies actual bytes.
+                    return storage()
+                        .get(uuid(r.getPayload().getOperationId()))
+                        .flatMap(
+                            current -> {
+                              if (!current.id().equals(uuid(r.getReservationId()))
+                                  || !current
+                                      .resource()
+                                      .equals(uuid(r.getPayload().getResourceId()))
+                                  || current.fence() != number(r.getFence()))
+                                return Mono.error(
+                                    new DomainException(
+                                        DomainStatus.FAILED_PRECONDITION, "STALE_FENCE"));
+                              return commit
+                                  ? storage().commit(current)
+                                  : storage().release(current);
+                            })
+                        .map(ru.taska.quota.StorageQuotaWire::encode);
+                  }
+                  if (r.getKind() != QuotaReservation.KindValue.KIND_UNSPECIFIED
+                      && r.getKind() != QuotaReservation.KindValue.KIND_PROJECT)
+                    return Mono.error(invalid());
                   if (r.getPayload().hasActualQuantity()
                       && !"1".equals(r.getPayload().getActualQuantity()))
                     return Mono.error(invalid());

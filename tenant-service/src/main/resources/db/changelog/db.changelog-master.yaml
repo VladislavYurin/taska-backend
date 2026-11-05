@@ -357,6 +357,21 @@
           }
         ]
       }
+    },
+    {
+      "changeSet": {
+        "id": "tenant-storage-quota-0012",
+        "author": "taska",
+        "changes": [
+          {
+            "sqlFile": {
+              "path": "0012-storage-quota.sql",
+              "relativeToChangelogFile": true,
+              "splitStatements": false
+            }
+          }
+        ]
+      }
     }
   ]
 }

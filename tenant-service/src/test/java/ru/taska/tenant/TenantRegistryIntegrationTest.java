@@ -501,7 +501,10 @@ class TenantRegistryIntegrationTest {
   @Test
   void grpcWithoutVerifiedInterceptorContextNeverReachesDatabase() {
     var adapter =
-        new TenantGrpcService(service, org.mockito.Mockito.mock(TenantMembershipService.class), org.mockito.Mockito.mock(SeatQuotaStore.class));
+        new TenantGrpcService(
+            service,
+            org.mockito.Mockito.mock(TenantMembershipService.class),
+            org.mockito.Mockito.mock(SeatQuotaStore.class));
     StepVerifier.create(adapter.createTenant(Mono.just(request("untrusted", PAID, "Company"))))
         .expectErrorSatisfies(
             e ->
@@ -560,6 +563,10 @@ class TenantRegistryIntegrationTest {
     try (var context =
         new org.springframework.boot.builder.SpringApplicationBuilder(
                 TenantServiceApplication.class)
+            // storage-lib is present only for the cross-service quota fixture. Tenant runtime
+            // has no S3 dependency; reproduce that runtime rather than activating fixture imports.
+            .properties(
+                "spring.autoconfigure.exclude=ru.taska.storage.config.StorageAutoConfiguration")
             .initializers(
                 c ->
                     org.springframework.boot.test.util.TestPropertyValues.of(properties).applyTo(c))
@@ -776,7 +783,9 @@ class TenantRegistryIntegrationTest {
             .addService(
                 io.grpc.ServerInterceptors.intercept(
                     new TenantGrpcService(
-                        service, org.mockito.Mockito.mock(TenantMembershipService.class), org.mockito.Mockito.mock(SeatQuotaStore.class)),
+                        service,
+                        org.mockito.Mockito.mock(TenantMembershipService.class),
+                        org.mockito.Mockito.mock(SeatQuotaStore.class)),
                     new ru.taska.security.tenant.TenantServerInterceptor(
                         recipient, policies, "test")))
             .build()

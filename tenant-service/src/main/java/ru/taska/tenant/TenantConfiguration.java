@@ -399,14 +399,77 @@ public class TenantConfiguration {
   }
 
   @Bean
+  @org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
+  StorageQuotaStore.Policy storageQuotaPolicy() {
+    return (c, command, target) ->
+        Mono.error(
+            new ru.taska.exception.DomainException(
+                ru.taska.exception.DomainStatus.UNAVAILABLE, "STORAGE_POLICY_UNAVAILABLE"));
+  }
+
+  @Bean
+  @org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
+  ru.taska.quota.StorageQuotaProtocol.Owner storageQuotaOwner(
+      org.springframework.beans.factory.ObjectProvider<
+              ru.taska.api.b2b.v1.ReactorStorageQuotaOwnerServiceGrpc
+                  .ReactorStorageQuotaOwnerServiceStub>
+          stubs,
+      org.springframework.beans.factory.ObjectProvider<ru.taska.security.tenant.RpcContextSecurity>
+          security) {
+    var stub = stubs.getIfAvailable();
+    var trust = security.getIfAvailable();
+    if (stub != null && trust != null)
+      return new ru.taska.quota.GrpcStorageQuotaOwner(
+          stub, trust, Clock.systemUTC(), "tenant-service");
+    return new ru.taska.quota.StorageQuotaProtocol.Owner() {
+      private <T> Mono<T> unavailable() {
+        return Mono.error(
+            new ru.taska.exception.DomainException(
+                ru.taska.exception.DomainStatus.UNAVAILABLE, "STORAGE_OWNER_UNAVAILABLE"));
+      }
+
+      public Mono<ru.taska.quota.StorageQuotaProtocol.Receipt> inspect(
+          ru.taska.quota.StorageQuotaProtocol.Reservation r) {
+        return unavailable();
+      }
+
+      public Mono<ru.taska.quota.StorageQuotaProtocol.Receipt> cancel(
+          ru.taska.quota.StorageQuotaProtocol.Reservation r) {
+        return unavailable();
+      }
+
+      public Mono<ru.taska.quota.StorageQuotaProtocol.Receipt> activate(
+          ru.taska.quota.StorageQuotaProtocol.Reservation r) {
+        return unavailable();
+      }
+
+      public Mono<ru.taska.quota.StorageQuotaProtocol.ManifestPage> manifests(
+          java.util.UUID t, java.util.UUID after, long version) {
+        return unavailable();
+      }
+    };
+  }
+
+  @Bean
+  StorageQuotaStore storageQuotas(
+      TenantTransactionExecutor tx,
+      StorageQuotaStore.Policy policy,
+      ru.taska.quota.StorageQuotaProtocol.Owner owner,
+      ru.taska.entitlement.EntitlementProjection.Source billing) {
+    return new StorageQuotaStore(tx, policy, owner, billing, Clock.systemUTC());
+  }
+
+  @Bean
   @DependsOn("safeRuntimeRole")
   SeatQuotaStore seatQuotas(
       TenantTransactionExecutor transactions,
       SeatQuotaStore.Authority authority,
       ru.taska.entitlement.EntitlementProjection.Source source,
       ru.taska.entitlement.TenantTaskQuotaSource tasks,
-      ProjectQuotaStore projects) {
-    return new SeatQuotaStore(transactions, authority, source, Clock.systemUTC(), tasks, projects);
+      ProjectQuotaStore projects,
+      StorageQuotaStore storage) {
+    return new SeatQuotaStore(
+        transactions, authority, source, Clock.systemUTC(), tasks, projects, storage);
   }
 
   @Bean
