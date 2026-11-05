@@ -99,6 +99,21 @@
           }
         ]
       }
+    },
+    {
+      "changeSet": {
+        "id": "tenant-merchant-configuration-0004",
+        "author": "taska",
+        "changes": [
+          {
+            "sqlFile": {
+              "path": "0004-merchant-configuration.sql",
+              "relativeToChangelogFile": true,
+              "splitStatements": false
+            }
+          }
+        ]
+      }
     }
   ]
 }

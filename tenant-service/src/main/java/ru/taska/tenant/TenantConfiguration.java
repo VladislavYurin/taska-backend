@@ -17,6 +17,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.DependsOn;
 import org.springframework.grpc.server.GlobalServerInterceptor;
 import reactor.core.publisher.Mono;
+import ru.taska.api.b2b.v1.MerchantConfigurationServiceGrpc;
 import ru.taska.api.b2b.v1.PlatformServiceGrpc;
 import ru.taska.api.b2b.v1.TenantMembershipServiceGrpc;
 import ru.taska.api.b2b.v1.TenantServiceGrpc;
@@ -138,6 +139,16 @@ public class TenantConfiguration {
   }
 
   @Bean
+  @DependsOn("safeRuntimeRole")
+  MerchantConfigurations merchantConfigurations(ConnectionFactory factory, PlatformFlags access) {
+    return new MerchantConfigurations(
+        org.springframework.r2dbc.core.DatabaseClient.create(factory),
+        org.springframework.transaction.reactive.TransactionalOperator.create(
+            new org.springframework.r2dbc.connection.R2dbcTransactionManager(factory)),
+        access);
+  }
+
+  @Bean
   @GlobalServerInterceptor
   ServerInterceptor registrySecurity(
       ObjectProvider<RpcContextSecurity> provider,
@@ -147,6 +158,15 @@ public class TenantConfiguration {
       return new TenantServerInterceptor(
           security,
           Map.of(
+              MerchantConfigurationServiceGrpc.getGetMerchantConfigurationMethod()
+                      .getFullMethodName(),
+                  new RpcContextSecurity.Policy(false, false),
+              MerchantConfigurationServiceGrpc.getPublishMerchantConfigurationMethod()
+                      .getFullMethodName(),
+                  new RpcContextSecurity.Policy(false, true),
+              MerchantConfigurationServiceGrpc.getResolveMerchantConfigurationMethod()
+                      .getFullMethodName(),
+                  new RpcContextSecurity.Policy(false, false),
               PlatformServiceGrpc.getListPlatformFlagsMethod().getFullMethodName(),
                   new RpcContextSecurity.Policy(false, false),
               PlatformServiceGrpc.getUpdatePlatformFlagMethod().getFullMethodName(),

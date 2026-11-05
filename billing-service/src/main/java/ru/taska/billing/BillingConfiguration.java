@@ -133,6 +133,55 @@ public class BillingConfiguration {
   }
 
   @Bean
+  @ConditionalOnMissingBean
+  ru.taska.billing.commercial.CommercialDependencies.ConfigurationSource
+      commercialConfigurationSource(
+          ObjectProvider<
+                  ru.taska.api.b2b.v1.ReactorMerchantConfigurationServiceGrpc
+                      .ReactorMerchantConfigurationServiceStub>
+              stubs,
+          ObjectProvider<RpcContextSecurity> security) {
+    var stub = stubs.getIfAvailable();
+    var trust = security.getIfAvailable();
+    if (stub != null && trust != null)
+      return new ru.taska.billing.commercial.GrpcMerchantConfigurationSource(
+          stub, trust, Clock.systemUTC());
+    return new ru.taska.billing.commercial.CommercialDependencies.ConfigurationSource() {
+      public Mono<ru.taska.api.b2b.v1.MerchantConfigurationSnapshot> current() {
+        return Mono.error(CatalogErrors.fail(DomainStatus.UNAVAILABLE, "POLICY_NOT_CONFIGURED"));
+      }
+
+      public Mono<ru.taska.api.b2b.v1.MerchantConfigurationSnapshot> version(String version) {
+        return current();
+      }
+    };
+  }
+
+  @Bean
+  @ConditionalOnMissingBean
+  ru.taska.billing.commercial.CommercialDependencies.CredentialAuthority
+      commercialCredentialAuthority() {
+    return stripe -> Mono.empty();
+  }
+
+  @Bean
+  @ConditionalOnMissingBean
+  ru.taska.billing.commercial.CommercialDependencies.FxQuoteProvider commercialFxQuoteProvider() {
+    return (environment, policy) ->
+        Mono.error(CatalogErrors.fail(DomainStatus.UNAVAILABLE, "POLICY_NOT_CONFIGURED"));
+  }
+
+  @Bean
+  @DependsOn("safeRuntimeRole")
+  ru.taska.billing.commercial.CommercialReadiness commercialReadiness(
+      ru.taska.billing.commercial.CommercialDependencies.ConfigurationSource profiles,
+      ru.taska.billing.commercial.CommercialDependencies.CredentialAuthority credentials,
+      ru.taska.billing.commercial.CommercialDependencies.FxQuoteProvider quotes) {
+    return new ru.taska.billing.commercial.CommercialReadiness(
+        profiles, credentials, quotes, Clock.systemUTC());
+  }
+
+  @Bean
   @GlobalServerInterceptor
   ServerInterceptor registrySecurity(
       ObjectProvider<RpcContextSecurity> provider,
