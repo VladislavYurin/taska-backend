@@ -364,7 +364,12 @@ public final class FreeEligibilityLedger implements FreeAdmission {
               var selected = ownOrEmail(all, identity.actor());
               review(selected, prepared.purpose());
               if (!selected.isEmpty()) {
-                if (selected.stream().anyMatch(r -> !tenant.equals(r.get("bound_tenant_id"))))
+                if (selected.stream()
+                    .anyMatch(
+                        r ->
+                            !tenant.equals(r.get("bound_tenant_id"))
+                                || (r.get("first_user_id") != null
+                                    && !identity.actor().equals(r.get("first_user_id")))))
                   return Mono.error(fail(DomainStatus.ALREADY_EXISTS, "FREE_ELIGIBILITY_USED"));
                 return adoptLiveBinding(connection, identity, tenant, selected)
                     .then(alias(connection, identity, all, selected));
@@ -587,13 +592,12 @@ public final class FreeEligibilityLedger implements FreeAdmission {
                                         .then(matches(db, p.identity()))
                                         .map(
                                             rows -> {
-                                              review(
-                                                  ownOrEmail(rows, p.identity().actor()),
-                                                  p.purpose());
+                                              var selected = ownOrEmail(rows, p.identity().actor());
+                                              review(selected, p.purpose());
                                               return TenantCreationOptions.newBuilder()
                                                   .addAllPlans(catalog)
                                                   .setFreeEligibility(
-                                                      rows.isEmpty()
+                                                      selected.isEmpty()
                                                           ? FreeEligibilityState
                                                               .FREE_ELIGIBILITY_AVAILABLE
                                                           : FreeEligibilityState

@@ -467,6 +467,10 @@ class FreeEligibilityIntegrationTest {
     assertEquals(1, count("free_eligibility_ledger"));
     var conflict = TenantRegistryIntegrationTest.request(winner, FREE, "Another name");
     reason("IDEMPOTENCY_CONFLICT", account(A, "createTenant", registry.create(conflict)));
+    emails.clear();
+    secretKeys.clear();
+    create(A, FREE, winner).block(WAIT); // Durable replay does not reconstruct identity/KMS.
+    assertEquals(1, count("tenants"));
   }
 
   @Test
@@ -632,6 +636,49 @@ class FreeEligibilityIntegrationTest {
     admit(tenant, 2, UUID.randomUUID().toString()).block(WAIT);
     assertEquals(2, count("free_eligibility_ledger"));
     assertTrue(markers().stream().allMatch(r -> B.equals(r.get("first_user_id"))));
+  }
+
+  @Test
+  void anotherLiveUsersEmailMarkerCannotBeAdoptedWithoutMinimization() {
+    UUID tenant = free(A);
+    active(tenant);
+    emails.put(B, new ConfirmedEmail(B, emails.get(A).canonicalEmail(), "AUTH_EMAIL_V1"));
+    transfer(tenant, B);
+    assertEquals(
+        FreeEligibilityState.FREE_ELIGIBILITY_USED,
+        account(B, "getTenantCreationOptions", ledger.options()).block(WAIT).getFreeEligibility());
+    reason("FREE_ELIGIBILITY_USED", admit(tenant, 2, UUID.randomUUID().toString()));
+    reason("FREE_ELIGIBILITY_USED", create(B, FREE, UUID.randomUUID().toString()));
+    assertEquals(A, markers().getFirst().get("first_user_id"));
+    assertEquals(1, count("tenants"));
+    assertEquals(1, count("idempotency_records"));
+  }
+
+  @Test
+  void concurrentDispositionHasOneAtomicReceiptAndPreservesVerifiedAlias() {
+    UUID tenant = free(A);
+    emails.put(A, new ConfirmedEmail(A, "concurrent-latest@example.test", "AUTH_EMAIL_V1"));
+    var d =
+        decision(
+            DispositionAction.MINIMIZE_TENANT, tenant, List.of(emails.get(A)), List.of(), null);
+    Mono.when(
+            apply(d).subscribeOn(Schedulers.boundedElastic()),
+            apply(d).subscribeOn(Schedulers.boundedElastic()))
+        .block(WAIT);
+    assertEquals(1, count("free_eligibility_dispositions"));
+    assertEquals(2, count("free_eligibility_ledger"));
+    assertTrue(
+        markers().stream()
+            .allMatch(
+                r ->
+                    r.get("first_user_id") == null
+                        && r.get("bound_tenant_id") == null
+                        && r.get("operation_id") == null));
+    emails.put(B, new ConfirmedEmail(B, "concurrent-latest@example.test", "AUTH_EMAIL_V1"));
+    assertEquals(
+        FreeEligibilityState.FREE_ELIGIBILITY_USED,
+        account(B, "getTenantCreationOptions", ledger.options()).block(WAIT).getFreeEligibility());
+    reason("FREE_ELIGIBILITY_USED", create(B, FREE, UUID.randomUUID().toString()));
   }
 
   @Test
