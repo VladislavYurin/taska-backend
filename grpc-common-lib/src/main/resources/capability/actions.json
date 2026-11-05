@@ -1,0 +1,1208 @@
+[
+  {
+    "action": "tenant.create",
+    "effect": "MODIFY",
+    "scope": "NEW_TENANT",
+    "profile": "ACCOUNT",
+    "roles": [
+      "OWNER",
+      "TENANT_ADMIN",
+      "PROJECT_ADMIN",
+      "MEMBER",
+      "VIEWER"
+    ],
+    "userMode": "SESSION_REQUIRED",
+    "grantOwner": false
+  },
+  {
+    "action": "tenant.list",
+    "effect": "READ",
+    "scope": "ACCOUNT_VISIBLE_TENANTS",
+    "profile": "CONTROL",
+    "roles": [
+      "OWNER",
+      "TENANT_ADMIN",
+      "PROJECT_ADMIN",
+      "MEMBER",
+      "VIEWER"
+    ],
+    "userMode": "READ",
+    "grantOwner": false
+  },
+  {
+    "action": "tenant.read",
+    "effect": "READ",
+    "scope": "TENANT",
+    "profile": "CONTROL",
+    "roles": [
+      "OWNER",
+      "TENANT_ADMIN",
+      "PROJECT_ADMIN",
+      "MEMBER",
+      "VIEWER"
+    ],
+    "userMode": "READ",
+    "grantOwner": false
+  },
+  {
+    "action": "tenant.update",
+    "effect": "MODIFY",
+    "scope": "TENANT",
+    "profile": "NORMAL",
+    "roles": [
+      "OWNER"
+    ],
+    "userMode": "WRITE",
+    "grantOwner": false
+  },
+  {
+    "action": "tenant.pause",
+    "effect": "MODIFY",
+    "scope": "TENANT",
+    "profile": "OWNER_CONTROL",
+    "roles": [
+      "OWNER"
+    ],
+    "userMode": "WRITE",
+    "grantOwner": false
+  },
+  {
+    "action": "tenant.resume",
+    "effect": "MODIFY",
+    "scope": "TENANT",
+    "profile": "OWNER_CONTROL",
+    "roles": [
+      "OWNER"
+    ],
+    "userMode": "WRITE",
+    "grantOwner": false
+  },
+  {
+    "action": "tenant.cancel_creation",
+    "effect": "MODIFY",
+    "scope": "TENANT",
+    "profile": "PENDING_CONTROL",
+    "roles": [
+      "OWNER"
+    ],
+    "userMode": "WRITE",
+    "grantOwner": false
+  },
+  {
+    "action": "tenant.transfer_ownership",
+    "effect": "MODIFY",
+    "scope": "TENANT",
+    "profile": "TRANSFER",
+    "roles": [
+      "OWNER"
+    ],
+    "userMode": "WRITE",
+    "grantOwner": false
+  },
+  {
+    "action": "tenant.delete",
+    "effect": "MODIFY",
+    "scope": "TENANT",
+    "profile": "COMPANY_DELETE",
+    "roles": [
+      "OWNER"
+    ],
+    "userMode": "WRITE",
+    "grantOwner": false
+  },
+  {
+    "action": "membership.read",
+    "effect": "READ",
+    "scope": "TENANT",
+    "profile": "DIRECTORY",
+    "roles": [
+      "OWNER",
+      "TENANT_ADMIN",
+      "PROJECT_ADMIN",
+      "MEMBER",
+      "VIEWER"
+    ],
+    "userMode": "READ",
+    "grantOwner": false
+  },
+  {
+    "action": "membership.role_update",
+    "effect": "MODIFY",
+    "scope": "TENANT",
+    "profile": "NORMAL",
+    "roles": [
+      "OWNER",
+      "TENANT_ADMIN"
+    ],
+    "userMode": "WRITE",
+    "grantOwner": false
+  },
+  {
+    "action": "membership.suspend",
+    "effect": "MODIFY",
+    "scope": "TENANT",
+    "profile": "NORMAL",
+    "roles": [
+      "OWNER",
+      "TENANT_ADMIN"
+    ],
+    "userMode": "WRITE",
+    "grantOwner": false
+  },
+  {
+    "action": "membership.reactivate",
+    "effect": "MODIFY",
+    "scope": "TENANT",
+    "profile": "NORMAL",
+    "roles": [
+      "OWNER",
+      "TENANT_ADMIN"
+    ],
+    "userMode": "WRITE",
+    "grantOwner": false
+  },
+  {
+    "action": "membership.remove",
+    "effect": "MODIFY",
+    "scope": "TENANT",
+    "profile": "RECOVERY",
+    "roles": [
+      "OWNER",
+      "TENANT_ADMIN"
+    ],
+    "userMode": "WRITE",
+    "grantOwner": false
+  },
+  {
+    "action": "membership.leave",
+    "effect": "MODIFY",
+    "scope": "TENANT",
+    "profile": "LEAVE",
+    "roles": [
+      "OWNER",
+      "TENANT_ADMIN",
+      "PROJECT_ADMIN",
+      "MEMBER",
+      "VIEWER"
+    ],
+    "userMode": "WRITE",
+    "grantOwner": false
+  },
+  {
+    "action": "invitation.create",
+    "effect": "MODIFY",
+    "scope": "TENANT",
+    "profile": "NORMAL",
+    "roles": [
+      "OWNER",
+      "TENANT_ADMIN"
+    ],
+    "userMode": "WRITE",
+    "grantOwner": false
+  },
+  {
+    "action": "invitation.accept",
+    "effect": "MODIFY",
+    "scope": "TENANT",
+    "profile": "INVITE_ACCEPT",
+    "roles": [
+      "OWNER",
+      "TENANT_ADMIN",
+      "PROJECT_ADMIN",
+      "MEMBER",
+      "VIEWER"
+    ],
+    "userMode": "WRITE",
+    "grantOwner": false
+  },
+  {
+    "action": "invitation.resend",
+    "effect": "MODIFY",
+    "scope": "TENANT",
+    "profile": "NORMAL",
+    "roles": [
+      "OWNER",
+      "TENANT_ADMIN"
+    ],
+    "userMode": "WRITE",
+    "grantOwner": false
+  },
+  {
+    "action": "invitation.revoke",
+    "effect": "MODIFY",
+    "scope": "TENANT",
+    "profile": "RECOVERY",
+    "roles": [
+      "OWNER",
+      "TENANT_ADMIN"
+    ],
+    "userMode": "WRITE",
+    "grantOwner": false
+  },
+  {
+    "action": "project.read",
+    "effect": "READ",
+    "scope": "PROJECT",
+    "profile": "CONTENT_READ",
+    "roles": [
+      "OWNER",
+      "TENANT_ADMIN",
+      "PROJECT_ADMIN",
+      "MEMBER",
+      "VIEWER"
+    ],
+    "userMode": "READ",
+    "grantOwner": false
+  },
+  {
+    "action": "project.create",
+    "effect": "MODIFY",
+    "scope": "TENANT",
+    "profile": "NORMAL",
+    "roles": [
+      "OWNER",
+      "TENANT_ADMIN"
+    ],
+    "userMode": "WRITE",
+    "grantOwner": false
+  },
+  {
+    "action": "project.update",
+    "effect": "MODIFY",
+    "scope": "PROJECT",
+    "profile": "NORMAL",
+    "roles": [
+      "OWNER",
+      "TENANT_ADMIN",
+      "PROJECT_ADMIN"
+    ],
+    "userMode": "WRITE",
+    "grantOwner": false
+  },
+  {
+    "action": "project.archive",
+    "effect": "MODIFY",
+    "scope": "PROJECT",
+    "profile": "NORMAL",
+    "roles": [
+      "OWNER",
+      "TENANT_ADMIN",
+      "PROJECT_ADMIN"
+    ],
+    "userMode": "WRITE",
+    "grantOwner": false
+  },
+  {
+    "action": "project.restore",
+    "effect": "MODIFY",
+    "scope": "PROJECT",
+    "profile": "NORMAL",
+    "roles": [
+      "OWNER",
+      "TENANT_ADMIN",
+      "PROJECT_ADMIN"
+    ],
+    "userMode": "WRITE",
+    "grantOwner": false
+  },
+  {
+    "action": "project.delete",
+    "effect": "MODIFY",
+    "scope": "PROJECT",
+    "profile": "RECOVERY",
+    "roles": [
+      "OWNER",
+      "TENANT_ADMIN",
+      "PROJECT_ADMIN"
+    ],
+    "userMode": "WRITE",
+    "grantOwner": false
+  },
+  {
+    "action": "project.membership_update",
+    "effect": "MODIFY",
+    "scope": "PROJECT",
+    "profile": "NORMAL",
+    "roles": [
+      "OWNER",
+      "TENANT_ADMIN",
+      "PROJECT_ADMIN"
+    ],
+    "userMode": "WRITE",
+    "grantOwner": false
+  },
+  {
+    "action": "workflow.read",
+    "effect": "READ",
+    "scope": "PROJECT",
+    "profile": "CONTENT_READ",
+    "roles": [
+      "OWNER",
+      "TENANT_ADMIN",
+      "PROJECT_ADMIN",
+      "MEMBER",
+      "VIEWER"
+    ],
+    "userMode": "READ",
+    "grantOwner": false
+  },
+  {
+    "action": "issue_type.read",
+    "effect": "READ",
+    "scope": "PROJECT",
+    "profile": "CONTENT_READ",
+    "roles": [
+      "OWNER",
+      "TENANT_ADMIN",
+      "PROJECT_ADMIN",
+      "MEMBER",
+      "VIEWER"
+    ],
+    "userMode": "READ",
+    "grantOwner": false
+  },
+  {
+    "action": "workflow.configure",
+    "effect": "MODIFY",
+    "scope": "PROJECT",
+    "profile": "NORMAL",
+    "roles": [
+      "OWNER",
+      "TENANT_ADMIN",
+      "PROJECT_ADMIN"
+    ],
+    "userMode": "WRITE",
+    "grantOwner": false
+  },
+  {
+    "action": "issue_type.configure",
+    "effect": "MODIFY",
+    "scope": "PROJECT",
+    "profile": "NORMAL",
+    "roles": [
+      "OWNER",
+      "TENANT_ADMIN",
+      "PROJECT_ADMIN"
+    ],
+    "userMode": "WRITE",
+    "grantOwner": false
+  },
+  {
+    "action": "issue.read",
+    "effect": "READ",
+    "scope": "ISSUE",
+    "profile": "CONTENT_READ",
+    "roles": [
+      "OWNER",
+      "TENANT_ADMIN",
+      "PROJECT_ADMIN",
+      "MEMBER",
+      "VIEWER"
+    ],
+    "userMode": "READ",
+    "grantOwner": false
+  },
+  {
+    "action": "issue.search",
+    "effect": "READ",
+    "scope": "ISSUE",
+    "profile": "CONTENT_READ",
+    "roles": [
+      "OWNER",
+      "TENANT_ADMIN",
+      "PROJECT_ADMIN",
+      "MEMBER",
+      "VIEWER"
+    ],
+    "userMode": "READ",
+    "grantOwner": false
+  },
+  {
+    "action": "issue.board",
+    "effect": "READ",
+    "scope": "ISSUE",
+    "profile": "CONTENT_READ",
+    "roles": [
+      "OWNER",
+      "TENANT_ADMIN",
+      "PROJECT_ADMIN",
+      "MEMBER",
+      "VIEWER"
+    ],
+    "userMode": "READ",
+    "grantOwner": false
+  },
+  {
+    "action": "issue.history",
+    "effect": "READ",
+    "scope": "ISSUE",
+    "profile": "CONTENT_READ",
+    "roles": [
+      "OWNER",
+      "TENANT_ADMIN",
+      "PROJECT_ADMIN",
+      "MEMBER",
+      "VIEWER"
+    ],
+    "userMode": "READ",
+    "grantOwner": false
+  },
+  {
+    "action": "issue.create",
+    "effect": "MODIFY",
+    "scope": "ISSUE",
+    "profile": "NORMAL",
+    "roles": [
+      "OWNER",
+      "TENANT_ADMIN",
+      "PROJECT_ADMIN",
+      "MEMBER"
+    ],
+    "userMode": "WRITE",
+    "grantOwner": false
+  },
+  {
+    "action": "issue.update",
+    "effect": "MODIFY",
+    "scope": "ISSUE",
+    "profile": "NORMAL",
+    "roles": [
+      "OWNER",
+      "TENANT_ADMIN",
+      "PROJECT_ADMIN",
+      "MEMBER"
+    ],
+    "userMode": "WRITE",
+    "grantOwner": false
+  },
+  {
+    "action": "issue.delete",
+    "effect": "MODIFY",
+    "scope": "ISSUE",
+    "profile": "NORMAL",
+    "roles": [
+      "OWNER",
+      "TENANT_ADMIN",
+      "PROJECT_ADMIN",
+      "MEMBER"
+    ],
+    "userMode": "WRITE",
+    "grantOwner": false
+  },
+  {
+    "action": "issue.assign",
+    "effect": "MODIFY",
+    "scope": "ISSUE",
+    "profile": "NORMAL",
+    "roles": [
+      "OWNER",
+      "TENANT_ADMIN",
+      "PROJECT_ADMIN",
+      "MEMBER"
+    ],
+    "userMode": "WRITE",
+    "grantOwner": false
+  },
+  {
+    "action": "issue.transition",
+    "effect": "MODIFY",
+    "scope": "ISSUE",
+    "profile": "NORMAL",
+    "roles": [
+      "OWNER",
+      "TENANT_ADMIN",
+      "PROJECT_ADMIN",
+      "MEMBER"
+    ],
+    "userMode": "WRITE",
+    "grantOwner": false
+  },
+  {
+    "action": "comment.read",
+    "effect": "READ",
+    "scope": "ISSUE",
+    "profile": "CONTENT_READ",
+    "roles": [
+      "OWNER",
+      "TENANT_ADMIN",
+      "PROJECT_ADMIN",
+      "MEMBER",
+      "VIEWER"
+    ],
+    "userMode": "READ",
+    "grantOwner": false
+  },
+  {
+    "action": "worklog.read",
+    "effect": "READ",
+    "scope": "ISSUE",
+    "profile": "CONTENT_READ",
+    "roles": [
+      "OWNER",
+      "TENANT_ADMIN",
+      "PROJECT_ADMIN",
+      "MEMBER",
+      "VIEWER"
+    ],
+    "userMode": "READ",
+    "grantOwner": false
+  },
+  {
+    "action": "label.read",
+    "effect": "READ",
+    "scope": "ISSUE",
+    "profile": "CONTENT_READ",
+    "roles": [
+      "OWNER",
+      "TENANT_ADMIN",
+      "PROJECT_ADMIN",
+      "MEMBER",
+      "VIEWER"
+    ],
+    "userMode": "READ",
+    "grantOwner": false
+  },
+  {
+    "action": "watcher.read",
+    "effect": "READ",
+    "scope": "ISSUE",
+    "profile": "CONTENT_READ",
+    "roles": [
+      "OWNER",
+      "TENANT_ADMIN",
+      "PROJECT_ADMIN",
+      "MEMBER",
+      "VIEWER"
+    ],
+    "userMode": "READ",
+    "grantOwner": false
+  },
+  {
+    "action": "link.read",
+    "effect": "READ",
+    "scope": "ISSUE",
+    "profile": "CONTENT_READ",
+    "roles": [
+      "OWNER",
+      "TENANT_ADMIN",
+      "PROJECT_ADMIN",
+      "MEMBER",
+      "VIEWER"
+    ],
+    "userMode": "READ",
+    "grantOwner": false
+  },
+  {
+    "action": "attachment.read",
+    "effect": "READ",
+    "scope": "ISSUE",
+    "profile": "CONTENT_READ",
+    "roles": [
+      "OWNER",
+      "TENANT_ADMIN",
+      "PROJECT_ADMIN",
+      "MEMBER",
+      "VIEWER"
+    ],
+    "userMode": "READ",
+    "grantOwner": false
+  },
+  {
+    "action": "comment.create",
+    "effect": "MODIFY",
+    "scope": "ISSUE",
+    "profile": "NORMAL",
+    "roles": [
+      "OWNER",
+      "TENANT_ADMIN",
+      "PROJECT_ADMIN",
+      "MEMBER"
+    ],
+    "userMode": "WRITE",
+    "grantOwner": false
+  },
+  {
+    "action": "comment.update",
+    "effect": "MODIFY",
+    "scope": "ISSUE",
+    "profile": "NORMAL",
+    "roles": [
+      "OWNER",
+      "TENANT_ADMIN",
+      "PROJECT_ADMIN",
+      "MEMBER"
+    ],
+    "userMode": "WRITE",
+    "grantOwner": false
+  },
+  {
+    "action": "comment.delete",
+    "effect": "MODIFY",
+    "scope": "ISSUE",
+    "profile": "NORMAL",
+    "roles": [
+      "OWNER",
+      "TENANT_ADMIN",
+      "PROJECT_ADMIN",
+      "MEMBER"
+    ],
+    "userMode": "WRITE",
+    "grantOwner": false
+  },
+  {
+    "action": "worklog.create",
+    "effect": "MODIFY",
+    "scope": "ISSUE",
+    "profile": "NORMAL",
+    "roles": [
+      "OWNER",
+      "TENANT_ADMIN",
+      "PROJECT_ADMIN",
+      "MEMBER"
+    ],
+    "userMode": "WRITE",
+    "grantOwner": false
+  },
+  {
+    "action": "worklog.update",
+    "effect": "MODIFY",
+    "scope": "ISSUE",
+    "profile": "NORMAL",
+    "roles": [
+      "OWNER",
+      "TENANT_ADMIN",
+      "PROJECT_ADMIN",
+      "MEMBER"
+    ],
+    "userMode": "WRITE",
+    "grantOwner": false
+  },
+  {
+    "action": "worklog.delete",
+    "effect": "MODIFY",
+    "scope": "ISSUE",
+    "profile": "NORMAL",
+    "roles": [
+      "OWNER",
+      "TENANT_ADMIN",
+      "PROJECT_ADMIN",
+      "MEMBER"
+    ],
+    "userMode": "WRITE",
+    "grantOwner": false
+  },
+  {
+    "action": "label.configure",
+    "effect": "MODIFY",
+    "scope": "PROJECT",
+    "profile": "NORMAL",
+    "roles": [
+      "OWNER",
+      "TENANT_ADMIN",
+      "PROJECT_ADMIN"
+    ],
+    "userMode": "WRITE",
+    "grantOwner": false
+  },
+  {
+    "action": "watcher.manage",
+    "effect": "MODIFY",
+    "scope": "PROJECT",
+    "profile": "NORMAL",
+    "roles": [
+      "OWNER",
+      "TENANT_ADMIN",
+      "PROJECT_ADMIN"
+    ],
+    "userMode": "WRITE",
+    "grantOwner": false
+  },
+  {
+    "action": "label.attach",
+    "effect": "MODIFY",
+    "scope": "ISSUE",
+    "profile": "NORMAL",
+    "roles": [
+      "OWNER",
+      "TENANT_ADMIN",
+      "PROJECT_ADMIN",
+      "MEMBER"
+    ],
+    "userMode": "WRITE",
+    "grantOwner": false
+  },
+  {
+    "action": "label.detach",
+    "effect": "MODIFY",
+    "scope": "ISSUE",
+    "profile": "NORMAL",
+    "roles": [
+      "OWNER",
+      "TENANT_ADMIN",
+      "PROJECT_ADMIN",
+      "MEMBER"
+    ],
+    "userMode": "WRITE",
+    "grantOwner": false
+  },
+  {
+    "action": "watcher.self",
+    "effect": "MODIFY",
+    "scope": "ISSUE",
+    "profile": "NORMAL",
+    "roles": [
+      "OWNER",
+      "TENANT_ADMIN",
+      "PROJECT_ADMIN",
+      "MEMBER"
+    ],
+    "userMode": "WRITE",
+    "grantOwner": false
+  },
+  {
+    "action": "link.create",
+    "effect": "MODIFY",
+    "scope": "ISSUE",
+    "profile": "NORMAL",
+    "roles": [
+      "OWNER",
+      "TENANT_ADMIN",
+      "PROJECT_ADMIN",
+      "MEMBER"
+    ],
+    "userMode": "WRITE",
+    "grantOwner": false
+  },
+  {
+    "action": "link.delete",
+    "effect": "MODIFY",
+    "scope": "ISSUE",
+    "profile": "NORMAL",
+    "roles": [
+      "OWNER",
+      "TENANT_ADMIN",
+      "PROJECT_ADMIN",
+      "MEMBER"
+    ],
+    "userMode": "WRITE",
+    "grantOwner": false
+  },
+  {
+    "action": "attachment.upload",
+    "effect": "MODIFY",
+    "scope": "ISSUE",
+    "profile": "UPLOAD",
+    "roles": [
+      "OWNER",
+      "TENANT_ADMIN",
+      "PROJECT_ADMIN",
+      "MEMBER"
+    ],
+    "userMode": "WRITE",
+    "grantOwner": false
+  },
+  {
+    "action": "attachment.confirm",
+    "effect": "MODIFY",
+    "scope": "ISSUE",
+    "profile": "UPLOAD_FINISH",
+    "roles": [
+      "OWNER",
+      "TENANT_ADMIN",
+      "PROJECT_ADMIN",
+      "MEMBER"
+    ],
+    "userMode": "WRITE",
+    "grantOwner": false
+  },
+  {
+    "action": "attachment.delete",
+    "effect": "MODIFY",
+    "scope": "ISSUE",
+    "profile": "NORMAL",
+    "roles": [
+      "OWNER",
+      "TENANT_ADMIN",
+      "PROJECT_ADMIN",
+      "MEMBER"
+    ],
+    "userMode": "WRITE",
+    "grantOwner": false
+  },
+  {
+    "action": "export.create",
+    "effect": "MODIFY",
+    "scope": "TENANT_PROJECT_SUBSET",
+    "profile": "EXPORT",
+    "roles": [
+      "OWNER",
+      "TENANT_ADMIN",
+      "PROJECT_ADMIN",
+      "MEMBER",
+      "VIEWER"
+    ],
+    "userMode": "WRITE",
+    "grantOwner": false
+  },
+  {
+    "action": "export.download",
+    "effect": "READ",
+    "scope": "TENANT_PROJECT_SUBSET",
+    "profile": "CONTENT_READ",
+    "roles": [
+      "OWNER",
+      "TENANT_ADMIN",
+      "PROJECT_ADMIN",
+      "MEMBER",
+      "VIEWER"
+    ],
+    "userMode": "READ",
+    "grantOwner": false
+  },
+  {
+    "action": "notification.read",
+    "effect": "READ",
+    "scope": "TENANT",
+    "profile": "INBOX",
+    "roles": [
+      "OWNER",
+      "TENANT_ADMIN",
+      "PROJECT_ADMIN",
+      "MEMBER",
+      "VIEWER"
+    ],
+    "userMode": "READ",
+    "grantOwner": false
+  },
+  {
+    "action": "notification.mark_read",
+    "effect": "MODIFY",
+    "scope": "TENANT",
+    "profile": "PERSONAL_INBOX",
+    "roles": [
+      "OWNER",
+      "TENANT_ADMIN",
+      "PROJECT_ADMIN",
+      "MEMBER",
+      "VIEWER"
+    ],
+    "userMode": "WRITE",
+    "grantOwner": false
+  },
+  {
+    "action": "notification.preferences",
+    "effect": "MODIFY",
+    "scope": "TENANT",
+    "profile": "PERSONAL_INBOX",
+    "roles": [
+      "OWNER",
+      "TENANT_ADMIN",
+      "PROJECT_ADMIN",
+      "MEMBER",
+      "VIEWER"
+    ],
+    "userMode": "WRITE",
+    "grantOwner": false
+  },
+  {
+    "action": "billing.read",
+    "effect": "READ",
+    "scope": "TENANT_FINANCE",
+    "profile": "FINANCE_READ",
+    "roles": [
+      "OWNER"
+    ],
+    "userMode": "READ",
+    "grantOwner": false
+  },
+  {
+    "action": "billing.pay",
+    "effect": "MODIFY",
+    "scope": "TENANT_FINANCE",
+    "profile": "PAYMENT",
+    "roles": [
+      "OWNER"
+    ],
+    "userMode": "WRITE",
+    "grantOwner": false
+  },
+  {
+    "action": "billing.subscription_change",
+    "effect": "MODIFY",
+    "scope": "TENANT_FINANCE",
+    "profile": "FINANCE_RECOVERY",
+    "roles": [
+      "OWNER"
+    ],
+    "userMode": "WRITE",
+    "grantOwner": false
+  },
+  {
+    "action": "billing.autopay_consent",
+    "effect": "MODIFY",
+    "scope": "TENANT_FINANCE",
+    "profile": "AUTOPAY",
+    "roles": [
+      "OWNER"
+    ],
+    "userMode": "WRITE",
+    "grantOwner": false
+  },
+  {
+    "action": "billing.refund_request",
+    "effect": "MODIFY",
+    "scope": "TENANT_FINANCE",
+    "profile": "FINANCE_RECOVERY",
+    "roles": [
+      "OWNER"
+    ],
+    "userMode": "WRITE",
+    "grantOwner": false
+  },
+  {
+    "action": "billing.bank_confirm",
+    "effect": "MODIFY",
+    "scope": "TENANT_FINANCE",
+    "profile": "ADMIN",
+    "roles": [],
+    "userMode": "WRITE",
+    "grantOwner": false
+  },
+  {
+    "action": "billing.refund_confirm",
+    "effect": "MODIFY",
+    "scope": "TENANT_FINANCE",
+    "profile": "ADMIN",
+    "roles": [],
+    "userMode": "WRITE",
+    "grantOwner": false
+  },
+  {
+    "action": "billing.dispute_decide",
+    "effect": "MODIFY",
+    "scope": "TENANT_FINANCE",
+    "profile": "ADMIN",
+    "roles": [],
+    "userMode": "WRITE",
+    "grantOwner": false
+  },
+  {
+    "action": "account.self_read",
+    "effect": "READ",
+    "scope": "GLOBAL_SELF",
+    "profile": "ACCOUNT",
+    "roles": [
+      "OWNER",
+      "TENANT_ADMIN",
+      "PROJECT_ADMIN",
+      "MEMBER",
+      "VIEWER"
+    ],
+    "userMode": "READ",
+    "grantOwner": false
+  },
+  {
+    "action": "account.profile_update",
+    "effect": "MODIFY",
+    "scope": "GLOBAL_SELF",
+    "profile": "ACCOUNT",
+    "roles": [
+      "OWNER",
+      "TENANT_ADMIN",
+      "PROJECT_ADMIN",
+      "MEMBER",
+      "VIEWER"
+    ],
+    "userMode": "SESSION_REQUIRED",
+    "grantOwner": false
+  },
+  {
+    "action": "account.avatar_write",
+    "effect": "MODIFY",
+    "scope": "GLOBAL_SELF",
+    "profile": "ACCOUNT",
+    "roles": [
+      "OWNER",
+      "TENANT_ADMIN",
+      "PROJECT_ADMIN",
+      "MEMBER",
+      "VIEWER"
+    ],
+    "userMode": "SESSION_REQUIRED",
+    "grantOwner": false
+  },
+  {
+    "action": "account.password_change",
+    "effect": "MODIFY",
+    "scope": "GLOBAL_SELF",
+    "profile": "ACCOUNT",
+    "roles": [
+      "OWNER",
+      "TENANT_ADMIN",
+      "PROJECT_ADMIN",
+      "MEMBER",
+      "VIEWER"
+    ],
+    "userMode": "SESSION_REQUIRED",
+    "grantOwner": false
+  },
+  {
+    "action": "account.email_change",
+    "effect": "MODIFY",
+    "scope": "GLOBAL_SELF",
+    "profile": "ACCOUNT",
+    "roles": [
+      "OWNER",
+      "TENANT_ADMIN",
+      "PROJECT_ADMIN",
+      "MEMBER",
+      "VIEWER"
+    ],
+    "userMode": "SESSION_REQUIRED",
+    "grantOwner": false
+  },
+  {
+    "action": "account.delete",
+    "effect": "MODIFY",
+    "scope": "GLOBAL_SELF",
+    "profile": "ACCOUNT_DELETE",
+    "roles": [
+      "OWNER",
+      "TENANT_ADMIN",
+      "PROJECT_ADMIN",
+      "MEMBER",
+      "VIEWER"
+    ],
+    "userMode": "SESSION_REQUIRED",
+    "grantOwner": false
+  },
+  {
+    "action": "pat.create",
+    "effect": "MODIFY",
+    "scope": "GLOBAL_SELF",
+    "profile": "ACCOUNT",
+    "roles": [
+      "OWNER",
+      "TENANT_ADMIN",
+      "PROJECT_ADMIN",
+      "MEMBER",
+      "VIEWER"
+    ],
+    "userMode": "SESSION_REQUIRED",
+    "grantOwner": false
+  },
+  {
+    "action": "pat.metadata_revoke",
+    "effect": "MODIFY",
+    "scope": "GLOBAL_SELF",
+    "profile": "ACCOUNT",
+    "roles": [
+      "OWNER",
+      "TENANT_ADMIN",
+      "PROJECT_ADMIN",
+      "MEMBER",
+      "VIEWER"
+    ],
+    "userMode": "SESSION_REQUIRED",
+    "grantOwner": false
+  },
+  {
+    "action": "oauth.refresh_revoke",
+    "effect": "PROTOCOL",
+    "scope": "EXISTING_GRANT",
+    "profile": "PROTOCOL",
+    "roles": [],
+    "userMode": "NOT_APPLICABLE",
+    "grantOwner": true
+  },
+  {
+    "action": "admin.grant_issue_expand",
+    "effect": "MODIFY",
+    "scope": "PLATFORM",
+    "profile": "ADMIN_WEB",
+    "roles": [],
+    "userMode": "SESSION_REQUIRED",
+    "grantOwner": false
+  },
+  {
+    "action": "admin.account_block",
+    "effect": "MODIFY",
+    "scope": "GLOBAL_ACCOUNT",
+    "profile": "ADMIN",
+    "roles": [],
+    "userMode": "WRITE",
+    "grantOwner": false
+  },
+  {
+    "action": "admin.account_role_update",
+    "effect": "MODIFY",
+    "scope": "GLOBAL_ACCOUNT",
+    "profile": "ADMIN",
+    "roles": [],
+    "userMode": "WRITE",
+    "grantOwner": false
+  },
+  {
+    "action": "admin.account_delete",
+    "effect": "MODIFY",
+    "scope": "GLOBAL_ACCOUNT",
+    "profile": "ADMIN",
+    "roles": [],
+    "userMode": "WRITE",
+    "grantOwner": false
+  },
+  {
+    "action": "admin.query",
+    "effect": "READ",
+    "scope": "ADMIN_SELECTED_SCOPE",
+    "profile": "ADMIN",
+    "roles": [],
+    "userMode": "READ",
+    "grantOwner": false
+  },
+  {
+    "action": "admin.audit_read",
+    "effect": "READ",
+    "scope": "ADMIN_SELECTED_SCOPE",
+    "profile": "ADMIN",
+    "roles": [],
+    "userMode": "READ",
+    "grantOwner": false
+  },
+  {
+    "action": "admin.outbox_retry",
+    "effect": "MODIFY",
+    "scope": "ADMIN_SELECTED_SCOPE",
+    "profile": "ADMIN",
+    "roles": [],
+    "userMode": "WRITE",
+    "grantOwner": false
+  },
+  {
+    "action": "admin.tenant_block",
+    "effect": "MODIFY",
+    "scope": "TENANT",
+    "profile": "ADMIN",
+    "roles": [],
+    "userMode": "WRITE",
+    "grantOwner": false
+  },
+  {
+    "action": "admin.configuration_write",
+    "effect": "MODIFY",
+    "scope": "PLATFORM",
+    "profile": "ADMIN",
+    "roles": [],
+    "userMode": "WRITE",
+    "grantOwner": false
+  },
+  {
+    "action": "admin.account_profile_update",
+    "effect": "MODIFY",
+    "scope": "GLOBAL_ACCOUNT",
+    "profile": "ADMIN",
+    "roles": [],
+    "userMode": "WRITE",
+    "grantOwner": false
+  }
+]

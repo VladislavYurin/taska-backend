@@ -1,0 +1,23 @@
+syntax = "proto3";
+package ru.taska.b2b.v1;
+import "v1/tenant-registry.proto";
+option java_multiple_files = true;
+option java_outer_classname = "CapabilityTransportProto";
+option java_package = "ru.taska.api.b2b.v1";
+message Capability {
+  string action = 1;
+  bool allowed = 2;
+  repeated ErrorCode denial_codes = 3;
+  repeated RestrictionCode restrictions = 4;
+}
+message Capabilities {
+  string tenant_id = 1;
+  string actor_user_id = 2;
+  string policy_version = 3;
+  string entitlement_version = 4;
+  string membership_version = 5;
+  string flag_version = 6;
+  string evaluated_at = 7;
+  string expires_at = 8;
+  repeated Capability items = 9;
+}
