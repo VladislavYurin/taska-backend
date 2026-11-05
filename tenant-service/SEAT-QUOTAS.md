@@ -40,7 +40,12 @@ Commit therefore consumes the existing reservation without querying billing or
 requiring a new payment. Mandatory current purpose/lifecycle authority must still
 deny pause/block and invalid invitation acceptance. A billing outage cannot create a
 new reservation. `release` only frees pending reservations; it never decrements used
-membership seats. Expired generations cannot commit. Seat expiry is local and safe
+membership seats. Expired generations cannot commit, including expiry while the membership callback is
+running: the final state transition rechecks clock/fence and rolls back all work on
+failure. Reconciliation samples the clock on subscription. A concurrent expiry of
+another pending reservation cannot hide a callback adding multiple memberships;
+both membership growth and total reserved quantity are checked. Terminal release
+replays require the original generation fence. Seat expiry is local and safe
 because membership commit shares this database transaction; remote PROJECT/storage
 reservations require their distinct owner receipts and reconciliation.
 

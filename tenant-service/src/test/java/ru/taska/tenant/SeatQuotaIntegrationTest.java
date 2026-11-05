@@ -575,4 +575,95 @@ class SeatQuotaIntegrationTest {
     assertEquals(2, count("tenant_memberships"));
     assertEquals("1", usage(A).getReserved());
   }
+
+  @Test
+  void expiryDuringCallbackCannotCommitAnExpiredGeneration() {
+    var r = reserve(A, UUID.randomUUID());
+    assertThrows(
+        DomainException.class,
+        () ->
+            as(
+                    A,
+                    store.commit(
+                        r.operation(),
+                        r.id(),
+                        r.fence(),
+                        MEMBER,
+                        db ->
+                            mutation(A, MEMBER)
+                                .apply(db)
+                                .then(Mono.fromRunnable(() -> time.set(NOW.plusSeconds(600))))))
+                .block(WAIT));
+    assertEquals(2, count("tenant_memberships"));
+    assertEquals(0, count("quota_effects"));
+    assertEquals("0", usage(A).getReserved());
+  }
+
+  @Test
+  void expiringOtherReservationCannotHideMultipleMembershipsInCallback() {
+    UUID other = UUID.randomUUID();
+    as(A, store.reserve(other, other, NOW.plusSeconds(5))).block(WAIT);
+    var r = reserve(A, UUID.randomUUID());
+    time.set(NOW.plusSeconds(4));
+    assertThrows(
+        DomainException.class,
+        () ->
+            as(
+                    A,
+                    store.commit(
+                        r.operation(),
+                        r.id(),
+                        r.fence(),
+                        MEMBER,
+                        db ->
+                            mutation(A, MEMBER)
+                                .apply(db)
+                                .then(mutation(A, UUID.randomUUID()).apply(db))
+                                .then(Mono.fromRunnable(() -> time.set(NOW.plusSeconds(5))))))
+                .block(WAIT));
+    assertEquals(2, count("tenant_memberships"));
+    assertEquals(0, count("quota_effects"));
+    assertEquals("1", usage(A).getReserved());
+    assertEquals("1", usage(A).getUsed());
+  }
+
+  @Test
+  void terminalReleaseReplaysOnlyOriginalFence() {
+    var r = reserve(A, UUID.randomUUID());
+    var released = as(A, store.release(r.operation(), r.id(), r.fence())).block(WAIT);
+    assertEquals(released, as(A, store.release(r.operation(), r.id(), r.fence())).block(WAIT));
+    assertThrows(
+        DomainException.class,
+        () -> as(A, store.release(r.operation(), r.id(), released.fence() + 10)).block(WAIT));
+    assertEquals("0", usage(A).getReserved());
+  }
+
+  @Test
+  void removalReconcilesPrimaryUsageWithinSameMembershipTransaction() {
+    member(A, MEMBER, "ACTIVE");
+    assertEquals("2", usage(A).getUsed());
+    as(
+            A,
+            tx.execute(
+                db ->
+                    db.sql(
+                            "UPDATE taska.tenant_memberships SET status='REMOVED',version=version+1"
+                                + " WHERE tenant_id=:t AND user_id=:u")
+                        .bind("t", A)
+                        .bind("u", MEMBER)
+                        .fetch()
+                        .rowsUpdated()
+                        .then(store.reconcileMemberships(db, A))
+                        .thenReturn(true)))
+        .block(WAIT);
+    assertEquals(
+        1L,
+        operator
+            .sql("SELECT used FROM taska.quota_counters WHERE tenant_id=:t AND resource='SEAT'")
+            .bind("t", A)
+            .map((r, m) -> r.get("used", Long.class))
+            .one()
+            .block(WAIT));
+    assertEquals("1", usage(A).getUsed());
+  }
 }

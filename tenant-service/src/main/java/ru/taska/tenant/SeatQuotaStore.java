@@ -224,22 +224,39 @@ public final class SeatQuotaStore {
                                                           .fetch()
                                                           .rowsUpdated())
                                               .then(
-                                                  db.sql(
-                                                          "UPDATE taska.quota_reservations SET"
-                                                              + " state='COMMITTED',resource_id=:member,committed_at=:now,version=version+1"
-                                                              + " WHERE tenant_id=:t AND id=:id")
-                                                      .bind("member", member)
-                                                      .bind("now", offset(clock.instant()))
-                                                      .bind("t", tenant)
-                                                      .bind("id", reservation)
-                                                      .fetch()
-                                                      .rowsUpdated())
+                                                  Mono.defer(
+                                                      () ->
+                                                          db.sql(
+                                                                  "UPDATE taska.quota_reservations"
+                                                                      + " SET state='COMMITTED',resource_id=:member,committed_at=:now,version=version+1"
+                                                                      + " WHERE tenant_id=:t AND"
+                                                                      + " id=:id AND state='ACTIVE'"
+                                                                      + " AND fence=:fence AND"
+                                                                      + " expires_at>:now")
+                                                              .bind("member", member)
+                                                              .bind("now", offset(clock.instant()))
+                                                              .bind("t", tenant)
+                                                              .bind("id", reservation)
+                                                              .bind("fence", fence)
+                                                              .fetch()
+                                                              .rowsUpdated()
+                                                              .flatMap(
+                                                                  rows ->
+                                                                      rows == 1
+                                                                          ? Mono.<Void>empty()
+                                                                          : Mono.error(
+                                                                              fail(
+                                                                                  DomainStatus
+                                                                                      .FAILED_PRECONDITION,
+                                                                                  "RESERVATION_EXPIRED")))))
                                               .then(refresh(db, tenant))
                                               .flatMap(
                                                   after ->
-                                                      add(after.used(), after.reserved())
-                                                              > add(
-                                                                  before.used(), before.reserved())
+                                                      after.used() > add(before.used(), 1)
+                                                              || add(after.used(), after.reserved())
+                                                                  > add(
+                                                                      before.used(),
+                                                                      before.reserved())
                                                           ? Mono.error(
                                                               fail(
                                                                   DomainStatus.FAILED_PRECONDITION,
@@ -266,7 +283,11 @@ public final class SeatQuotaStore {
                             current -> {
                               if (!current.id().equals(reservation)) return Mono.error(invalid());
                               if (current.state().equals("RELEASED")
-                                  || current.state().equals("EXPIRED")) return Mono.just(current);
+                                  || current.state().equals("EXPIRED"))
+                                return fence == current.fence() - 1
+                                    ? Mono.just(current)
+                                    : Mono.error(
+                                        fail(DomainStatus.FAILED_PRECONDITION, "STALE_FENCE"));
                               if (current.fence() != fence)
                                 return Mono.error(
                                     fail(DomainStatus.FAILED_PRECONDITION, "STALE_FENCE"));
@@ -345,43 +366,45 @@ public final class SeatQuotaStore {
   }
 
   private Mono<Counter> refresh(DatabaseClient db, UUID tenant) {
-    return db.sql(
-            "INSERT INTO taska.quota_counters(tenant_id,resource,scope_id) VALUES(:t,'SEAT',:t) ON"
-                + " CONFLICT DO NOTHING")
-        .bind("t", tenant)
-        .fetch()
-        .rowsUpdated()
-        .then(
+    return Mono.defer(
+        () ->
             db.sql(
-                    "UPDATE taska.quota_reservations SET"
-                        + " state='EXPIRED',released_at=:now,fence=fence+1,version=version+1 WHERE"
-                        + " tenant_id=:t AND resource='SEAT' AND state='ACTIVE' AND"
-                        + " expires_at<=:now")
+                    "INSERT INTO taska.quota_counters(tenant_id,resource,scope_id)"
+                        + " VALUES(:t,'SEAT',:t) ON CONFLICT DO NOTHING")
                 .bind("t", tenant)
-                .bind("now", offset(clock.instant()))
                 .fetch()
-                .rowsUpdated())
-        .then(
-            db.sql(
-                    """
-                    WITH actual AS (
-                      SELECT (SELECT count(*) FROM taska.tenant_memberships WHERE tenant_id=:t AND status IN ('ACTIVE','SUSPENDED')) used,
-                        (SELECT coalesce(sum(amount),0)::bigint FROM taska.quota_reservations WHERE tenant_id=:t AND resource='SEAT' AND state='ACTIVE') reserved
-                    ) UPDATE taska.quota_counters c SET used=a.used,reserved=a.reserved,reconciled_at=:now,
-                      version=c.version+CASE WHEN c.used<>a.used OR c.reserved<>a.reserved THEN 1 ELSE 0 END
-                      FROM actual a WHERE c.tenant_id=:t AND c.resource='SEAT'
-                      RETURNING c.used,c.reserved,c.version,c.entitlement_version
-                    """)
-                .bind("t", tenant)
-                .bind("now", offset(clock.instant()))
-                .map(
-                    (r, m) ->
-                        new Counter(
-                            r.get("used", Long.class),
-                            r.get("reserved", Long.class),
-                            r.get("version", Long.class),
-                            r.get("entitlement_version", Long.class)))
-                .one());
+                .rowsUpdated()
+                .then(
+                    db.sql(
+                            "UPDATE taska.quota_reservations SET"
+                                + " state='EXPIRED',released_at=:now,fence=fence+1,version=version+1"
+                                + " WHERE tenant_id=:t AND resource='SEAT' AND state='ACTIVE' AND"
+                                + " expires_at<=:now")
+                        .bind("t", tenant)
+                        .bind("now", offset(clock.instant()))
+                        .fetch()
+                        .rowsUpdated())
+                .then(
+                    db.sql(
+                            """
+                            WITH actual AS (
+                              SELECT (SELECT count(*) FROM taska.tenant_memberships WHERE tenant_id=:t AND status IN ('ACTIVE','SUSPENDED')) used,
+                                (SELECT coalesce(sum(amount),0)::bigint FROM taska.quota_reservations WHERE tenant_id=:t AND resource='SEAT' AND state='ACTIVE') reserved
+                            ) UPDATE taska.quota_counters c SET used=a.used,reserved=a.reserved,reconciled_at=:now,
+                              version=c.version+CASE WHEN c.used<>a.used OR c.reserved<>a.reserved THEN 1 ELSE 0 END
+                              FROM actual a WHERE c.tenant_id=:t AND c.resource='SEAT'
+                              RETURNING c.used,c.reserved,c.version,c.entitlement_version
+                            """)
+                        .bind("t", tenant)
+                        .bind("now", offset(clock.instant()))
+                        .map(
+                            (r, m) ->
+                                new Counter(
+                                    r.get("used", Long.class),
+                                    r.get("reserved", Long.class),
+                                    r.get("version", Long.class),
+                                    r.get("entitlement_version", Long.class)))
+                        .one()));
   }
 
   private Mono<Void> reader(DatabaseClient db, UUID tenant, String actor) {
@@ -478,6 +501,8 @@ public final class SeatQuotaStore {
   }
 
   private Mono<Terms> terms(UUID tenant) {
+    // Zero requests the primary current snapshot; the locked local entitlement_version fence
+    // in reserve/get rejects older replies, including those racing another observed version.
     return billing
         .current(tenant, 0)
         .timeout(Duration.ofSeconds(5))
