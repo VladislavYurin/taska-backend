@@ -234,6 +234,8 @@ pgAdmin требует входа по `PGADMIN_DEFAULT_EMAIL` / `PGADMIN_DEFAUL
 
 [Tenant storage workflow-service — TAS-330](workflow-service/TENANT-STORAGE.md) отделяет опубликованный read-only шаблон от копий компаний и рабочих графов проектов. Provisioning и повторное создание графа идемпотентны; tenant RPC/ACL и capability-настройка подключаются в TAS-342.
 
+[Tenant storage issue-service — TAS-332](issue-service/TENANT-STORAGE.md) изолирует keys/counters/idempotency и атомарную базовую запись issue/history/outbox. Tenant business CRUD и lifetime admission подключаются в TAS-343/TAS-460.
+
 Поколение записи типа — внутренний UUID жизненного цикла. После удаления или повторного создания кода старый workflow binding исключается из разрешения, списка и редактирования. Старые строки binding физически удаляются при создании нового workflow для этого кода, в той же локальной транзакции, что и новая привязка. Удаление реестра не меняет чужую БД до commit, поэтому его откат сохраняет прежнюю привязку. Миграции project-service и workflow-service и новые gRPC-контракты нужно выкладывать согласованно; старые версии не проверяют поколение. Идентификаторы поколений и их детерминированный backfill для legacy-данных не являются секретами или средствами авторизации.
 
 ## API и безопасность

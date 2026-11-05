@@ -367,7 +367,8 @@
       "reports": {
         "directory": "issue-service/target/surefire-reports",
         "selectors": [
-          "*"
+          "*",
+          "TenantIssueStorageIntegrationTest"
         ],
         "noTestsReason": null
       },
