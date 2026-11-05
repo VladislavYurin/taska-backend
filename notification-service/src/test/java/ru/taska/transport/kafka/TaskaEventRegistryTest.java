@@ -40,8 +40,37 @@ class TaskaEventRegistryTest {
                 .hasMessage("Event producer, topic and scope do not match registry");
     }
 
+    @Test
+    void rejectsKnownEventTypeFromAnotherProducerBeforeHandlerCanCreateEffects() {
+        UUID tenantId = UUID.randomUUID();
+        TaskaEvent event = event(
+                "issue-service", EventScopeKind.TENANT, tenantId, tenantId, "UserEmailChanged");
+
+        assertThatThrownBy(() -> registry.validate("issue.events", event))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("Event producer, topic and scope do not match registry");
+    }
+
+    @Test
+    void acceptsRegisteredGlobalUserEventType() {
+        UUID userId = UUID.randomUUID();
+        TaskaEvent event = event(
+                "auth-service", EventScopeKind.GLOBAL_USER, null, userId, "UserEmailChanged");
+
+        assertThat(registry.validate("user.events", event)).isSameAs(event);
+    }
+
     private static TaskaEvent event(
             String producer, EventScopeKind scopeKind, UUID tenantId, UUID scopeId) {
+        return event(producer, scopeKind, tenantId, scopeId, "IssueCreated");
+    }
+
+    private static TaskaEvent event(
+            String producer,
+            EventScopeKind scopeKind,
+            UUID tenantId,
+            UUID scopeId,
+            String eventType) {
         return TaskaEvent.builder()
                 .id(UUID.randomUUID())
                 .scopeKind(scopeKind)
@@ -49,7 +78,7 @@ class TaskaEventRegistryTest {
                 .scopeId(scopeId)
                 .aggregateType("ISSUE")
                 .aggregateId(UUID.randomUUID())
-                .eventType("IssueCreated")
+                .eventType(eventType)
                 .producerService(producer)
                 .schemaVersion(TaskaEventContract.SCHEMA_VERSION)
                 .build();
