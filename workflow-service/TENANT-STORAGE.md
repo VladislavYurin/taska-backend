@@ -1,0 +1,33 @@
+# Workflow tenant storage — TAS-330
+
+The `tenant-storage` profile supplies B2B persistence and template provisioning. The default profile keeps the existing API. Tenant RPC/current project ACL and customization capability checks belong to TAS-342; the company provisioning saga belongs to TAS-337. This change does not enable the profile on the shared stage.
+
+## Stored configuration and identities
+
+`workflow_templates` is a GLOBAL read-only published catalog. Version1 contains the existing three status keys and six transitions, encoded as schema-v1 JSON with status keys/categories, transition endpoints and validator rules. It has no runtime status/transition UUID references. Runtime and admin database roles can only SELECT it; an immutable trigger also prevents rewriting or deleting a published configuration through ordinary DML. Publish a new version by an owning migration, rather than editing an issued version.
+
+Company provisioning calls `TenantWorkflowStore.execute(s -> s.provisionTemplate(publishedTemplateId))`. It validates the graph and creates one immutable `tenant_workflow_templates` snapshot per tenant/template version, with its own UUID. Concurrent inserts and retries return the same persisted copy. A conflicting identity is an error, rather than an empty success. Unsupported graph schemas or invalid status/transition/rule references fail before a copy is recorded.
+
+A project calls `instantiate(copyId, realProjectId)` to materialize its own working workflow. The company copy does not invent a project or use zero-project ownership. The atomic instantiation receipt is unique by tenant/project/copy, and references the working workflow through a deferred composite FK. The winning transaction creates fresh workflow/status/transition/rule UUIDs; other workers wait for it and return its graph. Commit failure emits no successful result. Each project has a distinct graph, including when companies use identical names and status keys. New template versions do not rewrite existing copies or working graphs.
+
+All runtime workflows have explicit nonzero `owner_project_id`. Status/transition/rule references include tenant; transition endpoints additionally include workflow identity. Binding/pin/journal/receipt graph references additionally include owning project, preventing cross-project reuse within the same tenant. Current registry generation is mandatory for new bindings. Resolution uses an exact tenant/project/type/generation join with no implicit fallback to the shared legacy seed or another company's graph.
+
+The eight existing business tables, private copies and instantiation receipts have UUID NOT NULL tenant scope and ENABLE/FORCE RLS. All native runtime SQL has an explicit verified tenant predicate or bound insert tenant. Global template reads are an intentional non-personal configuration exclusion, performed on the same scoped transaction connection. Recovery records retain original actor/membership generations, optional grant and operation fence; these snapshots do not authorize a future job. TAS-342 must revalidate current authority before commands and recovery effects. Service-only contexts cannot manufacture a human recovery identity.
+
+The store is an internal SQL unit of work, not a public authorization endpoint. Use only `VerifiedTenantContext` established by TAS-306 and `TenantTransactionExecutor` TAS-307. Compose local SQL and collect lists in the callback; no remote calls or detached subscriptions. Sessions cannot escape their owning transaction. Public input validation, project ownership authority, graph mutation/fence policy and FREE/paid customization flag handling remain in TAS-342; both plans use this same persistence model.
+
+## Clean start and rollout
+
+Provision a new dedicated workflow database using [TAS-308 bootstrap](../docs/data/tenant-rls-templates.md), with `service=workflow`, `schema=taska`. The operator creates `workflow_liquibase` owned by `taska_workflow_migrator` and revokes PUBLIC access to it. Provision app/deployer passwords through secret storage. Runtime uses `taska_workflow_app`; Liquibase logs in as `taska_workflow_deployer` and explicitly assumes the NOLOGIN migrator role. Startup rejects privileged runtime roles, memberships and table ownership before constructing the store.
+
+Configure the existing `WORKFLOW_SPRING_R2DBC_*` / `WORKFLOW_SPRING_LIQUIBASE_*` properties and `SPRING_PROFILES_ACTIVE=tenant-storage`. The profile fixes its changelog to [db/workflow-tenant/changelog.json](src/main/resources/db/workflow-tenant/changelog.json). It creates the clean target schema and applies/audits the versioned [RLS v2 cores](../common-lib/src/main/resources/db/tenant/v2/) in one transaction. Existing business tables cause a refusal before reassignment or modification. Repeated invocation of the migrated database is a Liquibase no-op. Applied legacy changesets and RLS v1 resources remain byte-identical.
+
+This profile loads no legacy repositories, services, resolver, coordinators or gRPC implementations. Its transport remains closed until TAS-342 supplies verified policy/adapters. Actuator health is available. Cross-tenant worker partition discovery/leases are TAS-489; there is no global recovery scan here. Do not point the legacy profile at a tenant database. Activating public traffic requires coordinated project/issue/gateway contracts, current authorization, capabilities and saga integration. Rollback before traffic selects the previous app/database configuration; preserve any used tenant database and recover forward after traffic. No automatic down migration, reset or test-data backfill exists.
+
+## Verification
+
+```sh
+python3 scripts/harness.py check --module workflow-service
+```
+
+`TenantWorkflowStorageIntegrationTest` is a required fresh report. Its isolated PostgreSQL16 uses real app/deployer LOGIN, shipped bootstrap/protection/audit SQL and a pooled R2DBC executor. It checks concurrent provisioning/instantiation, stable fresh graph UUIDs, template/rule copying, A/B and project FK isolation, absence of default fallback, terminal records, rollback during graph creation and at commit, pool/context safety, immutable snapshots, representative query plans, migration refusal and live tenant-profile health/legacy-bean exclusion. Existing workflow verify and explicit reservation/binding/scope IT remain required. These checks do not claim activated tenant RPC or a complete cross-service B2B release.
