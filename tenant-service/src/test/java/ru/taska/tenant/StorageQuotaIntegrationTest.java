@@ -26,6 +26,7 @@ import ru.taska.exception.*;
 import ru.taska.issuestorage.StorageQuotaOwner;
 import ru.taska.issuestorage.StorageQuotaOwnerGrpcService;
 import ru.taska.quota.*;
+import ru.taska.quota.ProjectQuotaProtocol.State;
 import ru.taska.r2dbc.TenantTransactionExecutor;
 import ru.taska.security.tenant.*;
 import ru.taska.storage.versioned.*;
@@ -334,6 +335,10 @@ class StorageQuotaIntegrationTest {
               if (!ownerOnline.get() || !permitted.get())
                 return Mono.error(
                     new DomainException(DomainStatus.PERMISSION_DENIED, "current policy revoked"));
+              if (use == StorageQuotaOwner.Use.ACTIVATE && failOpen.get())
+                return Mono.error(
+                    new DomainException(
+                        DomainStatus.UNAVAILABLE, "fixture activation unavailable"));
               if (use == StorageQuotaOwner.Use.DIRECT_DELETE && readOnly.get() && !bypass.get())
                 return Mono.error(
                     new DomainException(DomainStatus.FAILED_PRECONDITION, "READ_ONLY"));
@@ -1045,5 +1050,99 @@ class StorageQuotaIntegrationTest {
     as(A, owner.deleteConfirmed(done, StorageQuotaOwner.Use.DIRECT_DELETE)).block(WAIT);
     as(A, root.releaseUsage(done)).block(WAIT);
     assertEquals("0", usage(A).getUsed());
+  }
+
+  @Test
+  void committedButUnactivatedRootRecoversAndRepeatedCommitKeepsSameEffect() throws Exception {
+    var r = reserve(10);
+    upload(r, 7);
+    failOpen.set(true);
+    assertThrows(RuntimeException.class, () -> commit(r));
+    assertEquals(State.COMMITTED, as(A, authorityClient.get(r.operation())).block(WAIT).state());
+    assertEquals("UPLOADED", manifestState(r));
+    assertEquals("7", usage(A).getUsed());
+    assertEquals("0", usage(A).getReserved());
+    failOpen.set(false);
+    commit(r);
+    commit(r);
+    assertEquals("CONFIRMED", manifestState(r));
+    assertEquals(1, rows(rootAdmin, "quota_effects"));
+    assertEquals("7", usage(A).getUsed());
+  }
+
+  @Test
+  void manifestPagesReturnHundredThenOneWithoutMisclassifyingUnconfirmedFiles() throws Exception {
+    limit.set(1000);
+    for (int i = 0; i < 101; i++) {
+      var r = reserve(1);
+      upload(r, 1);
+      commit(r);
+    }
+    var first = as(A, owner.manifests(A, null, 0)).block(WAIT);
+    assertEquals(100, first.items().size());
+    assertFalse(first.complete());
+    assertNotNull(first.next());
+    assertEquals(first.items().get(99).reservation().resource(), first.next());
+    var second = as(A, owner.manifests(A, first.next(), first.version())).block(WAIT);
+    assertEquals(1, second.items().size());
+    assertTrue(second.complete());
+    assertNull(second.next());
+    var ids = new HashSet<UUID>();
+    for (var receipt : first.items()) {
+      assertEquals(OwnerState.CONFIRMED, receipt.state());
+      assertTrue(ids.add(receipt.reservation().resource()));
+    }
+    assertTrue(ids.add(second.items().getFirst().reservation().resource()));
+    assertEquals(101, ids.size());
+    var unconfirmed = reserve(1);
+    as(A, owner.prepare(unconfirmed, "text/plain")).block(WAIT);
+    assertThrows(
+        RuntimeException.class,
+        () -> as(A, owner.manifests(A, first.next(), first.version())).block(WAIT));
+    assertEquals(100, as(A, root.reconcileManifests(null, 0)).block(WAIT).items().size());
+    assertEquals("101", usage(A).getUsed());
+    as(A, authorityClient.release(unconfirmed)).block(WAIT);
+    var page = as(A, owner.manifests(A, null, 0)).block(WAIT);
+    var all = new ArrayList<Receipt>(page.items());
+    if (!page.complete())
+      all.addAll(as(A, owner.manifests(A, page.next(), page.version())).block(WAIT).items());
+    assertEquals(102, all.size());
+    assertEquals(
+        OwnerState.CANCELLED,
+        all.stream()
+            .filter(x -> x.reservation().operation().equals(unconfirmed.operation()))
+            .findFirst()
+            .orElseThrow()
+            .state());
+  }
+
+  @Test
+  void moreThanHundredS3VersionsMakeBoundedProgressAndKeepForeignKey() throws Exception {
+    var r = reserve(10);
+    upload(r, 8);
+    var done = commit(r);
+    for (int i = 0; i < 101; i++)
+      s3.putObject(
+              b -> b.bucket(BUCKET).key(StorageQuotaOwner.finalKey(r)).contentType("text/plain"),
+              AsyncRequestBody.fromBytes(new byte[] {1}))
+          .get(15, TimeUnit.SECONDS);
+    String foreign = "tenant/" + B + "/foreign/" + UUID.randomUUID();
+    var other =
+        s3.putObject(b -> b.bucket(BUCKET).key(foreign), AsyncRequestBody.fromBytes(new byte[] {9}))
+            .get(15, TimeUnit.SECONDS);
+    assertThrows(
+        RuntimeException.class,
+        () -> as(A, owner.deleteConfirmed(done, StorageQuotaOwner.Use.DIRECT_DELETE)).block(WAIT));
+    assertEquals("DELETE_PENDING", manifestState(r));
+    assertEquals("8", usage(A).getUsed());
+    as(A, owner.deleteConfirmed(done, StorageQuotaOwner.Use.DIRECT_DELETE)).block(WAIT);
+    as(A, root.releaseUsage(done)).block(WAIT);
+    assertEquals("0", usage(A).getUsed());
+    assertEquals("DELETED", manifestState(r));
+    assertEquals(
+        1,
+        s3.headObject(b -> b.bucket(BUCKET).key(foreign).versionId(other.versionId()))
+            .get(15, TimeUnit.SECONDS)
+            .contentLength());
   }
 }

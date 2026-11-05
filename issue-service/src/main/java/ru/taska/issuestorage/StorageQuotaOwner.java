@@ -616,26 +616,13 @@ public final class StorageQuotaOwner implements Owner {
                                                                       .map(
                                                                           row -> {
                                                                             var state =
-                                                                                switch ((String)
-                                                                                    row.get(
-                                                                                        "receipt_state")) {
-                                                                                  case "CANCELLED" ->
-                                                                                      OwnerState
-                                                                                          .CANCELLED;
-                                                                                  case "DELETED" ->
-                                                                                      OwnerState
-                                                                                          .DELETED;
-                                                                                  default ->
-                                                                                      "UPLOADED"
-                                                                                              .equals(
-                                                                                                  row
-                                                                                                      .get(
-                                                                                                          "state"))
-                                                                                          ? OwnerState
-                                                                                              .MATERIALIZED
-                                                                                          : OwnerState
-                                                                                              .CONFIRMED;
-                                                                                };
+                                                                                ownerState(
+                                                                                    (String)
+                                                                                        row.get(
+                                                                                            "receipt_state"),
+                                                                                    (String)
+                                                                                        row.get(
+                                                                                            "state"));
                                                                             return new Receipt(
                                                                                 fromManifest(row),
                                                                                 state,
@@ -786,11 +773,31 @@ public final class StorageQuotaOwner implements Owner {
                       m ->
                           new Receipt(
                               r,
-                              "UPLOADED".equals(m.get("state"))
-                                  ? OwnerState.MATERIALIZED
-                                  : OwnerState.CONFIRMED,
+                              ownerState((String) row.get("state"), (String) m.get("state")),
                               (Long) row.get("amount")));
             });
+  }
+
+  private static OwnerState ownerState(String receipt, String manifest) {
+    return switch (receipt) {
+      case "CANCELLED" -> {
+        if (!"EXPIRED".equals(manifest))
+          throw fail(DomainStatus.DATA_LOSS, "MANIFEST_RECEIPT_STATE_CONFLICT");
+        yield OwnerState.CANCELLED;
+      }
+      case "DELETED" -> {
+        if (!"DELETED".equals(manifest))
+          throw fail(DomainStatus.DATA_LOSS, "MANIFEST_RECEIPT_STATE_CONFLICT");
+        yield OwnerState.DELETED;
+      }
+      case "COMMITTED" ->
+          switch (manifest) {
+            case "UPLOADED" -> OwnerState.MATERIALIZED;
+            case "CONFIRMED", "DELETE_PENDING" -> OwnerState.CONFIRMED;
+            default -> throw fail(DomainStatus.DATA_LOSS, "MANIFEST_RECEIPT_STATE_CONFLICT");
+          };
+      default -> throw fail(DomainStatus.DATA_LOSS, "UNKNOWN_STORAGE_RECEIPT");
+    };
   }
 
   private static void match(Reservation r, Map<String, Object> row) {
