@@ -23,12 +23,48 @@ public final class BillingCatalogRpc extends ReactorBillingServiceGrpc.BillingSe
 
   private final SubscriptionStore subscriptions;
   private final InvoiceStore invoices;
+  private final SubscriptionPlanChanges changes;
 
   public BillingCatalogRpc(
       BillingCatalog catalog, SubscriptionStore subscriptions, InvoiceStore invoices) {
+    this(catalog, subscriptions, invoices, null);
+  }
+
+  @org.springframework.beans.factory.annotation.Autowired
+  public BillingCatalogRpc(
+      BillingCatalog catalog,
+      SubscriptionStore subscriptions,
+      InvoiceStore invoices,
+      SubscriptionPlanChanges changes) {
     this.catalog = catalog;
     this.subscriptions = subscriptions;
     this.invoices = invoices;
+    this.changes = changes;
+  }
+
+  private SubscriptionPlanChanges changes() {
+    if (changes == null)
+      throw new ru.taska.exception.DomainException(
+          ru.taska.exception.DomainStatus.UNAVAILABLE, "PLAN_POLICY_NOT_CONFIGURED");
+    return changes;
+  }
+
+  @Override
+  public Mono<ru.taska.api.b2b.v1.PlanChange> changeSubscriptionPlan(
+      Mono<ru.taska.api.b2b.v1.ChangeSubscriptionPlanRpcRequest> r) {
+    return inbound(r.flatMap(q -> changes().change(q)));
+  }
+
+  @Override
+  public Mono<Subscription> cancelSubscriptionRenewal(
+      Mono<ru.taska.api.b2b.v1.CancelSubscriptionRenewalRpcRequest> r) {
+    return inbound(r.flatMap(q -> changes().cancel(q)));
+  }
+
+  @Override
+  public Mono<Subscription> resumeSubscriptionRenewal(
+      Mono<ru.taska.api.b2b.v1.ResumeSubscriptionRenewalRpcRequest> r) {
+    return inbound(r.flatMap(q -> changes().resume(q)));
   }
 
   private static <T> Mono<T> inbound(Mono<T> work) {

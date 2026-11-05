@@ -16,13 +16,19 @@ message AdmitFreeTenantRequest {
   string operation_id = 3;
   string expected_owner_version = 4;
 }
-message FreeAdmissionResult { bool admitted = 1; }
+message FreeAdmissionReceipt {string tenant_id=1;string operation_id=2;string owner_user_id=3;string owner_version=4;string accepted_at=5;bool admitted=6;string cancelled_at=7;}
+message FreeAdmissionResult { bool admitted = 1; optional FreeAdmissionReceipt receipt=2; }
+message GetFreeAdmissionReceiptRequest {RequestContext context=1;string tenant_id=2;string operation_id=3;string owner_user_id=4;string owner_version=5;}
+message CancelFreeTenantAdmissionRequest {RequestContext context=1;string tenant_id=2;string operation_id=3;string owner_user_id=4;string owner_version=5;}
 message ApplyFreeEligibilityDispositionRequest { RequestContext context = 1; string case_id = 2; }
 message FreeDispositionResult { bool applied = 1; }
 service FreeEligibilityService {
   rpc GetTenantCreationOptions(TenantCreationOptionsRequest) returns (TenantCreationOptions);
   // Internal TAS-354 admission; target owner is loaded/locked from tenant DB, never supplied by caller.
   rpc AdmitFreeTenant(AdmitFreeTenantRequest) returns (FreeAdmissionResult);
+  // Read-only durable proof for an accepted billing intent; no second FREE admission.
+  rpc GetFreeAdmissionReceipt(GetFreeAdmissionReceiptRequest) returns (FreeAdmissionReceipt);
+  rpc CancelFreeTenantAdmission(CancelFreeTenantAdmissionRequest) returns (FreeAdmissionReceipt);
   // Internal closed retention cases only; no public email lookup/erasure API.
   rpc ApplyFreeEligibilityDisposition(ApplyFreeEligibilityDispositionRequest) returns (FreeDispositionResult);
 }

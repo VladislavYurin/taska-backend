@@ -40,7 +40,9 @@ import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.MountableFile;
 import reactor.core.publisher.Mono;
+import reactor.core.publisher.Flux;
 import reactor.core.scheduler.Schedulers;
+import ru.taska.api.b2b.v1.*;
 import ru.taska.api.b2b.v1.AdmitFreeTenantRequest;
 import ru.taska.api.b2b.v1.CreateTenantResponse;
 import ru.taska.api.b2b.v1.CredentialKind;
@@ -49,6 +51,7 @@ import ru.taska.api.b2b.v1.Money;
 import ru.taska.api.b2b.v1.PlanVersion;
 import ru.taska.api.b2b.v1.TrustedTenantContext;
 import ru.taska.exception.DomainException;
+import ru.taska.exception.DomainStatus;
 import ru.taska.r2dbc.TenantTransactionExecutor;
 import ru.taska.security.tenant.RegistryTestContext;
 import ru.taska.security.tenant.RpcContextSecurity;
@@ -214,7 +217,7 @@ class FreeEligibilityIntegrationTest {
   void reset() {
     sql(
         "TRUNCATE"
-            + " taska.quota_effects,taska.quota_reservations,taska.quota_counters,taska.free_eligibility_ledger,taska.free_eligibility_dispositions,taska.tenant_creation_receipts,taska.tenant_provisioning_dispatch,taska.tenant_operations,taska.tenants,taska.tenant_memberships,taska.idempotency_records,taska.outbox_events,taska.global_outbox_events");
+            + " taska.quota_effects,taska.quota_reservations,taska.quota_counters,taska.free_eligibility_ledger,taska.free_eligibility_dispositions,taska.tenant_creation_receipts,taska.tenant_provisioning_dispatch,taska.tenant_operations,taska.free_admission_subjects,taska.free_plan_admissions,taska.tenants,taska.tenant_memberships,taska.idempotency_records,taska.outbox_events,taska.global_outbox_events");
     emails = new ConcurrentHashMap<>();
     cases = new ConcurrentHashMap<>();
     secretKeys = new ConcurrentHashMap<>();
@@ -1031,7 +1034,9 @@ class FreeEligibilityIntegrationTest {
             .addService(
                 io.grpc.ServerInterceptors.intercept(
                     new TenantGrpcService(
-                        registry, org.mockito.Mockito.mock(TenantMembershipService.class), org.mockito.Mockito.mock(SeatQuotaStore.class)),
+                        registry,
+                        org.mockito.Mockito.mock(TenantMembershipService.class),
+                        org.mockito.Mockito.mock(SeatQuotaStore.class)),
                     interceptor))
             .build()
             .start();
@@ -1143,6 +1148,41 @@ class FreeEligibilityIntegrationTest {
           assertThrows(io.grpc.StatusRuntimeException.class, () -> bill.admitFreeTenant(request))
               .getStatus()
               .getCode());
+
+      // Real billing client, signed JWS and mTLS: a USER_PAT remains a USER_PAT at Root.
+      UUID paidTenant = paidTenant(B), planOperation = UUID.randomUUID();
+      var freeClient =
+          new ru.taska.billing.GrpcFreePlanAdmission(
+              ReactorFreeEligibilityServiceGrpc.newReactorStub(billingChannel),
+              billing,
+              Clock.systemUTC());
+      var parent =
+          ownerCaller(B, paidTenant, "changeSubscriptionPlan").toBuilder()
+              .setIssuerService("api-gateway")
+              .setAudienceService("billing-service")
+              .build();
+      var admitted =
+          RegistryTestContext.withClaims(parent, freeClient.admit(paidTenant, planOperation, B, 1))
+              .block(WAIT);
+      assertTrue(admitted.admitted());
+      assertEquals(B, admitted.owner());
+      var restored =
+          RegistryTestContext.withClaims(
+                  recovery(paidTenant, "recoverFreePlanChange").toBuilder()
+                      .setAudienceService("billing-service")
+                      .addScopes("plans:recover")
+                      .build(),
+                  freeClient.accepted(paidTenant, planOperation, B, 1))
+              .block(WAIT);
+      assertEquals(admitted, restored);
+      var bad = parent.toBuilder().setActorUserId(A.toString()).build();
+      assertEquals(
+          DomainStatus.PERMISSION_DENIED,
+          failure(
+                  RegistryTestContext.withClaims(
+                      bad, freeClient.admit(paidTenant, UUID.randomUUID(), B, 1)))
+              .getStatus());
+
       var d =
           decision(DispositionAction.MINIMIZE_ACCOUNT, A, List.of(emails.get(A)), List.of(), null);
       cases.put(d.caseId(), d);
@@ -1167,8 +1207,27 @@ class FreeEligibilityIntegrationTest {
                               .getApplyFreeEligibilityDispositionMethod()
                               .getFullMethodName())));
       assertTrue(cleaner.applyFreeEligibilityDisposition(dispositionRequest).getApplied());
-      assertEquals(null, markers().getFirst().get("first_user_id"));
-      assertEquals(tenant, markers().getFirst().get("bound_tenant_id"));
+      assertEquals(
+          1L,
+          operator
+              .sql("SELECT count(*) n FROM taska.free_plan_admissions WHERE owner_id IS NULL")
+              .map((r, m) -> r.get("n", Long.class))
+              .one()
+              .block(WAIT));
+      assertEquals(
+          null,
+          markers().stream()
+              .filter(m -> tenant.equals(m.get("bound_tenant_id")))
+              .findFirst()
+              .orElseThrow()
+              .get("first_user_id"));
+      assertEquals(
+          tenant,
+          markers().stream()
+              .filter(m -> tenant.equals(m.get("bound_tenant_id")))
+              .findFirst()
+              .orElseThrow()
+              .get("bound_tenant_id"));
       allowed.set(false);
       assertEquals(
           io.grpc.Status.Code.PERMISSION_DENIED,
@@ -1213,5 +1272,239 @@ class FreeEligibilityIntegrationTest {
             ru.taska.api.common.v1.Header.newBuilder().setRequestId(UUID.randomUUID().toString()))
         .setContext(c)
         .build();
+  }
+
+  TrustedTenantContext ownerCaller(UUID actor, UUID tenant, String action) {
+    return TrustedTenantContext.newBuilder()
+        .setActorUserId(actor.toString())
+        .setTenantId(tenant.toString())
+        .setActorGeneration("1")
+        .setMembershipGeneration("1")
+        .setCredentialKind(CredentialKind.CREDENTIAL_KIND_USER_PAT)
+        .setCredentialId(UUID.randomUUID().toString())
+        .setIssuerService("billing-service")
+        .setAudienceService("tenant-service")
+        .setAction(action)
+        .addScopes("write")
+        .build();
+  }
+
+  TrustedTenantContext recovery(UUID tenant, String action) {
+    return TrustedTenantContext.newBuilder()
+        .setTenantId(tenant.toString())
+        .setActorGeneration("1")
+        .setCredentialKind(CredentialKind.CREDENTIAL_KIND_SERVICE)
+        .setIssuerService("billing-service")
+        .setAudienceService("tenant-service")
+        .setAction(action)
+        .addScopes("write")
+        .addScopes("free:admit")
+        .build();
+  }
+
+  UUID paidTenant(UUID owner) {
+    UUID tenant =
+        UUID.fromString(
+            create(owner, PAID, UUID.randomUUID().toString()).block(WAIT).getTenant().getId());
+    active(tenant);
+    return tenant;
+  }
+
+  AdmitFreeTenantRequest admission(UUID tenant, UUID operation) {
+    return AdmitFreeTenantRequest.newBuilder()
+        .setTenantId(tenant.toString())
+        .setOperationId(operation.toString())
+        .setExpectedOwnerVersion("1")
+        .build();
+  }
+
+  CancelFreeTenantAdmissionRequest cancellation(UUID tenant, UUID operation, UUID owner) {
+    return CancelFreeTenantAdmissionRequest.newBuilder()
+        .setTenantId(tenant.toString())
+        .setOperationId(operation.toString())
+        .setOwnerUserId(owner.toString())
+        .setOwnerVersion("1")
+        .build();
+  }
+
+  GetFreeAdmissionReceiptRequest receipt(UUID tenant, UUID operation, UUID owner) {
+    return GetFreeAdmissionReceiptRequest.newBuilder()
+        .setTenantId(tenant.toString())
+        .setOperationId(operation.toString())
+        .setOwnerUserId(owner.toString())
+        .setOwnerVersion("1")
+        .build();
+  }
+
+  @Test
+  void
+      ownerPatAdmissionKeepsOriginalCredentialAndDurableReceiptSurvivesGenericCleanupAndTransfer() {
+    UUID tenant = paidTenant(A), operation = UUID.randomUUID();
+    var accepted =
+        RegistryTestContext.withClaims(
+                ownerCaller(A, tenant, "admitFreeTenant"),
+                ledger.admit(admission(tenant, operation)))
+            .block(WAIT);
+    assertTrue(accepted.getAdmitted());
+    assertTrue(accepted.hasReceipt());
+    assertEquals(A.toString(), accepted.getReceipt().getOwnerUserId());
+    sql(
+        "DELETE FROM taska.idempotency_records WHERE tenant_id='"
+            + tenant
+            + "' AND operation_code='admitFreeTenant'");
+    transfer(tenant, B);
+    time.set(NOW.plus(Duration.ofDays(3)));
+    var recovered =
+        RegistryTestContext.withClaims(
+                recovery(tenant, "getFreeAdmissionReceipt"),
+                ledger.accepted(receipt(tenant, operation, A)))
+            .block(WAIT);
+    assertEquals(accepted.getReceipt(), recovered);
+    assertEquals(1, count("free_plan_admissions"));
+    assertEquals(1, count("free_eligibility_ledger"));
+    assertThrows(
+        RuntimeException.class,
+        () -> sql("UPDATE taska.free_plan_admissions SET owner_id='" + B + "'"));
+  }
+
+  @Test
+  void cancelledRootOperationCannotConsumeFreeOnDelayedAdmission() {
+    UUID tenant = paidTenant(A), operation = UUID.randomUUID();
+    var cancelled =
+        RegistryTestContext.withClaims(
+                ownerCaller(A, tenant, "cancelFreeTenantAdmission"),
+                ledger.cancel(cancellation(tenant, operation, A)))
+            .block(WAIT);
+    assertFalse(cancelled.getAdmitted());
+    assertFalse(cancelled.getCancelledAt().isBlank());
+    var delayed =
+        RegistryTestContext.withClaims(
+                ownerCaller(A, tenant, "admitFreeTenant"),
+                ledger.admit(admission(tenant, operation)))
+            .block(WAIT);
+    assertFalse(delayed.getAdmitted());
+    assertEquals(cancelled, delayed.getReceipt());
+    assertEquals(0, count("free_eligibility_ledger"));
+    var another = UUID.randomUUID();
+    assertTrue(
+        RegistryTestContext.withClaims(
+                ownerCaller(A, tenant, "admitFreeTenant"), ledger.admit(admission(tenant, another)))
+            .block(WAIT)
+            .getAdmitted());
+    var cannotUndo =
+        RegistryTestContext.withClaims(
+                ownerCaller(A, tenant, "cancelFreeTenantAdmission"),
+                ledger.cancel(cancellation(tenant, another, A)))
+            .block(WAIT);
+    assertTrue(cannotUndo.getAdmitted());
+    assertEquals(1, count("free_eligibility_ledger"));
+  }
+
+  @Test
+  void delegatedFreeDeniesOtherOwnerReadOnlyAndAdminWithoutPrimaryGrant() {
+    UUID tenant = paidTenant(A), operation = UUID.randomUUID();
+    assertEquals(
+        DomainStatus.PERMISSION_DENIED,
+        failure(
+                RegistryTestContext.withClaims(
+                    ownerCaller(B, tenant, "admitFreeTenant"),
+                    ledger.admit(admission(tenant, operation))))
+            .getStatus());
+    assertEquals(
+        DomainStatus.PERMISSION_DENIED,
+        failure(
+                RegistryTestContext.withClaims(
+                    ownerCaller(A, tenant, "admitFreeTenant").toBuilder()
+                        .clearScopes()
+                        .addScopes("read")
+                        .build(),
+                    ledger.admit(admission(tenant, operation))))
+            .getStatus());
+    var admin =
+        ownerCaller(A, tenant, "admitFreeTenant").toBuilder()
+            .setCredentialKind(CredentialKind.CREDENTIAL_KIND_ADMIN_PAT)
+            .setGrantId(UUID.randomUUID().toString())
+            .setGrantGeneration("1")
+            .setAdministrativeLevel(AdminGrant.LevelValue.LEVEL_MODIFY)
+            .setAdministrativeScope(
+                AdminScope.newBuilder().setKind(AdminScope.KindValue.KIND_PLATFORM))
+            .build();
+    assertEquals(
+        DomainStatus.UNAVAILABLE,
+        failure(RegistryTestContext.withClaims(admin, ledger.admit(admission(tenant, operation))))
+            .getStatus());
+    assertEquals(0, count("free_plan_admissions"));
+    assertEquals(0, count("free_eligibility_ledger"));
+  }
+
+  @Test
+  void cancelledProofMinimizationUsesSubjectRoutingWithoutWeakeningTenantRls() {
+    UUID a = paidTenant(A), b = paidTenant(B);
+    RegistryTestContext.withClaims(
+            ownerCaller(A, a, "cancelFreeTenantAdmission"),
+            ledger.cancel(cancellation(a, UUID.randomUUID(), A)))
+        .block(WAIT);
+    RegistryTestContext.withClaims(
+            ownerCaller(B, b, "cancelFreeTenantAdmission"),
+            ledger.cancel(cancellation(b, UUID.randomUUID(), B)))
+        .block(WAIT);
+    assertEquals(0, count("free_eligibility_ledger"));
+    apply(decision(DispositionAction.MINIMIZE_ACCOUNT, A, List.of(), List.of(), null)).block(WAIT);
+    assertEquals(
+        1L,
+        operator
+            .sql("SELECT count(*) n FROM taska.free_plan_admissions WHERE owner_id IS NULL")
+            .map((r, m) -> r.get("n", Long.class))
+            .one()
+            .block(WAIT));
+    assertEquals(1, count("free_admission_subjects"));
+    assertEquals(
+        1L,
+        operator
+            .sql("SELECT count(*) n FROM taska.free_plan_admissions WHERE owner_id=:b")
+            .bind("b", B)
+            .map((r, m) -> r.get("n", Long.class))
+            .one()
+            .block(WAIT));
+    var hidden =
+        transactions.execute(
+            client ->
+                client
+                    .sql("SELECT count(*) n FROM taska.free_plan_admissions WHERE tenant_id=:b")
+                    .bind("b", b)
+                    .map((r, m) -> r.get("n", Long.class))
+                    .one());
+    assertEquals(
+        0L,
+        RegistryTestContext.withClaims(ownerCaller(A, a, "getFreeAdmissionReceipt"), hidden)
+            .block(WAIT));
+  }
+
+  @Test
+  void concurrentRootCancelAndAdmissionProduceOneDurableDecision() {
+    UUID tenant = paidTenant(A), operation = UUID.randomUUID();
+    var decisions =
+        Flux.merge(
+                RegistryTestContext.withClaims(
+                        ownerCaller(A, tenant, "admitFreeTenant"),
+                        ledger.admit(admission(tenant, operation)))
+                    .map(FreeAdmissionResult::getReceipt),
+                RegistryTestContext.withClaims(
+                    ownerCaller(A, tenant, "cancelFreeTenantAdmission"),
+                    ledger.cancel(cancellation(tenant, operation, A))))
+            .collectList()
+            .block(WAIT);
+    assertEquals(2, decisions.size());
+    assertEquals(decisions.get(0), decisions.get(1));
+    assertEquals(decisions.getFirst().getAdmitted() ? 1 : 0, count("free_eligibility_ledger"));
+    assertEquals(1, count("free_plan_admissions"));
+    assertEquals(1, count("free_admission_subjects"));
+    assertEquals(
+        decisions.getFirst(),
+        RegistryTestContext.withClaims(
+                ownerCaller(A, tenant, "admitFreeTenant"),
+                ledger.admit(admission(tenant, operation)))
+            .block(WAIT)
+            .getReceipt());
   }
 }

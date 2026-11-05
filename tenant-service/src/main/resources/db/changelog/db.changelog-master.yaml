@@ -372,6 +372,32 @@
           }
         ]
       }
+    },
+    {
+      "changeSet": {
+        "id": "tenant-free-plan-admissions-0013",
+        "author": "taska",
+        "changes": [
+          {
+            "sqlFile": {
+              "path": "0013-free-plan-admissions.sql",
+              "relativeToChangelogFile": true,
+              "splitStatements": false
+            }
+          },
+          {
+            "sql": {
+              "sql": "SET LOCAL ROLE taska_tenant_migrator; SELECT set_config('taska.guard_service','tenant',true),set_config('taska.guard_schema','taska',true),set_config('taska.guard_table','free_plan_admissions',true),set_config('taska.guard_column','tenant_id',true),set_config('taska.guard_app_access','read_write',true);"
+            }
+          },
+          {
+            "sqlFile": {
+              "path": "db/tenant/protect-table.sql",
+              "splitStatements": false
+            }
+          }
+        ]
+      }
     }
   ]
 }

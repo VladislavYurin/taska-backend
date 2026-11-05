@@ -47,6 +47,14 @@ public final class FreeEligibilityDependencies {
     Mono<List<PlanVersion>> published();
   }
 
+  /**
+   * Non-owner administrative admission requires a current primary scoped grant, never a role bit.
+   */
+  public interface AdmissionAuthority {
+    Mono<Boolean> allowed(
+        ru.taska.security.tenant.VerifiedTenantContext context, UUID owner, long ownerVersion);
+  }
+
   public enum DispositionAction {
     MINIMIZE_ACCOUNT,
     MINIMIZE_TENANT,

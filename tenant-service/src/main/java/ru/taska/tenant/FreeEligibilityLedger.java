@@ -19,10 +19,13 @@ import org.springframework.transaction.reactive.TransactionalOperator;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import ru.taska.api.b2b.v1.AdmitFreeTenantRequest;
+import ru.taska.api.b2b.v1.CancelFreeTenantAdmissionRequest;
 import ru.taska.api.b2b.v1.CredentialKind;
+import ru.taska.api.b2b.v1.FreeAdmissionReceipt;
 import ru.taska.api.b2b.v1.FreeAdmissionResult;
 import ru.taska.api.b2b.v1.FreeDispositionResult;
 import ru.taska.api.b2b.v1.FreeEligibilityState;
+import ru.taska.api.b2b.v1.GetFreeAdmissionReceiptRequest;
 import ru.taska.api.b2b.v1.PlanVersion;
 import ru.taska.api.b2b.v1.TenantCreationOptions;
 import ru.taska.exception.DomainException;
@@ -49,7 +52,13 @@ public final class FreeEligibilityLedger implements FreeAdmission {
 
   private record Prepared(Identity identity, PurposeAssessment purpose) {}
 
-  private record Owner(UUID id, long version, String lifecycle, UUID creationOperation) {}
+  private record Owner(
+      UUID id,
+      long version,
+      String lifecycle,
+      UUID creationOperation,
+      boolean activeMember,
+      long membershipVersion) {}
 
   private final DatabaseClient db;
   private final TransactionalOperator tx;
@@ -60,6 +69,7 @@ public final class FreeEligibilityLedger implements FreeAdmission {
   private final DispositionAuthority dispositions;
   private final CreationPlans plans;
   private final Clock clock;
+  private final FreeEligibilityDependencies.AdmissionAuthority admissions;
 
   public FreeEligibilityLedger(
       DatabaseClient db,
@@ -71,6 +81,31 @@ public final class FreeEligibilityLedger implements FreeAdmission {
       DispositionAuthority dispositions,
       CreationPlans plans,
       Clock clock) {
+    this(
+        db,
+        tx,
+        tenants,
+        identities,
+        hmac,
+        purposes,
+        dispositions,
+        plans,
+        clock,
+        (c, owner, version) -> Mono.error(policy()));
+  }
+
+  public FreeEligibilityLedger(
+      DatabaseClient db,
+      TransactionalOperator tx,
+      TenantTransactionExecutor tenants,
+      IdentityAuthority identities,
+      HmacAuthority hmac,
+      PurposeAuthority purposes,
+      DispositionAuthority dispositions,
+      CreationPlans plans,
+      Clock clock,
+      FreeEligibilityDependencies.AdmissionAuthority admissions) {
+    this.admissions = java.util.Objects.requireNonNull(admissions);
     this.db = db;
     this.tx = tx;
     this.tenants = tenants;
@@ -400,8 +435,11 @@ public final class FreeEligibilityLedger implements FreeAdmission {
   private Mono<Owner> owner(DatabaseClient connection, UUID tenant) {
     return connection
         .sql(
-            "SELECT owner_id,owner_version,lifecycle,creation_operation_id FROM taska.tenants WHERE"
-                + " id=:id FOR UPDATE")
+            "SELECT t.owner_id,t.owner_version,t.lifecycle,t.creation_operation_id, EXISTS(SELECT 1"
+                + " FROM taska.tenant_memberships m WHERE m.tenant_id=t.id AND m.user_id=t.owner_id"
+                + " AND m.status='ACTIVE') active_member, (SELECT version FROM"
+                + " taska.tenant_memberships m WHERE m.tenant_id=t.id AND m.user_id=t.owner_id)"
+                + " member_version FROM taska.tenants t WHERE t.id=:id FOR UPDATE OF t")
         .bind("id", tenant)
         .map(
             (r, m) ->
@@ -409,9 +447,37 @@ public final class FreeEligibilityLedger implements FreeAdmission {
                     r.get("owner_id", UUID.class),
                     r.get("owner_version", Long.class),
                     r.get("lifecycle", String.class),
-                    r.get("creation_operation_id", UUID.class)))
+                    r.get("creation_operation_id", UUID.class),
+                    Boolean.TRUE.equals(r.get("active_member", Boolean.class)),
+                    r.get("member_version", Long.class) == null
+                        ? 0
+                        : r.get("member_version", Long.class)))
         .one()
         .switchIfEmpty(Mono.error(fail(DomainStatus.NOT_FOUND, "RESOURCE_NOT_FOUND")));
+  }
+
+  private static boolean delegatedShape(ru.taska.api.b2b.v1.TrustedTenantContext c) {
+    return switch (c.getCredentialKind()) {
+      case CREDENTIAL_KIND_WEB_TENANT ->
+          c.hasSessionId()
+              && !c.getSessionId().isBlank()
+              && c.hasMembershipGeneration()
+              && !c.getMembershipGeneration().isBlank();
+      case CREDENTIAL_KIND_USER_PAT, CREDENTIAL_KIND_USER_OAUTH ->
+          c.hasCredentialId()
+              && !c.getCredentialId().isBlank()
+              && c.hasMembershipGeneration()
+              && !c.getMembershipGeneration().isBlank();
+      case CREDENTIAL_KIND_WEB_GLOBAL -> c.hasSessionId() && !c.getSessionId().isBlank();
+      case CREDENTIAL_KIND_ADMIN_PAT, CREDENTIAL_KIND_ADMIN_OAUTH ->
+          c.hasCredentialId()
+              && !c.getCredentialId().isBlank()
+              && c.hasGrantId()
+              && !c.getGrantId().isBlank()
+              && c.hasGrantGeneration()
+              && !c.getGrantGeneration().isBlank();
+      default -> false;
+    };
   }
 
   private Mono<VerifiedTenantContext> authority(String action, String issuer, UUID tenant) {
@@ -422,14 +488,32 @@ public final class FreeEligibilityLedger implements FreeAdmission {
         .map(
             v -> {
               var c = RpcContextBridge.details(v).getContext();
+              boolean service =
+                  c.getCredentialKind() == CredentialKind.CREDENTIAL_KIND_SERVICE
+                      && v.scopes()
+                          .contains(
+                              action.equals("admitFreeTenant")
+                                      || action.equals("cancelFreeTenantAdmission")
+                                      || action.equals("getFreeAdmissionReceipt")
+                                  ? "free:admit"
+                                  : "free:retention");
+              boolean delegated =
+                  (action.equals("admitFreeTenant") || action.equals("cancelFreeTenantAdmission"))
+                      && v.actorId() != null
+                      && !c.getActorGeneration().isBlank()
+                      && delegatedShape(c)
+                      && Set.of(
+                              CredentialKind.CREDENTIAL_KIND_WEB_TENANT,
+                              CredentialKind.CREDENTIAL_KIND_USER_PAT,
+                              CredentialKind.CREDENTIAL_KIND_USER_OAUTH,
+                              CredentialKind.CREDENTIAL_KIND_WEB_GLOBAL,
+                              CredentialKind.CREDENTIAL_KIND_ADMIN_PAT,
+                              CredentialKind.CREDENTIAL_KIND_ADMIN_OAUTH)
+                          .contains(c.getCredentialKind());
               if (!v.action().equals(action)
-                  || c.getCredentialKind() != CredentialKind.CREDENTIAL_KIND_SERVICE
+                  || (!service && !delegated)
                   || !c.getIssuerService().equals(issuer)
-                  || !v.scopes()
-                      .containsAll(
-                          Set.of(
-                              "write",
-                              action.equals("admitFreeTenant") ? "free:admit" : "free:retention"))
+                  || !v.scopes().contains("write")
                   || (tenant == null
                       ? v.tenantId() != null
                       : !tenant.toString().equals(v.tenantId())))
@@ -463,6 +547,71 @@ public final class FreeEligibilityLedger implements FreeAdmission {
         .then();
   }
 
+  private Mono<FreeAdmissionReceipt> proof(DatabaseClient db, UUID tenant, UUID operation) {
+    return db.sql(
+            "SELECT * FROM taska.free_plan_admissions WHERE tenant_id=:t AND operation_id=:op")
+        .bind("t", tenant)
+        .bind("op", operation)
+        .map(
+            (r, m) -> {
+              var b =
+                  FreeAdmissionReceipt.newBuilder()
+                      .setTenantId(tenant.toString())
+                      .setOperationId(operation.toString())
+                      .setOwnerUserId(
+                          r.get("owner_id", UUID.class) == null
+                              ? ""
+                              : r.get("owner_id", UUID.class).toString())
+                      .setOwnerVersion(r.get("owner_version", Long.class).toString())
+                      .setAdmitted("ADMITTED".equals(r.get("state", String.class)));
+              var accepted = r.get("accepted_at", OffsetDateTime.class);
+              var cancelled = r.get("cancelled_at", OffsetDateTime.class);
+              if (accepted != null) b.setAcceptedAt(accepted.toInstant().toString());
+              if (cancelled != null) b.setCancelledAt(cancelled.toInstant().toString());
+              return b.build();
+            })
+        .one();
+  }
+
+  private Mono<Void> routeAdmission(DatabaseClient connection, UUID tenant, UUID owner) {
+    return connection
+        .sql(
+            "INSERT INTO taska.free_admission_subjects(owner_id,tenant_id) VALUES(:owner,:t) ON"
+                + " CONFLICT DO NOTHING")
+        .bind("owner", owner)
+        .bind("t", tenant)
+        .fetch()
+        .rowsUpdated()
+        .then();
+  }
+
+  private Mono<FreeAdmissionResult> durableProof(
+      DatabaseClient db, UUID tenant, UUID operation, Owner owner) {
+    return db.sql(
+            "INSERT INTO"
+                + " taska.free_plan_admissions(tenant_id,operation_id,owner_id,owner_version,accepted_at)"
+                + " VALUES(:t,:op,:owner,:version,:now) ON CONFLICT DO NOTHING")
+        .bind("t", tenant)
+        .bind("op", operation)
+        .bind("owner", owner.id())
+        .bind("version", owner.version())
+        .bind("now", now().atOffset(ZoneOffset.UTC))
+        .fetch()
+        .rowsUpdated()
+        .then(routeAdmission(db, tenant, owner.id()))
+        .then(proof(db, tenant, operation))
+        .map(
+            p -> {
+              if (!p.getOwnerUserId().equals(owner.id().toString())
+                  || !p.getOwnerVersion().equals(Long.toString(owner.version())))
+                throw fail(DomainStatus.ALREADY_EXISTS, "IDEMPOTENCY_CONFLICT");
+              return FreeAdmissionResult.newBuilder()
+                  .setAdmitted(p.getAdmitted())
+                  .setReceipt(p)
+                  .build();
+            });
+  }
+
   private Mono<FreeAdmissionResult> admissionReceipt(
       DatabaseClient connection,
       UUID tenant,
@@ -473,21 +622,32 @@ public final class FreeEligibilityLedger implements FreeAdmission {
     byte[] hash =
         TenantRegistryService.digest(
             "admitFreeTenant", tenant.toString(), owner.id().toString(), Long.toString(expected));
-    return connection
-        .sql(
-            "SELECT request_hash FROM taska.idempotency_records WHERE tenant_id=:tenant AND"
-                + " actor_id=:actor AND operation_code='admitFreeTenant' AND key=:key")
-        .bind("tenant", tenant)
-        .bind("actor", owner.id())
-        .bind("key", operation.toString())
-        .map((r, m) -> r.get("request_hash", byte[].class))
-        .one()
+    Mono<Boolean> legacy =
+        connection
+            .sql(
+                "SELECT request_hash FROM taska.idempotency_records WHERE tenant_id=:tenant AND"
+                    + " actor_id=:actor AND operation_code='admitFreeTenant' AND key=:key AND"
+                    + " state='SUCCEEDED' AND response->>'admitted'='true'")
+            .bind("tenant", tenant)
+            .bind("actor", owner.id())
+            .bind("key", operation.toString())
+            .map((r, m) -> r.get("request_hash", byte[].class))
+            .one()
+            .map(
+                old -> {
+                  if (!java.security.MessageDigest.isEqual(old, hash))
+                    throw fail(DomainStatus.ALREADY_EXISTS, "IDEMPOTENCY_CONFLICT");
+                  return true;
+                });
+    return proof(connection, tenant, operation)
         .map(
-            old -> {
-              if (!java.security.MessageDigest.isEqual(old, hash))
+            p -> {
+              if (!p.getOwnerUserId().equals(owner.id().toString())
+                  || !p.getOwnerVersion().equals(Long.toString(expected)))
                 throw fail(DomainStatus.ALREADY_EXISTS, "IDEMPOTENCY_CONFLICT");
-              return FreeAdmissionResult.newBuilder().setAdmitted(true).build();
+              return true;
             })
+        .switchIfEmpty(legacy)
         .switchIfEmpty(
             Mono.defer(
                 () ->
@@ -495,8 +655,8 @@ public final class FreeEligibilityLedger implements FreeAdmission {
                         .then(
                             connection
                                 .sql(
-                                    "INSERT INTO taska.idempotency_records"
-                                        + "(tenant_id,actor_id,operation_code,key,request_hash,operation_id,state,response,created_at,expires_at)"
+                                    "INSERT INTO"
+                                        + " taska.idempotency_records(tenant_id,actor_id,operation_code,key,request_hash,operation_id,state,response,created_at,expires_at)"
                                         + " VALUES(:tenant,:actor,'admitFreeTenant',:key,:hash,:operation,'SUCCEEDED','{\"admitted\":true}',:now,:expires)")
                                 .bind("tenant", tenant)
                                 .bind("actor", owner.id())
@@ -507,7 +667,34 @@ public final class FreeEligibilityLedger implements FreeAdmission {
                                 .bind("expires", now().plusSeconds(86400).atOffset(ZoneOffset.UTC))
                                 .fetch()
                                 .rowsUpdated())
-                        .thenReturn(FreeAdmissionResult.newBuilder().setAdmitted(true).build())));
+                        .thenReturn(true)))
+        .then(durableProof(connection, tenant, operation, owner));
+  }
+
+  private Mono<Void> ownerAdmission(VerifiedTenantContext caller, Owner owner) {
+    var claims = RpcContextBridge.details(caller).getContext();
+    var kind = claims.getCredentialKind();
+    if (kind == CredentialKind.CREDENTIAL_KIND_SERVICE)
+      return Mono.empty(); // Existing explicit free:admit purpose only.
+    if (Set.of(
+            CredentialKind.CREDENTIAL_KIND_WEB_TENANT,
+            CredentialKind.CREDENTIAL_KIND_USER_PAT,
+            CredentialKind.CREDENTIAL_KIND_USER_OAUTH)
+        .contains(kind))
+      return owner.id().toString().equals(caller.actorId())
+              && owner.activeMember()
+              && Long.toString(owner.membershipVersion()).equals(claims.getMembershipGeneration())
+          ? Mono.empty()
+          : Mono.error(fail(DomainStatus.PERMISSION_DENIED, "OWNER_REQUIRED"));
+    return admissions
+        .allowed(caller, owner.id(), owner.version())
+        .timeout(java.time.Duration.ofSeconds(5))
+        .switchIfEmpty(Mono.error(policy()))
+        .flatMap(
+            allowed ->
+                allowed
+                    ? Mono.empty()
+                    : Mono.error(fail(DomainStatus.PERMISSION_DENIED, "OWNER_REQUIRED")));
   }
 
   public Mono<FreeAdmissionResult> admit(AdmitFreeTenantRequest request) {
@@ -517,38 +704,167 @@ public final class FreeEligibilityLedger implements FreeAdmission {
               operation = TenantRegistryService.uuid(request.getOperationId());
           long expected = version(request.getExpectedOwnerVersion());
           return authority("admitFreeTenant", "billing-service", tenant)
-              .flatMap(v -> tenants.execute(connection -> owner(connection, tenant)))
               .flatMap(
-                  before -> {
-                    if (before.version() != expected)
-                      throw fail(DomainStatus.ABORTED, "VERSION_CONFLICT");
-                    return prepareIdentity(before.id());
-                  })
-              .flatMap(
-                  p ->
-                      tenants.execute(
-                          connection ->
-                              owner(connection, tenant)
-                                  .flatMap(
-                                      current -> {
-                                        if (current.version() != expected
-                                            || !current.id().equals(p.identity().actor()))
-                                          throw fail(DomainStatus.ABORTED, "VERSION_CONFLICT");
-                                        if (!"ACTIVE".equals(current.lifecycle()))
-                                          throw fail(
-                                              DomainStatus.FAILED_PRECONDITION, "INVALID_STATE");
-                                        return locked(
-                                            connection,
-                                            () ->
-                                                admissionReceipt(
-                                                    connection,
-                                                    tenant,
-                                                    operation,
-                                                    current,
-                                                    p,
-                                                    expected));
-                                      })));
+                  caller ->
+                      tenants
+                          .execute(db -> owner(db, tenant))
+                          .flatMap(
+                              before -> {
+                                if (before.version() != expected)
+                                  return Mono.error(fail(DomainStatus.ABORTED, "VERSION_CONFLICT"));
+                                return ownerAdmission(caller, before)
+                                    .then(prepareIdentity(before.id()))
+                                    .flatMap(
+                                        prepared ->
+                                            ownerAdmission(caller, before)
+                                                .then(
+                                                    tenants.execute(
+                                                        db ->
+                                                            owner(db, tenant)
+                                                                .flatMap(
+                                                                    current -> {
+                                                                      if (current.version()
+                                                                              != expected
+                                                                          || !current
+                                                                              .id()
+                                                                              .equals(before.id()))
+                                                                        return Mono.error(
+                                                                            fail(
+                                                                                DomainStatus
+                                                                                    .ABORTED,
+                                                                                "VERSION_CONFLICT"));
+                                                                      if (!"ACTIVE"
+                                                                          .equals(
+                                                                              current.lifecycle()))
+                                                                        return Mono.error(
+                                                                            fail(
+                                                                                DomainStatus
+                                                                                    .FAILED_PRECONDITION,
+                                                                                "INVALID_STATE"));
+                                                                      return locked(
+                                                                          db,
+                                                                          () ->
+                                                                              admissionReceipt(
+                                                                                  db, tenant,
+                                                                                  operation,
+                                                                                  current, prepared,
+                                                                                  expected));
+                                                                    }))));
+                              }));
         });
+  }
+
+  private Mono<FreeAdmissionReceipt> legacyProof(
+      DatabaseClient db, UUID tenant, UUID op, UUID owner, long ownerVersion) {
+    byte[] hash =
+        TenantRegistryService.digest(
+            "admitFreeTenant", tenant.toString(), owner.toString(), Long.toString(ownerVersion));
+    return db.sql(
+            "SELECT request_hash FROM taska.idempotency_records WHERE tenant_id=:t AND"
+                + " actor_id=:owner AND operation_code='admitFreeTenant' AND key=:key AND"
+                + " state='SUCCEEDED' AND response->>'admitted'='true'")
+        .bind("t", tenant)
+        .bind("owner", owner)
+        .bind("key", op.toString())
+        .map((r, m) -> r.get("request_hash", byte[].class))
+        .one()
+        .flatMap(
+            old -> {
+              if (!java.security.MessageDigest.isEqual(hash, old))
+                return Mono.error(fail(DomainStatus.ALREADY_EXISTS, "IDEMPOTENCY_CONFLICT"));
+              return durableProof(
+                      db, tenant, op, new Owner(owner, ownerVersion, "ACTIVE", null, false, 0))
+                  .map(FreeAdmissionResult::getReceipt);
+            });
+  }
+
+  private FreeAdmissionReceipt matching(FreeAdmissionReceipt p, UUID owner, long version) {
+    if (!p.getOwnerUserId().equals(owner.toString())
+        || !p.getOwnerVersion().equals(Long.toString(version)))
+      throw fail(DomainStatus.ALREADY_EXISTS, "IDEMPOTENCY_CONFLICT");
+    return p;
+  }
+
+  /** Accepted/cancelled fact, retained independently of generic request-receipt expiry. */
+  public Mono<FreeAdmissionReceipt> accepted(GetFreeAdmissionReceiptRequest request) {
+    UUID tenant = TenantRegistryService.uuid(request.getTenantId()),
+        op = TenantRegistryService.uuid(request.getOperationId()),
+        owner = TenantRegistryService.uuid(request.getOwnerUserId());
+    long version = version(request.getOwnerVersion());
+    return authority("getFreeAdmissionReceipt", "billing-service", tenant)
+        .then(
+            tenants.execute(
+                db ->
+                    proof(db, tenant, op)
+                        .switchIfEmpty(
+                            Mono.defer(() -> legacyProof(db, tenant, op, owner, version)))
+                        .switchIfEmpty(
+                            Mono.error(fail(DomainStatus.NOT_FOUND, "FREE_ADMISSION_NOT_FOUND")))
+                        .map(p -> matching(p, owner, version))));
+  }
+
+  public Mono<FreeAdmissionReceipt> cancel(CancelFreeTenantAdmissionRequest request) {
+    UUID tenant = TenantRegistryService.uuid(request.getTenantId()),
+        op = TenantRegistryService.uuid(request.getOperationId()),
+        owner = TenantRegistryService.uuid(request.getOwnerUserId());
+    long version = version(request.getOwnerVersion());
+    return authority("cancelFreeTenantAdmission", "billing-service", tenant)
+        .flatMap(
+            c ->
+                tenants
+                    .execute(db -> owner(db, tenant))
+                    .flatMap(
+                        before ->
+                            ownerAdmission(c, before)
+                                .then(
+                                    tenants.execute(
+                                        db ->
+                                            owner(db, tenant)
+                                                .flatMap(
+                                                    current -> {
+                                                      if (current.version() != before.version()
+                                                          || !current.id().equals(before.id()))
+                                                        return Mono.error(
+                                                            fail(
+                                                                DomainStatus.ABORTED,
+                                                                "VERSION_CONFLICT"));
+                                                      return proof(db, tenant, op)
+                                                          .switchIfEmpty(
+                                                              Mono.defer(
+                                                                  () ->
+                                                                      legacyProof(
+                                                                          db, tenant, op, owner,
+                                                                          version)))
+                                                          .switchIfEmpty(
+                                                              Mono.defer(
+                                                                  () ->
+                                                                      db.sql(
+                                                                              "INSERT INTO"
+                                                                                  + " taska.free_plan_admissions(tenant_id,operation_id,owner_id,owner_version,state,cancelled_at)"
+                                                                                  + " VALUES(:t,:op,:owner,:version,'CANCELLED',:now)"
+                                                                                  + " ON CONFLICT"
+                                                                                  + " DO NOTHING")
+                                                                          .bind("t", tenant)
+                                                                          .bind("op", op)
+                                                                          .bind("owner", owner)
+                                                                          .bind("version", version)
+                                                                          .bind(
+                                                                              "now",
+                                                                              now()
+                                                                                  .atOffset(
+                                                                                      ZoneOffset
+                                                                                          .UTC))
+                                                                          .fetch()
+                                                                          .rowsUpdated()
+                                                                          .then(
+                                                                              routeAdmission(
+                                                                                  db, tenant,
+                                                                                  owner))
+                                                                          .then(
+                                                                              proof(
+                                                                                  db, tenant, op))))
+                                                          .map(p -> matching(p, owner, version));
+                                                    })))));
   }
 
   public Mono<TenantCreationOptions> options() {
@@ -665,10 +981,76 @@ public final class FreeEligibilityLedger implements FreeAdmission {
             });
   }
 
+  private Mono<Long> minimizeAdmissionInScope(
+      DatabaseClient connection, Disposition d, UUID tenant) {
+    var query =
+        connection
+            .sql(
+                d.action() == DispositionAction.MINIMIZE_TENANT
+                    ? "DELETE FROM taska.free_plan_admissions WHERE tenant_id=:t"
+                    : "UPDATE taska.free_plan_admissions SET owner_id=NULL WHERE tenant_id=:t AND"
+                          + " owner_id=:owner")
+            .bind("t", tenant);
+    if (d.action() != DispositionAction.MINIMIZE_TENANT) query = query.bind("owner", d.subjectId());
+    return query.fetch().rowsUpdated();
+  }
+
+  /** Global case authority supplies subjects; each proof mutation still uses its tenant RLS. */
+  private Mono<Void> minimizeAdmissionSubjects(DatabaseClient connection, Disposition d) {
+    return connection
+        .sql("SELECT COALESCE(current_setting('app.tenant_id',true),'') original")
+        .map((r, m) -> r.get("original", String.class))
+        .one()
+        .flatMap(
+            original -> {
+              Mono<List<UUID>> tenants =
+                  d.action() == DispositionAction.MINIMIZE_TENANT
+                      ? Mono.just(List.of(d.subjectId()))
+                      : connection
+                          .sql(
+                              "SELECT tenant_id FROM taska.free_admission_subjects WHERE"
+                                  + " owner_id=:subject ORDER BY tenant_id")
+                          .bind("subject", d.subjectId())
+                          .map((r, m) -> r.get("tenant_id", UUID.class))
+                          .all()
+                          .collectList();
+              return tenants
+                  .flatMapMany(Flux::fromIterable)
+                  .concatMap(
+                      tenant ->
+                          connection
+                              .sql("SELECT set_config('app.tenant_id',:t,true)")
+                              .bind("t", tenant.toString())
+                              .fetch()
+                              .all()
+                              .then(minimizeAdmissionInScope(connection, d, tenant)))
+                  .then(
+                      connection
+                          .sql("SELECT set_config('app.tenant_id',:original,true)")
+                          .bind("original", original)
+                          .fetch()
+                          .all()
+                          .then())
+                  .then(
+                      connection
+                          .sql(
+                              d.action() == DispositionAction.MINIMIZE_TENANT
+                                  ? "DELETE FROM taska.free_admission_subjects WHERE"
+                                        + " tenant_id=:subject"
+                                  : "DELETE FROM taska.free_admission_subjects WHERE"
+                                        + " owner_id=:subject")
+                          .bind("subject", d.subjectId())
+                          .fetch()
+                          .rowsUpdated())
+                  .then();
+            });
+  }
+
   private Mono<Void> apply(DatabaseClient connection, Disposition d, Map<UUID, Identity> prepared) {
     if (d.action() == DispositionAction.MINIMIZE_TENANT
         || d.action() == DispositionAction.MINIMIZE_ACCOUNT) {
-      return minimizeAliases(connection, d, prepared)
+      return minimizeAdmissionSubjects(connection, d)
+          .then(minimizeAliases(connection, d, prepared))
           .then(
               connection
                   .sql(
@@ -802,11 +1184,19 @@ public final class FreeEligibilityLedger implements FreeAdmission {
                                                                                           .build());
                                                                                 return db.sql(
                                                                                         "SELECT"
-                                                                                            + " set_config('taska.free_disposition',:action,true)")
+                                                                                            + " set_config('taska.free_disposition',:action,true),set_config('taska.free_disposition_subject',:subject,true)")
                                                                                     .bind(
                                                                                         "action",
                                                                                         d.action()
                                                                                             .name())
+                                                                                    .bind(
+                                                                                        "subject",
+                                                                                        d
+                                                                                                    .subjectId()
+                                                                                                == null
+                                                                                            ? ""
+                                                                                            : d.subjectId()
+                                                                                                .toString())
                                                                                     .fetch()
                                                                                     .all()
                                                                                     .then(

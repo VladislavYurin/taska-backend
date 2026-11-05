@@ -40,6 +40,7 @@ import org.testcontainers.utility.MountableFile;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
+import ru.taska.api.b2b.v1.*;
 import ru.taska.api.b2b.v1.AdminGrant;
 import ru.taska.api.b2b.v1.AdminScope;
 import ru.taska.api.b2b.v1.CredentialKind;
@@ -50,9 +51,11 @@ import ru.taska.api.b2b.v1.Subscription;
 import ru.taska.api.b2b.v1.SubscriptionPeriod;
 import ru.taska.api.b2b.v1.SubscriptionPeriodPage;
 import ru.taska.api.b2b.v1.TrustedTenantContext;
+import ru.taska.billing.PlanChangeDependencies.*;
 import ru.taska.billing.SubscriptionDependencies.CoverageEvidence;
 import ru.taska.billing.SubscriptionDependencies.FinancialReadAuthority;
 import ru.taska.billing.SubscriptionDependencies.PaymentSource;
+import ru.taska.billing.SubscriptionDependencies.PlanPayment;
 import ru.taska.billing.SubscriptionDependencies.RevocationEvidence;
 import ru.taska.billing.SubscriptionDependencies.SettlementEvidenceAuthority;
 import ru.taska.exception.DomainException;
@@ -309,7 +312,7 @@ class SubscriptionIntegrationTest {
   void reset() {
     sql(
         "TRUNCATE"
-            + " taska.renewal_calendar_assignments,taska.entitlement_snapshots,taska.payment_facts,taska.payment_allocations,taska.invoice_payment_matches,taska.financial_command_receipts,taska.invoices,taska.invoice_lines,taska.invoice_command_receipts,taska.subscriptions,taska.subscription_periods,taska.subscription_command_receipts,taska.outbox_events,taska.idempotency_records,taska.processed_events");
+            + " taska.renewal_calendar_assignments,taska.entitlement_snapshots,taska.payment_facts,taska.payment_allocations,taska.invoice_payment_matches,taska.financial_command_receipts,taska.invoices,taska.invoice_lines,taska.invoice_command_receipts,taska.subscription_plan_changes,taska.subscriptions,taska.subscription_periods,taska.subscription_command_receipts,taska.outbox_events,taska.idempotency_records,taska.processed_events");
     sql("ALTER TABLE taska.catalog_plan_versions DISABLE TRIGGER immutable_plan");
     sql("DELETE FROM taska.catalog_plan_versions WHERE version>1");
     sql("ALTER TABLE taska.catalog_plan_versions ENABLE TRIGGER immutable_plan");
@@ -1211,6 +1214,7 @@ class SubscriptionIntegrationTest {
     init(A, PAID, "init").block(WAIT);
     UUID payment = proof(A, NOW, Instant.parse("2026-02-28T12:34:56Z"));
     grant(A, payment, "grant").block(WAIT);
+    planCommands();
     BillingCatalogIntegrationTest.openssl(
         certs,
         "req",
@@ -1309,7 +1313,8 @@ class SubscriptionIntegrationTest {
                     new BillingCatalogRpc(
                         org.mockito.Mockito.mock(BillingCatalog.class),
                         store,
-                        org.mockito.Mockito.mock(InvoiceStore.class)),
+                        org.mockito.Mockito.mock(InvoiceStore.class),
+                        changes),
                     interceptor))
             .build()
             .start();
@@ -1376,8 +1381,92 @@ class SubscriptionIntegrationTest {
                           rpc)))
               .listSubscriptionPeriods(history)
               .getItemsCount());
+
+      var cancel =
+          CancelSubscriptionRenewalRpcRequest.newBuilder()
+              .setTenantId(A.toString())
+              .setContext(
+                  wire(OWNER_A, A, "cancelSubscriptionRenewal").toBuilder()
+                      .setContext(
+                          wire(OWNER_A, A, "cancelSubscriptionRenewal").getContext().toBuilder()
+                              .addScopes("write")))
+              .setPayload(ConfirmedAction.newBuilder().setConfirmed(true))
+              .setMutation(
+                  MutationOptions.newBuilder()
+                      .setExpectedVersion(get(OWNER_A, A).getVersion())
+                      .setIdempotencyKey("rpc-cancel"))
+              .build();
+      var cancelStub =
+          plain.withInterceptors(
+              io.grpc.stub.MetadataUtils.newAttachHeadersInterceptor(
+                  BillingCatalogIntegrationTest.signed(
+                      sender,
+                      cancel,
+                      new ru.taska.security.tenant.RpcContextSecurity.Policy(true, true),
+                      BillingServiceGrpc.getCancelSubscriptionRenewalMethod()
+                          .getFullMethodName())));
+      var stopped = cancelStub.cancelSubscriptionRenewal(cancel);
+      assertTrue(stopped.getRenewalCancelled());
+      assertTrue(stopped.hasPaidThrough());
+      assertEquals(
+          io.grpc.Status.Code.UNAUTHENTICATED,
+          assertThrows(
+                  io.grpc.StatusRuntimeException.class,
+                  () -> cancelStub.cancelSubscriptionRenewal(cancel))
+              .getStatus()
+              .getCode());
+      var resume =
+          ResumeSubscriptionRenewalRpcRequest.newBuilder()
+              .setTenantId(A.toString())
+              .setContext(
+                  wire(OWNER_A, A, "resumeSubscriptionRenewal").toBuilder()
+                      .setContext(
+                          wire(OWNER_A, A, "resumeSubscriptionRenewal").getContext().toBuilder()
+                              .addScopes("write")))
+              .setMutation(
+                  MutationOptions.newBuilder()
+                      .setExpectedVersion(stopped.getVersion())
+                      .setIdempotencyKey("rpc-resume"))
+              .build();
+      assertFalse(
+          plain
+              .withInterceptors(
+                  io.grpc.stub.MetadataUtils.newAttachHeadersInterceptor(
+                      BillingCatalogIntegrationTest.signed(
+                          sender,
+                          resume,
+                          new ru.taska.security.tenant.RpcContextSecurity.Policy(true, true),
+                          BillingServiceGrpc.getResumeSubscriptionRenewalMethod()
+                              .getFullMethodName())))
+              .resumeSubscriptionRenewal(resume)
+              .getRenewalCancelled());
+
       revoke(A, reverse(confirmed.get(payment)), "loss").block(WAIT);
       assertFalse(stub.getSubscription(req).hasPaidThrough());
+
+      var select =
+          selection(FREE, "rpc-free", get(OWNER_A, A).getVersion()).toBuilder()
+              .setContext(
+                  wire(OWNER_A, A, "changeSubscriptionPlan").toBuilder()
+                      .setContext(
+                          wire(OWNER_A, A, "changeSubscriptionPlan").getContext().toBuilder()
+                              .addScopes("write")))
+              .build();
+      assertEquals(
+          FREE.toString(),
+          plain
+              .withInterceptors(
+                  io.grpc.stub.MetadataUtils.newAttachHeadersInterceptor(
+                      BillingCatalogIntegrationTest.signed(
+                          sender,
+                          select,
+                          new ru.taska.security.tenant.RpcContextSecurity.Policy(true, true),
+                          BillingServiceGrpc.getChangeSubscriptionPlanMethod()
+                              .getFullMethodName())))
+              .changeSubscriptionPlan(select)
+              .getSubscription()
+              .getPlanVersionId());
+
       active.remove(OWNER_A.toString());
       assertEquals(
           io.grpc.Status.Code.PERMISSION_DENIED,
@@ -1409,5 +1498,557 @@ class SubscriptionIntegrationTest {
                 .setAssertionId(UUID.randomUUID().toString())
                 .setContextVersion(1))
         .build();
+  }
+
+  // Confirmed facts below are the explicit TAS-354 fake settlement port; no PSP E2E is claimed.
+  SubscriptionPlanChanges changes;
+  Map<UUID, FreeProof> freeDecisions;
+  Set<UUID> freeOwners;
+  AtomicBoolean loseFreeReply, denyFree, abortAfterFree;
+
+  void planCommands() {
+    freeDecisions = new ConcurrentHashMap<>();
+    freeOwners = ConcurrentHashMap.newKeySet();
+    loseFreeReply = new AtomicBoolean();
+    denyFree = new AtomicBoolean();
+    abortAfterFree = new AtomicBoolean();
+    changes =
+        new SubscriptionPlanChanges(
+            store,
+            (context, command) -> {
+              if (offline.get())
+                return Mono.error(
+                    CatalogErrors.fail(DomainStatus.UNAVAILABLE, "DEPENDENCY_UNAVAILABLE"));
+              if (command != Command.RECOVER_FREE
+                  && !context.actorId().equals(owners.get(context.tenantId())))
+                return Mono.error(
+                    CatalogErrors.fail(DomainStatus.PERMISSION_DENIED, "OWNER_REQUIRED"));
+              return Mono.just(new Grant(UUID.fromString(owners.get(context.tenantId())), 1));
+            },
+            new FreeAuthority() {
+              public Mono<FreeProof> admit(UUID t, UUID op, UUID owner, long version) {
+                return Mono.defer(
+                    () -> {
+                      var old = freeDecisions.get(op);
+                      if (old != null) return Mono.just(old);
+                      if (denyFree.get() || !freeOwners.add(owner))
+                        return Mono.error(
+                            CatalogErrors.fail(
+                                DomainStatus.FAILED_PRECONDITION, "FREE_ELIGIBILITY_USED"));
+                      var proof = new FreeProof(t, op, owner, version);
+                      freeDecisions.put(op, proof);
+                      if (abortAfterFree.getAndSet(false))
+                        return Mono.error(
+                            CatalogErrors.fail(DomainStatus.ABORTED, "VERSION_CONFLICT"));
+                      return loseFreeReply.getAndSet(false)
+                          ? Mono.error(
+                              CatalogErrors.fail(
+                                  DomainStatus.UNAVAILABLE, "FREE_ADMISSION_UNAVAILABLE"))
+                          : Mono.just(proof);
+                    });
+              }
+
+              public Mono<FreeProof> accepted(UUID t, UUID op, UUID owner, long version) {
+                return Mono.justOrEmpty(freeDecisions.get(op))
+                    .switchIfEmpty(
+                        Mono.error(
+                            CatalogErrors.fail(
+                                DomainStatus.NOT_FOUND, "FREE_ADMISSION_NOT_FOUND")));
+              }
+
+              public Mono<FreeProof> cancel(UUID t, UUID op, UUID owner, long version) {
+                return Mono.fromSupplier(
+                    () ->
+                        freeDecisions.computeIfAbsent(
+                            op, k -> new FreeProof(t, op, owner, version, false)));
+              }
+            },
+            clock);
+  }
+
+  UUID plan(long price) {
+    UUID id = UUID.randomUUID();
+    String code = "P" + id.toString().replace("-", "").toUpperCase();
+    sql("INSERT INTO taska.catalog_plans(plan_code,kind) VALUES('" + code + "','PAID')");
+    sql(
+        "INSERT INTO taska.catalog_plan_versions SELECT"
+            + " (jsonb_populate_record(NULL::taska.catalog_plan_versions,to_jsonb(p)||jsonb_build_object('id','"
+            + id
+            + "','plan_code','"
+            + code
+            + "','price_minor',"
+            + price
+            + "))).* FROM taska.catalog_plan_versions p WHERE id='"
+            + PAID
+            + "'");
+    return id;
+  }
+
+  Entitlement rights() {
+    var entitlements = new EntitlementStore(transactions, readers::allowed, clock);
+    return RegistryTestContext.withClaims(
+            human(OWNER_A, A, "getEntitlement"),
+            entitlements.get(
+                GetEntitlementRpcRequest.newBuilder().setTenantId(A.toString()).build()))
+        .block(WAIT);
+  }
+
+  UUID paid() {
+    init(A, PAID, "init").block(WAIT);
+    UUID fact = proof(A, NOW, Instant.parse("2026-02-28T12:34:56Z"));
+    grant(A, fact, "first").block(WAIT);
+    planCommands();
+    return fact;
+  }
+
+  ChangeSubscriptionPlanRpcRequest selection(UUID target, String key, String version) {
+    return ChangeSubscriptionPlanRpcRequest.newBuilder()
+        .setTenantId(A.toString())
+        .setPayload(
+            ChangePlanRequest.newBuilder()
+                .setPlanVersionId(target.toString())
+                .setConfirmed(true)
+                .setCurrency(ChangePlanRequest.CurrencyValue.CURRENCY_EUR)
+                .setPaymentMethod(ChangePlanRequest.PaymentMethodValue.PAYMENT_METHOD_PSP))
+        .setMutation(
+            MutationOptions.newBuilder().setIdempotencyKey(key).setExpectedVersion(version))
+        .build();
+  }
+
+  Mono<PlanChange> change(ChangeSubscriptionPlanRpcRequest request) {
+    return RegistryTestContext.withClaims(
+        human(OWNER_A, A, "changeSubscriptionPlan").toBuilder().addScopes("write").build(),
+        changes.change(request));
+  }
+
+  PlanChange select(UUID target, String key) {
+    return change(selection(target, key, get(OWNER_A, A).getVersion())).block(WAIT);
+  }
+
+  UUID settled(
+      PlanChange change, UUID target, Instant success, Instant confirmation, PaymentSource source) {
+    UUID invoice = UUID.randomUUID(),
+        fact = UUID.randomUUID(),
+        op = UUID.fromString(change.getOperationId());
+    InvoiceTestFixtures.ensure(operator, A, invoice, target, op, "PLAN_CHANGE");
+    var proof =
+        asWorker(
+                A,
+                "applySubscriptionCoverage",
+                "billing-service",
+                transactions.execute(
+                    client ->
+                        PlanCoveragePolicy.evidence(
+                            client,
+                            new PlanPayment(A, op, invoice, fact, source, success, confirmation),
+                            clock.instant())))
+            .block(WAIT);
+    UUID lookup = UUID.randomUUID();
+    confirmed.put(lookup, proof);
+    return lookup;
+  }
+
+  Mono<Subscription> renewal(boolean cancel, String key, String version) {
+    String action = cancel ? "cancelSubscriptionRenewal" : "resumeSubscriptionRenewal";
+    var options =
+        MutationOptions.newBuilder().setIdempotencyKey(key).setExpectedVersion(version).build();
+    return RegistryTestContext.withClaims(
+        human(OWNER_A, A, action).toBuilder().addScopes("write").build(),
+        cancel
+            ? changes.cancel(
+                CancelSubscriptionRenewalRpcRequest.newBuilder()
+                    .setTenantId(A.toString())
+                    .setPayload(ConfirmedAction.newBuilder().setConfirmed(true))
+                    .setMutation(options)
+                    .build())
+            : changes.resume(
+                ResumeSubscriptionRenewalRpcRequest.newBuilder()
+                    .setTenantId(A.toString())
+                    .setMutation(options)
+                    .build()));
+  }
+
+  @Test
+  void immediateFreeSealsEveryOldPeriodAndOldCoverageReceiptsCannotRevivePaid() {
+    UUID original = paid();
+    var request = selection(FREE, "free", get(OWNER_A, A).getVersion());
+    var free = change(request).block(WAIT);
+    assertEquals(PlanChange.EffectValue.EFFECT_IMMEDIATE, free.getEffect());
+    assertEquals(FREE.toString(), free.getSubscription().getPlanVersionId());
+    assertFalse(free.getSubscription().hasPaidThrough());
+    assertFalse(
+        rights().getRestrictionsList().contains(RestrictionCode.RESTRICTION_CODE_PAYMENT_EXPIRED));
+    assertEquals(
+        "SUPERSEDED", periods(OWNER_A, A, 100, null).getItems(0).getState().name().substring(6));
+    assertEquals(FREE.toString(), grant(A, original, "first").block(WAIT).getPlanVersionId());
+    assertEquals(FREE.toString(), grant(A, original, "new-key").block(WAIT).getPlanVersionId());
+    assertEquals(free, change(request).block(WAIT));
+    assertEquals(1, freeOwners.size());
+    assertEquals(1, count("subscription_periods"));
+    var newPayment = select(PAID, "return");
+    assertEquals(PlanChange.EffectValue.EFFECT_AFTER_PAYMENT, newPayment.getEffect());
+    assertEquals(FREE.toString(), get(OWNER_A, A).getPlanVersionId());
+    time.set(Instant.parse("2026-02-04T10:00:00Z"));
+    var proof = settled(newPayment, PAID, time.get(), time.get(), PaymentSource.PSP);
+    var activated = grant(A, proof, "new-full-payment").block(WAIT);
+    assertEquals("2026-03-04T10:00:00Z", activated.getPaidThrough());
+    assertEquals(4, activated.getAnchorDay());
+    assertEquals(activated, grant(A, proof, "another-key").block(WAIT));
+  }
+
+  @Test
+  void cheaperPlanWaitsForFullFactThenStartsNewMonthWithoutOldRemainder() {
+    paid();
+    UUID cheap = plan(1000);
+    var pending = select(cheap, "cheap");
+    assertEquals(PlanChange.EffectValue.EFFECT_AFTER_PAYMENT, pending.getEffect());
+    assertEquals(PAID.toString(), get(OWNER_A, A).getPlanVersionId());
+    assertEquals(1, count("subscription_periods"));
+    Instant succeeded = Instant.parse("2026-02-10T08:00:00Z");
+    time.set(succeeded.plusSeconds(60));
+    var proof = settled(pending, cheap, succeeded, time.get(), PaymentSource.PSP);
+    var result = grant(A, proof, "cheap-confirmed").block(WAIT);
+    assertEquals(cheap.toString(), result.getPlanVersionId());
+    assertEquals("2026-03-10T08:00:00Z", result.getPaidThrough());
+    assertEquals(10, result.getAnchorDay());
+    assertEquals(2, count("subscription_periods"));
+  }
+
+  @Test
+  void wireUsesAdministratorConfirmationTimeAndPreservesCalendarMonthClamp() {
+    paid();
+    UUID cheap = plan(1000);
+    var pending = select(cheap, "wire");
+    Instant succeeded = Instant.parse("2026-02-01T10:00:00Z"),
+        confirmedAt = Instant.parse("2026-03-31T10:00:00Z");
+    time.set(confirmedAt);
+    var proof = settled(pending, cheap, succeeded, confirmedAt, PaymentSource.WIRE);
+    var result = grant(A, proof, "wire-confirmed").block(WAIT);
+    assertEquals("2026-04-30T10:00:00Z", result.getPaidThrough());
+    assertEquals(31, result.getAnchorDay());
+  }
+
+  @Test
+  void higherPlanChangesAtNextPaidBoundaryAndNeverBeforeIt() {
+    paid();
+    UUID high = plan(4000);
+    var pending = select(high, "high");
+    assertEquals(PlanChange.EffectValue.EFFECT_NEXT_PERIOD, pending.getEffect());
+    assertEquals("2026-02-28T12:34:56Z", pending.getEffectiveAt());
+    var proof = settled(pending, high, NOW, NOW, PaymentSource.PSP);
+    assertEquals(PAID.toString(), grant(A, proof, "prepaid").block(WAIT).getPlanVersionId());
+    assertEquals(high.toString(), get(OWNER_A, A).getScheduledPlanVersionId());
+    time.set(Instant.parse(pending.getEffectiveAt()));
+    var current = get(OWNER_A, A);
+    assertEquals(high.toString(), current.getPlanVersionId());
+    assertEquals("2026-03-31T12:34:56Z", current.getPaidThrough());
+    assertFalse(current.hasScheduledPlanVersionId());
+  }
+
+  @Test
+  void unpaidHigherPlanGapStartsFreshMonthAtActualNewPayment() {
+    paid();
+    UUID high = plan(4000);
+    var pending = select(high, "high");
+    time.set(Instant.parse("2026-03-02T11:00:00Z"));
+    assertTrue(
+        rights().getRestrictionsList().contains(RestrictionCode.RESTRICTION_CODE_PAYMENT_EXPIRED));
+    var proof = settled(pending, high, time.get(), time.get(), PaymentSource.PSP);
+    var current = grant(A, proof, "late").block(WAIT);
+    assertEquals("2026-04-02T11:00:00Z", current.getPaidThrough());
+    assertEquals(2, current.getAnchorDay());
+    assertFalse(
+        rights().getRestrictionsList().contains(RestrictionCode.RESTRICTION_CODE_PAYMENT_EXPIRED));
+  }
+
+  @Test
+  void newSelectionRejectsStalePendingPaymentWithoutChangingRights() {
+    paid();
+    UUID cheap = plan(1000), other = plan(500);
+    var first = select(cheap, "first-choice");
+    var proof = settled(first, cheap, NOW, NOW, PaymentSource.PSP);
+    select(other, "other-choice");
+    rejects(
+        DomainStatus.FAILED_PRECONDITION,
+        "PLAN_SELECTION_CHANGED",
+        grant(A, proof, "stale-payment"));
+    assertEquals(PAID.toString(), get(OWNER_A, A).getPlanVersionId());
+    assertEquals(1, count("subscription_periods"));
+  }
+
+  @Test
+  void cancellationAndResumeNeverChangeCoverageOrRestoreAutopayConsent() {
+    paid();
+    sql("UPDATE taska.subscriptions SET autopay_state='DISABLED' WHERE tenant_id='" + A + "'");
+    var before = get(OWNER_A, A);
+    var stopped = renewal(true, "stop", before.getVersion()).block(WAIT);
+    assertTrue(stopped.getRenewalCancelled());
+    assertEquals(before.getPaidThrough(), stopped.getPaidThrough());
+    var resumed = renewal(false, "resume", stopped.getVersion()).block(WAIT);
+    assertFalse(resumed.getRenewalCancelled());
+    assertEquals(Subscription.AutopayStateValue.AUTOPAY_STATE_DISABLED, resumed.getAutopayState());
+    assertEquals(0, freeOwners.size());
+    assertEquals(1, count("subscription_periods"));
+    assertEquals(1, count("invoices"));
+    time.set(Instant.parse(before.getPaidThrough()));
+    assertEquals(PAID.toString(), get(OWNER_A, A).getPlanVersionId());
+    assertEquals(0, freeOwners.size());
+  }
+
+  @Test
+  void durableAdmissionRecoversLostResponseAndBlocksConflictingCommandsWhileUnknown() {
+    paid();
+    loseFreeReply.set(true);
+    var request = selection(FREE, "lost", get(OWNER_A, A).getVersion());
+    rejects(DomainStatus.UNAVAILABLE, "FREE_ADMISSION_UNAVAILABLE", change(request));
+    assertEquals(PAID.toString(), get(OWNER_A, A).getPlanVersionId());
+    rejects(
+        DomainStatus.ABORTED,
+        "FREE_TRANSITION_PENDING",
+        renewal(true, "stop", get(OWNER_A, A).getVersion()));
+    UUID operation = (UUID) header(A).get("active_plan_change_id");
+    var claims =
+        worker(A, "recoverFreePlanChange", "billing-service").toBuilder()
+            .addScopes("plans:recover")
+            .addScopes("free:admit")
+            .build();
+    var recovered =
+        RegistryTestContext.withClaims(claims, changes.recoverPendingFree(1).collectList())
+            .block(WAIT);
+    assertEquals(1, recovered.size());
+    var result = recovered.getFirst();
+    assertEquals(operation.toString(), result.getOperationId());
+    assertTrue(
+        RegistryTestContext.withClaims(claims, changes.recoverPendingFree(1).collectList())
+            .block(WAIT)
+            .isEmpty());
+    assertEquals(FREE.toString(), result.getSubscription().getPlanVersionId());
+    assertEquals(1, freeOwners.size());
+    assertEquals(1, freeDecisions.size());
+    assertEquals(result, change(request).block(WAIT));
+  }
+
+  @Test
+  void definitiveFreeRejectionRestoresPriorPendingSelectionAndItsPaymentFence() {
+    paid();
+    UUID cheap = plan(1000);
+    var pending = select(cheap, "cheap");
+    var proof = settled(pending, cheap, NOW, NOW, PaymentSource.PSP);
+    long generation = (Long) header(A).get("selection_generation");
+    denyFree.set(true);
+    var request = selection(FREE, "denied", get(OWNER_A, A).getVersion());
+    rejects(DomainStatus.FAILED_PRECONDITION, "FREE_ELIGIBILITY_USED", change(request));
+    assertEquals(UUID.fromString(pending.getOperationId()), header(A).get("active_plan_change_id"));
+    assertEquals(generation, header(A).get("selection_generation"));
+    assertEquals(PAID.toString(), get(OWNER_A, A).getPlanVersionId());
+    assertEquals(cheap.toString(), grant(A, proof, "still-valid").block(WAIT).getPlanVersionId());
+    rejects(DomainStatus.FAILED_PRECONDITION, "FREE_ELIGIBILITY_USED", change(request));
+    assertEquals(0, freeOwners.size());
+  }
+
+  @Test
+  void planMutationDeniesReadOnlyAndFormerOwnerWithoutLeavingIntent() {
+    paid();
+    var request = selection(FREE, "denied", get(OWNER_A, A).getVersion());
+    rejects(
+        DomainStatus.PERMISSION_DENIED,
+        "SCOPE_DENIED",
+        RegistryTestContext.withClaims(
+            human(OWNER_A, A, "changeSubscriptionPlan"), changes.change(request)));
+    rejects(
+        DomainStatus.PERMISSION_DENIED,
+        "OWNER_REQUIRED",
+        RegistryTestContext.withClaims(
+            human(OTHER, A, "changeSubscriptionPlan").toBuilder().addScopes("write").build(),
+            changes.change(request)));
+    assertEquals(0, count("subscription_plan_changes"));
+    assertEquals(0, freeOwners.size());
+  }
+
+  @Test
+  void expectedVersionMakesConcurrentChoicesChooseOneWinner() {
+    paid();
+    UUID first = plan(1000), second = plan(500);
+    String version = get(OWNER_A, A).getVersion();
+    var outcomes =
+        Flux.merge(
+                change(selection(first, "one", version)).materialize(),
+                change(selection(second, "two", version)).materialize())
+            .collectList()
+            .block(WAIT);
+    assertEquals(1, outcomes.stream().filter(signal -> signal.hasValue()).count());
+    assertEquals(1, outcomes.stream().filter(signal -> signal.isOnError()).count());
+    assertEquals(1, count("subscription_plan_changes"));
+    assertEquals(1, count("subscription_periods"));
+  }
+
+  @Test
+  void billingOutboxFailureAfterRootAdmissionKeepsPreparedIntentAndRecoversExactlyOnce() {
+    paid();
+    sql(
+        "CREATE FUNCTION taska.fixture_free_fail() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF"
+            + " NEW.event_type='SubscriptionPlanChanged' THEN RAISE EXCEPTION 'fixture'; END IF;"
+            + " RETURN NEW; END $$");
+    sql(
+        "CREATE TRIGGER fixture_free_fail BEFORE INSERT ON taska.outbox_events FOR EACH ROW EXECUTE"
+            + " FUNCTION taska.fixture_free_fail()");
+    var request = selection(FREE, "free-outbox", get(OWNER_A, A).getVersion());
+    try {
+      assertThrows(RuntimeException.class, () -> change(request).block(WAIT));
+    } finally {
+      sql("DROP TRIGGER fixture_free_fail ON taska.outbox_events");
+      sql("DROP FUNCTION taska.fixture_free_fail()");
+    }
+    assertEquals(PAID.toString(), get(OWNER_A, A).getPlanVersionId());
+    assertEquals(1, freeDecisions.size());
+    assertEquals(1, freeOwners.size());
+    var completed = change(request).block(WAIT);
+    assertEquals(FREE.toString(), completed.getSubscription().getPlanVersionId());
+    assertEquals(1, freeOwners.size());
+    assertEquals(1, count("subscription_periods"));
+    assertEquals(1, count("subscription_plan_changes"));
+  }
+
+  @Test
+  void historicalChoiceReceiptStillRequiresCurrentOwnerAndExactPayload() {
+    paid();
+    UUID cheap = plan(1000);
+    var request = selection(cheap, "stable", get(OWNER_A, A).getVersion());
+    var accepted = change(request).block(WAIT);
+    assertEquals(accepted, change(request).block(WAIT));
+    rejects(
+        DomainStatus.ALREADY_EXISTS,
+        "IDEMPOTENCY_CONFLICT",
+        change(
+            request.toBuilder()
+                .setPayload(request.getPayload().toBuilder().setPlanVersionId(FREE.toString()))
+                .build()));
+    owners.put(A.toString(), OTHER.toString());
+    active.add(OTHER.toString());
+    rejects(DomainStatus.PERMISSION_DENIED, "OWNER_REQUIRED", change(request));
+    assertEquals(1, count("subscription_plan_changes"));
+  }
+
+  @Test
+  void planInvoiceObligationUsesDurableChoiceAndHasNoGuessedPaidWindow() {
+    paid();
+    UUID cheap = plan(1000);
+    var pending = select(cheap, "cheap");
+    var invoice =
+        CreateInvoiceRequest.newBuilder()
+            .setPlanVersionId(cheap.toString())
+            .setPurpose(CreateInvoiceRequest.PurposeValue.PURPOSE_PLAN_CHANGE)
+            .setCurrency(CreateInvoiceRequest.CurrencyValue.CURRENCY_EUR)
+            .setPaymentMethod(CreateInvoiceRequest.PaymentMethodValue.PAYMENT_METHOD_WIRE)
+            .build();
+    PlanChangeDependencies.Policy policy = (c, command) -> Mono.just(new Grant(OWNER_A, 1));
+    var work =
+        transactions.execute(client -> PlanChangeObligations.resolve(client, A, invoice, policy));
+    var result =
+        RegistryTestContext.withClaims(
+                human(OWNER_A, A, "createInvoice").toBuilder().addScopes("write").build(), work)
+            .block(WAIT);
+    assertEquals(UUID.fromString(pending.getOperationId()), result.operationId());
+    assertEquals(cheap, result.planVersionId());
+    assertEquals(null, result.periodStartsAt());
+    assertEquals(null, result.periodEndsAt());
+    assertEquals(1, count("invoices"));
+    assertEquals(1, count("subscription_periods"));
+  }
+
+  @Test
+  void cheaperPlanWithoutPaymentExpiresWithoutCreatingCoverageOrFree() {
+    paid();
+    UUID cheap = plan(1000);
+    select(cheap, "unpaid");
+    time.set(Instant.parse("2026-02-28T12:34:56Z"));
+    assertEquals(PAID.toString(), get(OWNER_A, A).getPlanVersionId());
+    assertTrue(
+        rights().getRestrictionsList().contains(RestrictionCode.RESTRICTION_CODE_PAYMENT_EXPIRED));
+    assertEquals(1, count("subscription_periods"));
+    assertEquals(0, freeOwners.size());
+  }
+
+  @Test
+  void admittedDecisionWinsWhenCancellationRunsAfterDefinitiveRemoteError() {
+    paid();
+    abortAfterFree.set(true);
+    var result = select(FREE, "root-admitted-before-error");
+    assertEquals(FREE.toString(), result.getSubscription().getPlanVersionId());
+    assertEquals(1, freeOwners.size());
+    assertEquals(1, freeDecisions.size());
+    assertTrue(freeDecisions.values().iterator().next().admitted());
+  }
+
+  @Test
+  void newCoverageCannotSlipBetweenPreparedFreeAndItsCompletion() {
+    paid();
+    loseFreeReply.set(true);
+    rejects(
+        DomainStatus.UNAVAILABLE,
+        "FREE_ADMISSION_UNAVAILABLE",
+        change(selection(FREE, "unknown-free", get(OWNER_A, A).getVersion())));
+    UUID renewal = proof(A, NOW, Instant.parse("2026-02-28T12:34:56Z"));
+    rejects(DomainStatus.ABORTED, "FREE_TRANSITION_PENDING", grant(A, renewal, "new-coverage"));
+    assertEquals(1, count("subscription_periods"));
+    var claims =
+        worker(A, "recoverFreePlanChange", "billing-service").toBuilder()
+            .addScopes("plans:recover")
+            .addScopes("free:admit")
+            .build();
+    var results =
+        Flux.merge(
+                RegistryTestContext.withClaims(claims, changes.recoverPendingFree(1).collectList()),
+                RegistryTestContext.withClaims(claims, changes.recoverPendingFree(1).collectList()))
+            .collectList()
+            .block(WAIT);
+    assertTrue(results.stream().mapToInt(List::size).sum() >= 1);
+    assertEquals(1, freeOwners.size());
+    assertEquals(FREE.toString(), get(OWNER_A, A).getPlanVersionId());
+    rejects(
+        DomainStatus.FAILED_PRECONDITION,
+        "PLAN_SELECTION_CHANGED",
+        grant(A, renewal, "new-coverage"));
+    assertEquals(1, count("subscription_periods"));
+  }
+
+  @Test
+  void usdObligationBindsChoiceAndUnknownCurrencyFailsWithoutNewDocuments() {
+    paid();
+    UUID cheap = plan(1000);
+    var request =
+        selection(cheap, "usd", get(OWNER_A, A).getVersion()).toBuilder()
+            .setPayload(
+                selection(cheap, "usd", get(OWNER_A, A).getVersion()).getPayload().toBuilder()
+                    .setCurrency(ChangePlanRequest.CurrencyValue.CURRENCY_USD))
+            .build();
+    var pending = change(request).block(WAIT);
+    var invoice =
+        CreateInvoiceRequest.newBuilder()
+            .setPlanVersionId(cheap.toString())
+            .setPurpose(CreateInvoiceRequest.PurposeValue.PURPOSE_PLAN_CHANGE)
+            .setCurrency(CreateInvoiceRequest.CurrencyValue.CURRENCY_USD)
+            .setPaymentMethod(CreateInvoiceRequest.PaymentMethodValue.PAYMENT_METHOD_PSP)
+            .build();
+    PlanChangeDependencies.Policy policy = (c, command) -> Mono.just(new Grant(OWNER_A, 1));
+    var claims = human(OWNER_A, A, "createInvoice").toBuilder().addScopes("write").build();
+    var obligation =
+        RegistryTestContext.withClaims(
+                claims,
+                transactions.execute(
+                    client -> PlanChangeObligations.resolve(client, A, invoice, policy)))
+            .block(WAIT);
+    assertEquals(UUID.fromString(pending.getOperationId()), obligation.operationId());
+    rejects(
+        DomainStatus.INVALID_ARGUMENT,
+        "VALIDATION_FAILED",
+        RegistryTestContext.withClaims(
+            claims,
+            transactions.execute(
+                client ->
+                    PlanChangeObligations.resolve(
+                        client, A, invoice.toBuilder().setCurrencyValue(999).build(), policy))));
+    assertEquals(1, count("invoices"));
+    assertEquals(1, count("subscription_periods"));
   }
 }

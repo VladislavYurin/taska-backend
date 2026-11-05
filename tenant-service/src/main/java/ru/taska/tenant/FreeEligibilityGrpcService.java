@@ -40,6 +40,18 @@ public final class FreeEligibilityGrpcService
   }
 
   @Override
+  public Mono<ru.taska.api.b2b.v1.FreeAdmissionReceipt> getFreeAdmissionReceipt(
+      Mono<ru.taska.api.b2b.v1.GetFreeAdmissionReceiptRequest> request) {
+    return inbound(request.flatMap(ledger::accepted));
+  }
+
+  @Override
+  public Mono<ru.taska.api.b2b.v1.FreeAdmissionReceipt> cancelFreeTenantAdmission(
+      Mono<ru.taska.api.b2b.v1.CancelFreeTenantAdmissionRequest> request) {
+    return inbound(request.flatMap(ledger::cancel));
+  }
+
+  @Override
   public Mono<FreeDispositionResult> applyFreeEligibilityDisposition(
       Mono<ApplyFreeEligibilityDispositionRequest> request) {
     return inbound(request.flatMap(r -> ledger.disposition(r.getCaseId())));
