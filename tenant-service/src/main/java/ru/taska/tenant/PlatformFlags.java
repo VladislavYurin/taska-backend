@@ -25,8 +25,8 @@ import ru.taska.security.tenant.VerifiedTenantContext;
 
 /** Global allowlisted configuration. Every administrative call requires fresh online authority. */
 public final class PlatformFlags {
-  private static final String ROWS =
-      "SELECT DISTINCT ON(v.key) v.*,d.owner,d.default_value::text AS"
+  private static final String ROW =
+      "v.*,d.owner,d.default_value::text AS"
           + " default_text,d.minimum_value,d.maximum_value,v.value::text AS value_text FROM"
           + " taska.platform_configuration_versions v JOIN taska.platform_configuration_definitions"
           + " d USING(key)";
@@ -108,7 +108,7 @@ public final class PlatformFlags {
   }
 
   private Mono<PlatformFlag> version(String key, long version) {
-    return db.sql(ROWS + " WHERE v.key=:key AND v.version=:version ORDER BY v.key,v.version DESC")
+    return db.sql("SELECT " + ROW + " WHERE v.key=:key AND v.version=:version")
         .bind("key", key)
         .bind("version", version)
         .fetch()
@@ -118,7 +118,17 @@ public final class PlatformFlags {
 
   private static String authorityBinding(VerifiedTenantContext v) {
     var c = RpcContextBridge.details(v).getContext();
-    return c.toBuilder().clearIssuedAt().clearExpiresAt().clearAssertionId().build().toString();
+    // No maps in this wire message; binary fields have stable tags. Scopes are a set.
+    return Base64.getEncoder()
+        .encodeToString(
+            c.toBuilder()
+                .clearIssuedAt()
+                .clearExpiresAt()
+                .clearAssertionId()
+                .clearScopes()
+                .addAllScopes(new java.util.TreeSet<>(v.scopes()))
+                .build()
+                .toByteArray());
   }
 
   public Mono<PlatformFlagPage> list(ListPlatformFlagsRpcRequest request) {
@@ -128,7 +138,7 @@ public final class PlatformFlags {
               int limit = request.getPage().getLimit() == 0 ? 50 : request.getPage().getLimit();
               if (limit < 1 || limit > 100)
                 throw fail(DomainStatus.INVALID_ARGUMENT, "VALIDATION_FAILED");
-              return db.sql(ROWS + " ORDER BY v.key,v.version DESC")
+              return db.sql("SELECT DISTINCT ON(v.key) " + ROW + " ORDER BY v.key,v.version DESC")
                   .fetch()
                   .all()
                   .map(PlatformFlags::map)
@@ -230,7 +240,8 @@ public final class PlatformFlags {
                                           Mono.defer(
                                               () ->
                                                   db.sql(
-                                                          ROWS
+                                                          "SELECT "
+                                                              + ROW
                                                               + " WHERE v.key=:key ORDER BY"
                                                               + " v.key,v.version DESC LIMIT 1")
                                                       .bind("key", key)

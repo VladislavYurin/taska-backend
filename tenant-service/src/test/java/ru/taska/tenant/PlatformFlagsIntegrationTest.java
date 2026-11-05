@@ -571,6 +571,22 @@ class PlatformFlagsIntegrationTest {
                 .fetch()
                 .rowsUpdated()
                 .block(WAIT));
+    assertEquals(
+        "1000",
+        db.sql("SELECT '1e3'::jsonb::text AS n")
+            .map((row, m) -> row.get("n", String.class))
+            .one()
+            .block(WAIT));
+    assertThrows(
+        Exception.class,
+        () ->
+            db.sql(
+                    "INSERT INTO taska.platform_configuration_versions"
+                        + " VALUES('WIRE_RECONCILIATION_TARGET_SECONDS',2,'DURATION_SECONDS','1.0',now(),:actor,now())")
+                .bind("actor", ACTOR)
+                .fetch()
+                .rowsUpdated()
+                .block(WAIT));
     assertEquals(24, count("platform_configuration_versions"));
   }
 
@@ -580,14 +596,18 @@ class PlatformFlagsIntegrationTest {
         ListPlatformFlagsRpcRequest.newBuilder()
             .setPage(PageRequest.newBuilder().setLimit(2))
             .build();
-    var first = admin(false, service.list(r)).block(WAIT);
+    var pageClaims = claims(false).toBuilder().addScopes("configuration").build();
+    var first = RegistryTestContext.withClaims(pageClaims, service.list(r)).block(WAIT);
     assertEquals(2, first.getItemsCount());
     assertTrue(first.hasNextCursor());
     var next =
         r.toBuilder().setPage(r.getPage().toBuilder().setCursor(first.getNextCursor())).build();
     var second =
         RegistryTestContext.withClaims(
-                claims(false).toBuilder()
+                pageClaims.toBuilder()
+                    .clearScopes()
+                    .addScopes("configuration")
+                    .addScopes("read")
                     .setIssuedAt(Instant.now().toString())
                     .setAssertionId(UUID.randomUUID().toString())
                     .build(),
@@ -597,24 +617,26 @@ class PlatformFlagsIntegrationTest {
     rejects(
         DomainStatus.INVALID_ARGUMENT,
         RegistryTestContext.withClaims(
-            claims(false).toBuilder().setSessionId(UUID.randomUUID().toString()).build(),
+            pageClaims.toBuilder().setSessionId(UUID.randomUUID().toString()).build(),
             service.list(next)));
     rejects(
         DomainStatus.INVALID_ARGUMENT,
-        admin(
-            false,
+        RegistryTestContext.withClaims(
+            pageClaims,
             service.list(
                 next.toBuilder().setPage(next.getPage().toBuilder().setLimit(3)).build())));
     rejects(
         DomainStatus.INVALID_ARGUMENT,
-        admin(
-            false,
+        RegistryTestContext.withClaims(
+            pageClaims,
             service.list(
                 next.toBuilder()
                     .setPage(next.getPage().toBuilder().setCursor(first.getNextCursor() + "x"))
                     .build())));
     admin(true, service.update(bool("MCP", "1", false))).block(WAIT);
-    rejects(DomainStatus.INVALID_ARGUMENT, admin(false, service.list(next)));
+    rejects(
+        DomainStatus.INVALID_ARGUMENT,
+        RegistryTestContext.withClaims(pageClaims, service.list(next)));
   }
 
   @Test
