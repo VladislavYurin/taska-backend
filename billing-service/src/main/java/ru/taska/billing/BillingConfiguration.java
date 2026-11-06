@@ -330,8 +330,7 @@ public class BillingConfiguration {
   @Bean
   @ConditionalOnMissingBean
   PaymentSettlementDependencies.EvidenceAuthority verifiedPaymentEvidence() {
-    return (db, tenant, evidence) ->
-        Mono.error(CatalogErrors.fail(DomainStatus.UNAVAILABLE, "PAYMENT_EVIDENCE_UNAVAILABLE"));
+    return new ru.taska.billing.ingress.ProviderPaymentEvidence();
   }
 
   @Bean
@@ -388,6 +387,18 @@ public class BillingConfiguration {
       return new TenantServerInterceptor(
           security,
           Map.ofEntries(
+              Map.entry(
+                  ru.taska.api.b2b.v1.ProviderInboxServiceGrpc.getObserveProviderWebhookMethod()
+                      .getFullMethodName(),
+                  new RpcContextSecurity.Policy(false, true)),
+              Map.entry(
+                  ru.taska.api.b2b.v1.ProviderInboxServiceGrpc.getRegisterProviderPaymentMethod()
+                      .getFullMethodName(),
+                  new RpcContextSecurity.Policy(true, true)),
+              Map.entry(
+                  ru.taska.api.b2b.v1.ProviderInboxServiceGrpc.getProcessProviderWebhookMethod()
+                      .getFullMethodName(),
+                  new RpcContextSecurity.Policy(true, true)),
               Map.entry(
                   ru.taska.api.b2b.v1.PaymentSettlementServiceGrpc.getApplyVerifiedPaymentMethod()
                       .getFullMethodName(),

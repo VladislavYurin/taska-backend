@@ -52,3 +52,5 @@ python3 scripts/harness.py check --module billing-service
 [Verified payment settlement TAS-352](SETTLEMENT.md): atomic invoice/ledger/coverage and protected Root activation contracts.
 
 [PaymentProvider и управляемый fake — TAS-320](PAYMENT-PROVIDER.md).
+
+[Authenticated durable provider inbox and activation boundaries (TAS-351)](PROVIDER-INBOX.md).

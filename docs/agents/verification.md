@@ -211,3 +211,5 @@ See [settlement contracts and activation](../../billing-service/SETTLEMENT.md). 
 explicitly synthetic in this suite; external PSP/bank/public REST acceptance is separate.
 
 TAS-320: billing-service.verify additionally requires FakePaymentProviderTest and FakePaymentProviderConcurrencyTest. These are isolated port/fake contract checks, not external PSP E2E. [Provider contract](../../billing-service/PAYMENT-PROVIDER.md).
+
+TAS-351 adds required ProviderInboxIntegrationTest, ProviderInboxRpcIntegrationTest and InboxCipherTest: durable ACK/rollback, scoped mapping, canonical proof, real PostgreSQL/mTLS self-processing, lost Root response and private payload rotation/retention. [Scope and activation](../../billing-service/PROVIDER-INBOX.md). External PSP/public gateway E2E remains separate.
