@@ -1,0 +1,25 @@
+syntax = "proto3";
+package ru.taska.b2b.v1;
+import "v1/tenant-context.proto";
+import "google/protobuf/empty.proto";
+option java_multiple_files = true;
+option java_package = "ru.taska.api.b2b.v1";
+option java_outer_classname = "ProviderInboxApiProto";
+// Private adapter/worker endpoints. A caller's tenant claim never routes a raw webhook.
+enum ProviderEnvironment { PROVIDER_ENVIRONMENT_UNSPECIFIED = 0; PROVIDER_ENVIRONMENT_TEST = 1; PROVIDER_ENVIRONMENT_LIVE = 2; }
+message ObserveProviderWebhookRequest {
+ RequestContext context = 1; string provider = 2; string provider_account_id = 3;
+ ProviderEnvironment environment = 4; bytes raw_body = 5; string signature = 6;
+}
+message RegisterProviderPaymentRequest {
+ RequestContext context = 1; string tenant_id = 2; string invoice_id = 3;
+ string provider = 4; string provider_account_id = 5; ProviderEnvironment environment = 6;
+ string provider_payment_id = 7;
+}
+message ProcessProviderWebhookRequest { RequestContext context = 1; string tenant_id = 2; string receipt_id = 3; }
+message ProviderInboxReceipt { string id = 1; string state = 2; string reason_code = 3; optional string evidence_id = 4; }
+service ProviderInboxService {
+ rpc ObserveProviderWebhook(ObserveProviderWebhookRequest) returns (ProviderInboxReceipt);
+ rpc RegisterProviderPayment(RegisterProviderPaymentRequest) returns (google.protobuf.Empty);
+ rpc ProcessProviderWebhook(ProcessProviderWebhookRequest) returns (ProviderInboxReceipt);
+}

@@ -26,3 +26,13 @@ management:
       probes:
         enabled: true
       show-details: never
+
+taska:
+  billing:
+    ingress:
+      enabled: ${TASKA_BILLING_INBOX_ENABLED:false}
+      payload-key-id: ${TASKA_BILLING_INBOX_PAYLOAD_KEY_ID:}
+      payload-keys: ${TASKA_BILLING_INBOX_PAYLOAD_KEYS:}
+      service-generation: ${TASKA_BILLING_INBOX_SERVICE_GENERATION:}
+      max-body-bytes: ${TASKA_BILLING_INBOX_MAX_BODY_BYTES:65536}
+      max-deliveries-per-minute: ${TASKA_BILLING_INBOX_MAX_DELIVERIES_PER_MINUTE:120}
