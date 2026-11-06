@@ -201,7 +201,7 @@
             },
             "issues" : {
               "type" : "array",
-              "description" : "Порядок createdAt asc, id asc независимо от типа.",
+              "description" : "Порядок updatedAt desc, id desc для колонки категории DONE; createdAt asc, id asc для остальных, независимо от типа.",
               "items" : {
                 "$ref" : "#/$defs/BoardIssueDto"
               }
