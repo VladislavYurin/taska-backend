@@ -50,3 +50,5 @@ python3 scripts/harness.py check --module billing-service
 [Commercial readiness](COMMERCIAL-READINESS.md) supplies the private versioned seller/market/Stripe/FX policy, exact EUR→USD invoice terms and a guard before provider invocation. Default live readiness is false; operator configuration, credential attestation and real FX/provider adapters remain required. Tenant-service owns policy history; billing-service owns immutable FX quotes.
 
 [Verified payment settlement TAS-352](SETTLEMENT.md): atomic invoice/ledger/coverage and protected Root activation contracts.
+
+[PaymentProvider и управляемый fake — TAS-320](PAYMENT-PROVIDER.md).

@@ -1087,7 +1087,9 @@
           "InvoiceIntegrationTest",
           "FinancialLedgerIntegrationTest",
           "PaymentSettlementIntegrationTest",
-          "CommercialReadinessIntegrationTest"
+          "CommercialReadinessIntegrationTest",
+          "FakePaymentProviderTest",
+          "FakePaymentProviderConcurrencyTest"
         ],
         "noTestsReason": null
       },

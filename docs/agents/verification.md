@@ -207,3 +207,5 @@ selection fences, closed creation and revoked coverage. `TenantProvisioningRpcIn
 also covers the production settlement/Root decision chain over mTLS and separate owner databases.
 See [settlement contracts and activation](../../billing-service/SETTLEMENT.md). The producer is
 explicitly synthetic in this suite; external PSP/bank/public REST acceptance is separate.
+
+TAS-320: billing-service.verify additionally requires FakePaymentProviderTest and FakePaymentProviderConcurrencyTest. These are isolated port/fake contract checks, not external PSP E2E. [Provider contract](../../billing-service/PAYMENT-PROVIDER.md).
