@@ -4237,6 +4237,12 @@ components:
         creationDeadline:
           type: string
           format: date-time
+        creationClosureReason:
+          type: string
+          enum: [AUTO_EXPIRED, OWNER_CANCELLED]
+        creationClosedAt:
+          type: string
+          format: date-time
         version:
           type: string
           minLength: 1
@@ -5454,6 +5460,9 @@ components:
       type: object
       additionalProperties: false
       properties:
+        kind:
+          type: string
+          enum: [FREE, PAID]
         id:
           type: string
           format: uuid
@@ -5499,6 +5508,7 @@ components:
           type: string
           format: date-time
       required:
+      - kind
       - id
       - code
       - version
@@ -5527,6 +5537,9 @@ components:
       type: object
       additionalProperties: false
       properties:
+        kind:
+          type: string
+          enum: [FREE, PAID]
         code:
           type: string
           minLength: 1
@@ -5555,6 +5568,7 @@ components:
             maxLength: 80
           maxItems: 100
       required:
+      - kind
       - code
       - name
       - price
@@ -5590,6 +5604,7 @@ components:
           type: string
           format: uuid
         paidThrough:
+          description: Exclusive end instant of current paid coverage. Absent for FREE and before first payment. Expired history may retain a past end; presence alone grants no access.
           type: string
           format: date-time
         anchorDay:
@@ -6953,6 +6968,10 @@ components:
             minLength: 1
             maxLength: 80
           maxItems: 100
+        paidThrough:
+          type: string
+          format: date-time
+          description: Exclusive end of selected GRANTED paid coverage; may be in the past.
         issuedAt:
           type: string
           format: date-time
@@ -7067,10 +7086,30 @@ components:
           minLength: 1
           maxLength: 19
           pattern: ^(0|[1-9][0-9]{0,18})$
+        effectiveAt:
+          type: string
+          format: date-time
+        owner:
+          type: string
+          minLength: 1
+          maxLength: 100
+        defaultBooleanValue:
+          type: boolean
+        defaultIntegerValue:
+          type: string
+          pattern: ^[1-9][0-9]{0,18}$
+        minimumValue:
+          type: string
+          pattern: ^[1-9][0-9]{0,18}$
+        maximumValue:
+          type: string
+          pattern: ^[1-9][0-9]{0,18}$
       required:
       - key
       - type
       - version
+      - effectiveAt
+      - owner
       description: Exactly one value consistent with type. Registry is allowlisted; no arbitrary secret keys.
       oneOf:
       - properties:

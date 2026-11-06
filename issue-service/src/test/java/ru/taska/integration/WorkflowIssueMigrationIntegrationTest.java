@@ -56,8 +56,8 @@ class WorkflowIssueMigrationIntegrationTest extends AbstractIT {
         var other = issue(UUID.randomUUID(), IssueType.TASK, 4);
         var deleted = issue(project, IssueType.TASK, 5);
         db.sql("UPDATE taska.issues SET deleted_at=now() WHERE id=:id").bind("id", deleted.getId()).fetch().rowsUpdated().block();
-        assertThat(service.migrate(project, actor, workflow, List.of("TASK"), List.of("TODO", "DONE"),
-                Map.of("REVIEW", "DONE"), "r", "n").block()).isEqualTo(2);
+        assertThat(withTenant(service.migrate(project, actor, workflow, List.of("TASK"), List.of("TODO", "DONE"),
+                Map.of("REVIEW", "DONE"), "r", "n")).block()).isEqualTo(2);
         for (var changed : List.of(one, two)) {
             assertThat(repository.findById(changed.getId()).block().getStatusKey()).isEqualTo("DONE");
             assertThat(count("issue_history", "issue_id", changed.getId())).isEqualTo(1);
@@ -66,8 +66,8 @@ class WorkflowIssueMigrationIntegrationTest extends AbstractIT {
         for (var untouched : List.of(bug, other, deleted)) {
             assertThat(repository.findById(untouched.getId()).block().getStatusKey()).isEqualTo("REVIEW");
         }
-        assertThat(service.migrate(project, actor, workflow, List.of("TASK"), List.of("TODO", "DONE"),
-                Map.of("REVIEW", "DONE"), "retry", "n").block()).isZero();
+        assertThat(withTenant(service.migrate(project, actor, workflow, List.of("TASK"), List.of("TODO", "DONE"),
+                Map.of("REVIEW", "DONE"), "retry", "n")).block()).isZero();
         assertThat(count("issue_history", "issue_id", one.getId())).isEqualTo(1);
     }
 
@@ -75,7 +75,7 @@ class WorkflowIssueMigrationIntegrationTest extends AbstractIT {
     void missingMappingReturnsCountWithoutChangingAnyIssue() {
         var one = issue(project, IssueType.TASK, 1);
         issue(project, IssueType.TASK, 2);
-        StepVerifier.create(service.migrate(project, actor, workflow, List.of("TASK"), List.of("TODO", "DONE"), Map.of(), "r", "n"))
+        StepVerifier.create(withTenant(service.migrate(project, actor, workflow, List.of("TASK"), List.of("TODO", "DONE"), Map.of(), "r", "n")))
                 .expectErrorSatisfies(error -> {
                     assertThat(((DomainException) error).getStatus()).isEqualTo(DomainStatus.FAILED_PRECONDITION);
                     assertThat(((DomainException) error).getDetails()).containsEntry("reason", "WORKFLOW_ISSUES_UNMAPPED")
@@ -91,8 +91,8 @@ class WorkflowIssueMigrationIntegrationTest extends AbstractIT {
         db.sql("ALTER TABLE taska.outbox_events ADD CONSTRAINT workflow_migration_test_check CHECK (aggregate_id <> '" + one.getId() + "'::uuid)")
                 .fetch().rowsUpdated().block();
         try {
-            StepVerifier.create(service.migrate(project, actor, workflow, List.of("TASK"), List.of("TODO", "DONE"),
-                            Map.of("REVIEW", "DONE"), "r", "n"))
+            StepVerifier.create(withTenant(service.migrate(project, actor, workflow, List.of("TASK"), List.of("TODO", "DONE"),
+                            Map.of("REVIEW", "DONE"), "r", "n")))
                     .expectError(org.springframework.dao.DataIntegrityViolationException.class).verify();
             assertThat(repository.findById(one.getId()).block().getStatusKey()).isEqualTo("REVIEW");
             assertThat(count("issue_history", "issue_id", one.getId())).isZero();
@@ -107,7 +107,7 @@ class WorkflowIssueMigrationIntegrationTest extends AbstractIT {
         when(projects.checkProjectRole(any(), any(), any(), any())).thenReturn(Mono.just(
                 CheckProjectMemberRoleResponse.newBuilder().setProjectExists(true).setIsMember(true)
                         .setRole(ProjectRole.PROJECT_ROLE_MEMBER).build()));
-        StepVerifier.create(service.migrate(project, actor, workflow, List.of("TASK"), List.of("TODO"), Map.of(), "r", "n"))
+        StepVerifier.create(withTenant(service.migrate(project, actor, workflow, List.of("TASK"), List.of("TODO"), Map.of(), "r", "n")))
                 .expectErrorSatisfies(e -> assertThat(((DomainException) e).getStatus()).isEqualTo(DomainStatus.PERMISSION_DENIED)).verify();
     }
 
@@ -117,8 +117,8 @@ class WorkflowIssueMigrationIntegrationTest extends AbstractIT {
         when(projects.checkProjectRole(any(), any(), any(), any())).thenReturn(Mono.just(
                 CheckProjectMemberRoleResponse.newBuilder().setProjectExists(true).setIsMember(true)
                         .setRole(ProjectRole.PROJECT_ROLE_ADMIN).setProjectArchived(true).build()));
-        StepVerifier.create(service.migrate(project, actor, workflow, List.of("TASK"), List.of("TODO", "DONE"),
-                        Map.of("REVIEW", "DONE"), "r", "n"))
+        StepVerifier.create(withTenant(service.migrate(project, actor, workflow, List.of("TASK"), List.of("TODO", "DONE"),
+                        Map.of("REVIEW", "DONE"), "r", "n")))
                 .expectErrorSatisfies(e -> {
                     var error = (DomainException) e;
                     assertThat(error.getStatus()).isEqualTo(DomainStatus.FAILED_PRECONDITION);
@@ -134,8 +134,8 @@ class WorkflowIssueMigrationIntegrationTest extends AbstractIT {
         when(projects.checkProjectRole(any(), any(), any(), any())).thenReturn(Mono.just(
                 CheckProjectMemberRoleResponse.newBuilder().setProjectExists(true).setIsMember(true)
                         .setRole(ProjectRole.PROJECT_ROLE_ADMIN).build()));
-        StepVerifier.create(service.migrate(project, actor, workflow, List.of("TASK"), List.of("TODO", "DONE"),
-                        Map.of("REVIEW", "DONE"), "r", "n"))
+        StepVerifier.create(withTenant(service.migrate(project, actor, workflow, List.of("TASK"), List.of("TODO", "DONE"),
+                        Map.of("REVIEW", "DONE"), "r", "n")))
                 .expectErrorSatisfies(e -> assertThat(((DomainException) e).getStatus()).isEqualTo(DomainStatus.UNAVAILABLE))
                 .verify();
     }
@@ -143,8 +143,8 @@ class WorkflowIssueMigrationIntegrationTest extends AbstractIT {
     @Test
     void emptyMappingTargetIsInvalidAndDoesNotChangeIssue() {
         var one = issue(project, IssueType.TASK, 1);
-        StepVerifier.create(service.migrate(project, actor, workflow, List.of("TASK"), List.of("TODO", "DONE"),
-                        Map.of("REVIEW", ""), "r", "n"))
+        StepVerifier.create(withTenant(service.migrate(project, actor, workflow, List.of("TASK"), List.of("TODO", "DONE"),
+                        Map.of("REVIEW", ""), "r", "n")))
                 .expectErrorSatisfies(e -> assertThat(((DomainException) e).getStatus()).isEqualTo(DomainStatus.INVALID_ARGUMENT))
                 .verify();
         assertThat(repository.findById(one.getId()).block().getStatusKey()).isEqualTo("REVIEW");
@@ -156,13 +156,13 @@ class WorkflowIssueMigrationIntegrationTest extends AbstractIT {
         var selected = issue(project, IssueType.TASK, 1);
         var legacy = issue(project, IssueType.TASK, 2);
         db.sql("UPDATE taska.issues SET status_key='LEGACY' WHERE id=:id").bind("id", legacy.getId()).then().block();
-        StepVerifier.create(service.migrate(project, actor, workflow, List.of("TASK"), List.of("TODO", "DONE"),
-                        Map.of(), List.of("REVIEW"), "r", "n"))
+        StepVerifier.create(withTenant(service.migrate(project, actor, workflow, List.of("TASK"), List.of("TODO", "DONE"),
+                        Map.of(), List.of("REVIEW"), "r", "n")))
                 .expectErrorSatisfies(error -> assertThat(((DomainException) error).getDetails())
                         .containsExactlyInAnyOrderEntriesOf(Map.of("reason", "WORKFLOW_ISSUES_UNMAPPED", "issueCount", "1", "statusKeys", "REVIEW")))
                 .verify();
-        assertThat(service.migrate(project, actor, workflow, List.of("TASK"), List.of("TODO", "DONE"),
-                Map.of("REVIEW", "DONE"), List.of("REVIEW"), "r", "n").block()).isEqualTo(1);
+        assertThat(withTenant(service.migrate(project, actor, workflow, List.of("TASK"), List.of("TODO", "DONE"),
+                Map.of("REVIEW", "DONE"), List.of("REVIEW"), "r", "n")).block()).isEqualTo(1);
         assertThat(repository.findById(selected.getId()).block().getStatusKey()).isEqualTo("DONE");
         assertThat(repository.findById(legacy.getId()).block().getStatusKey()).isEqualTo("LEGACY");
         assertThat(count("issue_history", "issue_id", legacy.getId())).isZero();
@@ -172,12 +172,12 @@ class WorkflowIssueMigrationIntegrationTest extends AbstractIT {
     @Test
     void concurrentScopedMigrationsDoNotDuplicateEvents() {
         var selected = issue(project, IssueType.TASK, 1);
-        var outcomes = reactor.core.publisher.Flux.merge(
+        var outcomes = withTenant(reactor.core.publisher.Flux.merge(
                 service.migrate(project, actor, workflow, List.of("TASK"), List.of("TODO", "DONE"),
                         Map.of("REVIEW", "DONE"), List.of("REVIEW"), "first", "n"),
                 service.migrate(project, actor, workflow, List.of("TASK"), List.of("TODO", "DONE"),
                         Map.of("REVIEW", "DONE"), List.of("REVIEW"), "second", "n"))
-                .collectList().block();
+                .collectList()).block();
         assertThat(outcomes).containsExactlyInAnyOrder(1L, 0L);
         assertThat(repository.findById(selected.getId()).block().getStatusKey()).isEqualTo("DONE");
         assertThat(count("issue_history", "issue_id", selected.getId())).isEqualTo(1);
@@ -191,8 +191,8 @@ class WorkflowIssueMigrationIntegrationTest extends AbstractIT {
                 SELECT :project, n, 'LIMIT-' || gen_random_uuid(), 'TASK', 'Limit', 'REVIEW', 'MEDIUM', :actor
                 FROM generate_series(1,5001) n
                 """).bind("project", project).bind("actor", actor).then().block();
-        StepVerifier.create(service.migrate(project, actor, workflow, List.of("TASK"), List.of("TODO", "DONE"),
-                        Map.of("REVIEW", "DONE"), List.of("REVIEW"), "r", "n"))
+        StepVerifier.create(withTenant(service.migrate(project, actor, workflow, List.of("TASK"), List.of("TODO", "DONE"),
+                        Map.of("REVIEW", "DONE"), List.of("REVIEW"), "r", "n")))
                 .expectErrorSatisfies(error -> {
                     assertThat(((DomainException) error).getStatus()).isEqualTo(DomainStatus.FAILED_PRECONDITION);
                     assertThat(((DomainException) error).getDetails()).containsExactlyInAnyOrderEntriesOf(
@@ -213,8 +213,8 @@ class WorkflowIssueMigrationIntegrationTest extends AbstractIT {
         db.sql("UPDATE taska.issues SET status_key='OLD_ORPHAN' WHERE id=:id").bind("id", untouched.getId()).then().block();
         var sources = List.of("TODO", "REVIEW", "DONE", "EXPLICIT_OLD");
         var mapping = Map.of("REVIEW", "DONE", "EXPLICIT_OLD", "TODO");
-        assertThat(service.migrate(project, actor, workflow, List.of("TASK"), List.of("TODO", "DONE"), mapping, sources, "r", "n").block()).isEqualTo(2);
-        assertThat(service.migrate(project, actor, workflow, List.of("TASK"), List.of("TODO", "DONE"), mapping, sources, "retry", "n").block()).isZero();
+        assertThat(withTenant(service.migrate(project, actor, workflow, List.of("TASK"), List.of("TODO", "DONE"), mapping, sources, "r", "n")).block()).isEqualTo(2);
+        assertThat(withTenant(service.migrate(project, actor, workflow, List.of("TASK"), List.of("TODO", "DONE"), mapping, sources, "retry", "n")).block()).isZero();
         assertThat(repository.findById(own.getId()).block().getStatusKey()).isEqualTo("DONE");
         assertThat(repository.findById(explicit.getId()).block().getStatusKey()).isEqualTo("TODO");
         assertThat(repository.findById(untouched.getId()).block().getStatusKey()).isEqualTo("OLD_ORPHAN");
@@ -235,8 +235,8 @@ class WorkflowIssueMigrationIntegrationTest extends AbstractIT {
                     CASE WHEN n%2=0 THEN 'TODO' ELSE 'OLD_ORPHAN' END, 'MEDIUM', :actor
                 FROM generate_series(2,10003) n
                 """).bind("project", project).bind("actor", actor).then().block();
-        assertThat(service.migrate(project, actor, workflow, List.of("TASK"), List.of("TODO", "DONE"),
-                Map.of("REVIEW", "DONE"), List.of("TODO", "REVIEW", "DONE"), "r", "n").block()).isEqualTo(1);
+        assertThat(withTenant(service.migrate(project, actor, workflow, List.of("TASK"), List.of("TODO", "DONE"),
+                Map.of("REVIEW", "DONE"), List.of("TODO", "REVIEW", "DONE"), "r", "n")).block()).isEqualTo(1);
         assertThat(repository.findById(one.getId()).block().getStatusKey()).isEqualTo("DONE");
         assertThat(db.sql("SELECT count(*) FROM taska.issues WHERE project_id=:id AND status_key IN ('TODO','OLD_ORPHAN') AND version=1")
                 .bind("id", project).map(row -> row.get(0, Long.class)).one().block()).isEqualTo(10002);

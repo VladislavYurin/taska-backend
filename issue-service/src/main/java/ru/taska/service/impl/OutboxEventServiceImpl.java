@@ -10,6 +10,7 @@ import ru.taska.domain.entity.OutboxEvent;
 import ru.taska.event.AggregateType;
 import ru.taska.event.EventType;
 import ru.taska.repository.OutboxEventRepository;
+import ru.taska.security.tenant.VerifiedTenantContext;
 import ru.taska.service.OutboxEventService;
 import ru.taska.util.PayloadSerializer;
 import tools.jackson.databind.JsonNode;
@@ -28,13 +29,13 @@ public class OutboxEventServiceImpl implements OutboxEventService {
     @Transactional
     public Mono<OutboxEvent> saveOutboxEvent(String requestId, String nodeId, AggregateType aggregateType, Issue issue) {
         return Mono.deferContextual(context -> outboxEventRepository.save(
-                OutboxEvent.builder()
+                withTenant(OutboxEvent.builder()
                         .aggregateType(aggregateType.getValue())
                         .aggregateId(issue.getId())
                         .eventType(EventType.ISSUE_CREATED.getValue())
                         .payload(withChannel(payloadSerializer.createIssueCreatedPayload(issue), context))
                         .requestId(requestId)
-                        .build()));
+                        .build(), context)));
     }
 
     @Override
@@ -48,13 +49,19 @@ public class OutboxEventServiceImpl implements OutboxEventService {
             JsonNode payload
     ) {
         return Mono.deferContextual(context -> outboxEventRepository.save(
-                OutboxEvent.builder()
+                withTenant(OutboxEvent.builder()
                         .aggregateType(aggregateType.getValue())
                         .aggregateId(aggregateId)
                         .eventType(type.getValue())
                         .payload(withChannel(payload, context))
                         .requestId(requestId)
-                        .build()));
+                        .build(), context)));
+    }
+
+    private OutboxEvent withTenant(OutboxEvent event, reactor.util.context.ContextView context) {
+        var verified = VerifiedTenantContext.require(context);
+        event.setTenantId(UUID.fromString(verified.tenantId()));
+        return event;
     }
     private JsonNode withChannel(JsonNode payload, reactor.util.context.ContextView context) {
         var channel = ru.taska.domain.ActionMetadata.current(context).channel();

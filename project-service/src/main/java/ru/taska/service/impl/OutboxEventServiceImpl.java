@@ -18,6 +18,7 @@ import ru.taska.event.payload.projectService.ProjectCreatedPayload;
 import ru.taska.event.payload.projectService.ProjectUpdatedPayload;
 import ru.taska.repository.OutboxEventRepository;
 import ru.taska.repository.ProjectRepository;
+import ru.taska.security.tenant.VerifiedTenantContext;
 import ru.taska.service.OutboxEventService;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -52,7 +53,7 @@ public class OutboxEventServiceImpl implements OutboxEventService {
 
         log.debug("[{}][{}] Подготовка outbox-события [ {} ] для проекта [ ID = {} ]",
                 requestId, nodeId, EventType.PROJECT_CREATED, project.getId());
-        return outboxEventRepository.save(event);
+        return save(event);
     }
 
     @Override
@@ -116,7 +117,7 @@ public class OutboxEventServiceImpl implements OutboxEventService {
 
         log.debug("[{}][{}] Подготовка outbox-события [ {} ] для проекта [ ID = {} ]",
                 requestId, nodeId, EventType.PROJECT_UPDATED, project.getId());
-        return outboxEventRepository.save(event);
+        return save(event);
     }
 
     private Mono<OutboxEvent> saveMemberEvent(OutboxEvent event, java.util.function.Function<String, JsonNode> payload) {
@@ -125,8 +126,16 @@ public class OutboxEventServiceImpl implements OutboxEventService {
                 .defaultIfEmpty("")
                 .flatMap(key -> {
                     event.setPayload(payload.apply(key));
-                    return outboxEventRepository.save(event);
+                    return save(event);
                 });
+    }
+
+    private Mono<OutboxEvent> save(OutboxEvent event) {
+        return Mono.deferContextual(context -> {
+            var verified = VerifiedTenantContext.require(context);
+            event.setTenantId(UUID.fromString(verified.tenantId()));
+            return outboxEventRepository.save(event);
+        });
     }
 
     private JsonNode projectUpdatePayload(Project project , UUID actorUserId){

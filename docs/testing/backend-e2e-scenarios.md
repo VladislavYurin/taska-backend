@@ -282,11 +282,13 @@
 **Условия:** не менее трёх задач в одной колонке, задачи типа со своим графом и DONE category под нестандартным ключом.
 
 1. `GET /api/v1/projects/{P}/board?pageSizePerColumn=1`: 200, колонки по эффективным workflow реестра, первая карточка/totalCount/hasMore каждой колонки согласованы. Метки и профиль исполнителя согласованы с карточкой; planning и timeSpentMinutes не требовать от BoardIssueDto, если эти поля не предусмотрены его схемой.
-2. `GET /api/v1/projects/{P}/board/columns/{statusKey}/issues?pageSize=1`: 200, порядок createdAt asc,id asc. Продолжать с afterCreatedAt/afterId **одной последней карточки** и теми же фильтрами до пустой страницы: без повторов/пропусков стабильной выборки, totalCount полный независимо от cursor.
+2. `GET /api/v1/projects/{P}/board/columns/{statusKey}/issues?pageSize=1`: 200, для TODO/IN_PROGRESS порядок createdAt asc,id asc и cursor afterCreatedAt/afterId; для DONE — updatedAt desc,id desc и afterUpdatedAt/afterId. Продолжать с cursor **одной последней карточки** и теми же фильтрами до пустой страницы: без повторов/пропусков стабильной выборки, totalCount полный независимо от cursor. Повторить на 150 собственных DONE-карточках с различными createdAt/updatedAt и совпадающими updatedAt: первые 50 наиболее свежие, остальные возвращаются без повторов.
 3. Повторить при issueType, assigneeId, labelId, includeDone, priority, query. includeDone=false исключает все ключи категории DONE, а не только литерал DONE; true возвращает их.
 4. Неизвестный/невалидный issueType даёт пустую доску; неизвестный statusKey колонки — пустую страницу после проверки ACL. Одна половина cursor, неверная дата/UUID или pageSize вне 1..200 — 400.
 5. Удалить карточку, на которую указывает cursor, и продолжить: cursor остаётся пригодным. Вставка после cursor видна в продолжении; вставка до него — после обновления доски. Это чтение текущих данных, не snapshot между запросами.
 6. В legacy фикстуре задачи со статусом вне workflow **своего** типа находятся в unplacedIssues, не попадают в одноимённую колонку другого типа и не выдаются через column endpoint. Для проверки не портить общий стенд прямой записью БД.
+7. Передать одинаковый `doneSince` (например, 14 дней назад) обоим GET: у DONE остаются только updatedAt не раньше границы, включая равенство; totalCount/hasMore вычислены после фильтра. Без doneSince старые DONE возвращаются. Активные статусы и unplaced не меняются; нестандартный DONE-ключ фильтруется, буквальный DONE категории IN_PROGRESS — нет. При общем ключе разных категорий порядок колонки задаёт первый тип реестра, фильтры применяются по workflow каждой задачи.
+8. Для DONE передать afterCreatedAt, для активной колонки afterUpdatedAt, затем обе даты или только одну половину cursor: 400. Некорректный doneSince — 400. Повторить без прав на P: данные и счётчики не раскрываются.
 
 **Очистка:** удалить добавленные задачи, не удалять чужие курсорные объекты.
 
@@ -551,7 +553,7 @@
 
 ## E2E-38. Курсор с удалённым anchor и крайние страницы
 
-**Условия:** три собственные задачи одного status/type/priority, других подходящих строк в P нет. Порядок колонки — createdAt ASC, id ASC; cursor — позиция пары afterCreatedAt/afterId, не ссылка, требующая существования anchor.
+**Условия:** три собственные задачи одного status/type/priority в TODO/IN_PROGRESS, других подходящих строк в P нет. Порядок колонки — createdAt ASC, id ASC; cursor — позиция пары afterCreatedAt/afterId, не ссылка, требующая существования anchor. Повторить сценарий для DONE с updatedAt DESC, id DESC и afterUpdatedAt/afterId.
 
 1. Прочитать колонку с `pageSize=1`: одна задача, totalCount=3, hasMore=true. Сохранить её cursor и удалить именно эту задачу.
 2. Продолжить чтение со старой пары cursor: 200, обе оставшиеся задачи возвращены по одному разу. totalCount=2 на каждой странице, независимо от pageSize и cursor; удалённый anchor не появляется, сервер не требует его существования для позиционной выборки.
@@ -629,6 +631,17 @@
 5. Внешний журнал отличает ожидаемый 429 от дефекта приложения и от неполной подготовки тестовых данных. Не выдавать rate-limited попытку за успешную подготовку последующего сценария.
 
 **Очистка:** отозвать только PAT RUN; не трогать чужие активные токены. Оставшееся время ограничения общего тестового аккаунта указать во внешнем журнале.
+
+## E2E-45. Возобновляемое создание компании (TAS-337)
+
+Локальный service-path tier: `TenantProvisioningRpcIntegrationTest` (входит в `tenant-service.verify`). Реальные production gRPC handlers, mTLS/JWS и отдельные PostgreSQL БД tenant/billing/workflow; свои Testcontainers fixtures и cleanup в finally/AfterAll. Общий harness HTTP runner этот сценарий не выбирает.
+
+1. Создать FREE и paid через подписанный CreateTenant; неподписанный и подменённый payload получают отказ без нового tenant.
+2. Потерять ответ после успешной записи workflow, затем billing; запустить worker повторно по сохранённой операции.
+3. Прочитать GetTenantOperation и повторить CreateTenant с исходным ключом: один tenant/membership/account/template, прежний operationId, фактический SUCCEEDED. FREE активна; paid ожидает первую оплату с прежним deadline, без paid periods и рабочих прав.
+4. Компонентный `TenantProvisioningIntegrationTest` дополнительно проверяет чужого actor/tenant/PAT, RLS, истечение lease/устаревший fence и rollback activation+operation+outbox.
+
+Граница: это проверка внутреннего service path. Публичный HTTP/session flow, живой PSP и deployment стенда проверяются отдельно после подключения соответствующих adapters; их отсутствие не объявляется успешным E2E.
 
 ## Как фиксировать расхождение
 
@@ -751,3 +764,16 @@
 | `DELETE /api/v1/projects/{projectId}/workflows/{workflowId}/statuses/{statusId}` | `deleteWorkflowStatus` | E2E-12 | 200 |
 | `PATCH /api/v1/projects/{projectId}/workflows/{workflowId}/transitions/{transitionId}` | `updateWorkflowTransition` | E2E-10 | 200 |
 | `DELETE /api/v1/projects/{projectId}/workflows/{workflowId}/transitions/{transitionId}` | `deleteWorkflowTransition` | E2E-10 | 200 |
+
+
+## E2E-46. Отмена и deadline неоплаченного создания (TAS-478)
+
+Локальный service-path tier: `TenantProvisioningRpcIntegrationTest` и компонентный `TenantCreationLifecycleIntegrationTest`, обязательные в `tenant-service.verify`. Реальные production RPC, mTLS/JWS, Spring scheduler и собственные PostgreSQL/Testcontainers; финансовая authority — fake immutable decisions, не реальный settlement. Общий HTTP runner этот сценарий не выбирает.
+
+1. Создать PAID, дождаться provisioning, приблизить управляемые lifecycle-часы к исходному deadline; настоящий scheduler закрывает её с причиной `AUTO_EXPIRED`. Повтор signed expiry не создаёт новый эффект; неподписанный запрос отклоняется.
+2. Передать полное своевременное primary financial decision с committed coverage: позднее подтверждение открывает AUTO_CLOSED. Partial/late/DAY-overlap/no-coverage не открывают. До готовности подготовки оплата только фиксируется; activation происходит после обоих checkpoints.
+3. Отменить другую неоплаченную PAID владельцем через signed RPC с confirmation/version/key. Поздняя оплата, retry и stale worker не снимают `OWNER_CANCELLED`; подпись связывает payload.
+4. Проверить отсутствие изменений FREE/renewal/DELETING/DELETED/другой компании, сохранение membership и финансовых периодов; concurrent expiry/cancel/payment, RLS и rollback lifecycle+receipt+outbox — компонентные PostgreSQL assertions.
+5. Рабочее чтение до оплаты даёт `PAYMENT_PENDING` / `PENDING_FIRST_PAYMENT`; PROVISIONING — `INVALID_STATE`; metadata и cancel доступны. Проверено в `TenantMembershipIntegrationTest`.
+
+Cleanup: закрыть каналы/серверы/pools и удалить собственные контейнеры в `AfterAll`. Общий стенд, PSP, refunds и retention не затрагиваются. Контракт и границы: [creation closure](../../tenant-service/CREATION-CLOSURE.md).

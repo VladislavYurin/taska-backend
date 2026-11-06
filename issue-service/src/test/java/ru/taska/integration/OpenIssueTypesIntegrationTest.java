@@ -108,20 +108,20 @@ class OpenIssueTypesIntegrationTest extends AbstractIT {
     @Test
     void typePatchChecksRegistryAndWorkflowAndRecordsTypeOnlyChange() {
         Issue created = create(REQUEST, UUID.randomUUID().toString()).block();
-        StepVerifier.create(patches.patchIssue("r", "n", created.getId(), actor, created.getVersion(), patch(IssueType.valueOf("NOPE"))))
+        StepVerifier.create(withTenant(patches.patchIssue("r", "n", created.getId(), actor, created.getVersion(), patch(IssueType.valueOf("NOPE")))))
                 .expectErrorSatisfies(e -> assertThat(((DomainException) e).getStatus()).isEqualTo(DomainStatus.INVALID_ARGUMENT)).verify();
         when(workflows.requireStatusForType(any(), any(), any(), any())).thenReturn(Mono.error(
                 new DomainException(DomainStatus.FAILED_PRECONDITION, "Current status is not available for the target issue type")));
-        StepVerifier.create(patches.patchIssue("r", "n", created.getId(), actor, created.getVersion(), patch(IssueType.BUG)))
+        StepVerifier.create(withTenant(patches.patchIssue("r", "n", created.getId(), actor, created.getVersion(), patch(IssueType.BUG))))
                 .expectError(DomainException.class).verify();
         assertThat(repository.findById(created.getId()).block().getIssueType()).isEqualTo(REQUEST);
         when(workflows.requireStatusForType(any(), any(), any(), any())).thenReturn(Mono.empty());
-        var changed = patches.patchIssue("r", "n", created.getId(), actor, created.getVersion(), patch(IssueType.BUG)).block();
+        var changed = withTenant(patches.patchIssue("r", "n", created.getId(), actor, created.getVersion(), patch(IssueType.BUG))).block();
         assertThat(changed.issue().getIssueType()).isEqualTo(IssueType.BUG);
         assertThat(changed.issue().getVersion()).isEqualTo(created.getVersion() + 1);
         assertThat(jsonValue("issue_history", "issue_id", created.getId(), "newIssueType")).isEqualTo("BUG");
         assertThat(jsonValue("outbox_events", "aggregate_id", created.getId(), "oldIssueType")).isEqualTo("REQUEST");
-        var restored = patches.patchIssue("r", "n", created.getId(), actor, changed.issue().getVersion(), patch(REQUEST)).block();
+        var restored = withTenant(patches.patchIssue("r", "n", created.getId(), actor, changed.issue().getVersion(), patch(REQUEST))).block();
         assertThat(repository.findById(restored.issue().getId()).block().getIssueType()).isEqualTo(REQUEST);
     }
 
@@ -131,7 +131,7 @@ class OpenIssueTypesIntegrationTest extends AbstractIT {
         db.sql("ALTER TABLE taska.outbox_events ADD CONSTRAINT type_patch_test CHECK (payload->>'newIssueType' IS NULL)")
                 .fetch().rowsUpdated().block();
         try {
-            StepVerifier.create(patches.patchIssue("r", "n", created.getId(), actor, created.getVersion(), patch(IssueType.BUG)))
+            StepVerifier.create(withTenant(patches.patchIssue("r", "n", created.getId(), actor, created.getVersion(), patch(IssueType.BUG))))
                     .expectError(org.springframework.dao.DataIntegrityViolationException.class).verify();
             assertThat(repository.findById(created.getId()).block().getIssueType()).isEqualTo(REQUEST);
             assertThat(jsonValue("issue_history", "issue_id", created.getId(), "newIssueType")).isNull();
@@ -154,8 +154,8 @@ class OpenIssueTypesIntegrationTest extends AbstractIT {
     }
 
     private Mono<Issue> create(IssueType type, String key) {
-        return issues.createIssue("r", "n", key, project, type, "Business request", "", IssuePriority.MEDIUM,
-                actor, null, null, null, null, null);
+        return withTenant(issues.createIssue("r", "n", key, project, type, "Business request", "", IssuePriority.MEDIUM,
+                actor, null, null, null, null, null));
     }
 
     private IssuePatch patch(IssueType type) {

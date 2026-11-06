@@ -3796,5 +3796,18 @@
     "failClosed": "DEPENDENCY_UNAVAILABLE/503; POLICY_NOT_CONFIGURED/503",
     "concealment": "RESOURCE_NOT_FOUND/404 for cross-scope resource"
   },
-  "channelColumnNote": "WEB/MCP/SERVICE_WORKER are policy presentation families; wire credential_kind values are in credentialKinds and contracts/b2b.proto."
+  "channelColumnNote": "WEB/MCP/SERVICE_WORKER are policy presentation families; wire credential_kind values are in credentialKinds and contracts/b2b.proto.",
+  "runtimeEvaluator": {
+    "task": "TAS-360",
+    "module": "grpc-common-lib",
+    "actions": "src/main/java/ru/taska/capability/Action.java",
+    "rules": "src/main/resources/capability/actions.json",
+    "status": "CORE_IMPLEMENTED_DOMAIN_ADAPTERS_PENDING",
+    "integrationTasks": [
+      "TAS-491",
+      "TAS-493",
+      "TAS-495",
+      "TAS-463"
+    ]
+  }
 }

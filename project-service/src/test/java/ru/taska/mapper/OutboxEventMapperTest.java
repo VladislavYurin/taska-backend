@@ -20,6 +20,7 @@ class OutboxEventMapperTest {
     private OutboxEvent event(String eventType, String aggregateType, UUID aggregateId, JsonNode payload) {
         return OutboxEvent.builder()
                           .id(UUID.randomUUID())
+                          .tenantId(UUID.randomUUID())
                           .aggregateType(aggregateType)
                           .aggregateId(aggregateId)
                           .eventType(eventType)

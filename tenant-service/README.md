@@ -33,7 +33,7 @@ Create принимает только проверенный контекст `
 
 В tenant row сохраняются immutable `creation_actor_id`, `creation_request_hash` (SHA-256 canonical JSON name/planVersionId/operationId), `creation_operation_id`, `plan_version_id`, kind и deadline. `INSERT ON CONFLICT` сериализует параллельные попытки: разные payload с тем же ключом дают IDEMPOTENCY_CONFLICT, один payload возвращает один tenant/operation. Replay проверяет текущую ACTIVE membership, работает при retirement/недоступности каталога и после удаления response-cache. TTL idempotency cache24h не удаляет durable creation facts; их purge должен учитывать доменный dedupe в TAS-520.
 
-В одной транзакции создаются tenant, ACTIVE/TENANT_ADMIN owner membership, outbox `TenantCreationRequested` и idempotency response. Циклический composite FK owner→membership проверяется на commit. Event содержит IDs/planVersion, не название компании или credentials. Publisher и возобновляемая saga — TAS-318/337. Операция возвращается PENDING: readiness/ACTIVE этим модулем не выставляется.
+В одной транзакции создаются tenant, ACTIVE/TENANT_ADMIN owner membership, outbox `TenantCreationRequested` и idempotency response. Циклический composite FK owner→membership проверяется на commit. Event содержит IDs/planVersion, не название компании или credentials. Kafka publisher — TAS-318; возобновляемая saga, durable worker и фактическое чтение операции реализованы TAS-337. Первый ответ возвращает PENDING; ACTIVE выставляется только после готовности обязательных шагов.
 
 Paid начинается AWAITING_PAYMENT с `creationDeadline=createdAt+30d`, `PENDING_FIRST_PAYMENT`, без покрытия/рабочих прав. FREE остаётся PROVISIONING после атомарного admission, без paid deadline. Retrying не продлевает deadline. Trigger запрещает изменение исходных creation facts даже прямым SQL. Get требует совпадение signed tenant и request tenant, action getTenant и ACTIVE membership; чужой/удалённый tenant скрывается как TENANT_NOT_FOUND. Это чтение metadata, оно не обходит ограничения рабочих операций. Административный bypass — отдельный доверенный путь TAS-346, обычный GLOBAL_ADMIN не даёт его автоматически.
 
@@ -64,3 +64,23 @@ python3 scripts/harness.py check --module tenant-service
 ```
 
 PostgreSQL16/Testcontainers, фактический Liquibase с deployer→migrator, app LOGIN и повтор применения changelog. Проверяются atomic create, конкурентный retry/conflict, immutable deadline, cache eviction и catalog retirement, независимые actors, FREE/paid separation, cancellation rollback, membership isolation, отсутствующая trust и запуск Spring Boot/HTTP health на чистой миграции. `RegistryTestContext` существует только в test sources; production не принимает body context за verified authority. Дополнительно сам registry adapter проверяется по настоящему loopback mTLS/JWS: create/get, payload tampering, replay и чужой actor; openssl создаёт временные credentials. Базовые security-инварианты повторяются grpc-common-lib suite. Runtime jar не содержит test helper. Планы и service repository контракты будущих сущностей проверяются задачами их реализации.
+
+## Platform configuration — TAS-462
+
+[Typed global business flags](PLATFORM-FLAGS.md) add protected ListPlatformFlags/UpdatePlatformFlag RPCs, immutable version/audit history, idempotent optimistic updates and transactional global events. Paid creation now snapshots its 30-day default from the DB registry; existing deadlines and retries retain their original value. Public capabilities and flag enforcement in other domains remain separate tasks.
+
+## Private merchant policy — TAS-519
+
+The [commercial configuration authority](../billing-service/COMMERCIAL-READINESS.md) adds protected Get/Publish/ResolveMerchantConfiguration RPCs and one private JSON policy in the platform registry. Scalar flag listing excludes this document. Administrative responses and version events contain metadata only; full configuration is restricted to the verified billing-service reader.
+
+## FREE eligibility — TAS-472
+
+[Atomic FREE eligibility](FREE-ELIGIBILITY.md) implements the creation admission and protected billing admission, WEB_GLOBAL creation options and internal lawful-disposition RPCs. Identity/KMS/purpose preparation happens outside SQL; the marker commits with creation or an admission receipt. Deletion minimization retains only purpose-bound matching data. Real primary providers, gateway and offboarding/plan orchestration remain separate activation dependencies.
+
+## Durable provisioning — TAS-337
+
+[Durable saga, operation lookup, recovery, protected RPCs and local service-path E2E](PROVISIONING.md). Registry creation now stores the actual operation and dispatch entry atomically; FREE activates only after workflow/billing preparation. Public gateway integration and deployment activation remain separate.
+
+[Atomic seat quotas and GetTenantQuotas](SEAT-QUOTAS.md) describe TAS-322 transactional primitives, authorization requirements and activation limits.
+
+[Storage reservations and primary manifests](STORAGE-QUOTAS.md) describe TAS-347 byte accounting, pinned S3 proof, bounded recovery and the TAS-365/TAS-367 integration boundaries.

@@ -3,15 +3,32 @@ package ru.taska.tenant;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
-import java.time.*;
-import java.util.*;
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.UUID;
+import java.util.function.Function;
 import org.springframework.r2dbc.core.DatabaseClient;
 import reactor.core.publisher.Mono;
-import ru.taska.api.b2b.v1.*;
-import ru.taska.exception.*;
+import ru.taska.api.b2b.v1.CreateTenantResponse;
+import ru.taska.api.b2b.v1.CreateTenantRpcRequest;
+import ru.taska.api.b2b.v1.GetTenantRpcRequest;
+import ru.taska.api.b2b.v1.Operation;
+import ru.taska.api.b2b.v1.RestrictionCode;
+import ru.taska.api.b2b.v1.Tenant;
+import ru.taska.exception.DomainException;
+import ru.taska.exception.DomainStatus;
 import ru.taska.r2dbc.TenantTransactionExecutor;
-import ru.taska.security.tenant.*;
-import ru.taska.tenant.RegistryDependencies.*;
+import ru.taska.security.tenant.TenantCreationTransaction;
+import ru.taska.security.tenant.VerifiedTenantContext;
+import ru.taska.tenant.RegistryDependencies.FreeAdmission;
+import ru.taska.tenant.RegistryDependencies.PublishedPlan;
+import ru.taska.tenant.RegistryDependencies.PublishedPlans;
 
 public final class TenantRegistryService {
   private final TenantTransactionExecutor transactions;
@@ -19,7 +36,7 @@ public final class TenantRegistryService {
   private final PublishedPlans plans;
   private final FreeAdmission free;
   private final Clock clock;
-  private final Duration window;
+  private final Function<DatabaseClient, Mono<Duration>> creationWindows;
 
   public TenantRegistryService(
       TenantTransactionExecutor transactions,
@@ -27,14 +44,23 @@ public final class TenantRegistryService {
       FreeAdmission free,
       Clock clock,
       Duration window) {
+    this(transactions, plans, free, clock, db -> Mono.just(window));
+    if (window.isNegative() || window.isZero())
+      throw new IllegalArgumentException("creation window must be positive");
+  }
+
+  public TenantRegistryService(
+      TenantTransactionExecutor transactions,
+      PublishedPlans plans,
+      FreeAdmission free,
+      Clock clock,
+      Function<DatabaseClient, Mono<Duration>> creationWindows) {
     this.transactions = transactions;
     this.creations = new TenantCreationTransaction(transactions);
     this.plans = plans;
     this.free = free;
     this.clock = clock;
-    this.window = window;
-    if (window.isNegative() || window.isZero())
-      throw new IllegalArgumentException("creation window must be positive");
+    this.creationWindows = creationWindows;
   }
 
   static DomainException fail(DomainStatus status, String code) {
@@ -81,9 +107,13 @@ public final class TenantRegistryService {
           uuid(key);
           if (name.isBlank()
               || !name.equals(name.strip())
-              || name.codePointCount(0, name.length()) > 128
-              || name.codePoints().anyMatch(Character::isISOControl)
-              || key.isBlank()
+              || name.codePointCount(0, name.length()) > 120
+              || name.codePoints().anyMatch(Character::isISOControl))
+            throw new DomainException(
+                DomainStatus.INVALID_ARGUMENT,
+                "VALIDATION_FAILED",
+                Map.of("code", "VALIDATION_FAILED", "field", "name", "reason", "INVALID_NAME"));
+          if (key.isBlank()
               || key.length() > 128
               || key.codePoints().anyMatch(c -> c < 33 || c > 126)
               || request.getMutation().hasExpectedVersion())
@@ -141,11 +171,17 @@ public final class TenantRegistryService {
                                                     fail(
                                                         DomainStatus.UNAVAILABLE,
                                                         "DEPENDENCY_UNAVAILABLE"));
-                                              return creations.execute(
-                                                  tenant,
-                                                  db ->
-                                                      insert(
-                                                          db, tenant, actor, name, key, hash, p));
+                                              return (p.free()
+                                                      ? free.prepare(actor)
+                                                      : Mono.just(free))
+                                                  .flatMap(
+                                                      admission ->
+                                                          creations.execute(
+                                                              tenant,
+                                                              db ->
+                                                                  insert(
+                                                                      db, tenant, actor, name, key,
+                                                                      hash, p, admission)));
                                             }));
                   });
         });
@@ -158,7 +194,24 @@ public final class TenantRegistryService {
       String name,
       String key,
       byte[] hash,
-      PublishedPlan plan) {
+      PublishedPlan plan,
+      FreeAdmission admission) {
+    return (plan.free() ? Mono.just(Duration.ZERO) : creationWindows.apply(db))
+        .flatMap(
+            window ->
+                insertWithWindow(db, tenant, actor, name, key, hash, plan, window, admission));
+  }
+
+  private Mono<CreateTenantResponse> insertWithWindow(
+      DatabaseClient db,
+      UUID tenant,
+      UUID actor,
+      String name,
+      String key,
+      byte[] hash,
+      PublishedPlan plan,
+      Duration window,
+      FreeAdmission preparedAdmission) {
     Instant now = clock.instant();
     UUID operation = UUID.randomUUID();
     var sql =
@@ -187,7 +240,8 @@ public final class TenantRegistryService {
             id -> {
               // FREE claim and registry insert must roll back together; unavailable admission never
               // creates a tenant.
-              Mono<Void> admission = plan.free() ? free.reserve(db, actor, tenant) : Mono.empty();
+              Mono<Void> admission =
+                  plan.free() ? preparedAdmission.reserve(db, actor, tenant) : Mono.empty();
               return admission
                   .then(
                       db.sql(
@@ -210,6 +264,9 @@ public final class TenantRegistryService {
                           .bind("created", now.atOffset(ZoneOffset.UTC))
                           .fetch()
                           .rowsUpdated())
+                  .then(
+                      TenantProvisioning.insert(
+                          db, tenant, actor, operation, key, hash, plan.id(), plan.free(), now))
                   .then(existing(db, tenant))
                   .flatMap(
                       row ->
@@ -248,7 +305,7 @@ public final class TenantRegistryService {
         .one();
   }
 
-  private static byte[] binary(Object value) {
+  static byte[] binary(Object value) {
     if (value instanceof byte[] bytes) return bytes;
     var buffer = ((ByteBuffer) value).duplicate();
     var bytes = new byte[buffer.remaining()];
@@ -311,7 +368,16 @@ public final class TenantRegistryService {
         });
   }
 
-  private static Tenant tenant(Map<String, Object> row) {
+  public Mono<Tenant> cancelCreation(ru.taska.api.b2b.v1.CancelTenantCreationRpcRequest request) {
+    return new TenantCreationLifecycle(
+            transactions,
+            (tenant, decision) ->
+                Mono.error(fail(DomainStatus.UNAVAILABLE, "DEPENDENCY_UNAVAILABLE")),
+            clock)
+        .cancel(request);
+  }
+
+  static Tenant tenant(Map<String, Object> row) {
     var result =
         Tenant.newBuilder()
             .setId(row.get("id").toString())
@@ -320,7 +386,16 @@ public final class TenantRegistryService {
             .setLifecycle(Tenant.LifecycleValue.valueOf("LIFECYCLE_" + row.get("lifecycle")))
             .setCreatedAt(((OffsetDateTime) row.get("created_at")).toInstant().toString())
             .setVersion(row.get("version").toString())
-            .setOwnerVersion(row.get("owner_version").toString());
+            .setOwnerVersion(row.get("owner_version").toString())
+            .setPlanVersionId(row.get("plan_version_id").toString())
+            .setCreationOperationId(row.get("creation_operation_id").toString())
+            .setCreationKind(
+                Tenant.CreationKindValue.valueOf("CREATION_KIND_" + row.get("creation_kind")));
+    if (row.get("creation_closure_reason") instanceof String reason)
+      result.setCreationClosureReason(
+          Tenant.CreationClosureReason.valueOf("CREATION_CLOSURE_REASON_" + reason));
+    if (row.get("creation_closed_at") instanceof OffsetDateTime closed)
+      result.setCreationClosedAt(closed.toInstant().toString());
     if (row.get("creation_deadline_at") instanceof OffsetDateTime d)
       result.setCreationDeadline(d.toInstant().toString());
     if (row.get("creation_kind").equals("PAID") && row.get("first_payment_fact_id") == null)
@@ -328,18 +403,17 @@ public final class TenantRegistryService {
     return result.build();
   }
 
+  public Mono<Operation> getOperation(ru.taska.api.b2b.v1.GetTenantOperationRpcRequest request) {
+    return new TenantProvisioning(transactions, null, clock).get(request);
+  }
+
   private Mono<CreateTenantResponse> response(Map<String, Object> row) {
     var t = tenant(row);
-    var op =
-        Operation.newBuilder()
-            .setId(row.get("creation_operation_id").toString())
-            .setType("TENANT_PROVISION")
-            .setState(Operation.StateValue.STATE_PENDING)
-            .setTenantId(t.getId())
-            .setResourceId(t.getId())
-            .setCreatedAt(t.getCreatedAt())
-            .setUpdatedAt(t.getCreatedAt())
-            .build();
-    return Mono.just(CreateTenantResponse.newBuilder().setTenant(t).setOperation(op).build());
+    return transactions
+        .execute(
+            db ->
+                TenantProvisioning.operation(
+                    db, (UUID) row.get("id"), (UUID) row.get("creation_operation_id")))
+        .map(op -> CreateTenantResponse.newBuilder().setTenant(t).setOperation(op).build());
   }
 }

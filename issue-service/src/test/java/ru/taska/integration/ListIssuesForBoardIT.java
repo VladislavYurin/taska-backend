@@ -767,6 +767,10 @@ public class ListIssuesForBoardIT extends AbstractIT {
         excludedType.setPriority(IssuePriority.HIGH);
         issueRepository.save(excludedType).block();
         attachLabel(excludedType, label);
+        databaseClient.sql("UPDATE taska.issues SET updated_at=:date WHERE id=:id")
+                .bind("date",date.plusSeconds(10)).bind("id",included.getId()).then().block();
+        databaseClient.sql("UPDATE taska.issues SET updated_at=:date WHERE id=:id")
+                .bind("date",date).bind("id",second.getId()).then().block();
         var request =
                 boardColumnRequest("CUSTOM_CLOSED")
                         .setPageSizePerColumn(1)
@@ -800,7 +804,7 @@ public class ListIssuesForBoardIT extends AbstractIT {
                 callBoardColumn(
                         request.clone()
                                 .setAfterId(included.getId().toString())
-                                .setAfterCreatedAt(first.getIssues(0).getCreatedAt()));
+                                .setAfterUpdatedAt(first.getIssues(0).getUpdatedAt()));
         Assertions.assertThat(last.getIssuesList())
                 .extracting(IssueBoardResponse::getId)
                 .containsExactly(second.getId().toString());

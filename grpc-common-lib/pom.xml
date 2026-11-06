@@ -38,6 +38,10 @@
             <artifactId>protobuf-java</artifactId>
         </dependency>
 
+        <dependency>
+            <groupId>com.google.protobuf</groupId><artifactId>protobuf-java-util</artifactId><version>${protobuf.version}</version>
+        </dependency>
+
         <!-- Reactor -->
         <dependency>
             <groupId>io.projectreactor</groupId>
@@ -75,6 +79,9 @@
             <version>${grpc.version}</version>
             <scope>test</scope>
         </dependency>
+        <dependency><groupId>ru.taska</groupId><artifactId>common-lib</artifactId><version>${project.version}</version><type>test-jar</type><scope>test</scope></dependency>
+        <dependency><groupId>io.r2dbc</groupId><artifactId>r2dbc-pool</artifactId><scope>test</scope></dependency>
+        <dependency><groupId>org.testcontainers</groupId><artifactId>postgresql</artifactId><scope>test</scope></dependency>
     </dependencies>
 
     <build>

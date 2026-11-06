@@ -1,5 +1,6 @@
 package ru.taska.service.impl;
 
+import ru.taska.board.BoardReadOptions;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -801,20 +802,21 @@ public class IssueServiceImpl implements IssueService {
     }
 
     @Override
-    public Mono<List<IssueBoardResponse>> listIssueBoard(String requestId,
-                                                  String nodeId,
-                                                  UUID actorUserId,
-                                                  UUID projectId,
-                                                  String statusKey,
-                                                  UUID assigneeId,
-                                                  IssueType issueType,
-                                                  boolean includeDone,
-                                                  List<String> doneStatusKeys,
-                                                  List<UUID> labelIds,
-                                                  Integer pageSizePerColumn,
-                                                  IssuePriority priority,
-                                                  String query
-    ) {
+    public Mono<List<IssueBoardResponse>> listIssueBoard(
+            String requestId,
+            String nodeId,
+            UUID actorUserId,
+            UUID projectId,
+            String statusKey,
+            UUID assigneeId,
+            IssueType issueType,
+            boolean includeDone,
+            List<String> doneStatusKeys,
+            List<UUID> labelIds,
+            Integer pageSizePerColumn,
+            IssuePriority priority,
+            String query,
+            BoardReadOptions options) {
         Set<ProjectRole> allowedRoles = issueProperties.allowedRoles().listIssueRoles();
 
         return projectRoleChecker
@@ -831,7 +833,8 @@ public class IssueServiceImpl implements IssueService {
                                         labelIds,
                                         pageSizePerColumn,
                                         priority,
-                                        query)
+                                        query,
+                                        options)
                                 .collectList())
                 .flatMap(this::mapBoardIssues);
     }
@@ -852,7 +855,8 @@ public class IssueServiceImpl implements IssueService {
             IssuePriority priority,
             String query,
             Instant afterCreatedAt,
-            UUID afterId) {
+            UUID afterId,
+            BoardReadOptions options) {
         return projectRoleChecker
                 .checkProjectRole(
                         requestId,
@@ -873,7 +877,8 @@ public class IssueServiceImpl implements IssueService {
                                 priority,
                                 query,
                                 afterCreatedAt,
-                                afterId))
+                                afterId,
+                                options))
                 .flatMap(
                         page ->
                                 mapBoardIssues(page.items())

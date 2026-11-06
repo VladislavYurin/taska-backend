@@ -58,6 +58,7 @@ class OutboxEventPublisherTest {
 
         event = OutboxEvent.builder()
                 .id(UUID.randomUUID())
+                .tenantId(UUID.randomUUID())
                 .aggregateType(AggregateType.ISSUE.getValue())
                 .aggregateId(UUID.randomUUID())
                 .eventType("IssueCreated")
@@ -104,7 +105,8 @@ class OutboxEventPublisherTest {
                     .isEqualTo(TOPIC);
 
             Assertions.assertThat(record.key())
-                    .isEqualTo(event.getAggregateId().toString());
+                    .isEqualTo("t:%s:%s:%s".formatted(
+                            event.getTenantId(), event.getAggregateType(), event.getAggregateId()));
 
             Assertions.assertThat(record.value())
                     .isEqualTo(expectedJson);

@@ -12,6 +12,29 @@ import java.util.UUID;
 
 public interface BoardService {
 
+    default Mono<BoardResponseDto> getBoard(
+            UUID projectId,
+            String issueType,
+            UUID assigneeId,
+            UUID labelId,
+            Boolean includeDone,
+            IssuePriorityDto priority,
+            String query,
+            Integer pageSizePerColumn,
+            GatewayContext context) {
+        return getBoard(
+                projectId,
+                issueType,
+                assigneeId,
+                labelId,
+                includeDone,
+                priority,
+                query,
+                pageSizePerColumn,
+                null,
+                context);
+    }
+
     Mono<BoardResponseDto> getBoard(
             UUID projectId,
             String issueType,
@@ -21,8 +44,38 @@ public interface BoardService {
             IssuePriorityDto priority,
             String query,
             Integer pageSizePerColumn,
-            GatewayContext context
-    );
+            OffsetDateTime doneSince,
+            GatewayContext context);
+
+    default Mono<BoardColumnPageResponseDto> listBoardColumnIssues(
+            UUID projectId,
+            String statusKey,
+            OffsetDateTime afterCreatedAt,
+            UUID afterId,
+            String issueType,
+            UUID assigneeId,
+            UUID labelId,
+            Boolean includeDone,
+            IssuePriorityDto priority,
+            String query,
+            Integer pageSize,
+            GatewayContext context) {
+        return listBoardColumnIssues(
+                projectId,
+                statusKey,
+                afterCreatedAt,
+                afterId,
+                issueType,
+                assigneeId,
+                labelId,
+                includeDone,
+                priority,
+                query,
+                pageSize,
+                null,
+                null,
+                context);
+    }
 
     Mono<BoardColumnPageResponseDto> listBoardColumnIssues(
             UUID projectId,
@@ -36,5 +89,7 @@ public interface BoardService {
             IssuePriorityDto priority,
             String query,
             Integer pageSize,
+            OffsetDateTime afterUpdatedAt,
+            OffsetDateTime doneSince,
             GatewayContext context);
 }

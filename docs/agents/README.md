@@ -20,7 +20,12 @@ Harness объединяет инструкции, доступные инстр
 | Область | Владелец и точки входа | При изменении проверить |
 |---|---|---|
 | Внешний REST | `api-gateway`; [OpenAPI](../../api-gateway/src/main/resources/static/openapi.yml) | YAML/JSON parity, валидация, ошибки, ACL, downstream mapping |
+| Capabilities и причины | [Common evaluator](../security/capabilities.md), `grpc-common-lib` | Current role/grant/ACL, exact recovery allowlist, flags, no user-token admin bypass and retained integrity/audit |
+| Entitlement-проекция | [Versioned projection](../data/entitlement-projection.md), `grpc-common-lib` | Monotonic events, reconciliation, bounded cache, current authority and owner migrations |
 | Внутренний RPC | [proto/v1](../../grpc-common-lib/src/main/proto/v1/) | производителей и потребителей, совместимость полей/enum, request context |
+| Lifetime-квота задач | [TASK admission](../../issue-service/TASK-QUOTAS.md), `issue-service` | Атомарность create/idempotency, current billing, 50/>50, counter tombstones и scoped reads |
+| Квоты проектов | [PROJECT saga](../../tenant-service/PROJECT-QUOTAS.md), `tenant-service` / `project-service` | Hidden provision, owner-confirmed expiry, durable effects и current policy |
+| Квоты мест | [SEAT admission](../../tenant-service/SEAT-QUOTAS.md), `tenant-service` | Membership + reservation atomicity, replay/fence/expiry, scoped admin bypass and safe quota read |
 | Пользователь и доступ | `auth-service` | сессии, refresh rotation, статус пользователя, PAT scopes; [приглашения](../tas-204-invitations-and-directory.md) |
 | Проекты и роли | `project-service` | ADMIN/MEMBER/VIEWER, последний ADMIN, собственность типов задач |
 | Workflow | `workflow-service` | граф, типы, версии, резервирования; [привязки](../tas-436-workflow-type-bindings.md) |
@@ -29,9 +34,10 @@ Harness объединяет инструкции, доступные инстр
 | Файлы | `storage-lib`, `auth-service`, `issue-service` | presigned URL, confirm, размер/MIME, доступ и очистка объектов |
 | Администрирование | [admin-service](../../admin-service/README.md) | session-only guards, безопасное чтение, аудит, повтор outbox |
 | MCP | [mcp-server](../../mcp-server/README.md) | schemas, catalog snapshot, scopes, owner isolation, REST dispatch |
-| Оплата B2B | [billing-service](../../billing-service/README.md) | PaymentProvider port/fake сейчас; invoice, ledger, Stripe и entitlement проектируются отдельно |
 | OAuth AS | `oauth-server`, `auth-service`, `api-gateway`, `mcp-server` | [AS и доверие](../tas-413-oauth-backend.md), discovery, PKCE, consent, revocation |
 | Социальный вход | `oauth-server`, `auth-service`, `api-gateway` | [provider flow](../tas-424-oauth.md), [сценарии](../tas-447-social-sign-in-scenarios.md) |
+| Создание компании | `tenant-service`, `billing-service`, `workflow-service` | [Durable provisioning TAS-337](../../tenant-service/PROVISIONING.md), [отмена и deadline TAS-478](../../tenant-service/CREATION-CLOSURE.md), lease/fence, remote receipts, атомарность activation/operation/outbox |
+| Каталог тарифов | `billing-service` | [Каталог и границы TAS-313](../../billing-service/README.md), неизменяемость, global receipts/outbox, реальная PostgreSQL/RLS и mTLS |
 | Метрики и эксплуатация | `metrics-starter`, `infra/`, Compose, `.github/workflows/` | конфигурационные тесты, секреты, health и revision каждого сервиса |
 
 Точные имена классов, маршруты и правила брать из текущего checkout. Таблица определяет границы поиска и не заменяет код. Целевая схема БД определяется последовательностью миграций каждого сервиса.

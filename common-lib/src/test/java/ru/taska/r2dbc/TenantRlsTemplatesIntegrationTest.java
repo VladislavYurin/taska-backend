@@ -709,4 +709,25 @@ class TenantRlsTemplatesIntegrationTest {
       sql("REVOKE taska_project_app FROM unexpected_member;DROP ROLE unexpected_member;");
     }
   }
+
+  @Test
+  void existingLongWorkflowTableNameCanBeProtectedAndAudited() throws Exception {
+    for(String name:List.of("protect-table","audit"))for(String ext:List.of("sql","psql"))
+      postgres.copyFileToContainer(MountableFile.forClasspathResource("db/tenant/v2/"+name+"."+ext),"/tmp/v2/"+name+"."+ext);
+    for(String table:List.of("issue_type_creation_workflow_receipts","workflow_"+"x".repeat(54))) {
+      as("taska_project_migrator","CREATE TABLE taska."+table+"(id uuid PRIMARY KEY,tenant_id uuid NOT NULL)");
+      try {
+        runAs("taska_project_deployer",true,"-v","service=project","-v","schema=taska","-v","table="+table,
+            "-v","tenant_column=tenant_id","-c","SET ROLE taska_project_migrator","-f","/tmp/v2/protect-table.psql");
+        run(true,"-v","service=project","-v","schema=taska","-v","table="+table,
+            "-v","tenant_column=tenant_id","-f","/tmp/v2/audit.psql");
+        assertEquals(A,as("taska_project_app","BEGIN;SET LOCAL app.tenant_id='"+A+"';INSERT INTO taska."+table+
+            " VALUES('"+UUID.randomUUID()+"','"+A+"') RETURNING tenant_id;ROLLBACK;"));
+        denies("taska_project_app","ALTER TABLE taska."+table+" DISABLE ROW LEVEL SECURITY");
+      } finally {sql("DROP TABLE taska."+table);}
+    }
+    String error=run(false,"-v","service=project","-v","schema=taska","-v","table="+"a".repeat(64),
+        "-v","tenant_column=tenant_id","-f","/tmp/v2/audit.psql");
+    assertTrue(error.contains("Invalid audit inputs"),error);
+  }
 }
