@@ -17,5 +17,10 @@ public final class RegistryDependencies {
   public interface FreeAdmission {
     /** Must reserve in this transaction/connection, never by remote check-then-insert. */
     Mono<Void> reserve(DatabaseClient transaction, UUID actor, UUID tenant);
+
+    /** Resolve identity/KMS/policy before opening the write transaction. */
+    default Mono<FreeAdmission> prepare(UUID actor) {
+      return Mono.just(this);
+    }
   }
 }

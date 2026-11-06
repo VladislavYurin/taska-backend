@@ -32,18 +32,27 @@ public final class SessionReceiptCleanup {
 
   Mono<Void> purge() {
     var now = clock.instant().atOffset(ZoneOffset.UTC);
-    return db.sql("UPDATE taska.refresh_rotation_receipts SET nonce=NULL,ciphertext=NULL"
-        + " WHERE expires_at<=:now AND ciphertext IS NOT NULL")
-        .bind("now", now).fetch().rowsUpdated()
-        .then(db.sql("UPDATE taska.session_issuance_receipts SET nonce=NULL,ciphertext=NULL"
-            + " WHERE expires_at<=:now AND ciphertext IS NOT NULL")
-            .bind("now", now).fetch().rowsUpdated()).then();
+    return db.sql(
+            "UPDATE taska.refresh_rotation_receipts SET nonce=NULL,ciphertext=NULL"
+                + " WHERE expires_at<=:now AND ciphertext IS NOT NULL")
+        .bind("now", now)
+        .fetch()
+        .rowsUpdated()
+        .then(
+            db.sql(
+                    "UPDATE taska.session_issuance_receipts SET nonce=NULL,ciphertext=NULL"
+                        + " WHERE expires_at<=:now AND ciphertext IS NOT NULL")
+                .bind("now", now)
+                .fetch()
+                .rowsUpdated())
+        .then();
   }
 
   @Scheduled(fixedDelayString = "${taska.b2b.sessions.receipt-cleanup-interval:1m}")
   public void run() {
     if (!running.compareAndSet(false, true)) return;
-    purge().timeout(Duration.ofSeconds(30))
+    purge()
+        .timeout(Duration.ofSeconds(30))
         .doFinally(ignored -> running.set(false))
         .subscribe(ignored -> {}, error -> log.warn("Session receipt cleanup failed"));
   }

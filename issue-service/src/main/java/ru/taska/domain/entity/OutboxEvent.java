@@ -34,6 +34,10 @@ public class OutboxEvent {
     @Column("id")
     private UUID id;
 
+    /** Verified tenant scope captured when the domain mutation is committed. */
+    @Column("tenant_id")
+    private UUID tenantId;
+
     /**
      * Тип агрегата (например, USER).
      */

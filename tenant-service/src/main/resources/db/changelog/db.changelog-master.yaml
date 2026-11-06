@@ -84,6 +84,320 @@
           }
         ]
       }
+    },
+    {
+      "changeSet": {
+        "id": "tenant-platform-flags-0003",
+        "author": "taska",
+        "changes": [
+          {
+            "sqlFile": {
+              "path": "0003-platform-flags.sql",
+              "relativeToChangelogFile": true,
+              "splitStatements": false
+            }
+          }
+        ]
+      }
+    },
+    {
+      "changeSet": {
+        "id": "tenant-merchant-configuration-0004",
+        "author": "taska",
+        "changes": [
+          {
+            "sqlFile": {
+              "path": "0004-merchant-configuration.sql",
+              "relativeToChangelogFile": true,
+              "splitStatements": false
+            }
+          }
+        ]
+      }
+    },
+    {
+      "changeSet": {
+        "id": "tenant-free-eligibility-0005",
+        "author": "taska",
+        "changes": [
+          {
+            "sqlFile": {
+              "path": "0005-free-eligibility.sql",
+              "relativeToChangelogFile": true,
+              "splitStatements": false
+            }
+          }
+        ]
+      }
+    },
+    {
+      "changeSet": {
+        "id": "tenant-provisioning-0006",
+        "author": "taska",
+        "changes": [
+          {
+            "sqlFile": {
+              "path": "0006-provisioning.sql",
+              "relativeToChangelogFile": true,
+              "splitStatements": false
+            }
+          },
+          {
+            "sql": {
+              "sql": "SELECT set_config('taska.guard_service','tenant',true),set_config('taska.guard_schema','taska',true),set_config('taska.guard_table','tenant_operations',true),set_config('taska.guard_column','tenant_id',true),set_config('taska.guard_app_access','read_write',true);"
+            }
+          },
+          {
+            "sqlFile": {
+              "path": "db/tenant/protect-table.sql",
+              "splitStatements": false
+            }
+          }
+        ],
+        "runInTransaction": true
+      }
+    },
+    {
+      "changeSet": {
+        "id": "tenant-creation-closure-0007",
+        "author": "taska",
+        "runInTransaction": true,
+        "changes": [
+          {
+            "sqlFile": {
+              "path": "0007-creation-closure.sql",
+              "relativeToChangelogFile": true,
+              "splitStatements": false
+            }
+          },
+          {
+            "sql": {
+              "sql": "SELECT set_config('taska.guard_service','tenant',true),set_config('taska.guard_schema','taska',true),set_config('taska.guard_table','tenant_creation_receipts',true),set_config('taska.guard_column','tenant_id',true),set_config('taska.guard_app_access','append_only',true);"
+            }
+          },
+          {
+            "sqlFile": {
+              "path": "db/tenant/protect-table.sql",
+              "splitStatements": false
+            }
+          }
+        ]
+      }
+    },
+    {
+      "changeSet": {
+        "id": "tenant-entitlement-0008",
+        "author": "taska",
+        "changes": [
+          {
+            "sql": {
+              "sql": "SET LOCAL ROLE taska_tenant_migrator;"
+            }
+          },
+          {
+            "sqlFile": {
+              "path": "db/tenant/entitlement-projection.sql",
+              "splitStatements": false
+            }
+          },
+          {
+            "sql": {
+              "sql": "SELECT set_config('taska.guard_service','tenant',true),set_config('taska.guard_schema','taska',true),set_config('taska.guard_table','entitlement_projections',true),set_config('taska.guard_column','tenant_id',true),set_config('taska.guard_app_access','read_write',true);"
+            }
+          },
+          {
+            "sqlFile": {
+              "path": "db/tenant/protect-table.sql",
+              "splitStatements": false
+            }
+          },
+          {
+            "sql": {
+              "sql": "SELECT set_config('taska.audit_service','tenant',true),set_config('taska.audit_schema','taska',true),set_config('taska.audit_table','entitlement_projections',true),set_config('taska.audit_column','tenant_id',true),set_config('taska.audit_app_access','read_write',true);"
+            }
+          },
+          {
+            "sqlFile": {
+              "path": "db/tenant/audit.sql",
+              "splitStatements": false
+            }
+          },
+          {
+            "sql": {
+              "sql": "SELECT set_config('taska.guard_service','tenant',true),set_config('taska.guard_schema','taska',true),set_config('taska.guard_table','entitlement_projection_events',true),set_config('taska.guard_column','tenant_id',true),set_config('taska.guard_app_access','append_only',true);"
+            }
+          },
+          {
+            "sqlFile": {
+              "path": "db/tenant/protect-table.sql",
+              "splitStatements": false
+            }
+          },
+          {
+            "sql": {
+              "sql": "SELECT set_config('taska.audit_service','tenant',true),set_config('taska.audit_schema','taska',true),set_config('taska.audit_table','entitlement_projection_events',true),set_config('taska.audit_column','tenant_id',true),set_config('taska.audit_app_access','append_only',true);"
+            }
+          },
+          {
+            "sqlFile": {
+              "path": "db/tenant/audit.sql",
+              "splitStatements": false
+            }
+          }
+        ]
+      }
+    },
+    {
+      "changeSet": {
+        "id": "tenant-seat-quota-0009",
+        "author": "taska",
+        "changes": [
+          {
+            "sqlFile": {
+              "path": "0009-seat-quota.sql",
+              "relativeToChangelogFile": true,
+              "splitStatements": false
+            }
+          },
+          {
+            "sql": {
+              "sql": "SELECT set_config('taska.guard_service','tenant',true),set_config('taska.guard_schema','taska',true),set_config('taska.guard_table','quota_counters',true),set_config('taska.guard_column','tenant_id',true),set_config('taska.guard_app_access','read_write',true);"
+            }
+          },
+          {
+            "sqlFile": {
+              "path": "db/tenant/protect-table.sql",
+              "splitStatements": false
+            }
+          },
+          {
+            "sql": {
+              "sql": "SELECT set_config('taska.audit_service','tenant',true),set_config('taska.audit_schema','taska',true),set_config('taska.audit_table','quota_counters',true),set_config('taska.audit_column','tenant_id',true),set_config('taska.audit_app_access','read_write',true);"
+            }
+          },
+          {
+            "sqlFile": {
+              "path": "db/tenant/audit.sql",
+              "splitStatements": false
+            }
+          },
+          {
+            "sql": {
+              "sql": "SELECT set_config('taska.guard_service','tenant',true),set_config('taska.guard_schema','taska',true),set_config('taska.guard_table','quota_reservations',true),set_config('taska.guard_column','tenant_id',true),set_config('taska.guard_app_access','read_write',true);"
+            }
+          },
+          {
+            "sqlFile": {
+              "path": "db/tenant/protect-table.sql",
+              "splitStatements": false
+            }
+          },
+          {
+            "sql": {
+              "sql": "SELECT set_config('taska.audit_service','tenant',true),set_config('taska.audit_schema','taska',true),set_config('taska.audit_table','quota_reservations',true),set_config('taska.audit_column','tenant_id',true),set_config('taska.audit_app_access','read_write',true);"
+            }
+          },
+          {
+            "sqlFile": {
+              "path": "db/tenant/audit.sql",
+              "splitStatements": false
+            }
+          },
+          {
+            "sql": {
+              "sql": "SELECT set_config('taska.guard_service','tenant',true),set_config('taska.guard_schema','taska',true),set_config('taska.guard_table','quota_effects',true),set_config('taska.guard_column','tenant_id',true),set_config('taska.guard_app_access','append_only',true);"
+            }
+          },
+          {
+            "sqlFile": {
+              "path": "db/tenant/protect-table.sql",
+              "splitStatements": false
+            }
+          },
+          {
+            "sql": {
+              "sql": "SELECT set_config('taska.audit_service','tenant',true),set_config('taska.audit_schema','taska',true),set_config('taska.audit_table','quota_effects',true),set_config('taska.audit_column','tenant_id',true),set_config('taska.audit_app_access','append_only',true);"
+            }
+          },
+          {
+            "sqlFile": {
+              "path": "db/tenant/audit.sql",
+              "splitStatements": false
+            }
+          }
+        ]
+      }
+    },
+    {
+      "changeSet": {
+        "id": "tenant-task-quota-0010",
+        "author": "taska",
+        "changes": [
+          {
+            "sqlFile": {
+              "path": "0010-task-quota-version.sql",
+              "relativeToChangelogFile": true,
+              "splitStatements": false
+            }
+          }
+        ]
+      }
+    },
+    {
+      "changeSet": {
+        "id": "tenant-project-quota-0011",
+        "author": "taska",
+        "changes": [
+          {
+            "sqlFile": {
+              "path": "0011-project-quota.sql",
+              "relativeToChangelogFile": true,
+              "splitStatements": false
+            }
+          }
+        ]
+      }
+    },
+    {
+      "changeSet": {
+        "id": "tenant-storage-quota-0012",
+        "author": "taska",
+        "changes": [
+          {
+            "sqlFile": {
+              "path": "0012-storage-quota.sql",
+              "relativeToChangelogFile": true,
+              "splitStatements": false
+            }
+          }
+        ]
+      }
+    },
+    {
+      "changeSet": {
+        "id": "tenant-free-plan-admissions-0013",
+        "author": "taska",
+        "changes": [
+          {
+            "sqlFile": {
+              "path": "0013-free-plan-admissions.sql",
+              "relativeToChangelogFile": true,
+              "splitStatements": false
+            }
+          },
+          {
+            "sql": {
+              "sql": "SET LOCAL ROLE taska_tenant_migrator; SELECT set_config('taska.guard_service','tenant',true),set_config('taska.guard_schema','taska',true),set_config('taska.guard_table','free_plan_admissions',true),set_config('taska.guard_column','tenant_id',true),set_config('taska.guard_app_access','read_write',true);"
+            }
+          },
+          {
+            "sqlFile": {
+              "path": "db/tenant/protect-table.sql",
+              "splitStatements": false
+            }
+          }
+        ]
+      }
     }
   ]
 }

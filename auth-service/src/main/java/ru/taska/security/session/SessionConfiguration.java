@@ -21,7 +21,8 @@ import org.springframework.transaction.reactive.TransactionalOperator;
 @ConditionalOnProperty(name = "taska.b2b.sessions.enabled", havingValue = "true")
 public class SessionConfiguration {
   @Bean
-  WebSessionStore webSessionStore(DatabaseClient db,
+  WebSessionStore webSessionStore(
+      DatabaseClient db,
       @Qualifier("transactionalOperator") TransactionalOperator tx,
       WebSessionStore.MembershipAuthority membership,
       @Value("${taska.b2b.sessions.refresh-receipt-key:}") String encodedReceiptKey,
@@ -29,8 +30,8 @@ public class SessionConfiguration {
     byte[] receiptKey = decode("TASKA_B2B_REFRESH_RECEIPT_KEY", encodedReceiptKey);
     if (receiptKey.length != 32)
       throw new IllegalStateException("TASKA_B2B_REFRESH_RECEIPT_KEY must contain 32 bytes");
-    return new WebSessionStore(db, tx, Clock.systemUTC(), new SecureRandom(),
-        refreshTtl, membership, receiptKey);
+    return new WebSessionStore(
+        db, tx, Clock.systemUTC(), new SecureRandom(), refreshTtl, membership, receiptKey);
   }
 
   @Bean
@@ -40,8 +41,8 @@ public class SessionConfiguration {
       @Value("${taska.b2b.sessions.access-ttl:15m}") Duration accessTtl)
       throws GeneralSecurityException {
     byte[] der = decode("TASKA_B2B_ED25519_PRIVATE_KEY", encodedPrivateKey);
-    PrivateKey privateKey = KeyFactory.getInstance("Ed25519")
-        .generatePrivate(new PKCS8EncodedKeySpec(der));
+    PrivateKey privateKey =
+        KeyFactory.getInstance("Ed25519").generatePrivate(new PKCS8EncodedKeySpec(der));
     return new TenantAccessIssuer(privateKey, kid, Clock.systemUTC(), accessTtl);
   }
 

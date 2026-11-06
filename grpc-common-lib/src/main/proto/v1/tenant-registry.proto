@@ -1,6 +1,7 @@
 syntax = "proto3";
 package ru.taska.b2b.v1;
 import "v1/tenant-context.proto";
+import "v1/quota-admission.proto";
 option java_multiple_files = true;
 option java_package = "ru.taska.api.b2b.v1";
 // TAS-310: implemented subset of docs/b2b/contracts/b2b.proto; wire numbers preserved.
@@ -72,6 +73,13 @@ message Tenant {
   optional string creation_deadline = 7;
   string version = 8;
   string owner_version = 9;
+  optional string plan_version_id = 10;
+  optional string creation_operation_id = 11;
+  enum CreationKindValue { CREATION_KIND_UNSPECIFIED = 0; CREATION_KIND_FREE = 1; CREATION_KIND_PAID = 2; }
+  optional CreationKindValue creation_kind = 12;
+  enum CreationClosureReason { CREATION_CLOSURE_REASON_UNSPECIFIED = 0; CREATION_CLOSURE_REASON_AUTO_EXPIRED = 1; CREATION_CLOSURE_REASON_OWNER_CANCELLED = 2; }
+  optional CreationClosureReason creation_closure_reason = 13;
+  optional string creation_closed_at = 14;
 }
 
 message CreateTenantRequest {
@@ -126,7 +134,24 @@ message ListTenantMembersRpcRequest {
   PageRequest page = 3;
 }
 
+message ConfirmedAction { bool confirmed = 1; }
+message CancelTenantCreationRpcRequest {
+  RequestContext context = 1;
+  string tenant_id = 2;
+  ConfirmedAction payload = 3;
+  MutationOptions mutation = 4;
+}
+
+message GetTenantOperationRpcRequest {
+  RequestContext context = 1;
+  string tenant_id = 2;
+  string operation_id = 3;
+}
+
 service TenantService {
+  rpc GetTenantQuotas(GetTenantQuotasRpcRequest) returns (QuotaSnapshot);
+  rpc CancelTenantCreation(CancelTenantCreationRpcRequest) returns (Tenant);
+  rpc GetTenantOperation(GetTenantOperationRpcRequest) returns (Operation);
   rpc CreateTenant(CreateTenantRpcRequest) returns (CreateTenantResponse);
   rpc GetTenant(GetTenantRpcRequest) returns (Tenant);
   rpc ListTenantMembers(ListTenantMembersRpcRequest) returns (MembershipPage);

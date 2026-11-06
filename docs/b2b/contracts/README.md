@@ -2,7 +2,7 @@
 
 Это нормативный blueprint для implementation, а не действующий API. Проверенный код: `af7ab57ead44304b89bbd47dabeeba45b761ce16`; решения: [актуальная бизнес-спецификация](../ai-business-spec.md), включая уточнения владельца от 03.11.2026. [Инвентарь baseline](../api-inventory.md) отделён от [целевого OpenAPI](b2b-openapi.yaml) и [целевого proto](b2b.proto). Согласованные модели: [данные](../target-data-model.md), [матрица доступа](../access-control.md), [async/files](../async-and-files.md), [retention ES_V1](../retention-policy.md) и [policy JSON](../schemas/retention-policy.json). Ни static OpenAPI, ни `grpc-common-lib/src/main/proto/v1`, ни generated code этой аналитикой не изменяются.
 
-OpenAPI содержит 86 операций на 75 paths, 122 именованные schemas; основные DTO закрыты `additionalProperties: false`. Proto содержит 92 RPC: REST orchestration + 3 quota authority + access decision + entitlement lookup + verified payment ingress + project-quota read с project ACL + append-only payment evidence refinement + 3 unmatched wire intake/list/assignment RPC. Названия, поля и номера определены; coding tasks реализуют этот контракт, а не повторяют аналитическое «согласовать API». Политика действия обязательна вместе со схемой: формат сам не доказывает права или финансовый факт.
+OpenAPI содержит 86 операций на 75 paths, 122 именованные schemas; основные DTO закрыты `additionalProperties: false`. Proto содержит 94 RPC: REST orchestration + 3 quota authority + access decision + entitlement lookup + verified payment ingress + project-quota read с project ACL + append-only payment evidence refinement + 3 unmatched wire intake/list/assignment RPC. Названия, поля и номера определены; coding tasks реализуют этот контракт, а не повторяют аналитическое «согласовать API». Политика действия обязательна вместе со схемой: формат сам не доказывает права или финансовый факт.
 
 ## 1. Идентификаторы, даты, деньги и версии
 
@@ -176,3 +176,27 @@ Implementation acceptance: cross-tenant URL/body/header/RPC/MCP mismatch, suspen
 Решения владельца 03.11.2026 закрывают выбор Stripe, окончательный partial chargeback, срок/комиссию WIRE return; ES_V1 retention и внутренний post-delete access определены в отдельной policy пакета. C03/C05 больше не являются policy gates. TAS-518/519/520 реализуют принятые workflows/readiness/retention engine. Остаётся операционное подключение реального seller/merchant, signing credentials, календаря продавца и применимых market/tax/document/FX profiles. Unset live configuration приводит к конкретному POLICY_NOT_CONFIGURED, не к скрытому EUR-only режиму, выдуманным налогам, платежу или удалению. Независимая разработка и fake/sandbox проверки выполняются по готовым DTO/RPC и сценариям; эти статические reference checks не утверждают продуктовую реализацию или live readiness.
 
 TAS-310 implements the additive `TenantService.CreateTenant/GetTenant` subset in `grpc-common-lib/src/main/proto/v1/tenant-registry.proto`. These gRPC methods do not publish HTTP endpoints or activate provisioning; see [registry implementation and dependency boundaries](../../../tenant-service/README.md). Message/enum field numbers match this blueprint; already shipped RequestContext is imported, not redefined.
+
+### Implemented catalog subset (TAS-313)
+
+[billing-catalog.proto](../../../grpc-common-lib/src/main/proto/v1/billing-catalog.proto) implements draft/publish/list plus internal published-version resolution; [runtime boundaries](../../../billing-service/README.md). Catalog list selects only the latest published version per code. Additive `kind` fields distinguish FREE/PAID without a price-based eligibility rule (TAS-501 A16). Existing numbers are preserved. Public REST adapters and invoice/entitlement/payment activation remain separate from this catalog backend.
+
+### Subscription/coverage backend (TAS-314)
+
+The existing BillingService now implements `GetSubscription` and `ListSubscriptionPeriods` with unchanged blueprint field numbers. [Stored model, internal evidence ports, read semantics and activation prerequisites](../../../billing-service/SUBSCRIPTIONS.md). `paidThrough` is the exclusive end instant of the current paid coverage, absent for FREE/before first payment; future renewals do not apply early. Expired history can retain the past end and never authorizes access by field presence alone.
+
+TAS-475 implements [immutable invoice RPCs and storage](../../../billing-service/INVOICES.md) (`CreateInvoice/GetInvoice/ListInvoices`) with the blueprint DTO field numbers in billing-catalog.proto. Mandatory assignment/commercial authorities fail closed until provisioned; gateway REST, financial projectors and PSP activation are separate tasks.
+TAS-519 implements the private operator/billing commercial profile in [commercial-configuration.proto](../../../grpc-common-lib/src/main/proto/v1/commercial-configuration.proto). These service RPCs do not add public REST routes; private secret references are excluded from scalar flags and administrative response views. [Runtime validation and activation](../../../billing-service/COMMERCIAL-READINESS.md).
+
+TAS-472 implements [free-eligibility.proto](../../../grpc-common-lib/src/main/proto/v1/free-eligibility.proto): WEB_GLOBAL creation options, internal current-owner FREE admission and authorized retention-case disposition. [Identity, atomicity and activation boundaries](../../../tenant-service/FREE-ELIGIBILITY.md). The future account/tenant-creation-options REST adapter is not yet published by the gateway.
+
+TAS-337 implements [durable provisioning and operation lookup](../../../tenant-service/PROVISIONING.md): `GetTenantOperation`, real-state create replay, additive creation metadata in Tenant, service-only `tenant-provisioning.proto` and signed billing/workflow adapters. This does not activate the public HTTP/session layer or payment settlement.
+
+
+### Unpaid creation errors (TAS-478 / A14)
+
+For authorized working-content reads, `AWAITING_PAYMENT` returns `PAYMENT_PENDING` with reason `PENDING_FIRST_PAYMENT` (HTTP 409); `PROVISIONING` returns `INVALID_STATE` (409). This does not block owner metadata/status, payment or confirmed cancellation. The current tenant member RPC implements this guard; future gateway/project/workflow B2B adapters must preserve it. See [implemented lifecycle and financial-authority boundary](../../../tenant-service/CREATION-CLOSURE.md). Tenant DTO adds optional `creationClosureReason` and `creationClosedAt`; a valid timely full primary decision may clear the current AUTO_EXPIRED closure, while its receipt history remains immutable.
+
+### Delivered entitlement foundation — TAS-319
+
+[Entitlement snapshots](../../../billing-service/ENTITLEMENTS.md) implement `BillingService.GetEntitlement` and internal `EntitlementService.GetEntitlementSnapshot` with immutable tenant-scoped versions, period-bound validity and transactional outbox. Blueprint fields are preserved; `Entitlement.paid_through=11` adds the explicit exclusive coverage end required by TAS-319. Safe member reads use their own mandatory authority; financial-document owner/admin checks remain separate. Gateway activation, consumer projection and full capabilities are follow-up tasks, not implied by the backend transport.

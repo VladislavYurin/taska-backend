@@ -114,7 +114,7 @@ class TenantMembershipIntegrationTest {
     operator
         .sql(
             "TRUNCATE"
-                + " taska.tenants,taska.tenant_memberships,taska.outbox_events,taska.idempotency_records")
+                + " taska.quota_effects,taska.quota_reservations,taska.quota_counters,taska.tenant_creation_receipts,taska.tenant_provisioning_dispatch,taska.tenant_operations,taska.free_admission_subjects,taska.free_plan_admissions,taska.tenants,taska.tenant_memberships,taska.outbox_events,taska.idempotency_records")
         .fetch()
         .rowsUpdated()
         .block(WAIT);
@@ -329,7 +329,17 @@ class TenantMembershipIntegrationTest {
         .fetch()
         .rowsUpdated()
         .block(WAIT);
-    rejects(DomainStatus.NOT_FOUND, list(owner, 2, null));
+    var pending = assertThrows(DomainException.class, () -> list(owner, 2, null).block(WAIT));
+    assertEquals(DomainStatus.FAILED_PRECONDITION, pending.getStatus());
+    assertEquals("PAYMENT_PENDING", pending.getDetails().get("code"));
+    assertEquals("PENDING_FIRST_PAYMENT", pending.getDetails().get("reason"));
+    operator
+        .sql("UPDATE taska.tenants SET lifecycle='PROVISIONING' WHERE id=:id")
+        .bind("id", A)
+        .then()
+        .block(WAIT);
+    var preparing = assertThrows(DomainException.class, () -> list(owner, 2, null).block(WAIT));
+    assertEquals("INVALID_STATE", preparing.getDetails().get("code"));
   }
 
   @Test
@@ -418,6 +428,32 @@ class TenantMembershipIntegrationTest {
     var empty = list(owner, 1, token).block(WAIT);
     assertEquals(0, empty.getItemsCount());
     assertFalse(empty.hasNextCursor());
+    operator
+        .sql("UPDATE taska.tenants SET lifecycle='AWAITING_PAYMENT' WHERE id=:id")
+        .bind("id", A)
+        .then()
+        .block(WAIT);
+    var pending = assertThrows(DomainException.class, () -> list(owner, 1, token).block(WAIT));
+    assertEquals("PAYMENT_PENDING", pending.getDetails().get("code"));
+    assertEquals(
+        Tenant.LifecycleValue.LIFECYCLE_AWAITING_PAYMENT,
+        batch(A, OWNER).block(WAIT).getTenantLifecycle());
+    operator
+        .sql("UPDATE taska.tenants SET lifecycle='PROVISIONING' WHERE id=:id")
+        .bind("id", A)
+        .then()
+        .block(WAIT);
+    assertEquals(
+        "INVALID_STATE",
+        assertThrows(DomainException.class, () -> list(owner, 1, token).block(WAIT))
+            .getDetails()
+            .get("code"));
+    operator
+        .sql("UPDATE taska.tenants SET lifecycle='ACTIVE' WHERE id=:id")
+        .bind("id", A)
+        .then()
+        .block(WAIT);
+
     operator
         .sql("UPDATE taska.tenants SET membership_version=11 WHERE id=:t")
         .bind("t", A)
@@ -787,6 +823,53 @@ class TenantMembershipIntegrationTest {
             .trustManager(certs.resolve("ca.crt").toFile())
             .clientAuth(io.grpc.netty.shaded.io.netty.handler.ssl.ClientAuth.REQUIRE)
             .build();
+    var quotaStore =
+        new SeatQuotaStore(
+            transactions,
+            (actor, command) ->
+                Mono.error(new DomainException(DomainStatus.UNAVAILABLE, "purpose not configured")),
+            (tenant, minimum) -> {
+              var e =
+                  Entitlement.newBuilder()
+                      .setTenantId(tenant.toString())
+                      .setVersion("1")
+                      .setPlanVersionId(id(500).toString())
+                      .setValidFrom(NOW.minusSeconds(1).toString())
+                      .setIssuedAt(NOW.toString());
+              for (var kind :
+                  List.of(
+                      QuotaLimit.KindValue.KIND_SEAT,
+                      QuotaLimit.KindValue.KIND_PROJECT,
+                      QuotaLimit.KindValue.KIND_STORAGE_BYTES,
+                      QuotaLimit.KindValue.KIND_TASK_LIFETIME))
+                e.addLimits(QuotaLimit.newBuilder().setKind(kind).setLimit("50"));
+              return Mono.just(e.build());
+            },
+            clock,
+            t ->
+                Mono.just(
+                    ru.taska.api.b2b.v1.TenantTaskQuotaSummary.newBuilder()
+                        .setTenantId(t.toString())
+                        .setMaximumCreated("0")
+                        .setVersion("1")
+                        .setEntitlementVersion("1")
+                        .build()),
+            t ->
+                Mono.just(
+                    ru.taska.api.b2b.v1.QuotaUsage.newBuilder()
+                        .setKind(ru.taska.api.b2b.v1.QuotaUsage.KindValue.KIND_PROJECT)
+                        .setUsed("0")
+                        .setReserved("0")
+                        .setVersion("1")
+                        .build()),
+            t ->
+                Mono.just(
+                    QuotaUsage.newBuilder()
+                        .setKind(QuotaUsage.KindValue.KIND_STORAGE_BYTES)
+                        .setUsed("0")
+                        .setReserved("0")
+                        .setVersion("1")
+                        .build()));
     var server =
         io.grpc.netty.shaded.io.grpc.netty.NettyServerBuilder.forAddress(
                 new java.net.InetSocketAddress("127.0.0.1", 0))
@@ -794,7 +877,7 @@ class TenantMembershipIntegrationTest {
             .addService(
                 io.grpc.ServerInterceptors.intercept(
                     new TenantGrpcService(
-                        org.mockito.Mockito.mock(TenantRegistryService.class), service),
+                        org.mockito.Mockito.mock(TenantRegistryService.class), service, quotaStore),
                     interceptor))
             .addService(
                 io.grpc.ServerInterceptors.intercept(
@@ -856,6 +939,41 @@ class TenantMembershipIntegrationTest {
                   .listTenantMembers(next)
                   .getItems(0)
                   .getUserId());
+          var quotaRequest =
+              GetTenantQuotasRpcRequest.newBuilder()
+                  .setTenantId(A.toString())
+                  .setContext(wire(owner.toBuilder().setAction("getTenantQuotas").build()))
+                  .build();
+          String quotaRpc = TenantServiceGrpc.getGetTenantQuotasMethod().getFullMethodName();
+          assertEquals(
+              io.grpc.Status.Code.UNAUTHENTICATED,
+              assertThrows(
+                      io.grpc.StatusRuntimeException.class,
+                      () -> plain.getTenantQuotas(quotaRequest))
+                  .getStatus()
+                  .getCode());
+          var quotaStub =
+              plain.withInterceptors(
+                  io.grpc.stub.MetadataUtils.newAttachHeadersInterceptor(
+                      TenantRegistryIntegrationTest.signed(
+                          sender, quotaRequest, policy, quotaRpc)));
+          assertEquals("4", quotaStub.getTenantQuotas(quotaRequest).getQuotas(0).getUsed());
+          operator
+              .sql(
+                  "UPDATE taska.tenant_memberships SET status='SUSPENDED' WHERE tenant_id=:t AND"
+                      + " user_id=:u")
+              .bind("t", A)
+              .bind("u", OWNER)
+              .fetch()
+              .rowsUpdated()
+              .block(WAIT);
+          assertEquals(
+              io.grpc.Status.Code.PERMISSION_DENIED,
+              assertThrows(
+                      io.grpc.StatusRuntimeException.class,
+                      () -> quotaStub.getTenantQuotas(quotaRequest))
+                  .getStatus()
+                  .getCode());
         } else {
           var request =
               GetMembershipRpcRequest.newBuilder()

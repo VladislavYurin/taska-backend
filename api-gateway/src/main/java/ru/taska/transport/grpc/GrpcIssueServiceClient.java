@@ -58,6 +58,7 @@ import ru.taska.domain.dto.UpdateIssueResponseDto;
 import ru.taska.mapper.IssueMapper;
 
 import java.time.OffsetDateTime;
+import ru.taska.board.BoardReadOptions;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
@@ -478,18 +479,18 @@ public class GrpcIssueServiceClient {
     }
 
     /**
-     * Получает список задач для доски проекта с учетом фильтров
-     * и преобразует gRPC-модели во внутренние модели API Gateway.
+     * Получает список задач для доски проекта с учетом фильтров и преобразует gRPC-модели во
+     * внутренние модели API Gateway.
      *
-     * @param projectId     идентификатор проекта
-     * @param issueType     тип задачи; {@code null} — задачи всех типов
-     * @param assigneeId    идентификатор исполнителя
-     * @param labelId       идентификатор метки
-     * @param includeDone   включать ли завершенные задачи
+     * @param projectId идентификатор проекта
+     * @param issueType тип задачи; {@code null} — задачи всех типов
+     * @param assigneeId идентификатор исполнителя
+     * @param labelId идентификатор метки
+     * @param includeDone включать ли завершенные задачи
      * @param doneStatusKeys ключи статусов категории DONE из workflow проекта
-     * @param priority      приоритет задачи; {@code null} — без фильтра
-     * @param query         полнотекстовый фильтр по ключу, краткому описанию и описанию задачи
-     * @param context       контекст запроса
+     * @param priority приоритет задачи; {@code null} — без фильтра
+     * @param query полнотекстовый фильтр по ключу, краткому описанию и описанию задачи
+     * @param context контекст запроса
      * @return список задач для формирования доски
      */
     public Mono<List<BoardIssueData>> listIssuesForBoard(
@@ -502,8 +503,33 @@ public class GrpcIssueServiceClient {
             IssuePriorityDto priority,
             String query,
             Integer pageSizePerColumn,
-            GatewayContext context
-    ) {
+            GatewayContext context) {
+        return listIssuesForBoard(
+                projectId,
+                issueType,
+                assigneeId,
+                labelId,
+                includeDone,
+                doneStatusKeys,
+                priority,
+                query,
+                pageSizePerColumn,
+                BoardReadOptions.DEFAULT,
+                context);
+    }
+
+    public Mono<List<BoardIssueData>> listIssuesForBoard(
+            String projectId,
+            String issueType,
+            String assigneeId,
+            String labelId,
+            Boolean includeDone,
+            List<String> doneStatusKeys,
+            IssuePriorityDto priority,
+            String query,
+            Integer pageSizePerColumn,
+            BoardReadOptions options,
+            GatewayContext context) {
         log.info(
                 "[{}] Calling listIssuesForBoard for project {}",
                 context.requestId(),
@@ -523,6 +549,7 @@ public class GrpcIssueServiceClient {
                         pageSizePerColumn,
                         context);
 
+        applyBoardOptions(requestBodyBuilder, options);
         return dynamicStub()
                 .listIssuesForBoard(
                         ListIssuesForBoardRequest.newBuilder()
@@ -531,6 +558,7 @@ public class GrpcIssueServiceClient {
                                 .build())
                 .map(
                         response -> {
+                            requireBoardVersion(response, options, false);
                             if (response.getIssuesList().stream()
                                     .anyMatch(issue -> !issue.hasStatusTotalCount())) {
                                 throw new ResponseStatusException(
@@ -557,6 +585,40 @@ public class GrpcIssueServiceClient {
             OffsetDateTime afterCreatedAt,
             UUID afterId,
             GatewayContext context) {
+        return listBoardColumnPage(
+                projectId,
+                issueType,
+                statusKey,
+                assigneeId,
+                labelId,
+                includeDone,
+                doneStatusKeys,
+                priority,
+                query,
+                pageSize,
+                afterCreatedAt,
+                afterId,
+                null,
+                BoardReadOptions.DEFAULT,
+                context);
+    }
+
+    public Mono<BoardIssuePageData> listBoardColumnPage(
+            String projectId,
+            String issueType,
+            String statusKey,
+            String assigneeId,
+            String labelId,
+            Boolean includeDone,
+            List<String> doneStatusKeys,
+            IssuePriorityDto priority,
+            String query,
+            int pageSize,
+            OffsetDateTime afterCreatedAt,
+            UUID afterId,
+            OffsetDateTime afterUpdatedAt,
+            BoardReadOptions options,
+            GatewayContext context) {
         var body =
                 boardRequestBody(
                                 projectId,
@@ -570,6 +632,7 @@ public class GrpcIssueServiceClient {
                                 pageSize,
                                 context)
                         .setStatusKey(statusKey);
+        applyBoardOptions(body, options);
         if (afterCreatedAt != null) {
             var instant = afterCreatedAt.toInstant();
             body.setAfterCreatedAt(
@@ -579,6 +642,9 @@ public class GrpcIssueServiceClient {
                                     .build())
                     .setAfterId(afterId.toString());
         }
+        if (afterUpdatedAt != null)
+            body.setAfterUpdatedAt(boardTimestamp(afterUpdatedAt.toInstant()))
+                    .setAfterId(afterId.toString());
         return dynamicStub()
                 .listIssuesForBoard(
                         ListIssuesForBoardRequest.newBuilder()
@@ -587,11 +653,12 @@ public class GrpcIssueServiceClient {
                                 .build())
                 .map(
                         response -> {
+                            requireBoardVersion(response, options, afterUpdatedAt != null);
                             if (!response.hasTotalCount() || !response.hasHasMore()) {
                                 throw new ResponseStatusException(
                                         HttpStatus.SERVICE_UNAVAILABLE,
                                         "Board cursor pagination unavailable; issue-service update"
-                                            + " required");
+                                                + " required");
                             }
                             return new BoardIssuePageData(
                                     response.getIssuesList().stream()
@@ -600,6 +667,35 @@ public class GrpcIssueServiceClient {
                                     response.getTotalCount(),
                                     response.getHasMore());
                         });
+    }
+
+    private static void requireBoardVersion(
+            ru.taska.api.issue.v1.ListIssuesForBoardResponse response,
+            BoardReadOptions options,
+            boolean updatedCursor) {
+        if ((updatedCursor
+                        || options.doneSince() != null
+                        || options.updatedOrderStatusKeys() != null)
+                && (!response.hasBoardReadVersion() || response.getBoardReadVersion() != 1))
+            throw new ResponseStatusException(
+                    HttpStatus.SERVICE_UNAVAILABLE,
+                    "Board ordering/filter unavailable; issue-service update required");
+    }
+
+    private static Timestamp boardTimestamp(java.time.Instant at) {
+        return Timestamp.newBuilder()
+                .setSeconds(at.getEpochSecond())
+                .setNanos(at.getNano())
+                .build();
+    }
+
+    private static void applyBoardOptions(
+            ListIssuesForBoardRequestBody.Builder body, BoardReadOptions options) {
+        if (options.doneSince() != null) body.setDoneSince(boardTimestamp(options.doneSince()));
+        if (options.updatedOrderStatusKeys() != null)
+            body.setColumnOrdering(
+                    ru.taska.api.issue.v1.BoardColumnOrdering.newBuilder()
+                            .addAllUpdatedStatusKeys(options.updatedOrderStatusKeys()));
     }
 
     private ListIssuesForBoardRequestBody.Builder boardRequestBody(

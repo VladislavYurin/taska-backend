@@ -1,0 +1,342 @@
+{
+  "databaseChangeLog": [
+    {
+      "changeSet": {
+        "id": "billing-catalog-0001",
+        "author": "taska",
+        "changes": [
+          {
+            "sqlFile": {
+              "path": "0001-catalog.sql",
+              "relativeToChangelogFile": true,
+              "splitStatements": false
+            }
+          },
+          {
+            "sql": {
+              "sql": "SET LOCAL ROLE taska_billing_migrator; SELECT set_config('taska.guard_service','billing',true),set_config('taska.guard_schema','taska',true),set_config('taska.guard_table','idempotency_records',true),set_config('taska.guard_column','tenant_id',true),set_config('taska.guard_app_access','read_write',true);"
+            }
+          },
+          {
+            "sqlFile": {
+              "path": "db/tenant/protect-table.sql",
+              "splitStatements": false
+            }
+          },
+          {
+            "sql": {
+              "sql": "SET LOCAL ROLE taska_billing_migrator; SELECT set_config('taska.guard_service','billing',true),set_config('taska.guard_schema','taska',true),set_config('taska.guard_table','outbox_events',true),set_config('taska.guard_column','tenant_id',true),set_config('taska.guard_app_access','append_only',true);"
+            }
+          },
+          {
+            "sqlFile": {
+              "path": "db/tenant/protect-table.sql",
+              "splitStatements": false
+            }
+          },
+          {
+            "sql": {
+              "sql": "SET LOCAL ROLE taska_billing_migrator; SELECT set_config('taska.guard_service','billing',true),set_config('taska.guard_schema','taska',true),set_config('taska.guard_table','processed_events',true),set_config('taska.guard_column','tenant_id',true),set_config('taska.guard_app_access','read_write',true);"
+            }
+          },
+          {
+            "sqlFile": {
+              "path": "db/tenant/protect-table.sql",
+              "splitStatements": false
+            }
+          }
+        ]
+      }
+    },
+    {
+      "changeSet": {
+        "id": "billing-subscriptions-0002",
+        "author": "taska",
+        "changes": [
+          {
+            "sqlFile": {
+              "path": "0002-subscriptions.sql",
+              "relativeToChangelogFile": true,
+              "splitStatements": false
+            }
+          },
+          {
+            "sql": {
+              "sql": "SET LOCAL ROLE taska_billing_migrator; SELECT set_config('taska.guard_service','billing',true),set_config('taska.guard_schema','taska',true),set_config('taska.guard_table','subscriptions',true),set_config('taska.guard_column','tenant_id',true),set_config('taska.guard_app_access','read_write',true);"
+            }
+          },
+          {
+            "sqlFile": {
+              "path": "db/tenant/protect-table.sql",
+              "splitStatements": false
+            }
+          },
+          {
+            "sql": {
+              "sql": "SET LOCAL ROLE taska_billing_migrator; SELECT set_config('taska.guard_service','billing',true),set_config('taska.guard_schema','taska',true),set_config('taska.guard_table','subscription_periods',true),set_config('taska.guard_column','tenant_id',true),set_config('taska.guard_app_access','read_write',true);"
+            }
+          },
+          {
+            "sqlFile": {
+              "path": "db/tenant/protect-table.sql",
+              "splitStatements": false
+            }
+          },
+          {
+            "sql": {
+              "sql": "SET LOCAL ROLE taska_billing_migrator; SELECT set_config('taska.guard_service','billing',true),set_config('taska.guard_schema','taska',true),set_config('taska.guard_table','subscription_command_receipts',true),set_config('taska.guard_column','tenant_id',true),set_config('taska.guard_app_access','read_write',true);"
+            }
+          },
+          {
+            "sqlFile": {
+              "path": "db/tenant/protect-table.sql",
+              "splitStatements": false
+            }
+          }
+        ]
+      }
+    },
+    {
+      "changeSet": {
+        "id": "billing-invoices-0003",
+        "author": "taska",
+        "changes": [
+          {
+            "sqlFile": {
+              "path": "0003-invoices.sql",
+              "relativeToChangelogFile": true,
+              "splitStatements": false
+            }
+          },
+          {
+            "sql": {
+              "sql": "SET LOCAL ROLE taska_billing_migrator; SELECT set_config('taska.guard_service','billing',true),set_config('taska.guard_schema','taska',true),set_config('taska.guard_table','invoices',true),set_config('taska.guard_column','tenant_id',true),set_config('taska.guard_app_access','read_write',true);"
+            }
+          },
+          {
+            "sqlFile": {
+              "path": "db/tenant/protect-table.sql",
+              "splitStatements": false
+            }
+          },
+          {
+            "sql": {
+              "sql": "SET LOCAL ROLE taska_billing_migrator; SELECT set_config('taska.guard_service','billing',true),set_config('taska.guard_schema','taska',true),set_config('taska.guard_table','invoice_lines',true),set_config('taska.guard_column','tenant_id',true),set_config('taska.guard_app_access','append_only',true);"
+            }
+          },
+          {
+            "sqlFile": {
+              "path": "db/tenant/protect-table.sql",
+              "splitStatements": false
+            }
+          },
+          {
+            "sql": {
+              "sql": "SET LOCAL ROLE taska_billing_migrator; SELECT set_config('taska.guard_service','billing',true),set_config('taska.guard_schema','taska',true),set_config('taska.guard_table','invoice_command_receipts',true),set_config('taska.guard_column','tenant_id',true),set_config('taska.guard_app_access','append_only',true);"
+            }
+          },
+          {
+            "sqlFile": {
+              "path": "db/tenant/protect-table.sql",
+              "splitStatements": false
+            }
+          }
+        ]
+      }
+    },
+    {
+      "changeSet": {
+        "id": "billing-commercial-fx-0004",
+        "author": "taska",
+        "changes": [
+          {
+            "sqlFile": {
+              "path": "0004-commercial-fx.sql",
+              "relativeToChangelogFile": true,
+              "splitStatements": false
+            }
+          }
+        ]
+      }
+    },
+    {
+      "changeSet": {
+        "id": "billing-ledger-0005",
+        "author": "taska",
+        "changes": [
+          {
+            "sqlFile": {
+              "path": "0005-financial-ledger.sql",
+              "relativeToChangelogFile": true,
+              "splitStatements": false
+            }
+          },
+          {
+            "sql": {
+              "sql": "SET LOCAL ROLE taska_billing_migrator; SELECT set_config('taska.guard_service','billing',true),set_config('taska.guard_schema','taska',true),set_config('taska.guard_table','payment_facts',true),set_config('taska.guard_column','tenant_id',true),set_config('taska.guard_app_access','append_only',true);"
+            }
+          },
+          {
+            "sqlFile": {
+              "path": "db/tenant/protect-table.sql",
+              "splitStatements": false
+            }
+          },
+          {
+            "sql": {
+              "sql": "SET LOCAL ROLE taska_billing_migrator; SELECT set_config('taska.guard_service','billing',true),set_config('taska.guard_schema','taska',true),set_config('taska.guard_table','invoice_payment_matches',true),set_config('taska.guard_column','tenant_id',true),set_config('taska.guard_app_access','append_only',true);"
+            }
+          },
+          {
+            "sqlFile": {
+              "path": "db/tenant/protect-table.sql",
+              "splitStatements": false
+            }
+          },
+          {
+            "sql": {
+              "sql": "SET LOCAL ROLE taska_billing_migrator; SELECT set_config('taska.guard_service','billing',true),set_config('taska.guard_schema','taska',true),set_config('taska.guard_table','payment_allocations',true),set_config('taska.guard_column','tenant_id',true),set_config('taska.guard_app_access','append_only',true);"
+            }
+          },
+          {
+            "sqlFile": {
+              "path": "db/tenant/protect-table.sql",
+              "splitStatements": false
+            }
+          },
+          {
+            "sql": {
+              "sql": "SET LOCAL ROLE taska_billing_migrator; SELECT set_config('taska.guard_service','billing',true),set_config('taska.guard_schema','taska',true),set_config('taska.guard_table','financial_command_receipts',true),set_config('taska.guard_column','tenant_id',true),set_config('taska.guard_app_access','append_only',true);"
+            }
+          },
+          {
+            "sqlFile": {
+              "path": "db/tenant/protect-table.sql",
+              "splitStatements": false
+            }
+          },
+          {
+            "sql": {
+              "sql": "SET LOCAL ROLE taska_billing_migrator; GRANT UPDATE(id) ON taska.payment_facts TO taska_billing_app;"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "changeSet": {
+        "id": "billing-entitlements-0006",
+        "author": "taska",
+        "changes": [
+          {
+            "sqlFile": {
+              "path": "0006-entitlements.sql",
+              "relativeToChangelogFile": true,
+              "splitStatements": false
+            }
+          },
+          {
+            "sql": {
+              "sql": "SET LOCAL ROLE taska_billing_migrator; SELECT set_config('taska.guard_service','billing',true),set_config('taska.guard_schema','taska',true),set_config('taska.guard_table','entitlement_snapshots',true),set_config('taska.guard_column','tenant_id',true),set_config('taska.guard_app_access','append_only',true);"
+            }
+          },
+          {
+            "sqlFile": {
+              "path": "db/tenant/protect-table.sql",
+              "splitStatements": false
+            }
+          }
+        ]
+      }
+    },
+    {
+      "changeSet": {
+        "id": "billing-renewal-calendar-0007",
+        "author": "taska",
+        "changes": [
+          {
+            "sqlFile": {
+              "path": "0007-renewal-calendar.sql",
+              "relativeToChangelogFile": true,
+              "splitStatements": false
+            }
+          },
+          {
+            "sql": {
+              "sql": "SET LOCAL ROLE taska_billing_migrator; SELECT set_config('taska.guard_service','billing',true),set_config('taska.guard_schema','taska',true),set_config('taska.guard_table','renewal_calendar_assignments',true),set_config('taska.guard_column','tenant_id',true),set_config('taska.guard_app_access','append_only',true);"
+            }
+          },
+          {
+            "sqlFile": {
+              "path": "db/tenant/protect-table.sql",
+              "splitStatements": false
+            }
+          }
+        ]
+      }
+    },
+    {
+      "changeSet": {
+        "id": "billing-plan-changes-0008",
+        "author": "taska",
+        "changes": [
+          {
+            "sqlFile": {
+              "path": "0008-plan-changes.sql",
+              "relativeToChangelogFile": true,
+              "splitStatements": false
+            }
+          },
+          {
+            "sql": {
+              "sql": "SET LOCAL ROLE taska_billing_migrator; SELECT set_config('taska.guard_service','billing',true),set_config('taska.guard_schema','taska',true),set_config('taska.guard_table','subscription_plan_changes',true),set_config('taska.guard_column','tenant_id',true),set_config('taska.guard_app_access','read_write',true);"
+            }
+          },
+          {
+            "sqlFile": {
+              "path": "db/tenant/protect-table.sql",
+              "splitStatements": false
+            }
+          }
+        ]
+      }
+    },
+    {
+      "changeSet": {
+        "id": "billing-payment-settlement-0009",
+        "author": "taska",
+        "changes": [
+          {
+            "sqlFile": {
+              "path": "0009-payment-settlement.sql",
+              "relativeToChangelogFile": true,
+              "splitStatements": false
+            }
+          },
+          {
+            "sql": {
+              "sql": "SET LOCAL ROLE taska_billing_migrator; SELECT set_config('taska.guard_service','billing',true),set_config('taska.guard_schema','taska',true),set_config('taska.guard_table','payment_settlements',true),set_config('taska.guard_column','tenant_id',true),set_config('taska.guard_app_access','append_only',true);"
+            }
+          },
+          {
+            "sqlFile": {
+              "path": "db/tenant/protect-table.sql",
+              "splitStatements": false
+            }
+          },
+          {
+            "sql": {
+              "sql": "SET LOCAL ROLE taska_billing_migrator; SELECT set_config('taska.guard_service','billing',true),set_config('taska.guard_schema','taska',true),set_config('taska.guard_table','initial_payment_deliveries',true),set_config('taska.guard_column','tenant_id',true),set_config('taska.guard_app_access','append_only',true);"
+            }
+          },
+          {
+            "sqlFile": {
+              "path": "db/tenant/protect-table.sql",
+              "splitStatements": false
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

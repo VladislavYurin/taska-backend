@@ -79,10 +79,10 @@ class ActionAttributionIntegrationTest extends AbstractIT {
     @Test
     void latestCommentWriteUpdatesItsChannelWhileHistoryRetainsEachAction() {
         var created = add(ActionChannel.MCP, "Agent text").block().getComment();
-        var updated = grpc.updateIssueComment(Mono.just(UpdateIssueCommentRequest.newBuilder()
+        var updated = withTenant(grpc.updateIssueComment(Mono.just(UpdateIssueCommentRequest.newBuilder()
                 .setHeader(header(ActionChannel.UI)).setBody(UpdateIssueCommentRequestBody.newBuilder()
                         .setIssueId(issue.toString()).setCommentId(created.getId()).setActorUserId(actor.toString()).setBody("Human edit"))
-                .build())).block().getComment();
+                .build()))).block().getComment();
         assertThat(updated.getChannel()).isEqualTo("UI");
         var stored = comments.findById(UUID.fromString(created.getId())).block();
         assertThat(stored.getTokenId()).isNull();
@@ -110,10 +110,10 @@ class ActionAttributionIntegrationTest extends AbstractIT {
 
     @Test
     void legacyHeaderAndRowsRemainUnknownAndNullable() {
-        var response = grpc.addIssueComment(Mono.just(AddIssueCommentRequest.newBuilder()
+        var response = withTenant(grpc.addIssueComment(Mono.just(AddIssueCommentRequest.newBuilder()
                 .setHeader(Header.newBuilder().setRequestId("old-client").setNodeId("old-gateway"))
                 .setBody(AddIssueCommentRequestBody.newBuilder().setIssueId(issue.toString()).setAuthorUserId(actor.toString()).setBody("Old client"))
-                .build())).block();
+                .build()))).block();
         assertThat(response.getComment().hasChannel()).isFalse();
         var stored = comments.findById(UUID.fromString(response.getComment().getId())).block();
         assertThat(stored.getChannel()).isNull();
@@ -130,10 +130,10 @@ class ActionAttributionIntegrationTest extends AbstractIT {
     void issueCreationHistoryAndOutboxUseTheSameRequestContext() {
         var entity = issues.findById(issue).block();
         var metadata = new ActionMetadata(ActionChannel.API_TOKEN, TOKEN);
-        historyService.saveIssueCreateHistory("create", "gateway", entity)
-                .contextWrite(context -> context.put(ActionMetadata.class, metadata)).block();
-        outbox.saveOutboxEvent("create", "gateway", ru.taska.event.AggregateType.ISSUE, entity)
-                .contextWrite(context -> context.put(ActionMetadata.class, metadata)).block();
+        withTenant(historyService.saveIssueCreateHistory("create", "gateway", entity)
+                .contextWrite(context -> context.put(ActionMetadata.class, metadata))).block();
+        withTenant(outbox.saveOutboxEvent("create", "gateway", ru.taska.event.AggregateType.ISSUE, entity)
+                .contextWrite(context -> context.put(ActionMetadata.class, metadata))).block();
         var event = history.findByIssueIdOrderByOccurredAtDesc(issue, org.springframework.data.domain.Limit.of(10)).blockFirst();
         assertThat(event.getChannel()).isEqualTo("API_TOKEN");
         assertThat(event.getTokenId()).isEqualTo(TOKEN);
@@ -152,9 +152,9 @@ class ActionAttributionIntegrationTest extends AbstractIT {
     }
 
     private Mono<AddIssueCommentResponse> add(ActionChannel channel, String body) {
-        return grpc.addIssueComment(Mono.just(AddIssueCommentRequest.newBuilder().setHeader(header(channel))
+        return withTenant(grpc.addIssueComment(Mono.just(AddIssueCommentRequest.newBuilder().setHeader(header(channel))
                 .setBody(AddIssueCommentRequestBody.newBuilder().setIssueId(issue.toString()).setAuthorUserId(actor.toString()).setBody(body))
-                .build()));
+                .build())));
     }
 
     private Header header(ActionChannel channel) {

@@ -42,7 +42,12 @@ message RevokeTenantSessionRpcRequest {
   string session_id = 2;
   MutationOptions mutation = 3;
 }
+message RevokeWebSessionRpcRequest {
+  RequestContext context = 1;
+  MutationOptions mutation = 2;
+}
 service AuthSessionService {
+  rpc RevokeWebSession(RevokeWebSessionRpcRequest) returns (google.protobuf.Empty);
   rpc StartWebSession(StartWebSessionRpcRequest) returns (LoginResult);
   rpc RefreshWebSession(RefreshWebSessionRpcRequest) returns (AccessSession);
   rpc CreateTenantSession(CreateTenantSessionRpcRequest) returns (AccessSession);

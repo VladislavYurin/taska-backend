@@ -55,6 +55,7 @@ class OutboxEventPublisherTest {
 
         event = OutboxEvent.builder()
                            .id(UUID.randomUUID())
+                           .tenantId(UUID.randomUUID())
                            .aggregateType("project")
                            .aggregateId(UUID.randomUUID())
                            .eventType("ProjectCreated")
@@ -86,7 +87,8 @@ class OutboxEventPublisherTest {
             SenderRecord<String, String, UUID> record = captor.getValue().block();
             Assertions.assertThat(record).isNotNull();
             Assertions.assertThat(record.topic()).isEqualTo(TOPIC);
-            Assertions.assertThat(record.key()).isEqualTo(event.getAggregateId().toString());
+            Assertions.assertThat(record.key()).isEqualTo(
+                    "t:%s:%s:%s".formatted(event.getTenantId(), event.getAggregateType(), event.getAggregateId()));
             Assertions.assertThat(record.value()).isEqualTo(expectedJson);
             Assertions.assertThat(record.correlationMetadata()).isEqualTo(event.getId());
         }

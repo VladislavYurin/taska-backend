@@ -14,6 +14,9 @@ import tools.jackson.databind.JsonNode;
 @Builder
 public record TaskaEvent(
         UUID id,
+        EventScopeKind scopeKind,
+        UUID tenantId,
+        UUID scopeId,
         String aggregateType,
         UUID aggregateId,
         String eventType,
