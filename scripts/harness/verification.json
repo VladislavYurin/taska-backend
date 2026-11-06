@@ -270,7 +270,9 @@
           "*",
           "WebSessionStoreIntegrationTest",
           "TenantAccessIssuerTest",
-          "AuthSessionBoundaryTest"
+          "AuthSessionBoundaryTest",
+          "TenantPersonalTokenStoreIntegrationTest",
+          "TenantPersonalTokenBoundaryTest"
         ],
         "noTestsReason": null
       },

@@ -1,0 +1,55 @@
+syntax = "proto3";
+package ru.taska.b2b.v1;
+import "v1/tenant-context.proto";
+import "v1/tenant-registry.proto";
+option java_multiple_files = true;
+option java_package = "ru.taska.api.b2b.v1";
+
+// Additive subset of docs/b2b/contracts/b2b.proto for TAS-463. Blueprint field numbers are preserved.
+message PersonalTokenRequest {
+  enum ScopesValue { SCOPES_UNSPECIFIED = 0; SCOPES_read = 1; SCOPES_write = 2; }
+  string tenant_id = 1;
+  string name = 2;
+  repeated ScopesValue scopes = 3;
+  int64 expires_in_days = 4;
+}
+message PersonalToken {
+  enum ScopesValue { SCOPES_UNSPECIFIED = 0; SCOPES_read = 1; SCOPES_write = 2; }
+  string id = 1;
+  string tenant_id = 2;
+  string name = 3;
+  repeated ScopesValue scopes = 4;
+  string created_at = 5;
+  string expires_at = 6;
+  bool revoked = 7;
+}
+message PersonalTokenCreated {
+  PersonalToken metadata = 1;
+  string secret = 2;
+}
+message CreateTenantPersonalTokenRpcRequest {
+  RequestContext context = 1;
+  PersonalTokenRequest payload = 2;
+  MutationOptions mutation = 3;
+}
+
+// Internal edge authentication (gateway/MCP, TAS-316). Not in the blueprint: it is the step that
+// produces the verified credential, so it carries no RequestContext. The binding is immutable;
+// membership, ACL, flags and entitlement are still checked per operation by the capability policy.
+message AuthenticateTenantPersonalTokenRequest { string secret = 1; }
+message TenantPersonalTokenBinding {
+  CredentialKind credential_kind = 1;
+  string actor_user_id = 2;
+  string tenant_id = 3;
+  string credential_id = 4;
+  string grant_id = 5;
+  string grant_generation = 6;
+  string actor_generation = 7;
+  repeated string scopes = 8;
+  string expires_at = 9;
+}
+
+service TenantPersonalTokenService {
+  rpc CreateTenantPersonalToken(CreateTenantPersonalTokenRpcRequest) returns (PersonalTokenCreated);
+  rpc AuthenticateTenantPersonalToken(AuthenticateTenantPersonalTokenRequest) returns (TenantPersonalTokenBinding);
+}
