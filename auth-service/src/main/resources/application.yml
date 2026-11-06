@@ -7,6 +7,9 @@ taska:
       refresh-receipt-key: ${TASKA_B2B_REFRESH_RECEIPT_KEY:}
       ed25519-private-key: ${TASKA_B2B_ED25519_PRIVATE_KEY:}
       ed25519-kid: ${TASKA_B2B_ED25519_KID:}
+    # TAS-463: requires B2B sessions and a CapabilityEvaluator.Source adapter; reuses the receipt key.
+    tenant-tokens:
+      enabled: ${TASKA_B2B_TENANT_TOKENS_ENABLED:false}
   signup:
     enabled: ${TASKA_SIGNUP_ENABLED:false}
     ip-attempts-per-hour: ${AUTH_SIGNUP_IP_ATTEMPTS_PER_HOUR:10}

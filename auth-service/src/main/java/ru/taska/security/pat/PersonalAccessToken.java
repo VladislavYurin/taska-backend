@@ -27,4 +27,6 @@ public class PersonalAccessToken {
     private Instant lastUsedAt;
     private Instant revokedAt;
     private String revokedReason;
+    /** TAS-463: tenant-bound tokens authenticate only through TenantPersonalTokenStore. */
+    private UUID integrationGrantId;
 }
