@@ -267,7 +267,10 @@
       "reports": {
         "directory": "auth-service/target/surefire-reports",
         "selectors": [
-          "*"
+          "*",
+          "WebSessionStoreIntegrationTest",
+          "TenantAccessIssuerTest",
+          "AuthSessionBoundaryTest"
         ],
         "noTestsReason": null
       },

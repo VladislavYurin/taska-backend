@@ -1,0 +1,55 @@
+syntax = "proto3";
+package ru.taska.b2b.v1;
+import "v1/tenant-context.proto";
+import "v1/tenant-registry.proto";
+import "google/protobuf/empty.proto";
+option java_multiple_files = true;
+option java_package = "ru.taska.api.b2b.v1";
+
+// Additive subset of docs/b2b/contracts/b2b.proto for TAS-315.
+message AccessSession {
+  enum TokenTypeValue { TOKEN_TYPE_UNSPECIFIED = 0; TOKEN_TYPE_Bearer = 1; }
+  string session_id = 1;
+  string user_id = 2;
+  optional string tenant_id = 3;
+  string access_token = 4;
+  string refresh_token = 5;
+  TokenTypeValue token_type = 6;
+  int64 expires_in = 7;
+  bool mfa_verified = 8;
+}
+message PasswordLoginRequest { string email = 1; string password = 2; }
+message LoginResult { oneof result { AccessSession access_session = 1; } }
+message StartWebSessionRpcRequest {
+  RequestContext context = 1;
+  PasswordLoginRequest payload = 2;
+  MutationOptions mutation = 3;
+}
+message RefreshSessionRequest { string refresh_token = 1; }
+message RefreshWebSessionRpcRequest {
+  RequestContext context = 1;
+  RefreshSessionRequest payload = 2;
+  MutationOptions mutation = 3;
+}
+message TenantSelectionRequest { string tenant_id = 1; }
+message CreateTenantSessionRpcRequest {
+  RequestContext context = 1;
+  TenantSelectionRequest payload = 2;
+  MutationOptions mutation = 3;
+}
+message RevokeTenantSessionRpcRequest {
+  RequestContext context = 1;
+  string session_id = 2;
+  MutationOptions mutation = 3;
+}
+message RevokeWebSessionRpcRequest {
+  RequestContext context = 1;
+  MutationOptions mutation = 2;
+}
+service AuthSessionService {
+  rpc RevokeWebSession(RevokeWebSessionRpcRequest) returns (google.protobuf.Empty);
+  rpc StartWebSession(StartWebSessionRpcRequest) returns (LoginResult);
+  rpc RefreshWebSession(RefreshWebSessionRpcRequest) returns (AccessSession);
+  rpc CreateTenantSession(CreateTenantSessionRpcRequest) returns (AccessSession);
+  rpc RevokeTenantSession(RevokeTenantSessionRpcRequest) returns (google.protobuf.Empty);
+}

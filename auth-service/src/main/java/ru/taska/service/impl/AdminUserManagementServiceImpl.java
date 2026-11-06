@@ -60,6 +60,7 @@ public class AdminUserManagementServiceImpl implements AdminUserManagementServic
                     user.setStatus(UserStatus.BLOCKED);
 
                     return userRepository.save(user)
+                            .flatMap(saved -> userRepository.incrementAuthVersion(saved.getId()).thenReturn(saved))
                             .flatMap(saved -> personalTokens.revokeAll(saved, "USER_BLOCKED", requestId).thenReturn(saved))
                             .flatMap(savedUser -> {
 
@@ -101,6 +102,7 @@ public class AdminUserManagementServiceImpl implements AdminUserManagementServic
                     user.setBlockedFromStatus(null);
 
                     return userRepository.save(user)
+                            .flatMap(saved -> userRepository.incrementAuthVersion(saved.getId()).thenReturn(saved))
                             .flatMap(savedUser -> {
 
                                 JsonNode payload = outboxEventMapper.buildUserUnblockedPayload(
