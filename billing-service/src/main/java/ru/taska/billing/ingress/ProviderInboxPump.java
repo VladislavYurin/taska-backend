@@ -34,7 +34,13 @@ public final class ProviderInboxPump {
                             .onErrorResume(
                                 error -> {
                                   log.warn("Provider inbox processing deferred");
-                                  return Mono.empty();
+                                  return store
+                                      .retry(row.receiptId())
+                                      .onErrorResume(
+                                          retryError -> {
+                                            log.warn("Provider inbox retry scheduling deferred");
+                                            return Mono.empty();
+                                          });
                                 }))
                 .then());
   }

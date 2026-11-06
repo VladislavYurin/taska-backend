@@ -62,6 +62,11 @@ public class ProviderInboxConfiguration {
       ReactorPaymentSettlementServiceGrpc.ReactorPaymentSettlementServiceStub settlement,
       RpcContextSecurity trust,
       @Value("${taska.billing.ingress.service-generation:}") String generation) {
+    if (generation == null
+        || generation.isBlank()
+        || generation.length() > 100
+        || generation.chars().anyMatch(Character::isISOControl))
+      throw new IllegalStateException("TASKA_BILLING_INBOX_SERVICE_GENERATION must be provisioned");
     return new GrpcProviderInboxWorker(inbox, settlement, trust, Clock.systemUTC(), generation);
   }
 

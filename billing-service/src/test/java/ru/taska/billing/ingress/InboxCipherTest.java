@@ -41,5 +41,10 @@ class InboxCipherTest {
     assertThrows(
         IllegalStateException.class,
         () -> new ProviderInboxConfiguration().inboxCipher("active", ""));
+    var generation =
+        assertThrows(
+            IllegalStateException.class,
+            () -> new ProviderInboxConfiguration().providerInboxWorker(null, null, null, ""));
+    assertTrue(generation.getMessage().contains("TASKA_BILLING_INBOX_SERVICE_GENERATION"));
   }
 }

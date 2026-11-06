@@ -120,9 +120,9 @@ public final class ProviderInboxStore {
                       db.sql(
                           "INSERT INTO"
                               + " taska.provider_inbox(id,provider,provider_account_id,environment,event_id,payload_digest,"
-                              + "payload_key_id,payload_nonce,payload_ciphertext,observation,signature_verified,state,reason_code,received_at,processed_at)"
+                              + "payload_key_id,payload_nonce,payload_ciphertext,observation,signature_verified,state,reason_code,received_at,next_attempt_at,processed_at)"
                               + " VALUES(:id,:provider,:account,:environment,:event,:digest,:key,:nonce,:cipher,CAST(:document"
-                              + " AS jsonb),true,:state,:reason,:now,:processed) ON"
+                              + " AS jsonb),true,:state,:reason,:now,:now,:processed) ON"
                               + " CONFLICT(provider,provider_account_id,environment,event_id) DO"
                               + " NOTHING"),
                       identity)
@@ -410,11 +410,25 @@ public final class ProviderInboxStore {
                 + " ON r.provider=i.provider AND r.provider_account_id=i.provider_account_id AND"
                 + " r.environment=i.environment AND"
                 + " r.provider_payment_id=i.observation->>'paymentId' WHERE i.state IN"
-                + " ('RECEIVED','VERIFIED') ORDER BY i.received_at,i.id LIMIT :limit")
+                + " ('RECEIVED','VERIFIED') AND i.next_attempt_at<=:now ORDER BY"
+                + " i.next_attempt_at,i.received_at,i.id LIMIT :limit")
         .bind("limit", limit)
+        .bind("now", offset(now()))
         .map((r, m) -> new Pending(r.get("id", UUID.class), r.get("tenant_id", UUID.class)))
         .all()
         .collectList();
+  }
+
+  public Mono<Void> retry(UUID receipt) {
+    return db.sql(
+            "UPDATE taska.provider_inbox SET attempts=attempts+1,reason_code='RETRY_PENDING',"
+                + " next_attempt_at=greatest(next_attempt_at,:now+LEAST(900,5*power(2,LEAST(attempts,8)))*interval"
+                + " '1 second') WHERE id=:id AND state IN ('RECEIVED','VERIFIED')")
+        .bind("id", receipt)
+        .bind("now", offset(now()))
+        .fetch()
+        .rowsUpdated()
+        .then();
   }
 
   public Mono<Void> verifyPayloadKeys() {

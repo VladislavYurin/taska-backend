@@ -28,7 +28,7 @@ publish this binding using the original persisted attempt's provider identity, n
 If the callback arrives before the create response/mapping, its durable RECEIVED row waits for the
 binding; ACK does not depend on the arrival order. No charge or provider fetch is executed here.
 
-The bounded pump discovers mapped receipts and calls `ProcessProviderWebhook` over the configured
+The bounded pump discovers only mapped, due receipts and calls `ProcessProviderWebhook` over the configured
 self mTLS channel. The service-origin SDK obtains fresh authority and a message-bound signature;
 there is no manually constructed VerifiedTenantContext or role/header fallback. The handler requires
 `SERVICE billing-service`, `processProviderWebhook`, `write` + `inbox:process`, rechecks the stored
@@ -42,7 +42,7 @@ lookup includes the exact requested tenant. The following settlement transaction
 ledger, coverage and Root eligibility. The process handler invokes the protected settlement RPC after
 its inbox transaction commits, and marks APPLIED only after successful delivery. Root failure after
 the financial commit leaves VERIFIED for retry: the same proof/decision is delivered again, never a
-second charge/month. APPLIED means processed (including REVIEW_REQUIRED), not necessarily PAID.
+second charge/month. Failed deliveries receive persisted exponential backoff (5 seconds to 15 minutes), so a failing batch does not monopolize subsequent polls. Receipt/evidence tenant identity is also enforced by a composite FK. APPLIED means processed (including REVIEW_REQUIRED), not necessarily PAID.
 
 ## Activation and storage
 

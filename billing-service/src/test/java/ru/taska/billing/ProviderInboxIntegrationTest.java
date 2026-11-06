@@ -626,7 +626,75 @@ class ProviderInboxIntegrationTest {
                 .fetch()
                 .rowsUpdated()
                 .block(WAIT));
+    assertThrows(
+        RuntimeException.class,
+        () ->
+            operator
+                .sql(
+                    "INSERT INTO taska.provider_inbox SELECT"
+                        + " (jsonb_populate_record(NULL::taska.provider_inbox,"
+                        + " to_jsonb(p)||jsonb_build_object('id',CAST(:id AS"
+                        + " text),'event_id','wrong-tenant-evidence','assigned_tenant_id',CAST(:tenant"
+                        + " AS text)))).* FROM taska.provider_inbox p WHERE p.id=:source")
+                .bind("id", UUID.randomUUID())
+                .bind("tenant", B)
+                .bind("source", r.id())
+                .fetch()
+                .rowsUpdated()
+                .block(WAIT));
     assertEquals(result.evidenceId(), process(r.id()).block(WAIT).evidenceId());
     assertEquals(1, count("payment_facts"));
+  }
+
+  @Test
+  void unmappedBacklogNeverOccupiesTheMappedWorkBatch() {
+    for (int n = 0; n < 60; n++) {
+      var unknown =
+          fake.createCheckout(
+                  identity.merchant(),
+                  new PaymentProvider.Invoice(base.invoice, new PaymentProvider.Money(2000, "EUR")),
+                  UUID.randomUUID(),
+                  "unmapped-" + n)
+              .block(WAIT);
+      receive(
+              fake.confirmPayment(
+                  identity.merchant(),
+                  unknown.providerPaymentId(),
+                  PaymentProvider.State.SUCCEEDED,
+                  "unmapped-event-" + n))
+          .block(WAIT);
+    }
+    base.f.f.time.set(NOW.plusSeconds(1));
+    var mapped = receive(webhook).block(WAIT);
+    bind();
+    assertEquals(
+        List.of(new ProviderInboxStore.Pending(mapped.id(), A)), store.pending(50).block(WAIT));
+    assertEquals(61, count("provider_inbox"));
+  }
+
+  @Test
+  void retryBackoffLetsOtherMappedPaymentsProgressAndReturnsDueWork() {
+    bind();
+    receive(webhook).block(WAIT);
+    receive(
+            fake.confirmPayment(
+                identity.merchant(),
+                payment.providerPaymentId(),
+                PaymentProvider.State.SUCCEEDED,
+                "evt-retry-2"))
+        .block(WAIT);
+    receive(
+            fake.confirmPayment(
+                identity.merchant(),
+                payment.providerPaymentId(),
+                PaymentProvider.State.SUCCEEDED,
+                "evt-retry-3"))
+        .block(WAIT);
+    var first = store.pending(1).block(WAIT).get(0);
+    store.retry(first.receiptId()).block(WAIT);
+    assertNotEquals(first.receiptId(), store.pending(1).block(WAIT).get(0).receiptId());
+    assertEquals(2, store.pending(50).block(WAIT).size());
+    base.f.f.time.set(NOW.plusSeconds(6));
+    assertTrue(store.pending(50).block(WAIT).contains(first));
   }
 }
