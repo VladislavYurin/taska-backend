@@ -1,5 +1,6 @@
 package ru.taska.service.impl;
 
+import ru.taska.board.BoardReadOptions;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
 
@@ -85,43 +86,145 @@ public class BoardServiceImpl implements BoardService {
             IssuePriorityDto priority,
             String query,
             Integer pageSizePerColumn,
-            GatewayContext context
-    ) {
+            OffsetDateTime doneSince,
+            GatewayContext context) {
         log.info("[{}] Getting board for project: {}", context.requestId(), projectId);
 
         int pageSize = pageSizePerColumn == null ? 50 : pageSizePerColumn;
-        if (pageSize < 1 || pageSize > 200) {
+        if (pageSize < 1 || pageSize > 200 || !validBoardTime(doneSince)) {
             return Mono.error(new ResponseStatusException(HttpStatus.BAD_REQUEST,
                     "pageSizePerColumn must be between 1 and 200"));
         }
-        return resolveWorkflows(projectId, issueType, context).flatMap(workflows -> {
-            List<WorkflowStatusDto> statuses = mergeStatusesByKey(workflows.stream()
-                    .filter(WorkflowTypeResolution::isFound).map(WorkflowTypeResolution::statuses).toList());
-            Map<String, Set<String>> statusKeysByType = workflows.stream().collect(Collectors.toMap(
-                    WorkflowTypeResolution::issueType, workflow -> workflow.isFound()
-                            ? workflow.statuses().stream().map(WorkflowStatusDto::getStatusKey).collect(Collectors.toSet()) : Set.of()));
-            // DONE belongs to (issueType, statusKey). Filter in issue-service before merging columns.
-            return Flux.fromIterable(workflows).flatMapSequential(workflow -> {
-                List<String> doneKeys = workflow.isFound() ? workflow.statuses().stream()
-                        .filter(status -> "DONE".equals(status.getCategory()))
-                        .map(WorkflowStatusDto::getStatusKey).distinct().toList() : List.of();
-                return issueClient.listIssuesForBoard(projectId.toString(), workflow.issueType(),
-                        assigneeId != null ? assigneeId.toString() : null,
-                        labelId != null ? labelId.toString() : null, includeDone, doneKeys, priority, query, pageSize, context);
-            }).flatMapIterable(rows -> rows).collectList()
-                    .map(issues -> selectPage(issues, statusKeysByType, pageSize))
-                    .flatMap(page -> enrichAndBuildBoard(projectId, statuses, statusKeysByType, page.issues(), context)
-                            .map(board -> {
-                                board.getColumns().forEach(column -> {
-                                    long total = page.totals().getOrDefault(column.getStatusKey(), 0L);
-                                    column.setTotalCount(total);
-                                    column.setHasMore(total > column.getIssues().size());
-                                });
-                                board.setUnplacedTotalCount(page.unplacedTotal());
-                                board.setUnplacedHasMore(page.unplacedTotal() > board.getUnplacedIssues().size());
-                                return board;
-                            }));
-        });
+        return resolveWorkflows(projectId, issueType, context)
+                .flatMap(
+                        workflows -> {
+                            List<WorkflowStatusDto> statuses =
+                                    mergeStatusesByKey(
+                                            workflows.stream()
+                                                    .filter(WorkflowTypeResolution::isFound)
+                                                    .map(WorkflowTypeResolution::statuses)
+                                                    .toList());
+                            Set<String> updatedColumns =
+                                    statuses.stream()
+                                            .filter(status -> "DONE".equals(status.getCategory()))
+                                            .map(WorkflowStatusDto::getStatusKey)
+                                            .collect(Collectors.toSet());
+                            Map<String, Set<String>> statusKeysByType =
+                                    workflows.stream()
+                                            .collect(
+                                                    Collectors.toMap(
+                                                            WorkflowTypeResolution::issueType,
+                                                            workflow ->
+                                                                    workflow.isFound()
+                                                                            ? workflow
+                                                                                    .statuses()
+                                                                                    .stream()
+                                                                                    .map(
+                                                                                            WorkflowStatusDto
+                                                                                                    ::getStatusKey)
+                                                                                    .collect(
+                                                                                            Collectors
+                                                                                                    .toSet())
+                                                                            : Set.of()));
+                            // DONE belongs to (issueType, statusKey). Filter in issue-service
+                            // before merging columns.
+                            return Flux.fromIterable(workflows)
+                                    .flatMapSequential(
+                                            workflow -> {
+                                                List<String> doneKeys =
+                                                        workflow.isFound()
+                                                                ? workflow.statuses().stream()
+                                                                        .filter(
+                                                                                status ->
+                                                                                        "DONE"
+                                                                                                .equals(
+                                                                                                        status
+                                                                                                                .getCategory()))
+                                                                        .map(
+                                                                                WorkflowStatusDto
+                                                                                        ::getStatusKey)
+                                                                        .distinct()
+                                                                        .toList()
+                                                                : List.of();
+                                                return issueClient.listIssuesForBoard(
+                                                        projectId.toString(),
+                                                        workflow.issueType(),
+                                                        assigneeId != null
+                                                                ? assigneeId.toString()
+                                                                : null,
+                                                        labelId != null ? labelId.toString() : null,
+                                                        includeDone,
+                                                        doneKeys,
+                                                        priority,
+                                                        query,
+                                                        pageSize,
+                                                        new BoardReadOptions(
+                                                                doneSince == null
+                                                                        ? null
+                                                                        : doneSince.toInstant(),
+                                                                workflow.isFound()
+                                                                        ? workflow
+                                                                                .statuses()
+                                                                                .stream()
+                                                                                .map(
+                                                                                        WorkflowStatusDto
+                                                                                                ::getStatusKey)
+                                                                                .filter(
+                                                                                        updatedColumns
+                                                                                                ::contains)
+                                                                                .distinct()
+                                                                                .toList()
+                                                                        : List.of()),
+                                                        context);
+                                            })
+                                    .flatMapIterable(rows -> rows)
+                                    .collectList()
+                                    .map(
+                                            issues ->
+                                                    selectPage(
+                                                            issues,
+                                                            statusKeysByType,
+                                                            pageSize,
+                                                            updatedColumns))
+                                    .flatMap(
+                                            page ->
+                                                    enrichAndBuildBoard(
+                                                                    projectId,
+                                                                    statuses,
+                                                                    statusKeysByType,
+                                                                    page.issues(),
+                                                                    context)
+                                                            .map(
+                                                                    board -> {
+                                                                        board.getColumns()
+                                                                                .forEach(
+                                                                                        column -> {
+                                                                                            long
+                                                                                                    total =
+                                                                                                            page.totals()
+                                                                                                                    .getOrDefault(
+                                                                                                                            column
+                                                                                                                                    .getStatusKey(),
+                                                                                                                            0L);
+                                                                                            column
+                                                                                                    .setTotalCount(
+                                                                                                            total);
+                                                                                            column
+                                                                                                    .setHasMore(
+                                                                                                            total
+                                                                                                                    > column.getIssues()
+                                                                                                                            .size());
+                                                                                        });
+                                                                        board.setUnplacedTotalCount(
+                                                                                page
+                                                                                        .unplacedTotal());
+                                                                        board.setUnplacedHasMore(
+                                                                                page.unplacedTotal()
+                                                                                        > board.getUnplacedIssues()
+                                                                                                .size());
+                                                                        return board;
+                                                                    }));
+                        });
     }
 
     @Override
@@ -137,122 +240,185 @@ public class BoardServiceImpl implements BoardService {
             IssuePriorityDto priority,
             String query,
             Integer pageSize,
+            OffsetDateTime afterUpdatedAt,
+            OffsetDateTime doneSince,
             GatewayContext context) {
         int limit = pageSize == null ? 50 : pageSize;
         if (limit < 1
                 || limit > 200
                 || statusKey == null
                 || statusKey.isBlank()
-                || (afterCreatedAt == null) != (afterId == null)
-                || (afterCreatedAt != null
-                        && (afterCreatedAt.toEpochSecond() < -62135596800L
-                                || afterCreatedAt.toEpochSecond() > 253402300799L))) {
+                || afterCreatedAt != null && afterUpdatedAt != null
+                || (afterCreatedAt != null || afterUpdatedAt != null) != (afterId != null)
+                || !validBoardTime(afterCreatedAt)
+                || !validBoardTime(afterUpdatedAt)
+                || !validBoardTime(doneSince))
             return Mono.error(
                     new ResponseStatusException(
                             HttpStatus.BAD_REQUEST,
-                            "Invalid board cursor or pageSize (1..200); both cursor fields are"
-                                + " required"));
-        }
+                            "Invalid board cursor, date or pageSize (1..200)"));
         return resolveWorkflows(projectId, issueType, context)
-                .flatMapMany(
-                        workflows ->
-                                Flux.fromIterable(workflows)
-                                        // A shared status key is a column only for the types whose
-                                        // own workflow contains it.
-                                        .filter(
-                                                workflow ->
-                                                        workflow.isFound()
-                                                                && workflow.statuses().stream()
-                                                                        .anyMatch(
-                                                                                status ->
-                                                                                        statusKey
-                                                                                                .equals(
-                                                                                                        status
-                                                                                                                .getStatusKey())))
-                                        .flatMapSequential(
-                                                workflow ->
-                                                        issueClient.listBoardColumnPage(
-                                                                projectId.toString(),
-                                                                workflow.issueType(),
-                                                                statusKey,
-                                                                assigneeId == null
-                                                                        ? null
-                                                                        : assigneeId.toString(),
-                                                                labelId == null
-                                                                        ? null
-                                                                        : labelId.toString(),
-                                                                includeDone,
-                                                                workflow.statuses().stream()
-                                                                        .filter(
-                                                                                status ->
-                                                                                        "DONE"
-                                                                                                .equals(
-                                                                                                        status
-                                                                                                                .getCategory()))
-                                                                        .map(
-                                                                                WorkflowStatusDto
-                                                                                        ::getStatusKey)
-                                                                        .distinct()
-                                                                        .toList(),
-                                                                priority,
-                                                                query,
-                                                                limit,
-                                                                afterCreatedAt,
-                                                                afterId,
-                                                                context)))
-                .collectList()
                 .flatMap(
-                        pages -> {
-                            var candidates =
-                                    pages.stream()
-                                            .flatMap(page -> page.issues().stream())
-                                            .sorted(boardOrder())
-                                            .toList();
-                            var selected = candidates.stream().limit(limit).toList();
-                            long total =
-                                    pages.stream().mapToLong(BoardIssuePageData::totalCount).sum();
-                            boolean hasMore =
-                                    candidates.size() > limit
-                                            || pages.stream().anyMatch(BoardIssuePageData::hasMore);
-                            return Mono.zip(
-                                            resolveLabelsById(projectId, selected, context),
-                                            resolveUsersById(selected, context))
-                                    .map(
-                                            tuple -> {
-                                                selected.forEach(
-                                                        data ->
-                                                                enrichIssue(
-                                                                        data,
-                                                                        tuple.getT1(),
-                                                                        tuple.getT2(),
-                                                                        context));
-                                                return new BoardColumnPageResponseDto()
-                                                        .statusKey(statusKey)
-                                                        .issues(
-                                                                selected.stream()
-                                                                        .map(BoardIssueData::issue)
-                                                                        .toList())
-                                                        .totalCount(total)
-                                                        .hasMore(hasMore);
+                        workflows -> {
+                            var statuses =
+                                    mergeStatusesByKey(
+                                            workflows.stream()
+                                                    .filter(WorkflowTypeResolution::isFound)
+                                                    .map(WorkflowTypeResolution::statuses)
+                                                    .toList());
+                            var column =
+                                    statuses.stream()
+                                            .filter(
+                                                    status ->
+                                                            statusKey.equals(status.getStatusKey()))
+                                            .findFirst();
+                            boolean updated =
+                                    column.map(status -> "DONE".equals(status.getCategory()))
+                                            .orElse(false);
+                            if (column.isPresent()
+                                    && afterId != null
+                                    && updated != (afterUpdatedAt != null))
+                                return Mono.error(
+                                        new ResponseStatusException(
+                                                HttpStatus.BAD_REQUEST,
+                                                "Use afterUpdatedAt/afterId for DONE and"
+                                                    + " afterCreatedAt/afterId otherwise"));
+                            var options =
+                                    new BoardReadOptions(
+                                            doneSince == null ? null : doneSince.toInstant(),
+                                            updated ? List.of(statusKey) : List.of());
+                            return Flux.fromIterable(workflows)
+                                    .filter(
+                                            workflow ->
+                                                    workflow.isFound()
+                                                            && workflow.statuses().stream()
+                                                                    .anyMatch(
+                                                                            status ->
+                                                                                    statusKey
+                                                                                            .equals(
+                                                                                                    status
+                                                                                                            .getStatusKey())))
+                                    .flatMapSequential(
+                                            workflow ->
+                                                    issueClient.listBoardColumnPage(
+                                                            projectId.toString(),
+                                                            workflow.issueType(),
+                                                            statusKey,
+                                                            assigneeId == null
+                                                                    ? null
+                                                                    : assigneeId.toString(),
+                                                            labelId == null
+                                                                    ? null
+                                                                    : labelId.toString(),
+                                                            includeDone,
+                                                            workflow.statuses().stream()
+                                                                    .filter(
+                                                                            status ->
+                                                                                    "DONE"
+                                                                                            .equals(
+                                                                                                    status
+                                                                                                            .getCategory()))
+                                                                    .map(
+                                                                            WorkflowStatusDto
+                                                                                    ::getStatusKey)
+                                                                    .distinct()
+                                                                    .toList(),
+                                                            priority,
+                                                            query,
+                                                            limit,
+                                                            afterCreatedAt,
+                                                            afterId,
+                                                            afterUpdatedAt,
+                                                            options,
+                                                            context))
+                                    .collectList()
+                                    .flatMap(
+                                            pages -> {
+                                                var candidates =
+                                                        pages.stream()
+                                                                .flatMap(
+                                                                        page ->
+                                                                                page
+                                                                                        .issues()
+                                                                                        .stream())
+                                                                .sorted(boardOrder(updated))
+                                                                .toList();
+                                                var selected =
+                                                        candidates.stream().limit(limit).toList();
+                                                long total =
+                                                        pages.stream()
+                                                                .mapToLong(
+                                                                        BoardIssuePageData
+                                                                                ::totalCount)
+                                                                .sum();
+                                                boolean hasMore =
+                                                        candidates.size() > limit
+                                                                || pages.stream()
+                                                                        .anyMatch(
+                                                                                BoardIssuePageData
+                                                                                        ::hasMore);
+                                                return Mono.zip(
+                                                                resolveLabelsById(
+                                                                        projectId, selected,
+                                                                        context),
+                                                                resolveUsersById(selected, context))
+                                                        .map(
+                                                                tuple -> {
+                                                                    selected.forEach(
+                                                                            data ->
+                                                                                    enrichIssue(
+                                                                                            data,
+                                                                                            tuple
+                                                                                                    .getT1(),
+                                                                                            tuple
+                                                                                                    .getT2(),
+                                                                                            context));
+                                                                    return new BoardColumnPageResponseDto()
+                                                                            .statusKey(statusKey)
+                                                                            .issues(
+                                                                                    selected
+                                                                                            .stream()
+                                                                                            .map(
+                                                                                                    BoardIssueData
+                                                                                                            ::issue)
+                                                                                            .toList())
+                                                                            .totalCount(total)
+                                                                            .hasMore(hasMore);
+                                                                });
                                             });
                         });
     }
 
-    private Comparator<BoardIssueData> boardOrder() {
+    private static boolean validBoardTime(OffsetDateTime time) {
+        return time == null
+                || time.toEpochSecond() >= -62135596800L && time.toEpochSecond() <= 253402300799L;
+    }
+
+    private Comparator<BoardIssueData> boardOrder(boolean updated) {
+        Comparator<java.time.Instant> timeOrder =
+                updated ? Comparator.reverseOrder() : Comparator.naturalOrder();
+        Comparator<String> idOrder =
+                updated ? Comparator.reverseOrder() : Comparator.naturalOrder();
         return Comparator.comparing(
-                        (BoardIssueData data) ->
-                                data.issue().getCreatedAt() == null
-                                        ? null
-                                        : data.issue().getCreatedAt().toInstant(),
-                        Comparator.nullsLast(Comparator.naturalOrder()))
-                .thenComparing(data -> data.issue().getId().toString());
+                        (BoardIssueData data) -> {
+                            var time =
+                                    updated
+                                            ? data.issue().getUpdatedAt()
+                                            : data.issue().getCreatedAt();
+                            return time == null ? null : time.toInstant();
+                        },
+                        Comparator.nullsLast(timeOrder))
+                .thenComparing(data -> data.issue().getId().toString(), idOrder);
     }
 
     private record StatusGroup(String type, String status) {}
     private record BoardPage(List<BoardIssueData> issues, Map<String, Long> totals, long unplacedTotal) {}
 
-    private BoardPage selectPage(List<BoardIssueData> candidates, Map<String, Set<String>> statusKeysByType,
-                                 int limit) {
+    private BoardPage selectPage(
+            List<BoardIssueData> candidates,
+            Map<String, Set<String>> statusKeysByType,
+            int limit,
+            Set<String> updatedColumns) {
         // Each type supplied its first N per status. Their union contains the global first N.
         var groups = candidates.stream().collect(Collectors.groupingBy(data ->
                 new StatusGroup(data.issue().getIssueType(), data.statusKey())));
@@ -268,17 +434,27 @@ public class BoardServiceImpl implements BoardService {
                 unplacedTotal += count;
             }
         }
-        var sorted = candidates.stream().sorted(boardOrder()).toList();
-        Map<String, Integer> selectedByColumn = new HashMap<>();
-        List<BoardIssueData> selected = new ArrayList<>();
-        for (var data : sorted) {
-            String column = statusKeysByType.getOrDefault(data.issue().getIssueType(), Set.of()).contains(data.statusKey())
-                    ? data.statusKey() : null; // One bounded page for all unplaced statuses/types.
-            if (selectedByColumn.getOrDefault(column, 0) < limit) {
-                selected.add(data);
-                selectedByColumn.merge(column, 1, Integer::sum);
-            }
+        Map<String, List<BoardIssueData>> columns = new LinkedHashMap<>();
+        for (var data : candidates) {
+            String column =
+                    statusKeysByType
+                                    .getOrDefault(data.issue().getIssueType(), Set.of())
+                                    .contains(data.statusKey())
+                            ? data.statusKey()
+                            : null;
+            columns.computeIfAbsent(column, key -> new ArrayList<>()).add(data);
         }
+        List<BoardIssueData> selected = new ArrayList<>();
+        columns.forEach(
+                (column, rows) ->
+                        selected.addAll(
+                                rows.stream()
+                                        .sorted(
+                                                boardOrder(
+                                                        column != null
+                                                                && updatedColumns.contains(column)))
+                                        .limit(limit)
+                                        .toList()));
         return new BoardPage(selected, totals, unplacedTotal);
     }
 

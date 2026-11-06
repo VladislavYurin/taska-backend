@@ -1,5 +1,6 @@
 package ru.taska.service;
 
+import ru.taska.board.BoardReadOptions;
 import reactor.core.publisher.Mono;
 
 import ru.taska.api.issue.v1.IssueBoardResponse;
@@ -160,6 +161,37 @@ public interface IssueService {
      * @param pageSizePerColumn количество задач на одну колонку
      * @return                  Mono с готовыми к ответу представлениями задач для доски
      */
+    default Mono<List<IssueBoardResponse>> listIssueBoard(
+            String requestId,
+            String nodeId,
+            UUID actorUserId,
+            UUID projectId,
+            String statusKey,
+            UUID assigneeId,
+            IssueType issueType,
+            boolean includeDone,
+            List<String> doneStatusKeys,
+            List<UUID> labelIds,
+            Integer pageSizePerColumn,
+            IssuePriority priority,
+            String query) {
+        return listIssueBoard(
+                requestId,
+                nodeId,
+                actorUserId,
+                projectId,
+                statusKey,
+                assigneeId,
+                issueType,
+                includeDone,
+                doneStatusKeys,
+                labelIds,
+                pageSizePerColumn,
+                priority,
+                query,
+                BoardReadOptions.DEFAULT);
+    }
+
     Mono<List<IssueBoardResponse>> listIssueBoard(
             String requestId,
             String nodeId,
@@ -173,8 +205,8 @@ public interface IssueService {
             List<UUID> labelIds,
             Integer pageSizePerColumn,
             IssuePriority priority,
-            String query
-    );
+            String query,
+            BoardReadOptions options);
 
 
     Mono<Issue> getIssueByKey(
@@ -183,6 +215,41 @@ public interface IssueService {
             String issueKey,
             UUID actorUserId
     );
+
+    default Mono<BoardCursorPage<IssueBoardResponse>> listBoardColumnPage(
+            String requestId,
+            String nodeId,
+            UUID actorUserId,
+            UUID projectId,
+            String statusKey,
+            UUID assigneeId,
+            IssueType issueType,
+            boolean includeDone,
+            List<String> doneStatusKeys,
+            List<UUID> labelIds,
+            int pageSize,
+            IssuePriority priority,
+            String query,
+            Instant afterCreatedAt,
+            UUID afterId) {
+        return listBoardColumnPage(
+                requestId,
+                nodeId,
+                actorUserId,
+                projectId,
+                statusKey,
+                assigneeId,
+                issueType,
+                includeDone,
+                doneStatusKeys,
+                labelIds,
+                pageSize,
+                priority,
+                query,
+                afterCreatedAt,
+                afterId,
+                BoardReadOptions.DEFAULT);
+    }
 
     Mono<BoardCursorPage<IssueBoardResponse>> listBoardColumnPage(
             String requestId,
@@ -199,5 +266,6 @@ public interface IssueService {
             IssuePriority priority,
             String query,
             Instant afterCreatedAt,
-            UUID afterId);
+            UUID afterId,
+            BoardReadOptions options);
 }

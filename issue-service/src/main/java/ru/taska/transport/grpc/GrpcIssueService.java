@@ -1173,133 +1173,268 @@ public class GrpcIssueService {
     @TrackMetrics(counter = "issue-service_list-issues-board_grpc_counter",
             timer = "issue-service_list-issues-board_grpc_timer")
     public Mono<ListIssuesForBoardResponse> listIssuesForBoard(Mono<ListIssuesForBoardRequest> request){
-        return request
-                .flatMap(req -> Mono.zip(
-                        GrpcRequestValidators.requireNonBlankOrInvalidArgument(
-                                req.getHeader().getRequestId(), "header.requestId"
-                        ),
-                        GrpcRequestValidators.requireNonBlankOrInvalidArgument(
-                                req.getHeader().getNodeId(), "header.nodeId"
-                        ),
-                        GrpcRequestValidators.parseUuidOrInvalidArgument(
-                                req.getBody().getProjectId(), "body.projectId"
-                        ),
-                        GrpcRequestValidators.parseUuidOrInvalidArgument(
-                                req.getBody().getActorUserId(), "body.actorUserId"
-                        ),
-                                req.getBody().hasAssigneeId()
-                                        ? GrpcRequestValidators.parseUuidOrInvalidArgument(req
-                                        .getBody().getAssigneeId(), "body.assigneeId").map(Optional::of)
-                                        : Mono.just(Optional.<UUID>empty()),
-                                validateLabelIds(req.getBody().getLabelIdsList()),
-                                validateBoardCursor(req.getBody())
+        return request.flatMap(
+                req ->
+                        Mono.zip(
+                                        GrpcRequestValidators.requireNonBlankOrInvalidArgument(
+                                                req.getHeader().getRequestId(), "header.requestId"),
+                                        GrpcRequestValidators.requireNonBlankOrInvalidArgument(
+                                                req.getHeader().getNodeId(), "header.nodeId"),
+                                        GrpcRequestValidators.parseUuidOrInvalidArgument(
+                                                req.getBody().getProjectId(), "body.projectId"),
+                                        GrpcRequestValidators.parseUuidOrInvalidArgument(
+                                                req.getBody().getActorUserId(), "body.actorUserId"),
+                                        req.getBody().hasAssigneeId()
+                                                ? GrpcRequestValidators.parseUuidOrInvalidArgument(
+                                                                req.getBody().getAssigneeId(),
+                                                                "body.assigneeId")
+                                                        .map(Optional::of)
+                                                : Mono.just(Optional.<UUID>empty()),
+                                        validateLabelIds(req.getBody().getLabelIdsList()),
+                                        validateBoardCursor(req.getBody()),
+                                        validateBoardTime(
+                                                req.getBody().hasDoneSince(),
+                                                req.getBody().getDoneSince(),
+                                                "doneSince"))
+                                .doOnError(
+                                        StatusRuntimeException.class,
+                                        logValidationError(
+                                                req.getHeader().getRequestId(),
+                                                req.getHeader().getNodeId(),
+                                                "listIssuesForBoard"))
+                                .flatMap(
+                                        t -> {
+                                            String requestId = t.getT1();
+                                            String nodeId = t.getT2();
+                                            UUID projectId = t.getT3();
+                                            UUID actorUserId = t.getT4();
+                                            UUID assigneeId = t.getT5().orElse(null);
+                                            String statusKey =
+                                                    req.getBody().hasStatusKey()
+                                                                    && !req.getBody()
+                                                                            .getStatusKey()
+                                                                            .isBlank()
+                                                            ? req.getBody().getStatusKey()
+                                                            : null;
+                                            Integer pageSizePerColumn =
+                                                    req.getBody().hasPageSizePerColumn()
+                                                            ? req.getBody().getPageSizePerColumn()
+                                                            : null;
+                                            if (pageSizePerColumn != null
+                                                    && (pageSizePerColumn < 1
+                                                            || pageSizePerColumn > 200)) {
+                                                return Mono.error(
+                                                        io.grpc.Status.INVALID_ARGUMENT
+                                                                .withDescription(
+                                                                        "body.pageSizePerColumn"
+                                                                            + " must be between 1"
+                                                                            + " and 200")
+                                                                .asRuntimeException());
+                                            }
+                                            ru.taska.domain.IssueType issueType =
+                                                    (req.getBody().hasIssueTypeKey()
+                                                                    || req.getBody()
+                                                                                    .getIssueTypeValue()
+                                                                            != 0)
+                                                            ? validator.IssueTypeKeys.read(
+                                                                    req.getBody().hasIssueTypeKey(),
+                                                                    req.getBody().getIssueTypeKey(),
+                                                                    req.getBody().getIssueType())
+                                                            : null;
+                                            ru.taska.domain.entity.IssuePriority priority =
+                                                    req.getBody().getPriority()
+                                                                    == IssuePriority
+                                                                            .ISSUE_PRIORITY_UNSPECIFIED
+                                                            ? null
+                                                            : issueMapper.toDomainIssuePriority(
+                                                                    req.getBody().getPriority());
+                                            String query =
+                                                    req.getBody().hasQuery()
+                                                                    && !req.getBody()
+                                                                            .getQuery()
+                                                                            .isBlank()
+                                                            ? req.getBody().getQuery()
+                                                            : null;
+                                            List<UUID> labelIds =
+                                                    t.getT6().isEmpty() ? null : t.getT6();
 
-                ).doOnError(
-                        StatusRuntimeException.class,
-                        logValidationError(
-                                req.getHeader().getRequestId(),
-                                req.getHeader().getNodeId(),
-                                "listIssuesForBoard"
-                        )
-                                )
-                        .flatMap(t -> {
-                            String requestId = t.getT1();
-                            String nodeId = t.getT2();
-                            UUID projectId = t.getT3();
-                            UUID actorUserId = t.getT4();
-                            UUID assigneeId = t.getT5().orElse(null);
-                            String statusKey = req.getBody().hasStatusKey() && !req.getBody().getStatusKey().isBlank()
-                                    ? req.getBody().getStatusKey()
-                                    : null;
-                            Integer pageSizePerColumn = req.getBody().hasPageSizePerColumn()
-                                    ? req.getBody().getPageSizePerColumn()
-                                    : null;
-                            if (pageSizePerColumn != null && (pageSizePerColumn < 1 || pageSizePerColumn > 200)) {
-                                return Mono.error(io.grpc.Status.INVALID_ARGUMENT
-                                        .withDescription("body.pageSizePerColumn must be between 1 and 200").asRuntimeException());
-                            }
-                            ru.taska.domain.IssueType issueType = (req.getBody().hasIssueTypeKey() || req.getBody().getIssueTypeValue() != 0)
-                                    ? validator.IssueTypeKeys.read(req.getBody().hasIssueTypeKey(), req.getBody().getIssueTypeKey(), req.getBody().getIssueType()) : null;
-                            ru.taska.domain.entity.IssuePriority priority =
-                                    req.getBody().getPriority() == IssuePriority.ISSUE_PRIORITY_UNSPECIFIED
-                                    ? null
-                                    : issueMapper.toDomainIssuePriority(req.getBody().getPriority());
-                            String query = req.getBody().hasQuery() && !req.getBody().getQuery().isBlank()
-                                    ? req.getBody().getQuery()
-                                    : null;
-                            List<UUID> labelIds = t.getT6().isEmpty() ? null : t.getT6();
-
-                            log.info(
-                                    "[{}][{}] listIssuesForBoard: projectId={}, actorUserId={}, statusKey={}, " +
-                                            "assigneeId={}, issueType={}, includeDone={}, labelIds={}, pageSizePerColumn={}, priority={}, query={}",
-                                    requestId, nodeId, projectId, actorUserId, statusKey,
-                                    assigneeId, issueType, req.getBody().getIncludeDone(), labelIds, pageSizePerColumn, priority, query
-                            );
-                            BoardCursor cursor = t.getT7().orElse(null);
-                            Mono<ListIssuesForBoardResponse> result;
-                            if (statusKey != null && (cursor != null || pageSizePerColumn != null)) {
-                                result = issueService.listBoardColumnPage(requestId, nodeId, actorUserId, projectId,
-                                                statusKey, assigneeId, issueType, req.getBody().getIncludeDone(),
-                                                req.getBody().getDoneStatusKeysList(), labelIds,
-                                                pageSizePerColumn == null ? 50 : pageSizePerColumn, priority, query,
-                                                cursor == null ? null : cursor.createdAt(), cursor == null ? null : cursor.id())
-                                        .map(page -> ListIssuesForBoardResponse.newBuilder().addAllIssues(page.items())
-                                                .setTotalCount(page.totalCount()).setHasMore(page.hasMore()).build());
-                            } else {
-                                // Legacy status-only requests without pagination remain unbounded.
-                                result = issueService.listIssueBoard(requestId, nodeId, actorUserId, projectId,
-                                                statusKey, assigneeId, issueType, req.getBody().getIncludeDone(),
-                                                req.getBody().getDoneStatusKeysList(), labelIds, pageSizePerColumn, priority, query)
-                                        .map(issues -> ListIssuesForBoardResponse.newBuilder().addAllIssues(issues).build());
-                            }
-                            return result
-                                    .doOnSuccess(response ->
-                                            log.info("[{}][{}] listIssuesForBoard: successfully found {} issues",
-                                            requestId, nodeId, response.getIssuesCount()))
-                                    .doOnError(DomainException.class,
-                                            logOnError(
-                                                    req.getHeader().getRequestId(),
-                                                    req.getHeader().getNodeId(),
-                                                    "listIssuesForBoard"
-                                            )
-                                    );
-                        })
-                );
+                                            log.info(
+                                                    "[{}][{}] listIssuesForBoard: projectId={},"
+                                                        + " actorUserId={}, statusKey={},"
+                                                        + " assigneeId={}, issueType={},"
+                                                        + " includeDone={}, labelIds={},"
+                                                        + " pageSizePerColumn={}, priority={},"
+                                                        + " query={}",
+                                                    requestId,
+                                                    nodeId,
+                                                    projectId,
+                                                    actorUserId,
+                                                    statusKey,
+                                                    assigneeId,
+                                                    issueType,
+                                                    req.getBody().getIncludeDone(),
+                                                    labelIds,
+                                                    pageSizePerColumn,
+                                                    priority,
+                                                    query);
+                                            BoardCursor cursor = t.getT7().orElse(null);
+                                            var options =
+                                                    new ru.taska.board.BoardReadOptions(
+                                                            t.getT8().orElse(null),
+                                                            req.getBody().hasColumnOrdering()
+                                                                    ? req.getBody()
+                                                                            .getColumnOrdering()
+                                                                            .getUpdatedStatusKeysList()
+                                                                    : null);
+                                            Mono<ListIssuesForBoardResponse> result;
+                                            if (statusKey != null
+                                                    && (cursor != null
+                                                            || pageSizePerColumn != null)) {
+                                                result =
+                                                        issueService
+                                                                .listBoardColumnPage(
+                                                                        requestId,
+                                                                        nodeId,
+                                                                        actorUserId,
+                                                                        projectId,
+                                                                        statusKey,
+                                                                        assigneeId,
+                                                                        issueType,
+                                                                        req.getBody()
+                                                                                .getIncludeDone(),
+                                                                        req.getBody()
+                                                                                .getDoneStatusKeysList(),
+                                                                        labelIds,
+                                                                        pageSizePerColumn == null
+                                                                                ? 50
+                                                                                : pageSizePerColumn,
+                                                                        priority,
+                                                                        query,
+                                                                        cursor == null
+                                                                                ? null
+                                                                                : cursor.at(),
+                                                                        cursor == null
+                                                                                ? null
+                                                                                : cursor.id(),
+                                                                        options)
+                                                                .map(
+                                                                        page ->
+                                                                                ListIssuesForBoardResponse
+                                                                                        .newBuilder()
+                                                                                        .addAllIssues(
+                                                                                                page
+                                                                                                        .items())
+                                                                                        .setTotalCount(
+                                                                                                page
+                                                                                                        .totalCount())
+                                                                                        .setHasMore(
+                                                                                                page
+                                                                                                        .hasMore())
+                                                                                        .build());
+                                            } else {
+                                                // Legacy status-only requests without pagination
+                                                // remain unbounded.
+                                                result =
+                                                        issueService
+                                                                .listIssueBoard(
+                                                                        requestId,
+                                                                        nodeId,
+                                                                        actorUserId,
+                                                                        projectId,
+                                                                        statusKey,
+                                                                        assigneeId,
+                                                                        issueType,
+                                                                        req.getBody()
+                                                                                .getIncludeDone(),
+                                                                        req.getBody()
+                                                                                .getDoneStatusKeysList(),
+                                                                        labelIds,
+                                                                        pageSizePerColumn,
+                                                                        priority,
+                                                                        query,
+                                                                        options)
+                                                                .map(
+                                                                        issues ->
+                                                                                ListIssuesForBoardResponse
+                                                                                        .newBuilder()
+                                                                                        .addAllIssues(
+                                                                                                issues)
+                                                                                        .build());
+                                            }
+                                            return result.map(
+                                                            response ->
+                                                                    response.toBuilder()
+                                                                            .setBoardReadVersion(1)
+                                                                            .build())
+                                                    .doOnSuccess(
+                                                            response ->
+                                                                    log.info(
+                                                                            "[{}][{}]"
+                                                                                + " listIssuesForBoard:"
+                                                                                + " successfully"
+                                                                                + " found {}"
+                                                                                + " issues",
+                                                                            requestId,
+                                                                            nodeId,
+                                                                            response
+                                                                                    .getIssuesCount()))
+                                                    .doOnError(
+                                                            DomainException.class,
+                                                            logOnError(
+                                                                    req.getHeader().getRequestId(),
+                                                                    req.getHeader().getNodeId(),
+                                                                    "listIssuesForBoard"));
+                                        }));
     }
 
-    private record BoardCursor(Instant createdAt, UUID id) {}
+    private record BoardCursor(Instant at, UUID id) {}
 
-    private Mono<Optional<BoardCursor>> validateBoardCursor(ListIssuesForBoardRequestBody body) {
-        if (body.hasAfterCreatedAt() != body.hasAfterId()
-                || (body.hasAfterCreatedAt()
-                        && (!body.hasStatusKey() || body.getStatusKey().isBlank()))) {
-            return Mono.error(
-                    io.grpc.Status.INVALID_ARGUMENT
-                            .withDescription(
-                                    "afterCreatedAt and afterId must be supplied together with"
-                                        + " statusKey")
-                            .asRuntimeException());
-        }
-        if (!body.hasAfterCreatedAt()) return Mono.just(Optional.empty());
-        var timestamp = body.getAfterCreatedAt();
+    private Mono<Optional<Instant>> validateBoardTime(
+            boolean present, com.google.protobuf.Timestamp timestamp, String field) {
+        if (!present) return Mono.just(Optional.empty());
         if (timestamp.getSeconds() < -62135596800L
                 || timestamp.getSeconds() > 253402300799L
                 || timestamp.getNanos() < 0
-                || timestamp.getNanos() > 999999999) {
+                || timestamp.getNanos() > 999999999)
             return Mono.error(
                     io.grpc.Status.INVALID_ARGUMENT
-                            .withDescription("body.afterCreatedAt is invalid")
+                            .withDescription("body." + field + " is invalid")
                             .asRuntimeException());
-        }
-        return GrpcRequestValidators.parseUuidOrInvalidArgument(body.getAfterId(), "body.afterId")
+        return Mono.just(
+                Optional.of(Instant.ofEpochSecond(timestamp.getSeconds(), timestamp.getNanos())));
+    }
+
+    private Mono<Optional<BoardCursor>> validateBoardCursor(ListIssuesForBoardRequestBody body) {
+        boolean created = body.hasAfterCreatedAt(), updated = body.hasAfterUpdatedAt();
+        var orderKeys =
+                body.hasColumnOrdering()
+                        ? body.getColumnOrdering().getUpdatedStatusKeysList()
+                        : body.getDoneStatusKeysList();
+        boolean descending = body.hasStatusKey() && orderKeys.contains(body.getStatusKey());
+        if (created && updated
+                || (created || updated) != body.hasAfterId()
+                || (created || updated)
+                        && (!body.hasStatusKey()
+                                || body.getStatusKey().isBlank()
+                                || descending != updated))
+            return Mono.error(
+                    io.grpc.Status.INVALID_ARGUMENT
+                            .withDescription(
+                                    "Use afterUpdatedAt/afterId for DONE and afterCreatedAt/afterId"
+                                        + " otherwise, with statusKey")
+                            .asRuntimeException());
+        if (!created && !updated) return Mono.just(Optional.empty());
+        return validateBoardTime(
+                        true,
+                        updated ? body.getAfterUpdatedAt() : body.getAfterCreatedAt(),
+                        updated ? "afterUpdatedAt" : "afterCreatedAt")
+                .zipWith(
+                        GrpcRequestValidators.parseUuidOrInvalidArgument(
+                                body.getAfterId(), "body.afterId"))
                 .map(
-                        id ->
+                        pair ->
                                 Optional.of(
-                                        new BoardCursor(
-                                                Instant.ofEpochSecond(
-                                                        timestamp.getSeconds(),
-                                                        timestamp.getNanos()),
-                                                id)));
+                                        new BoardCursor(pair.getT1().orElseThrow(), pair.getT2())));
     }
 
     /**
