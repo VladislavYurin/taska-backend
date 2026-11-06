@@ -200,3 +200,10 @@ After final review repeat these source-path checks. Public capabilities REST (TA
 concrete domain authority wiring and shared broker/stage E2E are separate activation scopes.
 
 TAS-324: `tenant-service.verify` требует `ProjectQuotaIntegrationTest`: production root/owner на двух PostgreSQL через mTLS/JWS, last-slot/expiry/retry/UNKNOWN, A/B, archive/hard-delete и atomic owner outbox rollback. [Контракт и активация PROJECT](../../tenant-service/PROJECT-QUOTAS.md). Project tenant storage, SEAT и membership checks повторяют затронутые schema/read paths; public REST/stage не заявлены проверенными.
+
+TAS-352: `billing-service.verify` requires `PaymentSettlementIntegrationTest`: actual PostgreSQL,
+full settlement/coverage/outbox rollback, economic deduplication, current invoice projection,
+selection fences, closed creation and revoked coverage. `TenantProvisioningRpcIntegrationTest`
+also covers the production settlement/Root decision chain over mTLS and separate owner databases.
+See [settlement contracts and activation](../../billing-service/SETTLEMENT.md). The producer is
+explicitly synthetic in this suite; external PSP/bank/public REST acceptance is separate.

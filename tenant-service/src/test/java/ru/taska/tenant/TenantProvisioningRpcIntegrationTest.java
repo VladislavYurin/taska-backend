@@ -546,7 +546,7 @@ class TenantProvisioningRpcIntegrationTest {
   }
 
   @Test
-  void signedCreationResumesAcrossLostRemoteAcksAndReadsFinalOperation() {
+  void signedCreationResumesAcrossLostRemoteAcksAndReadsFinalOperation() throws Exception {
     try (var scheduler =
         new org.springframework.context.annotation.AnnotationConfigApplicationContext()) {
       scheduler
@@ -658,6 +658,7 @@ class TenantProvisioningRpcIntegrationTest {
       assertFalse(loseBilling.get());
       closureAndDecisionRpcFlow();
       planDowngradePreservesRootStorage();
+      verifiedSettlementAndRootActivationRpcFlow();
     }
   }
 
@@ -1175,5 +1176,254 @@ class TenantProvisioningRpcIntegrationTest {
             .map((r, m) -> r.get("n", Long.class))
             .one()
             .block(WAIT));
+  }
+
+  /**
+   * Actual billing settlement -> primary Root -> billing decision -> Root activation, over mTLS.
+   */
+  void verifiedSettlementAndRootActivationRpcFlow() throws Exception {
+    closureNow.set(CLOCK.instant());
+    var create =
+        CreateTenantRpcRequest.newBuilder()
+            .setContext(context("createTenant"))
+            .setPayload(
+                ru.taska.api.b2b.v1.CreateTenantRequest.newBuilder()
+                    .setName("Verified settlement RPC")
+                    .setPlanVersionId(PAID.toString()))
+            .setMutation(
+                MutationOptions.newBuilder().setIdempotencyKey(UUID.randomUUID().toString()))
+            .build();
+    var created =
+        tenant
+            .withInterceptors(
+                MetadataUtils.newAttachHeadersInterceptor(
+                    signature(
+                        create,
+                        TenantServiceGrpc.getCreateTenantMethod().getFullMethodName(),
+                        true)))
+            .createTenant(create);
+    UUID t = UUID.fromString(created.getTenant().getId()),
+        op = UUID.fromString(created.getOperation().getId()),
+        invoice = UUID.randomUUID(),
+        evidenceId = UUID.randomUUID();
+    org.awaitility.Awaitility.await()
+        .atMost(Duration.ofSeconds(20))
+        .until(
+            () ->
+                "SUCCEEDED"
+                    .equals(
+                        tenantDb
+                            .sql("SELECT state FROM taska.tenant_operations WHERE tenant_id=:t")
+                            .bind("t", t)
+                            .map((r, m) -> r.get("state", String.class))
+                            .one()
+                            .block(WAIT)));
+    var occurred = CLOCK.instant().truncatedTo(java.time.temporal.ChronoUnit.MICROS);
+    billingDb
+        .sql(
+            """
+            DO $$ BEGIN
+              INSERT INTO taska.invoices(id,tenant_id,number,operation_id,target_key,purpose,plan_version_id,method,currency,currency_exponent,
+                subtotal_minor,tax_minor,total_minor,issued_at,payable_until,creation_deadline_snapshot,terms_snapshot,pricing_snapshot,seller_snapshot,buyer_snapshot,snapshot)
+              VALUES('%s','%s','RPC-%s','%s','first','INITIAL','%s','PSP','EUR',2,2000,0,2000,'%s','%s','%s','{}','{"profileVersion":"fixture-v1"}','{}','{}','');
+              INSERT INTO taska.invoice_lines(tenant_id,invoice_id,line_no,description,quantity,net_minor,tax_minor,total_minor,taxes_snapshot,snapshot)
+              VALUES('%s','%s',1,'Monthly subscription',1,2000,0,2000,'[]','');
+              UPDATE taska.invoices SET state='OPEN' WHERE tenant_id='%s' AND id='%s';
+            END $$
+            """
+                .formatted(
+                    invoice,
+                    t,
+                    invoice,
+                    op,
+                    PAID,
+                    occurred.minusSeconds(1),
+                    occurred.plusSeconds(7 * 86400),
+                    created.getTenant().getCreationDeadline(),
+                    t,
+                    invoice,
+                    t,
+                    invoice))
+        .then()
+        .block(WAIT);
+    var decisionStub =
+        new java.util.concurrent.atomic.AtomicReference<
+            ReactorPaymentSettlementServiceGrpc.ReactorPaymentSettlementServiceStub>();
+    var realLifecycle =
+        new TenantCreationLifecycle(
+            new TenantTransactionExecutor(pools.get(0)),
+            (tenantId, decision) ->
+                new GrpcInitialPaymentDecisions(decisionStub.get(), tenantTrust, CLOCK)
+                    .resolve(tenantId, decision),
+            CLOSURE_CLOCK);
+    int rootPort =
+        server(
+            "tenant-service",
+            interceptor(new TenantConfiguration(), tenantTrust, "registrySecurity"),
+            new TenantPaymentStateGrpc(realLifecycle),
+            new TenantCreationLifecycleGrpc(realLifecycle));
+    var rootChannel = channel("billing-service", rootPort);
+    var btx = new TenantTransactionExecutor(pools.get(1));
+    var emptyEvidence =
+        new SubscriptionDependencies.SettlementEvidenceAuthority() {
+          public Mono<SubscriptionDependencies.CoverageEvidence> confirmed(
+              DatabaseClient db, UUID tenantId, UUID proof) {
+            return Mono.empty();
+          }
+
+          public Mono<SubscriptionDependencies.RevocationEvidence> reversed(
+              DatabaseClient db, UUID tenantId, UUID proof) {
+            return Mono.empty();
+          }
+        };
+    var subscriptions =
+        new SubscriptionStore(
+            btx,
+            c -> Mono.just(false),
+            emptyEvidence,
+            CLOSURE_CLOCK,
+            new PeriodCursor(Base64.getEncoder().encodeToString(new byte[32]), CLOSURE_CLOCK));
+    var ledger =
+        new FinancialLedger(
+            btx,
+            c -> Mono.just(false),
+            (db, tenantId, proof) -> Mono.empty(),
+            (db, tenantId, i, ids) -> Mono.empty(),
+            CLOSURE_CLOCK);
+    var normalized =
+        new FinancialLedgerDependencies.Movement(
+            t,
+            new FinancialLedgerDependencies.Source(
+                "FAKE_VERIFIED_PSP",
+                "fixture-merchant",
+                FinancialLedgerDependencies.Environment.SANDBOX,
+                "payment-" + invoice,
+                FinancialLedgerDependencies.Method.PSP),
+            FinancialLedgerDependencies.Kind.PAYMENT,
+            null,
+            null,
+            2000,
+            FinancialLedgerDependencies.Currency.EUR,
+            new FinancialLedgerDependencies.Occurrence(
+                FinancialLedgerDependencies.Precision.EXACT, occurred, null, null),
+            occurred,
+            occurred,
+            null,
+            null,
+            "fixture/payment-receipt",
+            "ab".repeat(32));
+    var verified =
+        new PaymentSettlementDependencies.VerifiedPaymentFact(
+            t, invoice, op, "fixture-v1", normalized);
+    var deliveries = new java.util.concurrent.atomic.AtomicInteger();
+    var actualDelivery =
+        new GrpcInitialPaymentDelivery(
+            ReactorTenantCreationLifecycleServiceGrpc.newReactorStub(rootChannel),
+            billingSigner,
+            CLOCK);
+    var settlement =
+        new PaymentSettlement(
+            subscriptions,
+            ledger,
+            (db, tenantId, proof) -> Mono.justOrEmpty(proof.equals(evidenceId) ? verified : null),
+            new GrpcTenantPaymentState(
+                ReactorTenantPaymentStateServiceGrpc.newReactorStub(rootChannel),
+                billingSigner,
+                CLOCK),
+            (tenantId, decision) -> {
+              deliveries.incrementAndGet();
+              return actualDelivery.deliver(tenantId, decision);
+            },
+            CLOSURE_CLOCK);
+    int billingPort =
+        server(
+            "billing-service",
+            interceptor(new BillingConfiguration(), billingSigner, "registrySecurity"),
+            new PaymentSettlementGrpc(settlement));
+    decisionStub.set(
+        ReactorPaymentSettlementServiceGrpc.newReactorStub(channel("tenant-service", billingPort)));
+    var rpc =
+        PaymentSettlementServiceGrpc.newBlockingStub(channel("billing-service", billingPort))
+            .withDeadlineAfter(15, TimeUnit.SECONDS);
+    closureNow.set(
+        java.time.Instant.parse(created.getTenant().getCreationDeadline()).plusSeconds(1));
+    var expire =
+        ExpireTenantCreationRequest.newBuilder()
+            .setTenantId(t.toString())
+            .setContext(
+                ProvisioningAuthority.context(t, "tenant-service", "expireTenantCreation", CLOCK))
+            .build();
+    assertEquals(
+        Tenant.LifecycleValue.LIFECYCLE_AUTO_CLOSED,
+        closureRpc
+            .withInterceptors(
+                MetadataUtils.newAttachHeadersInterceptor(
+                    serviceSignature(
+                        expire,
+                        TenantCreationLifecycleServiceGrpc.getExpireTenantCreationMethod()
+                            .getFullMethodName(),
+                        tenantTrust)))
+            .expireTenantCreation(expire)
+            .getLifecycle());
+    for (int attempt = 0; attempt < 2; attempt++) {
+      var context =
+          ProvisioningAuthority.context(t, "billing-service", "applyVerifiedPayment", CLOCK)
+              .toBuilder();
+      context.setContext(
+          context.getContext().toBuilder()
+              .setIssuerService("billing-service")
+              .addScopes("ledger:write"));
+      var apply =
+          ApplyVerifiedPaymentRequest.newBuilder()
+              .setContext(context)
+              .setTenantId(t.toString())
+              .setEvidenceId(evidenceId.toString())
+              .build();
+      assertEquals(
+          Status.Code.UNAUTHENTICATED,
+          assertThrows(StatusRuntimeException.class, () -> rpc.applyVerifiedPayment(apply))
+              .getStatus()
+              .getCode());
+      var paid =
+          rpc.withInterceptors(
+                  MetadataUtils.newAttachHeadersInterceptor(
+                      serviceSignature(
+                          apply,
+                          PaymentSettlementServiceGrpc.getApplyVerifiedPaymentMethod()
+                              .getFullMethodName(),
+                          billingSigner)))
+              .applyVerifiedPayment(apply);
+      assertEquals(PaymentSettlementResult.Outcome.OUTCOME_APPLIED, paid.getOutcome());
+      assertEquals(
+          "ACTIVE",
+          tenantDb
+              .sql("SELECT lifecycle FROM taska.tenants WHERE id=:t")
+              .bind("t", t)
+              .map((r, m) -> r.get("lifecycle", String.class))
+              .one()
+              .block(WAIT));
+    }
+    for (String table :
+        List.of(
+            "payment_facts", "payment_allocations", "payment_settlements", "subscription_periods"))
+      assertEquals(
+          1L,
+          billingDb
+              .sql("SELECT count(*) n FROM taska." + table + " WHERE tenant_id=:t")
+              .bind("t", t)
+              .map((r, m) -> r.get("n", Long.class))
+              .one()
+              .block(WAIT),
+          table);
+    assertEquals(2, deliveries.get());
+    assertEquals(
+        occurred,
+        billingDb
+            .sql("SELECT starts_at FROM taska.subscription_periods WHERE tenant_id=:t")
+            .bind("t", t)
+            .map((r, m) -> r.get("starts_at", java.time.OffsetDateTime.class).toInstant())
+            .one()
+            .block(WAIT));
+    closureNow.set(CLOCK.instant());
   }
 }

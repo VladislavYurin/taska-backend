@@ -281,7 +281,16 @@ public class TenantConfiguration {
 
   @Bean
   @ConditionalOnMissingBean
-  TenantCreationDecisions.Authority initialPaymentDecisions() {
+  TenantCreationDecisions.Authority initialPaymentDecisions(
+      ObjectProvider<
+              ru.taska.api.b2b.v1.ReactorPaymentSettlementServiceGrpc
+                  .ReactorPaymentSettlementServiceStub>
+          stubs,
+      ObjectProvider<RpcContextSecurity> security) {
+    var stub = stubs.getIfAvailable();
+    var trust = security.getIfAvailable();
+    if (stub != null && trust != null)
+      return new GrpcInitialPaymentDecisions(stub, trust, Clock.systemUTC());
     return (tenant, decision) ->
         Mono.error(TenantRegistryService.fail(DomainStatus.UNAVAILABLE, "DEPENDENCY_UNAVAILABLE"));
   }
@@ -508,6 +517,10 @@ public class TenantConfiguration {
                       .getFullMethodName(),
                   new RpcContextSecurity.Policy(true, false)),
               java.util.Map.entry(
+                  ru.taska.api.b2b.v1.TenantPaymentStateServiceGrpc.getGetTenantPaymentStateMethod()
+                      .getFullMethodName(),
+                  new RpcContextSecurity.Policy(true, false)),
+              java.util.Map.entry(
                   TenantServiceGrpc.getGetTenantQuotasMethod().getFullMethodName(),
                   new RpcContextSecurity.Policy(true, false)),
               java.util.Map.entry(
@@ -550,7 +563,8 @@ public class TenantConfiguration {
                   PlatformServiceGrpc.getUpdatePlatformFlagMethod().getFullMethodName(),
                   new RpcContextSecurity.Policy(false, true)),
               java.util.Map.entry(
-                  PlatformServiceGrpc.getGetPlatformConfigurationSnapshotMethod().getFullMethodName(),
+                  PlatformServiceGrpc.getGetPlatformConfigurationSnapshotMethod()
+                      .getFullMethodName(),
                   new RpcContextSecurity.Policy(false, false)),
               java.util.Map.entry(
                   TenantServiceGrpc.getCreateTenantMethod().getFullMethodName(),

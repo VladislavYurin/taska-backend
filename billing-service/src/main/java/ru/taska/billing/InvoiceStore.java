@@ -642,6 +642,17 @@ public final class InvoiceStore {
         : s.bind(name, time.atOffset(ZoneOffset.UTC));
   }
 
+  private static Invoice currentInvoice(Map<String, Object> row) {
+    Invoice original = parsed((String) row.get("snapshot"));
+    var state = Invoice.StateValue.valueOf("STATE_" + row.get("state"));
+    var b = original.toBuilder().setState(state);
+    if (state == Invoice.StateValue.STATE_PAID)
+      b.setAllocated(original.getTotal())
+          .setRemaining(original.getTotal().toBuilder().setAmountMinor("0"))
+          .setMatchedUnallocated(original.getTotal().toBuilder().setAmountMinor("0"));
+    return b.build();
+  }
+
   public Mono<Invoice> get(GetInvoiceRpcRequest request) {
     UUID tenant = uuid(request.getTenantId()), id = uuid(request.getInvoiceId());
     return access
@@ -651,12 +662,13 @@ public final class InvoiceStore {
                 transactions.execute(
                     db ->
                         db.sql(
-                                "SELECT snapshot FROM taska.invoices WHERE tenant_id=:tenant AND"
+                                "SELECT * FROM taska.invoices WHERE tenant_id=:tenant AND"
                                     + " id=:id AND state<>'DRAFT'")
                             .bind("tenant", tenant)
                             .bind("id", id)
-                            .map((r, m) -> parsed(r.get("snapshot", String.class)))
+                            .fetch()
                             .one()
+                            .map(InvoiceStore::currentInvoice)
                             .switchIfEmpty(
                                 Mono.error(fail(DomainStatus.NOT_FOUND, "RESOURCE_NOT_FOUND")))));
   }
@@ -702,7 +714,7 @@ public final class InvoiceStore {
               return transactions.execute(
                   db ->
                       db.sql(
-                              "SELECT snapshot,issued_at,id FROM taska.invoices WHERE"
+                              "SELECT * FROM taska.invoices WHERE"
                                   + " tenant_id=:tenant AND state<>'DRAFT' AND (:first OR"
                                   + " (issued_at,id)<(:after,:id)) ORDER BY issued_at DESC,id DESC"
                                   + " LIMIT :limit")
@@ -721,7 +733,7 @@ public final class InvoiceStore {
                               rows -> {
                                 var page = InvoicePage.newBuilder();
                                 for (var row : rows.subList(0, Math.min(rows.size(), limit)))
-                                  page.addItems(parsed((String) row.get("snapshot")));
+                                  page.addItems(currentInvoice(row));
                                 if (rows.size() > limit) {
                                   var row = rows.get(limit - 1);
                                   page.setNextCursor(

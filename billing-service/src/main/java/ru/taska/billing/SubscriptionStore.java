@@ -368,7 +368,7 @@ public final class SubscriptionStore {
         .flatMap(ignored -> transactions.execute(db -> view(db, tenant)));
   }
 
-  private Mono<Subscription> grantConfirmed(DatabaseClient db, UUID tenant, CoverageEvidence e) {
+  Mono<Subscription> grantConfirmed(DatabaseClient db, UUID tenant, CoverageEvidence e) {
     validate(tenant, e);
     if (!e.supersededPeriodIds().isEmpty() && e.startsAt().isAfter(clock.instant()))
       return Mono.error(fail(DomainStatus.FAILED_PRECONDITION, "INVALID_STATE"));

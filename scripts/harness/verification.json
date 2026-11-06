@@ -1086,6 +1086,7 @@
           "RenewalCalendarIntegrationTest",
           "InvoiceIntegrationTest",
           "FinancialLedgerIntegrationTest",
+          "PaymentSettlementIntegrationTest",
           "CommercialReadinessIntegrationTest"
         ],
         "noTestsReason": null

@@ -253,6 +253,20 @@ public final class FinancialLedger {
                             .flatMap(ids -> fact(db, tenant, ids.getFirst()))));
   }
 
+  Mono<Fact> recordConfirmed(DatabaseClient db, UUID tenant, Movement movement) {
+    validate(tenant, movement);
+    return insert(db, movement);
+  }
+
+  Mono<Match> matchConfirmed(DatabaseClient db, UUID tenant, UUID payment, UUID invoice) {
+    return createMatch(db, tenant, payment, invoice)
+        .flatMap(ids -> matchRow(db, tenant, ids.getFirst()));
+  }
+
+  Mono<UUID> allocateConfirmed(DatabaseClient db, UUID tenant, Match match) {
+    return allocation(db, tenant, match, "FULL_TIMELY_VERIFIED");
+  }
+
   private Mono<Fact> insert(DatabaseClient db, Movement m) {
     byte[] hash = movementHash(m);
     var s = m.source();

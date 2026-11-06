@@ -1,0 +1,31 @@
+syntax = "proto3";
+package ru.taska.b2b.v1;
+import "v1/tenant-context.proto";
+import "v1/tenant-registry.proto";
+option java_multiple_files = true;
+option java_package = "ru.taska.api.b2b.v1";
+option java_outer_classname = "PaymentSettlementApiProto";
+// Internal producer/owner APIs. No browser-supplied amount, timestamps or success flags.
+message ApplyVerifiedPaymentRequest { RequestContext context = 1; string tenant_id = 2; string evidence_id = 3; }
+message PaymentSettlementResult {
+ enum Outcome { OUTCOME_UNSPECIFIED = 0; OUTCOME_APPLIED = 1; OUTCOME_REVIEW_REQUIRED = 2; }
+ string decision_id = 1; string tenant_id = 2; string invoice_id = 3;
+ string financial_fact_id = 4; optional string coverage_id = 5;
+ Outcome outcome = 6; string reason_code = 7; bool requires_tenant_activation = 8;
+}
+message GetInitialPaymentDecisionRequest { RequestContext context = 1; string tenant_id = 2; string decision_id = 3; }
+message InitialPaymentDecision {
+ string decision_id = 1; string tenant_id = 2; string creation_operation_id = 3;
+ string financial_fact_id = 4; string invoice_id = 5; string plan_version_id = 6;
+ string coverage_id = 7; string occurred_at = 8; string invoice_deadline = 9;
+}
+message GetTenantPaymentStateRequest { RequestContext context = 1; string tenant_id = 2; }
+message TenantPaymentState {
+ string tenant_id = 1; Tenant.LifecycleValue lifecycle = 2; string creation_operation_id = 3;
+ string plan_version_id = 4; optional string creation_deadline_at = 5; string version = 6;
+}
+service PaymentSettlementService {
+ rpc ApplyVerifiedPayment(ApplyVerifiedPaymentRequest) returns (PaymentSettlementResult);
+ rpc GetInitialPaymentDecision(GetInitialPaymentDecisionRequest) returns (InitialPaymentDecision);
+}
+service TenantPaymentStateService { rpc GetTenantPaymentState(GetTenantPaymentStateRequest) returns (TenantPaymentState); }
