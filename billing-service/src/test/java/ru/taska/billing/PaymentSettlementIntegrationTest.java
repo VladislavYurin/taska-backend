@@ -31,6 +31,7 @@ class PaymentSettlementIntegrationTest {
   Map<UUID, VerifiedPaymentFact> facts;
   AtomicReference<TenantPaymentState> root;
   AtomicInteger reads;
+  AtomicInteger deliveries;
   UUID invoice;
   java.util.concurrent.atomic.AtomicBoolean loseDelivery;
 
@@ -91,6 +92,7 @@ class PaymentSettlementIntegrationTest {
     loseDelivery = new java.util.concurrent.atomic.AtomicBoolean();
     facts = new ConcurrentHashMap<>();
     reads = new AtomicInteger();
+    deliveries = new AtomicInteger();
     var ledger =
         new FinancialLedger(
             f.f.transactions,
@@ -107,13 +109,16 @@ class PaymentSettlementIntegrationTest {
               return Mono.justOrEmpty(facts.get(e));
             },
             t -> Mono.just(root.get()),
-            (t, d) ->
-                loseDelivery.get()
-                    ? Mono.error(CatalogErrors.fail(DomainStatus.UNAVAILABLE, "ROOT_UNAVAILABLE"))
-                    : Mono.just(
-                        TenantInitialPaymentResult.newBuilder()
-                            .setOutcome(TenantInitialPaymentResult.Outcome.OUTCOME_APPLIED)
-                            .build()),
+            (t, d) -> {
+              deliveries.incrementAndGet();
+              return loseDelivery.get()
+                  ? Mono.error(CatalogErrors.fail(DomainStatus.UNAVAILABLE, "ROOT_UNAVAILABLE"))
+                  : Mono.just(
+                      TenantInitialPaymentResult.newBuilder()
+                          .setTenant(Tenant.newBuilder().setId(t.toString()).setVersion("1"))
+                          .setOutcome(TenantInitialPaymentResult.Outcome.OUTCOME_APPLIED)
+                          .build());
+            },
             f.f.clock);
   }
 
@@ -382,6 +387,10 @@ class PaymentSettlementIntegrationTest {
     var first = apply(id).block(WAIT);
     sql("UPDATE taska.subscription_periods SET status='REVOKED' WHERE tenant_id='" + A + "'");
     assertEquals(first, apply(id).block(WAIT));
+    assertEquals(
+        first,
+        apply(proof(facts.get(id).movement()))
+            .block(WAIT)); // New delivery ID, same economic identity.
     assertEquals("REVOKED", column("subscription_periods", "status"));
     assertEquals(1, count("subscription_periods"));
     var claims =
@@ -419,6 +428,16 @@ class PaymentSettlementIntegrationTest {
     loseDelivery.set(false);
     assertEquals(decision, apply(proof).block(WAIT).getDecisionId());
     assertEquals(1, count("payment_allocations"));
+    assertEquals(
+        1L,
+        operator
+            .sql(
+                "SELECT count(*) n FROM taska.outbox_events WHERE tenant_id=:t AND"
+                    + " event_type='TenantInitialPaymentDecisionReady'")
+            .bind("t", A)
+            .map((r, m) -> r.get("n", Long.class))
+            .one()
+            .block(WAIT));
   }
 
   @Test
@@ -759,5 +778,52 @@ class PaymentSettlementIntegrationTest {
     assertInstanceOf(io.r2dbc.spi.R2dbcException.class, cause);
     assertEquals("P0002", ((io.r2dbc.spi.R2dbcException) cause).getSqlState());
     assertEquals(1, count("invoices"));
+  }
+
+  @Test
+  void paidInvoiceDoesNotHideOrMatchASeparateExcessPayment() {
+    paid();
+    var extra = movement(500, "separate-excess", Method.PSP, NOW, NOW);
+    var ledger =
+        new FinancialLedger(
+            f.f.transactions,
+            f.f.readers,
+            (d, t, e) -> Mono.just(extra),
+            (d, t, i, ids) -> Mono.empty(),
+            f.f.clock);
+    var payment =
+        ledgerWorker("recordFinancialFact", ledger.record(A, UUID.randomUUID(), "separate-excess"));
+    assertThrows(
+        DomainException.class,
+        () ->
+            ledgerWorker(
+                "matchInvoicePayment", ledger.match(A, payment.id(), invoice, "excess-match")));
+    var current = f.get(invoice.toString());
+    assertEquals(Invoice.StateValue.STATE_PAID, current.getState());
+    assertEquals("2000", current.getAllocated().getAmountMinor());
+    assertEquals("0", current.getMatchedUnallocated().getAmountMinor());
+    assertEquals("0", current.getRemaining().getAmountMinor());
+    var balance = f.as("getFinancialBalance", ledger.balance(A, payment.id())).block(WAIT);
+    assertEquals(500, balance.unallocatedRemaining());
+    assertEquals(0, balance.matchedUnallocated());
+    assertEquals(0, balance.netAllocated());
+    assertEquals(current, f.list(10, null).getItems(0));
+    assertEquals(1, count("payment_allocations"));
+  }
+
+  @Test
+  void successfulRootDeliveryIsRememberedAfterRevocationAndDeliveryOutage() {
+    UUID id = proof(movement(2000, "acknowledged-payment", Method.PSP, NOW, NOW));
+    var first = apply(id).block(WAIT);
+    assertEquals(1, deliveries.get());
+    assertEquals(1, count("initial_payment_deliveries"));
+    sql("UPDATE taska.subscription_periods SET status='REVOKED' WHERE tenant_id='" + A + "'");
+    loseDelivery.set(true);
+    assertEquals(first, apply(proof(facts.get(id).movement())).block(WAIT));
+    assertEquals(1, deliveries.get());
+    assertEquals("REVOKED", column("subscription_periods", "status"));
+    assertEquals(1, count("payment_facts"));
+    assertEquals(1, count("subscription_periods"));
+    assertEquals(1, count("payment_settlements"));
   }
 }

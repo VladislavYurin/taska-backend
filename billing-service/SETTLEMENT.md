@@ -40,7 +40,13 @@ resolves `GetInitialPaymentDecision` through `GrpcInitialPaymentDecisions` and c
 creation/deadline/cancellation/readiness guards in a separate transaction. AUTO_CLOSED can activate;
 OWNER_CANCELLED/DELETING/DELETED cannot. Independent restrictions are not cleared. No foreign DB
 transaction is used. If delivery/response fails, billing remains committed and retrying the same
-source evidence reuses the same decision and redelivers it; the durable
+source evidence reuses the same decision and redelivers it. `apply` can therefore return a
+transport/dependency error after the financial commit; this requests activation delivery retry,
+never another PSP charge or rollback of the financial result. Idempotency concerns the durable
+effects, not availability of a successful response while Root is unavailable. A successful Root
+response is recorded once in append-only `initial_payment_deliveries` (outcome/version);
+subsequent replays skip activation delivery even if coverage was later revoked. Concurrent lost
+acknowledgements can still redeliver, and Root's own decision idempotency handles them. The durable
 `TenantInitialPaymentDecisionReady` event is also the outbox retry input. This result distinguishes
 financial settlement from Root activation: `requires_tenant_activation` identifies INITIAL, and a
 Root denial never overrides its lifecycle. Cancellation racing after the observed Root version is

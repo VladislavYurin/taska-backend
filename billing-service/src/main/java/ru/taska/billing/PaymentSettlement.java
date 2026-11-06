@@ -100,11 +100,57 @@ public final class PaymentSettlement {
 
   private Mono<PaymentSettlementResult> afterCommit(PaymentSettlementResult result) {
     if (!result.getRequiresTenantActivation()) return Mono.just(result);
-    return delivery
-        .deliver(UUID.fromString(result.getTenantId()), UUID.fromString(result.getDecisionId()))
-        .timeout(Duration.ofSeconds(5))
-        .switchIfEmpty(Mono.error(fail(DomainStatus.UNAVAILABLE, "DEPENDENCY_UNAVAILABLE")))
-        .thenReturn(result);
+    UUID tenant = UUID.fromString(result.getTenantId()),
+        decision = UUID.fromString(result.getDecisionId());
+    return subscriptions
+        .transactions()
+        .execute(
+            db ->
+                db.sql(
+                        "SELECT decision_id FROM taska.initial_payment_deliveries WHERE"
+                            + " tenant_id=:t AND decision_id=:id")
+                    .bind("t", tenant)
+                    .bind("id", decision)
+                    .fetch()
+                    .one()
+                    .map(row -> true)
+                    .defaultIfEmpty(false))
+        .flatMap(
+            delivered -> {
+              if (delivered) return Mono.just(result);
+              // Never hold billing SQL open while Root processes/revalidates its own durable
+              // decision.
+              return delivery
+                  .deliver(tenant, decision)
+                  .timeout(Duration.ofSeconds(5))
+                  .switchIfEmpty(
+                      Mono.error(fail(DomainStatus.UNAVAILABLE, "DEPENDENCY_UNAVAILABLE")))
+                  .flatMap(
+                      root -> {
+                        if (!root.getTenant().getId().equals(tenant.toString())
+                            || !root.getTenant().getVersion().matches("[1-9][0-9]*")
+                            || root.getOutcomeValue() < 1
+                            || root.getOutcomeValue() > 5)
+                          return Mono.error(
+                              fail(DomainStatus.UNAVAILABLE, "ROOT_DELIVERY_RESPONSE_MISMATCH"));
+                        return subscriptions
+                            .transactions()
+                            .execute(
+                                db ->
+                                    db.sql(
+                                            "INSERT INTO"
+                                                + " taska.initial_payment_deliveries(tenant_id,decision_id,root_outcome,root_version)"
+                                                + " VALUES(:t,:id,:outcome,:version) ON"
+                                                + " CONFLICT(tenant_id,decision_id) DO NOTHING")
+                                        .bind("t", tenant)
+                                        .bind("id", decision)
+                                        .bind("outcome", root.getOutcome().name())
+                                        .bind("version", root.getTenant().getVersion())
+                                        .fetch()
+                                        .rowsUpdated()
+                                        .thenReturn(result));
+                      });
+            });
   }
 
   private Mono<Map<String, Object>> lockSubscription(DatabaseClient db, UUID tenant) {

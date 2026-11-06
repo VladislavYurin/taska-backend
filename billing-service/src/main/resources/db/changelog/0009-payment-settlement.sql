@@ -75,3 +75,16 @@ BEGIN
 END $$;
 CREATE CONSTRAINT TRIGGER paid_settlement AFTER INSERT OR UPDATE ON taska.invoices
  DEFERRABLE INITIALLY DEFERRED FOR EACH ROW EXECUTE FUNCTION taska.check_paid_settlement();
+
+-- Delivery acknowledgement is distinct from the immutable financial result. Business outcomes,
+-- including WAITING_PROVISIONING/NOT_ELIGIBLE, are durable Root decisions, not transport failures.
+CREATE TABLE taska.initial_payment_deliveries (
+ tenant_id uuid NOT NULL,decision_id uuid NOT NULL,
+ root_outcome text NOT NULL CHECK(root_outcome IN ('OUTCOME_APPLIED','OUTCOME_ALREADY_APPLIED','OUTCOME_NOT_ELIGIBLE','OUTCOME_NEEDS_EVIDENCE','OUTCOME_WAITING_PROVISIONING')),
+ root_version text NOT NULL CHECK(root_version ~ '^[1-9][0-9]*$'),
+ delivered_at timestamptz NOT NULL DEFAULT now(),
+ PRIMARY KEY(tenant_id,decision_id),
+ FOREIGN KEY(tenant_id,decision_id) REFERENCES taska.payment_settlements(tenant_id,id)
+);
+CREATE TRIGGER immutable_initial_payment_delivery BEFORE UPDATE OR DELETE ON taska.initial_payment_deliveries
+ FOR EACH ROW EXECUTE FUNCTION taska.protect_settlement();

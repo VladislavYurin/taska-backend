@@ -1405,7 +1405,11 @@ class TenantProvisioningRpcIntegrationTest {
     }
     for (String table :
         List.of(
-            "payment_facts", "payment_allocations", "payment_settlements", "subscription_periods"))
+            "payment_facts",
+            "payment_allocations",
+            "payment_settlements",
+            "subscription_periods",
+            "initial_payment_deliveries"))
       assertEquals(
           1L,
           billingDb
@@ -1415,7 +1419,7 @@ class TenantProvisioningRpcIntegrationTest {
               .one()
               .block(WAIT),
           table);
-    assertEquals(2, deliveries.get());
+    assertEquals(1, deliveries.get());
     assertEquals(
         occurred,
         billingDb
