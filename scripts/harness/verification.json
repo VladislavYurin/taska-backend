@@ -1092,7 +1092,10 @@
           "PaymentSettlementIntegrationTest",
           "CommercialReadinessIntegrationTest",
           "FakePaymentProviderTest",
-          "FakePaymentProviderConcurrencyTest"
+          "FakePaymentProviderConcurrencyTest",
+          "ProviderInboxIntegrationTest",
+          "ProviderInboxRpcIntegrationTest",
+          "InboxCipherTest"
         ],
         "noTestsReason": null
       },

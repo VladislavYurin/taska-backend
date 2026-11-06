@@ -385,6 +385,21 @@
           }
         ]
       }
+    },
+    {
+      "changeSet": {
+        "id": "billing-provider-inbox-0011",
+        "author": "taska",
+        "changes": [
+          {
+            "sqlFile": {
+              "path": "0011-provider-inbox.sql",
+              "relativeToChangelogFile": true,
+              "splitStatements": false
+            }
+          }
+        ]
+      }
     }
   ]
 }
