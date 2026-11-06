@@ -62,7 +62,8 @@ public final class PaymentAttemptStore {
               (id,tenant_id,invoice_id,provider,provider_idempotency_key,merchant_account,
                provider_environment,invoice_snapshot,state,accepted_at,updated_at)
             VALUES (:id,:tenant,:invoice,:provider,:key,:merchant,:environment,CAST(:snapshot AS jsonb),'ACCEPTED',:now,:now)
-            ON CONFLICT (provider,provider_idempotency_key) DO NOTHING
+            ON CONFLICT (provider,provider_idempotency_key) DO UPDATE
+              SET updated_at = taska.payment_attempts.updated_at
             RETURNING *
             """)
             .bind("id", id)
@@ -120,6 +121,7 @@ public final class PaymentAttemptStore {
   private static boolean matches(Attempt attempt, Request request) {
     return attempt.tenantId().equals(request.tenantId())
         && attempt.invoiceId().equals(request.invoiceId())
+        && attempt.invoiceSnapshot().equals(request.invoiceSnapshot())
         && attempt.merchantAccount().equals(request.merchantAccount())
         && attempt.environment() == request.environment();
   }

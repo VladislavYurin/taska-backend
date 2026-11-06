@@ -38,6 +38,9 @@ public final class PaymentAttemptCoordinator {
           if (attempt.providerPaymentId() != null) {
             return reconcile(attempt, merchant);
           }
+          // A provider may have accepted the request before the process timed out and
+          // therefore left no object id locally. Replaying the exact PSP idempotency key
+          // is the only safe recovery; a new key is never generated here.
           return provider.createCheckout(
                   merchant, invoice, operationId, request.providerIdempotencyKey())
               .flatMap(checkout -> attempts.mark(
@@ -77,7 +80,9 @@ public final class PaymentAttemptCoordinator {
 
   private Mono<PaymentAttemptStore.Attempt> reconcile(
       PaymentAttemptStore.Attempt attempt, PaymentProvider.Merchant merchant) {
-    return provider.fetchPayment(merchant, attempt.providerPaymentId())
+    var originalMerchant = new PaymentProvider.Merchant(
+        attempt.merchantAccount(), attempt.environment());
+    return provider.fetchPayment(originalMerchant, attempt.providerPaymentId())
         .flatMap(payment -> attempts.mark(
             attempt, toState(payment.state()), payment.providerPaymentId()))
         .onErrorResume(ProviderException.class, error ->

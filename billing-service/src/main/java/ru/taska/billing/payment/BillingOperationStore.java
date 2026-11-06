@@ -41,7 +41,9 @@ public final class BillingOperationStore {
         INSERT INTO taska.billing_operations
           (id,tenant_id,kind,actor_id,channel,grant_id,request_key,request_hash,state,fence,created_at,updated_at)
         VALUES (:id,:tenant,:kind,:actor,:channel,:grant,:key,:hash,'NEW',1,:now,:now)
-        ON CONFLICT (tenant_id,kind,request_key) DO NOTHING RETURNING *
+        ON CONFLICT (tenant_id,kind,request_key) DO UPDATE
+          SET updated_at = taska.billing_operations.updated_at
+        RETURNING *
         """)
         .bind("id", id).bind("tenant", request.tenantId()).bind("kind", request.kind())
         .bind("channel", request.channel()).bind("key", request.requestKey())
