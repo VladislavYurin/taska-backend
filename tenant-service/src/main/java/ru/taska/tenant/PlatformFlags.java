@@ -181,6 +181,26 @@ public final class PlatformFlags {
             });
   }
 
+  /** Only authenticated service identities can read this secret-free, platform-wide snapshot. */
+  public Mono<ru.taska.api.b2b.v1.PlatformConfigurationSnapshot> snapshot() {
+    return VerifiedTenantContext.current()
+        .onErrorMap(IllegalStateException.class,
+            error -> fail(DomainStatus.UNAUTHENTICATED, "AUTHENTICATION_REQUIRED"))
+        .flatMap(verified -> {
+          var context = RpcContextBridge.details(verified).getContext();
+          if (!"getPlatformConfigurationSnapshot".equals(verified.action())
+              || context.getCredentialKind() != CredentialKind.CREDENTIAL_KIND_SERVICE
+              || verified.actorId() != null || verified.tenantId() != null
+              || !verified.scopes().contains("read"))
+            return Mono.error(fail(DomainStatus.PERMISSION_DENIED, "SERVICE_SCOPE_DENIED"));
+          return db.sql("SELECT DISTINCT ON(v.key) " + ROW
+                  + " WHERE v.key IN (:keys) ORDER BY v.key,v.version DESC")
+              .bind("keys", ru.taska.configuration.PlatformConfigurationSnapshotCache.keys())
+              .fetch().all().map(PlatformFlags::map).collectList()
+              .map(flags -> ru.taska.configuration.PlatformConfigurationSnapshotCache.snapshot(flags));
+        });
+  }
+
   public Mono<PlatformFlag> update(UpdatePlatformFlagRpcRequest request) {
     return authority("updatePlatformFlag", true)
         .flatMap(

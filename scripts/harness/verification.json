@@ -127,7 +127,9 @@
           "GrpcEntitlementSourceTest",
           "CapabilityEvaluatorTest",
           "CapabilityEvaluatorTransportTest",
-          "GrpcTaskQuotaSourceTest"
+          "GrpcTaskQuotaSourceTest",
+          "PlatformConfigurationSnapshotCacheTest",
+          "VersionedCapabilitySourceIntegrationTest"
         ],
         "noTestsReason": null
       },

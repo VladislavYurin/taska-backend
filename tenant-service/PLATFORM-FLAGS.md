@@ -43,7 +43,25 @@ An update requires a canonical UUID Idempotency-Key and the positive version ret
 
 The version row, exact version receipt and `PlatformConfigurationChanged` global outbox event commit atomically. Every non-bootstrap version is an immutable audit entry with changed_by and server time; seed version1 has no human actor. Application DML cannot edit definitions, rewrite/delete history or receipts. SQL triggers additionally validate allowlisted types/ranges. No fake tenant UUID is used for global configuration.
 
-The event carries only key, typed value, version, exact effectiveAt and cacheMaxAgeSeconds=30. Consumers must ignore obsolete versions and use a hard, non-sliding TTL at most 30 seconds; online critical decisions must recheck authority/configuration. This registry reads PostgreSQL directly and introduces no stale local cache. Distributed cache/event delivery integration is TAS-334; outbox persistence does not prove broker delivery. Changes are immediately effective when committed; scheduling future changes is not exposed.
+The event carries only key, typed value, version, exact effectiveAt and cacheMaxAgeSeconds=30. Consumers must ignore obsolete versions and use a hard, non-sliding TTL at most 30 seconds; online critical decisions must recheck authority/configuration. This registry reads PostgreSQL directly and introduces no stale local cache. TAS-334 supplies the versioned source cache and authenticated invalidation fence; the owning broker adapter must deliver committed outbox metadata, and outbox persistence alone does not prove broker delivery. Changes are immediately effective when committed; scheduling future changes is not exposed.
+
+## Internal configuration snapshot — TAS-334
+
+`PlatformService.GetPlatformConfigurationSnapshot` returns all24 approved public
+scalar flags/properties from one SQL snapshot, a deterministic version of the complete
+sorted values/versions, and `cacheMaxAgeSeconds=30`. It accepts only an authenticated,
+online-authorized SERVICE identity with explicit read scope, the exact RPC action,
+and no actor/tenant selector. It does not grant administrative list/update rights.
+WEB_GLOBAL, tenant/user credentials and administrative PATs cannot use this internal
+path. Existing administrative RPC authority remains unchanged.
+
+The SQL allowlist excludes `MERCHANT_CONFIGURATION` and other private structured
+configuration before mapping. No secrets, credentials, tenant overrides, cursor or
+environment fallback is returned. `GrpcPlatformConfigurationSource` and
+`PlatformConfigurationSnapshotCache` are supplied in grpc-common-lib; see
+[source composition and activation](../docs/security/capabilities.md#versioned-source-composition--tas-334).
+Deploy the new tenant-service before enabling callers of the additive RPC. Legacy
+environment switches and public REST endpoints are not activated by these library APIs.
 
 ## Reads, deadlines and activation
 

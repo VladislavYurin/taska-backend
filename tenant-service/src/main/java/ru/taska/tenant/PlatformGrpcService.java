@@ -32,4 +32,12 @@ public final class PlatformGrpcService extends ReactorPlatformServiceGrpc.Platfo
         .onErrorMap(DomainException.class, GrpcExceptionMapper::toStatusRuntimeException)
         .onErrorMap(GrpcExceptionMapper::toGrpcStatus);
   }
+
+  @Override
+  public Mono<ru.taska.api.b2b.v1.PlatformConfigurationSnapshot> getPlatformConfigurationSnapshot(
+      Mono<ru.taska.api.b2b.v1.GetPlatformConfigurationSnapshotRequest> request) {
+    return RpcContextBridge.inbound(request.flatMap(ignored -> flags.snapshot()))
+        .onErrorMap(DomainException.class, GrpcExceptionMapper::toStatusRuntimeException)
+        .onErrorMap(GrpcExceptionMapper::toGrpcStatus);
+  }
 }

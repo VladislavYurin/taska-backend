@@ -190,4 +190,13 @@ TAS-322: `tenant-service.verify` requires `SeatQuotaIntegrationTest` (real Postg
 
 TAS-360: `grpc-common-lib.verify` requires `CapabilityEvaluatorTest` and `CapabilityEvaluatorTransportTest`: current-source decisions, READ_ONLY recovery/D244, independent reasons, exact admin grant/scope/level/MFA, user PAT/MCP flags, explicit quota bypass with integrity/audit, and real mTLS/JWS negative trust paths. [Policy/source contracts and activation](../security/capabilities.md). Domain API wiring and shared stage E2E remain TAS-491/493/495/463.
 
+TAS-334: `grpc-common-lib.verify` additionally requires `PlatformConfigurationSnapshotCacheTest`
+and `VersionedCapabilitySourceIntegrationTest`: hard source deadlines without sliding,
+current actor/grant revocation before cache reads, A/B source keys, version/event races,
+expiry, reset/outage and mandatory notification policy. `PlatformFlagsIntegrationTest`
+checks the complete secret-free snapshot against real PostgreSQL and the new production
+SERVICE-only mTLS/JWS RPC, including current service authority denial with a warm cache.
+After final review repeat these source-path checks. Public capabilities REST (TAS-497),
+concrete domain authority wiring and shared broker/stage E2E are separate activation scopes.
+
 TAS-324: `tenant-service.verify` требует `ProjectQuotaIntegrationTest`: production root/owner на двух PostgreSQL через mTLS/JWS, last-slot/expiry/retry/UNKNOWN, A/B, archive/hard-delete и atomic owner outbox rollback. [Контракт и активация PROJECT](../../tenant-service/PROJECT-QUOTAS.md). Project tenant storage, SEAT и membership checks повторяют затронутые schema/read paths; public REST/stage не заявлены проверенными.

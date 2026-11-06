@@ -354,6 +354,36 @@ class PlatformFlagsIntegrationTest {
   }
 
   @Test
+  void serviceSnapshotIsCompleteVersionedAndExcludesPrivateMerchantConfiguration() {
+    sql("INSERT INTO taska.platform_configuration_versions VALUES('MERCHANT_CONFIGURATION',2,'JSON',"
+        + "'{\"schemaVersion\":1,\"environment\":\"COMMERCIAL_ENVIRONMENT_LIVE\","
+        + "\"credentialRef\":\"fixture-private-reference\"}',now(),'" + ACTOR + "',now())");
+    var serviceClaims = TrustedTenantContext.newBuilder()
+        .setCredentialKind(CredentialKind.CREDENTIAL_KIND_SERVICE)
+        .setAction("getPlatformConfigurationSnapshot").addScopes("read").build();
+    var first = RegistryTestContext.withClaims(serviceClaims, service.snapshot()).block(WAIT);
+    assertEquals(24, first.getItemsCount());
+    assertEquals(30, first.getCacheMaxAgeSeconds());
+    assertEquals(first, RegistryTestContext.withClaims(serviceClaims, service.snapshot()).block(WAIT));
+    assertFalse(first.toString().contains("MERCHANT_CONFIGURATION"));
+    assertFalse(first.toString().contains("fixture-private-reference"));
+    long versions = count("platform_configuration_versions");
+    for (var invalid : List.of(claims(false),
+        serviceClaims.toBuilder().setTenantId(UUID.randomUUID().toString()).build(),
+        serviceClaims.toBuilder().setActorUserId(ACTOR.toString()).build(),
+        serviceClaims.toBuilder().clearScopes().build()))
+      rejects(DomainStatus.PERMISSION_DENIED, RegistryTestContext.withClaims(invalid, service.snapshot()));
+    rejects(DomainStatus.UNAUTHENTICATED, service.snapshot());
+    assertEquals(versions, count("platform_configuration_versions"));
+    assertEquals(0, count("platform_configuration_receipts"));
+    admin(true, service.update(bool("MCP", "1", false))).block(WAIT);
+    var changed = RegistryTestContext.withClaims(serviceClaims, service.snapshot()).block(WAIT);
+    assertNotEquals(first.getVersion(), changed.getVersion());
+    assertFalse(changed.getItemsList().stream().filter(f -> f.getKey().equals("MCP"))
+        .findFirst().orElseThrow().getBooleanValue());
+  }
+
+  @Test
   void concurrentSameIntentReplaysOnceAndChangedPayloadConflicts() {
     var r = bool("MCP", "1", false);
     var results =
@@ -824,6 +854,43 @@ class PlatformFlagsIntegrationTest {
                       new RpcContextSecurity.Policy(false, false),
                       PlatformServiceGrpc.getListPlatformFlagsMethod().getFullMethodName())));
       assertEquals(24, readStub.listPlatformFlags(read).getItemsCount());
+      var source = new ru.taska.configuration.GrpcPlatformConfigurationSource(
+          ru.taska.api.b2b.v1.ReactorPlatformServiceGrpc.newReactorStub(channel), sender,
+          Clock.systemUTC(), "api-gateway");
+      var snapshotCache = new ru.taska.configuration.PlatformConfigurationSnapshotCache(
+          source, (context, event) -> Mono.just(false), Clock.systemUTC(), Duration.ofSeconds(30));
+      var publicSnapshot = RegistryTestContext.withClaims(claims(false),
+          snapshotCache.resolve(ru.taska.configuration.PlatformConfigurationSnapshotCache.Use.OBSERVE))
+          .block(WAIT);
+      assertEquals(24, publicSnapshot.snapshot().getItemsCount());
+      assertFalse(publicSnapshot.snapshot().toString().contains("MERCHANT_CONFIGURATION"));
+      var adminSnapshotContext = wire(false);
+      var adminSnapshotRequest = ru.taska.api.b2b.v1.GetPlatformConfigurationSnapshotRequest.newBuilder()
+          .setContext(adminSnapshotContext.toBuilder().setContext(adminSnapshotContext.getContext().toBuilder()
+              .setAction("getPlatformConfigurationSnapshot"))).build();
+      var signedAdmin = plain.withInterceptors(io.grpc.stub.MetadataUtils.newAttachHeadersInterceptor(
+          TenantRegistryIntegrationTest.signed(sender, adminSnapshotRequest,
+              new RpcContextSecurity.Policy(false, false),
+              PlatformServiceGrpc.getGetPlatformConfigurationSnapshotMethod().getFullMethodName())));
+      assertEquals(io.grpc.Status.Code.PERMISSION_DENIED,
+          assertThrows(io.grpc.StatusRuntimeException.class,
+              () -> signedAdmin.getPlatformConfigurationSnapshot(adminSnapshotRequest)).getStatus().getCode());
+      Instant snapshotAt = Instant.now();
+      var wrongAudience = ru.taska.api.b2b.v1.GetPlatformConfigurationSnapshotRequest.newBuilder()
+          .setContext(wire(false).toBuilder().setContext(TrustedTenantContext.newBuilder()
+              .setContextVersion(1).setCredentialKind(CredentialKind.CREDENTIAL_KIND_SERVICE)
+              .setActorGeneration("service-v1").setIssuerService("api-gateway")
+              .setAudienceService("another-service").setAction("getPlatformConfigurationSnapshot")
+              .addScopes("read").setIssuedAt(snapshotAt.toString())
+              .setExpiresAt(snapshotAt.plusSeconds(30).toString())
+              .setAssertionId(UUID.randomUUID().toString()))).build();
+      var wrongAudienceStub = plain.withInterceptors(io.grpc.stub.MetadataUtils.newAttachHeadersInterceptor(
+          TenantRegistryIntegrationTest.signed(sender, wrongAudience,
+              new RpcContextSecurity.Policy(false, false),
+              PlatformServiceGrpc.getGetPlatformConfigurationSnapshotMethod().getFullMethodName())));
+      assertEquals(io.grpc.Status.Code.UNAUTHENTICATED,
+          assertThrows(io.grpc.StatusRuntimeException.class,
+              () -> wrongAudienceStub.getPlatformConfigurationSnapshot(wrongAudience)).getStatus().getCode());
       var change = bool("FREE_MCP", "1", true).toBuilder().setContext(wire(true)).build();
       var writeStub =
           plain.withInterceptors(
@@ -850,6 +917,9 @@ class PlatformFlagsIntegrationTest {
               .getStatus()
               .getCode());
       allowed.set(false);
+      assertThrows(RuntimeException.class, () -> RegistryTestContext.withClaims(claims(false),
+          snapshotCache.resolve(ru.taska.configuration.PlatformConfigurationSnapshotCache.Use.ADMISSION))
+          .block(WAIT));
       assertEquals(
           io.grpc.Status.Code.PERMISSION_DENIED,
           assertThrows(io.grpc.StatusRuntimeException.class, () -> readStub.listPlatformFlags(read))
