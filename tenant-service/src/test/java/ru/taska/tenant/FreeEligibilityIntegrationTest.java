@@ -39,8 +39,8 @@ import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.MountableFile;
-import reactor.core.publisher.Mono;
 import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 import ru.taska.api.b2b.v1.*;
 import ru.taska.api.b2b.v1.AdmitFreeTenantRequest;
@@ -1036,7 +1036,8 @@ class FreeEligibilityIntegrationTest {
                     new TenantGrpcService(
                         registry,
                         org.mockito.Mockito.mock(TenantMembershipService.class),
-                        org.mockito.Mockito.mock(SeatQuotaStore.class)),
+                        org.mockito.Mockito.mock(SeatQuotaStore.class),
+                        org.mockito.Mockito.mock(TenantMembershipMutationService.class)),
                     interceptor))
             .build()
             .start();

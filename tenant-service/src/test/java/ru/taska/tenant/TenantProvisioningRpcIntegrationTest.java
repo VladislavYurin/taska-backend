@@ -477,7 +477,8 @@ class TenantProvisioningRpcIntegrationTest {
             new TenantGrpcService(
                 registry,
                 org.mockito.Mockito.mock(TenantMembershipService.class),
-                org.mockito.Mockito.mock(SeatQuotaStore.class)),
+                org.mockito.Mockito.mock(SeatQuotaStore.class),
+                org.mockito.Mockito.mock(TenantMembershipMutationService.class)),
             new TenantProvisioningRpc(saga),
             new TenantCreationLifecycleGrpc(lifecycle));
     closureRpc =

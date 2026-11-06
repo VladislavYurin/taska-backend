@@ -7,10 +7,13 @@ import ru.taska.api.b2b.v1.CreateTenantResponse;
 import ru.taska.api.b2b.v1.CreateTenantRpcRequest;
 import ru.taska.api.b2b.v1.GetTenantOperationRpcRequest;
 import ru.taska.api.b2b.v1.GetTenantRpcRequest;
+import ru.taska.api.b2b.v1.LeaveTenantRpcRequest;
 import ru.taska.api.b2b.v1.ListTenantMembersRpcRequest;
+import ru.taska.api.b2b.v1.Membership;
 import ru.taska.api.b2b.v1.MembershipPage;
 import ru.taska.api.b2b.v1.Operation;
 import ru.taska.api.b2b.v1.ReactorTenantServiceGrpc;
+import ru.taska.api.b2b.v1.SetTenantMemberRoleRpcRequest;
 import ru.taska.api.b2b.v1.Tenant;
 import ru.taska.security.tenant.RpcContextBridge;
 
@@ -19,12 +22,17 @@ public final class TenantGrpcService extends ReactorTenantServiceGrpc.TenantServ
   private final TenantRegistryService registry;
   private final TenantMembershipService memberships;
   private final SeatQuotaStore quotas;
+  private final TenantMembershipMutationService mutations;
 
   public TenantGrpcService(
-      TenantRegistryService registry, TenantMembershipService memberships, SeatQuotaStore quotas) {
+      TenantRegistryService registry,
+      TenantMembershipService memberships,
+      SeatQuotaStore quotas,
+      TenantMembershipMutationService mutations) {
     this.registry = registry;
     this.memberships = memberships;
     this.quotas = quotas;
+    this.mutations = mutations;
   }
 
   @Override
@@ -72,6 +80,22 @@ public final class TenantGrpcService extends ReactorTenantServiceGrpc.TenantServ
   @Override
   public Mono<MembershipPage> listTenantMembers(Mono<ListTenantMembersRpcRequest> request) {
     return RpcContextBridge.inbound(request.flatMap(memberships::list))
+        .onErrorMap(
+            ru.taska.exception.DomainException.class, GrpcExceptionMapper::toStatusRuntimeException)
+        .onErrorMap(GrpcExceptionMapper::toGrpcStatus);
+  }
+
+  @Override
+  public Mono<Membership> setTenantMemberRole(Mono<SetTenantMemberRoleRpcRequest> request) {
+    return RpcContextBridge.inbound(request.flatMap(mutations::setRole))
+        .onErrorMap(
+            ru.taska.exception.DomainException.class, GrpcExceptionMapper::toStatusRuntimeException)
+        .onErrorMap(GrpcExceptionMapper::toGrpcStatus);
+  }
+
+  @Override
+  public Mono<Operation> leaveTenant(Mono<LeaveTenantRpcRequest> request) {
+    return RpcContextBridge.inbound(request.flatMap(mutations::leave))
         .onErrorMap(
             ru.taska.exception.DomainException.class, GrpcExceptionMapper::toStatusRuntimeException)
         .onErrorMap(GrpcExceptionMapper::toGrpcStatus);

@@ -1,28 +1,78 @@
 package ru.taska.tenant;
 
-import static io.r2dbc.spi.ConnectionFactoryOptions.*;
-import static org.junit.jupiter.api.Assertions.*;
-import static ru.taska.api.b2b.v1.CredentialKind.*;
+import static io.r2dbc.spi.ConnectionFactoryOptions.DATABASE;
+import static io.r2dbc.spi.ConnectionFactoryOptions.DRIVER;
+import static io.r2dbc.spi.ConnectionFactoryOptions.HOST;
+import static io.r2dbc.spi.ConnectionFactoryOptions.PASSWORD;
+import static io.r2dbc.spi.ConnectionFactoryOptions.PORT;
+import static io.r2dbc.spi.ConnectionFactoryOptions.USER;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static ru.taska.api.b2b.v1.CredentialKind.CREDENTIAL_KIND_ADMIN_PAT;
+import static ru.taska.api.b2b.v1.CredentialKind.CREDENTIAL_KIND_SERVICE;
+import static ru.taska.api.b2b.v1.CredentialKind.CREDENTIAL_KIND_USER_PAT;
+import static ru.taska.api.b2b.v1.CredentialKind.CREDENTIAL_KIND_WEB_GLOBAL;
+import static ru.taska.api.b2b.v1.CredentialKind.CREDENTIAL_KIND_WEB_TENANT;
 
-import io.r2dbc.pool.*;
-import io.r2dbc.spi.*;
-import java.time.*;
-import java.util.*;
-import java.util.concurrent.*;
-import java.util.concurrent.atomic.*;
-import org.junit.jupiter.api.*;
+import io.r2dbc.pool.ConnectionPool;
+import io.r2dbc.pool.ConnectionPoolConfiguration;
+import io.r2dbc.spi.ConnectionFactories;
+import io.r2dbc.spi.ConnectionFactory;
+import io.r2dbc.spi.ConnectionFactoryOptions;
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.ZoneOffset;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 import org.springframework.r2dbc.core.DatabaseClient;
 import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.junit.jupiter.*;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.MountableFile;
-import reactor.core.publisher.*;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 import reactor.test.StepVerifier;
-import ru.taska.api.b2b.v1.*;
-import ru.taska.exception.*;
+import ru.taska.api.b2b.v1.CreateTenantRequest;
+import ru.taska.api.b2b.v1.CreateTenantResponse;
+import ru.taska.api.b2b.v1.CreateTenantRpcRequest;
+import ru.taska.api.b2b.v1.GetTenantRpcRequest;
+import ru.taska.api.b2b.v1.MutationOptions;
+import ru.taska.api.b2b.v1.Operation;
+import ru.taska.api.b2b.v1.RequestContext;
+import ru.taska.api.b2b.v1.RestrictionCode;
+import ru.taska.api.b2b.v1.Tenant;
+import ru.taska.api.b2b.v1.TenantServiceGrpc;
+import ru.taska.api.b2b.v1.TrustedTenantContext;
+import ru.taska.exception.DomainException;
+import ru.taska.exception.DomainStatus;
 import ru.taska.r2dbc.TenantTransactionExecutor;
 import ru.taska.security.tenant.RegistryTestContext;
-import ru.taska.tenant.RegistryDependencies.*;
+import ru.taska.tenant.RegistryDependencies.FreeAdmission;
+import ru.taska.tenant.RegistryDependencies.PublishedPlan;
+import ru.taska.tenant.RegistryDependencies.PublishedPlans;
 
 @Testcontainers
 @Timeout(90)
@@ -504,7 +554,9 @@ class TenantRegistryIntegrationTest {
         new TenantGrpcService(
             service,
             org.mockito.Mockito.mock(TenantMembershipService.class),
-            org.mockito.Mockito.mock(SeatQuotaStore.class));
+            org.mockito.Mockito.mock(SeatQuotaStore.class),
+            org.mockito.Mockito.mock(TenantMembershipMutationService.class));
+
     StepVerifier.create(adapter.createTenant(Mono.just(request("untrusted", PAID, "Company"))))
         .expectErrorSatisfies(
             e ->
@@ -785,7 +837,8 @@ class TenantRegistryIntegrationTest {
                     new TenantGrpcService(
                         service,
                         org.mockito.Mockito.mock(TenantMembershipService.class),
-                        org.mockito.Mockito.mock(SeatQuotaStore.class)),
+                        org.mockito.Mockito.mock(SeatQuotaStore.class),
+                        org.mockito.Mockito.mock(TenantMembershipMutationService.class)),
                     new ru.taska.security.tenant.TenantServerInterceptor(
                         recipient, policies, "test")))
             .build()

@@ -1,13 +1,34 @@
 package ru.taska.tenant;
 
-import java.security.*;
-import java.time.*;
-import java.util.*;
+import java.security.GeneralSecurityException;
+import java.security.MessageDigest;
+import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
+import java.util.Base64;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.TreeMap;
+import java.util.TreeSet;
+import java.util.UUID;
 import reactor.core.publisher.Mono;
-import ru.taska.api.b2b.v1.*;
-import ru.taska.exception.*;
+import ru.taska.api.b2b.v1.BatchValidateMembershipsRpcRequest;
+import ru.taska.api.b2b.v1.CredentialKind;
+import ru.taska.api.b2b.v1.GetMembershipRpcRequest;
+import ru.taska.api.b2b.v1.ListTenantMembersRpcRequest;
+import ru.taska.api.b2b.v1.Membership;
+import ru.taska.api.b2b.v1.MembershipPage;
+import ru.taska.api.b2b.v1.MembershipSnapshot;
+import ru.taska.api.b2b.v1.MembershipValidation;
+import ru.taska.api.b2b.v1.MembershipValidationBatch;
+import ru.taska.api.b2b.v1.Tenant;
+import ru.taska.api.b2b.v1.TrustedTenantContext;
+import ru.taska.exception.DomainStatus;
 import ru.taska.r2dbc.TenantTransactionExecutor;
-import ru.taska.security.tenant.*;
+import ru.taska.security.tenant.RpcContextBridge;
+import ru.taska.security.tenant.VerifiedTenantContext;
 
 /**
  * Primary-DB authority. Each response's rows and generations come from one SQL statement snapshot.
@@ -186,7 +207,7 @@ public final class TenantMembershipService {
             });
   }
 
-  private static Membership publicMember(Map<String, Object> row) {
+  static Membership publicMember(Map<String, Object> row) {
     UUID tenant = (UUID) row.get("tenant_id"), user = (UUID) row.get("user_id");
     // Composite membership identity; stable across role changes/rejoin, never an auth credential.
     byte[] bytes =

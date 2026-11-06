@@ -491,6 +491,13 @@ public class TenantConfiguration {
   }
 
   @Bean
+  @DependsOn("safeRuntimeRole")
+  TenantMembershipMutationService tenantMembershipMutations(
+      TenantTransactionExecutor transactions) {
+    return new TenantMembershipMutationService(transactions, Clock.systemUTC());
+  }
+
+  @Bean
   @GlobalServerInterceptor
   ServerInterceptor registrySecurity(
       ObjectProvider<RpcContextSecurity> provider,
@@ -500,6 +507,12 @@ public class TenantConfiguration {
       return new TenantServerInterceptor(
           security,
           Map.ofEntries(
+              java.util.Map.entry(
+                  TenantServiceGrpc.getSetTenantMemberRoleMethod().getFullMethodName(),
+                  new RpcContextSecurity.Policy(true, false)),
+              java.util.Map.entry(
+                  TenantServiceGrpc.getLeaveTenantMethod().getFullMethodName(),
+                  new RpcContextSecurity.Policy(true, false)),
               java.util.Map.entry(
                   ru.taska.api.b2b.v1.QuotaAuthorityServiceGrpc.getReserveQuotaMethod()
                       .getFullMethodName(),

@@ -164,6 +164,8 @@ TAS-310: `tenant-service.verify` — новый обязательный Maven/D
 
 TAS-311: `tenant-service.verify` также требует свежий `TenantMembershipIntegrationTest`. Проверяются metadata list/get/batch, HMAC cursor expiry/binding/revocation, независимые A/B generations и один SQL snapshot при конкурентной записи. Реальный mTLS/JWS вызывает новые методы через production policy map. Keyset index добавлен отдельным changeset. [Контракт чтения](../../tenant-service/README.md#membership-authority--tas-311).
 
+TAS-312: тот же `TenantMembershipIntegrationTest` проверяет role/leave RPC на PostgreSQL: ACTIVE admin, owner guard, stale version, идемпотентный повтор, отказ постороннему/неактивному actor, атомарный outbox и одновременный выход двух администраторов. Проверка публичного REST остаётся неприменимой до gateway adapter. [Контракт мутаций](../../tenant-service/README.md#изменение-роли-и-выход--tas-312).
+
 ## Billing catalog
 
 `python3 scripts/harness.py check --module billing-service` requires fresh nonempty `BillingCatalogIntegrationTest`, `SubscriptionIntegrationTest`, `InvoiceIntegrationTest` and `FinancialLedgerIntegrationTest` reports. It exercises real PostgreSQL 16, Liquibase, app role/RLS, concurrent catalog mutations and mTLS/JWS production policies. See [billing-service](../../billing-service/README.md) for the delivered RPCs and activation boundaries. Public REST/PSP E2E is not established by these checks.
