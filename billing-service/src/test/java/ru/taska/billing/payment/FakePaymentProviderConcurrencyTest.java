@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
+import static ru.taska.billing.payment.ProviderException.Reason.IDEMPOTENCY_CONFLICT;
 import static ru.taska.billing.payment.ProviderException.Reason.INVALID_STATE;
 
 import org.junit.jupiter.api.Test;
@@ -206,6 +207,71 @@ class FakePaymentProviderConcurrencyTest {
                                         UUID.randomUUID(),
                                         "third")
                                 .block());
+    }
+
+    @Test
+    void refundObservationsIdentifyTheirAttemptAndRejectRebindingAnOldEvent() {
+        var fake = new FakePaymentProvider(new byte[32]);
+        var payment = fake.createCheckout(merchant, invoice, UUID.randomUUID(), "pay").block();
+        UUID firstOperation = UUID.randomUUID(), secondOperation = UUID.randomUUID();
+        fake.nextRefund(FakePaymentProvider.Scenario.DECLINE);
+        var first =
+                fake.refund(
+                                merchant,
+                                payment.providerPaymentId(),
+                                invoice.total(),
+                                firstOperation,
+                                "first")
+                        .block();
+        var old = fake.confirmRefund(merchant, "first", RefundState.DECLINED, "shared-event");
+        fake.nextRefund(FakePaymentProvider.Scenario.TIMEOUT_ACCEPTED);
+        assertThrows(
+                ProviderException.class,
+                () ->
+                        fake.refund(
+                                        merchant,
+                                        payment.providerPaymentId(),
+                                        invoice.total(),
+                                        secondOperation,
+                                        "second")
+                                .block());
+        var second =
+                fake.refund(
+                                merchant,
+                                payment.providerPaymentId(),
+                                invoice.total(),
+                                secondOperation,
+                                "second")
+                        .block();
+        var error =
+                assertThrows(
+                        ProviderException.class,
+                        () ->
+                                fake.confirmRefund(
+                                        merchant, "second", RefundState.DECLINED, "shared-event"));
+        assertEquals(IDEMPOTENCY_CONFLICT, error.reason());
+        assertEquals(
+                RefundState.PENDING,
+                fake.refund(
+                                merchant,
+                                payment.providerPaymentId(),
+                                invoice.total(),
+                                secondOperation,
+                                "second")
+                        .block()
+                        .state());
+        var current = fake.confirmRefund(merchant, "second", RefundState.DECLINED, "second-event");
+        assertEquals(
+                first.providerRefundId(),
+                fake.verifyWebhook(merchant, old.rawBody(), old.signature())
+                        .block()
+                        .providerRefundId());
+        assertEquals(
+                second.providerRefundId(),
+                fake.verifyWebhook(merchant, current.rawBody(), current.signature())
+                        .block()
+                        .providerRefundId());
+        assertNotEquals(first.providerRefundId(), second.providerRefundId());
     }
 
     @Test

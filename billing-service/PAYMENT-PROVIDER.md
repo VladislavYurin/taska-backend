@@ -21,3 +21,5 @@ The contract suite is inherited by fake and future sandbox adapters. Fake contra
 checks are required by billing-service.verify. Durable attempts/inbox, financial settlement,
 PSP verification/production Stripe, financial exceptions and external E2E remain TAS-349/351/348/357/378.
 See [settlement](SETTLEMENT.md) and [commercial readiness](COMMERCIAL-READINESS.md).
+
+Refund observations carry `providerRefundId` for the exact attempt. A new attempt after decline cannot reuse an earlier attempt’s event ID; the rejection preserves the new attempt’s pending state and the old verified event. Payment observations have no refund ID.

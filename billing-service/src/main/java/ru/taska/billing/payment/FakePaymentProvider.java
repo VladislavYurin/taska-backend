@@ -263,6 +263,7 @@ public final class FakePaymentProvider implements PaymentProvider {
                                 a.invoice().total(),
                                 occurred,
                                 finalState,
+                                null,
                                 null));
         a.occurredAt().set(occurred);
         a.state().set(finalState);
@@ -292,7 +293,8 @@ public final class FakePaymentProvider implements PaymentProvider {
                                 a.amount(),
                                 occurred,
                                 null,
-                                finalState));
+                                finalState,
+                                a.id()));
         a.occurredAt().set(occurred);
         a.state().set(finalState);
         return signed;
@@ -310,6 +312,7 @@ public final class FakePaymentProvider implements PaymentProvider {
         if (previous != null
                 && (!previous.merchant().equals(event.merchant())
                         || !previous.providerPaymentId().equals(event.providerPaymentId())
+                        || !Objects.equals(previous.providerRefundId(), event.providerRefundId())
                         || previous.kind() != event.kind()
                         || !previous.amount().equals(event.amount())
                         || previous.paymentState() != event.paymentState()
