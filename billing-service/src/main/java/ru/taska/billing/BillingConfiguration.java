@@ -24,6 +24,8 @@ import ru.taska.billing.SubscriptionDependencies.CoverageEvidence;
 import ru.taska.billing.SubscriptionDependencies.FinancialReadAuthority;
 import ru.taska.billing.SubscriptionDependencies.RevocationEvidence;
 import ru.taska.billing.SubscriptionDependencies.SettlementEvidenceAuthority;
+import ru.taska.billing.payment.PaymentAttemptStore;
+import ru.taska.billing.payment.BillingOperationStore;
 import ru.taska.exception.DomainStatus;
 import ru.taska.r2dbc.TenantTransactionExecutor;
 import ru.taska.security.tenant.RpcContextSecurity;
@@ -93,6 +95,18 @@ public class BillingConfiguration {
         org.springframework.transaction.reactive.TransactionalOperator.create(
             new org.springframework.r2dbc.connection.R2dbcTransactionManager(factory)),
         cursor);
+  }
+
+  @Bean
+  @DependsOn("safeRuntimeRole")
+  PaymentAttemptStore paymentAttemptStore(ConnectionFactory factory) {
+    return new PaymentAttemptStore(new TenantTransactionExecutor(factory), Clock.systemUTC());
+  }
+
+  @Bean
+  @DependsOn("safeRuntimeRole")
+  BillingOperationStore billingOperationStore(ConnectionFactory factory) {
+    return new BillingOperationStore(new TenantTransactionExecutor(factory), Clock.systemUTC());
   }
 
   @Bean
