@@ -87,11 +87,13 @@ public final class PlatformConfigurationSnapshotCache {
         () -> {
           Instant started;
           long generation;
+          Lease baseline;
           synchronized (this) {
             started = now();
             if (use == Use.OBSERVE && cached != null && started.isBefore(cached.validUntil()))
               return Mono.just(cached);
             generation = epoch;
+            baseline = cached;
           }
           return Mono.defer(source::current)
               .timeout(Duration.ofSeconds(5))
@@ -124,7 +126,7 @@ public final class PlatformConfigurationSnapshotCache {
                       return cached;
                     }
                   })
-              .doOnError(error -> clear())
+              .doOnError(error -> clearFailedRead(generation, baseline))
               .onErrorMap(error -> unavailable());
         });
   }
@@ -180,6 +182,12 @@ public final class PlatformConfigurationSnapshotCache {
   public synchronized void clear() {
     cached = null;
     epoch++;
+  }
+
+  private synchronized void clearFailedRead(long generation, Lease baseline) {
+    // Failed reconciliation invalidates its old warm entry, including invalid primary data.
+    // A late failure must not erase a newer successful read or fence a newer event generation.
+    if (generation == epoch && cached == baseline) cached = null;
   }
 
   public static Set<String> keys() {

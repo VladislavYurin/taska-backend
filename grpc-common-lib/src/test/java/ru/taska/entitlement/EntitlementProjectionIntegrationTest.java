@@ -216,6 +216,20 @@ class EntitlementProjectionIntegrationTest {
   }
 
   @Test
+  void futureValidityBoundsTheLeaseAndDoesNotAdmitBeforeActivation() {
+    billing.put(A, snapshot(A, 1).toBuilder().setValidFrom(START.plusSeconds(5).toString()).build());
+    var pending = as(A, projection.resolveLease(EntitlementProjection.Use.READ)).block(WAIT);
+    assertFalse(pending.view().validNow());
+    assertEquals(START.plusSeconds(5), pending.validUntil());
+    assertThrows(DomainException.class, pending.view()::requireNewResource);
+    now.set(START.plusSeconds(5));
+    var active = as(A, projection.resolveLease(EntitlementProjection.Use.READ)).block(WAIT);
+    assertTrue(active.view().validNow());
+    assertEquals(START.plusSeconds(10), active.validUntil());
+    assertDoesNotThrow(active.view()::requireNewResource);
+  }
+
+  @Test
   void duplicateOldAndReorderedRevokePreserveIndependentCoverageAndRestrictions() throws Exception {
     read(A);
     var revoke =

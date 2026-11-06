@@ -456,4 +456,81 @@ class VersionedCapabilitySourceIntegrationTest {
     assertTrue(denied.getDenialCodesList().contains(ERROR_CODE_CAPABILITY_DISABLED));
     assertTrue(mcp.apply(B).capability().getAllowed());
   }
+
+  @Test
+  void globalTargetsNeverBorrowATenantPlanAndTenantActionsStillRequireATenant() {
+    var global =
+        new VersionedCapabilitySource(
+            (context, target, actions) ->
+                Mono.just(
+                    inputs -> {
+                      assertNull(inputs.entitlement());
+                      assertNull(inputs.key().tenant());
+                      assertEquals("", inputs.key().entitlementVersion());
+                      return actors.get(A).current(context, target, actions);
+                    }),
+            cache,
+            projection,
+            clock);
+    var context =
+        claims(A)
+            .clearTenantId()
+            .setCredentialKind(CredentialKind.CREDENTIAL_KIND_WEB_GLOBAL)
+            .build();
+    var self = new Target(null, null, ACTOR, null);
+    var facts =
+        CapabilityEvaluatorTest.as(
+                context,
+                VerifiedTenantContext.current()
+                    .flatMap(verified -> global.current(verified, self, Set.of(ACCOUNT_SELF_READ))))
+            .block(WAIT);
+    assertNull(facts.entitlement());
+    assertEquals(PlanKind.UNKNOWN, facts.planKind());
+    var evaluator = new CapabilityEvaluator(global, clock);
+    assertTrue(
+        CapabilityEvaluatorTest.as(context, evaluator.evaluate(ACCOUNT_SELF_READ, self))
+            .block(WAIT)
+            .capability()
+            .getAllowed());
+    var denied =
+        CapabilityEvaluatorTest.as(
+                context,
+                evaluator.evaluate(ISSUE_CREATE, new Target(null, PROJECT_A, RESOURCE, null)))
+            .block(WAIT)
+            .capability();
+    assertFalse(denied.getAllowed());
+    assertTrue(denied.getDenialCodesList().contains(ERROR_CODE_TENANT_REQUIRED));
+    assertEquals(0, billingCalls.get());
+  }
+
+  @Test
+  void credentialExpiringDuringAssemblyNeverProducesExpiredFacts() {
+    time.set(START.plusSeconds(29));
+    var raced =
+        new VersionedCapabilitySource(
+            (context, target, actions) ->
+                Mono.just(
+                    inputs -> {
+                      time.set(START.plusSeconds(30));
+                      return actors.get(A).current(context, target, actions);
+                    }),
+            cache,
+            projection,
+            clock);
+    var failure =
+        assertThrows(
+            DomainException.class,
+            () ->
+                CapabilityEvaluatorTest.as(
+                        claims(A).build(),
+                        VerifiedTenantContext.current()
+                            .flatMap(
+                                context ->
+                                    raced.current(
+                                        context,
+                                        new Target(A, PROJECT_A, RESOURCE, null),
+                                        Set.of(ISSUE_READ))))
+                    .block(WAIT));
+    assertEquals(DomainStatus.UNAVAILABLE, failure.getStatus());
+  }
 }

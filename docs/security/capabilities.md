@@ -57,6 +57,15 @@ unknown/private keys, missing entries, conflicting equal versions, older replies
 future-effective values fail closed. Failed primary reconciliation clears the warm
 entry. Reads, duplicate events and reset do not extend a lease. Version fences survive
 memory clear; a new process must reload the primary before serving a cold cache.
+Failure cleanup is bound to the read's captured generation and warm entry: an old
+failed request cannot erase a newer primary confirmation or invalidate reads started
+after an event. Equal-version effectiveAt and other persisted metadata are immutable;
+changes require a new source version, just as value changes do.
+
+An explicitly global target has no entitlement or tariff (`PlanKind.UNKNOWN`), and its
+assembler must handle absent commercial input. The existing evaluator's global policy
+decides account/platform actions; tenant actions still require an actual selected
+tenant. A global request never borrows a paid company's cached plan.
 
 `invalidate(Change)` is an authenticated version fence; event payloads never supply
 replacement configuration values. It requires an explicitly global SERVICE context,

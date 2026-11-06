@@ -276,4 +276,70 @@ class PlatformConfigurationSnapshotCacheTest {
     assertSame(before, read());
     assertEquals(1, calls.get());
   }
+
+  @Test
+  void lateOldValidationFailureDoesNotEraseANewerPrimaryConfirmation() {
+    read();
+    var older = Sinks.<PlatformConfigurationSnapshot>one();
+    delayed.set(older);
+    var waiting = cache.resolve(Use.ADMISSION).toFuture();
+    delayed.set(null);
+    primary.set(change(initial(), "MCP", "2", false));
+    var confirmed = cache.resolve(Use.ADMISSION).block();
+    older.tryEmitValue(initial());
+    assertThrows(CompletionException.class, waiting::join);
+    int before = calls.get();
+    assertSame(confirmed, read());
+    assertEquals(before, calls.get());
+    assertFalse(read().flags().get(Flag.MCP));
+  }
+
+  @Test
+  void lateTransportFailureCannotInvalidateReadsStartedAfterAnEvent() {
+    read();
+    var older = Sinks.<PlatformConfigurationSnapshot>one();
+    delayed.set(older);
+    var first = cache.resolve(Use.ADMISSION).toFuture();
+    invalidate("MCP", 2);
+    var newer = Sinks.<PlatformConfigurationSnapshot>one();
+    delayed.set(newer);
+    var second = cache.resolve(Use.OBSERVE).toFuture();
+    older.tryEmitError(new IllegalStateException("private failure"));
+    assertThrows(CompletionException.class, first::join);
+    newer.tryEmitValue(change(initial(), "MCP", "2", false));
+    var confirmed = second.join();
+    assertSame(confirmed, read());
+    assertFalse(confirmed.flags().get(Flag.MCP));
+  }
+
+  @Test
+  void effectiveAtBelongsToTheImmutableVersionAndCannotChangeWithoutAVersionBump() {
+    read();
+    var metadata =
+        initial().getItemsList().stream()
+            .map(
+                flag ->
+                    flag.getKey().equals("MCP")
+                        ? flag.toBuilder().setEffectiveAt(START.minusSeconds(1).toString()).build()
+                        : flag)
+            .toList();
+    primary.set(PlatformConfigurationSnapshotCache.snapshot(metadata));
+    unavailable(cache.resolve(Use.ADMISSION));
+    primary.set(change(primary.get(), "MCP", "2", true));
+    assertTrue(read().flags().get(Flag.MCP));
+  }
+
+  @Test
+  void aFailedColdReadDoesNotFenceAHealthyConcurrentReconciliation() {
+    var failing = Sinks.<PlatformConfigurationSnapshot>one();
+    delayed.set(failing);
+    var first = cache.resolve(Use.ADMISSION).toFuture();
+    var healthy = Sinks.<PlatformConfigurationSnapshot>one();
+    delayed.set(healthy);
+    var second = cache.resolve(Use.ADMISSION).toFuture();
+    failing.tryEmitError(new IllegalStateException("private failure"));
+    assertThrows(CompletionException.class, first::join);
+    healthy.tryEmitValue(initial());
+    assertSame(second.join(), read());
+  }
 }

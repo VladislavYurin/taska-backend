@@ -34,6 +34,7 @@ public final class VersionedCapabilitySource implements CapabilityEvaluator.Sour
   /** No actor permission is stored under this source identity. */
   public record Key(UUID tenant, String flagsVersion, String entitlementVersion) {}
 
+  /** A global target has no entitlement or tariff: entitlement is null and its version is empty. */
   public record Inputs(
       Key key,
       PlatformConfigurationSnapshotCache.Lease configuration,

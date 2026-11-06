@@ -875,6 +875,22 @@ class PlatformFlagsIntegrationTest {
       assertEquals(io.grpc.Status.Code.PERMISSION_DENIED,
           assertThrows(io.grpc.StatusRuntimeException.class,
               () -> signedAdmin.getPlatformConfigurationSnapshot(adminSnapshotRequest)).getStatus().getCode());
+      Instant snapshotAt = Instant.now();
+      var wrongAudience = ru.taska.api.b2b.v1.GetPlatformConfigurationSnapshotRequest.newBuilder()
+          .setContext(wire(false).toBuilder().setContext(TrustedTenantContext.newBuilder()
+              .setContextVersion(1).setCredentialKind(CredentialKind.CREDENTIAL_KIND_SERVICE)
+              .setActorGeneration("service-v1").setIssuerService("api-gateway")
+              .setAudienceService("another-service").setAction("getPlatformConfigurationSnapshot")
+              .addScopes("read").setIssuedAt(snapshotAt.toString())
+              .setExpiresAt(snapshotAt.plusSeconds(30).toString())
+              .setAssertionId(UUID.randomUUID().toString()))).build();
+      var wrongAudienceStub = plain.withInterceptors(io.grpc.stub.MetadataUtils.newAttachHeadersInterceptor(
+          TenantRegistryIntegrationTest.signed(sender, wrongAudience,
+              new RpcContextSecurity.Policy(false, false),
+              PlatformServiceGrpc.getGetPlatformConfigurationSnapshotMethod().getFullMethodName())));
+      assertEquals(io.grpc.Status.Code.UNAUTHENTICATED,
+          assertThrows(io.grpc.StatusRuntimeException.class,
+              () -> wrongAudienceStub.getPlatformConfigurationSnapshot(wrongAudience)).getStatus().getCode());
       var change = bool("FREE_MCP", "1", true).toBuilder().setContext(wire(true)).build();
       var writeStub =
           plain.withInterceptors(
