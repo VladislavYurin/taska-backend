@@ -21,14 +21,18 @@ Received money that cannot settle remains unallocated with `REVIEW_REQUIRED` and
 wrong/full amount, imprecise day-only evidence, expired invoice, ineligible company, superseded
 selection or already paid invoice. This is not PAID or an invented refund. Financial cases, multiple
 bank receipts, excess and returns remain their owner tasks. A pending selection is retryable rather
-than a final rejection. No PSP is called by this processor.
+than a final rejection. A REVIEW_REQUIRED receipt is immutable for its original economic fact:
+subsequent payment/verified evidence uses a distinct owner decision (bank aggregation/refinement is
+TAS-357), never a replay that silently changes historical receipt/amount. No PSP is called by this processor.
 
 PSP periods start at actual success; WIRE first/resumed periods start at verified confirmation.
 Timely same-plan renewal preserves the calendar anchor. An expired/revoked period provides no
 remaining time: a new payment starts a full new month. Plan changes use `PlanCoveragePolicy` and
 the locked current intent/generation from TAS-354. An old disputed payment cannot restore revoked
 coverage. Original invoice snapshots/lines/terms remain sealed; get/list project the current PAID
-state and paid/remaining amounts over that document.
+state and ledger amounts over that document. Invoice `allocated` is historical gross allocation,
+so confirmed refunds/chargebacks do not reopen PAID; net principal/returns are the separate ledger
+balance. Pending matches reflect current unallocated principal, including confirmed returns.
 
 For INITIAL, the committed decision/outbox contains the creation operation and timely exact payment.
 After billing commit, `GrpcInitialPaymentDelivery` invokes the existing Root lifecycle RPC. Root

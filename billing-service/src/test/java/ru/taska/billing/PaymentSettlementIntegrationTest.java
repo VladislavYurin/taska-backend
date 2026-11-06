@@ -604,4 +604,160 @@ class PaymentSettlementIntegrationTest {
     assertEquals(confirmed, instantColumn("starts_at"));
     assertEquals(SubscriptionCalendar.initial(confirmed).endsAt(), instantColumn("ends_at"));
   }
+
+  <T> T ledgerWorker(String action, Mono<T> operation) {
+    return RegistryTestContext.withClaims(worker().toBuilder().setAction(action).build(), operation)
+        .block(WAIT);
+  }
+
+  @Test
+  void invoiceProjectionTracksPendingPrincipalAndItsConfirmedReturn() {
+    var proof =
+        new java.util.concurrent.atomic.AtomicReference<Movement>(
+            movement(1200, "pending-receipt", Method.PSP, NOW, NOW));
+    var ledger =
+        new FinancialLedger(
+            f.f.transactions,
+            f.f.readers,
+            (d, t, e) -> Mono.just(proof.get()),
+            (d, t, i, ids) -> Mono.empty(),
+            f.f.clock);
+    var payment =
+        ledgerWorker("recordFinancialFact", ledger.record(A, UUID.randomUUID(), "pending-receipt"));
+    ledgerWorker("matchInvoicePayment", ledger.match(A, payment.id(), invoice, "pending-match"));
+    var current = f.get(invoice.toString());
+    assertEquals("0", current.getAllocated().getAmountMinor());
+    assertEquals("1200", current.getMatchedUnallocated().getAmountMinor());
+    assertEquals("800", current.getRemaining().getAmountMinor());
+    assertEquals(current, f.list(10, null).getItems(0));
+    var original = proof.get();
+    proof.set(
+        new Movement(
+            A,
+            new Source(
+                "TEST_PSP", "test-account", Environment.SANDBOX, "pending-return", Method.PSP),
+            Kind.REFUND,
+            payment.id(),
+            null,
+            500,
+            Currency.EUR,
+            original.occurrence(),
+            NOW,
+            NOW,
+            null,
+            null,
+            original.evidenceRef(),
+            original.evidenceDigest()));
+    ledgerWorker("recordFinancialFact", ledger.record(A, UUID.randomUUID(), "pending-return"));
+    current = f.get(invoice.toString());
+    assertEquals("700", current.getMatchedUnallocated().getAmountMinor());
+    assertEquals("1300", current.getRemaining().getAmountMinor());
+    assertEquals(Invoice.StateValue.STATE_OPEN, current.getState());
+    assertEquals(current, f.list(10, null).getItems(0));
+  }
+
+  @Test
+  void reviewReceiptStaysHistoricalAfterANewEconomicPaymentSettlesTheInvoice() {
+    UUID partial = proof(movement(1200, "reviewed-partial", Method.PSP, NOW, NOW));
+    var previous = apply(partial).block(WAIT);
+    review(previous, "FULL_PAYMENT_REQUIRED");
+    paid();
+    assertEquals(previous, apply(partial).block(WAIT));
+    assertEquals(2, count("payment_facts"));
+    assertEquals(2, count("payment_settlements"));
+    assertEquals(1, count("payment_allocations"));
+    assertEquals(1, count("subscription_periods"));
+    assertEquals(Invoice.StateValue.STATE_PAID, f.get(invoice.toString()).getState());
+  }
+
+  @Test
+  void concurrentOwnerChoiceAndPaymentNeverApplyAnUnpaidTargetPlan() {
+    paid();
+    root.set(root.get().toBuilder().setLifecycle(Tenant.LifecycleValue.LIFECYCLE_ACTIVE).build());
+    f.f.planCommands();
+    var period = SubscriptionCalendar.initial(NOW.plusSeconds(1));
+    f.obligation.set(
+        new InvoiceDependencies.Obligation(
+            A,
+            UUID.randomUUID(),
+            PAID,
+            Invoice.PurposeValue.PURPOSE_RENEWAL,
+            "race-invoice",
+            period.startsAt(),
+            period.endsAt(),
+            null,
+            null));
+    var request =
+        f.payload().toBuilder()
+            .setPurpose(CreateInvoiceRequest.PurposeValue.PURPOSE_RENEWAL)
+            .build();
+    invoice =
+        UUID.fromString(
+            f.as("createInvoice", f.invoices.create(f.request("race-invoice", request)))
+                .block(WAIT)
+                .getId());
+    UUID target = f.f.plan(1000),
+        evidence = proof(movement(2000, "concurrent-renewal", Method.PSP, NOW, NOW));
+    var choice = f.f.selection(target, "race-choice", f.f.get(OWNER_A, A).getVersion());
+    var results =
+        Mono.zip(
+                apply(evidence).subscribeOn(Schedulers.parallel()),
+                f.f.change(choice).materialize().subscribeOn(Schedulers.parallel()))
+            .block(WAIT);
+    var result = results.getT1();
+    if (result.getOutcome() == PaymentSettlementResult.Outcome.OUTCOME_APPLIED)
+      assertEquals(2, count("subscription_periods"));
+    else {
+      assertEquals("PLAN_SELECTION_CHANGED", result.getReasonCode());
+      assertEquals(1, count("subscription_periods"));
+    }
+    if (results.getT2().isOnError())
+      assertInstanceOf(DomainException.class, results.getT2().getThrowable());
+    assertEquals(2, count("payment_facts"));
+    assertEquals(
+        0L,
+        operator
+            .sql(
+                "SELECT count(*) n FROM taska.subscription_periods WHERE tenant_id=:t AND"
+                    + " plan_version_id=:plan")
+            .bind("t", A)
+            .bind("plan", target)
+            .map((r, m) -> r.get("n", Long.class))
+            .one()
+            .block(WAIT));
+  }
+
+  @Test
+  void invoiceWithoutItsOwningSubscriptionIsRejectedBeforeAnyGenerationCanBeGuessed() {
+    UUID missing = UUID.randomUUID(), id = UUID.randomUUID();
+    var error =
+        assertThrows(
+            RuntimeException.class,
+            () ->
+                operator
+                    .sql("SELECT 1")
+                    .then()
+                    .then(
+                        operator
+                            .sql(
+                                """
+                                INSERT INTO taska.invoices SELECT (jsonb_populate_record(NULL::taska.invoices,to_jsonb(i)||jsonb_build_object(
+                                  'id',CAST(:id AS text),'tenant_id',CAST(:tenant AS text),'number',:number,'state','DRAFT',
+                                  'operation_id',CAST(:op AS text),'target_key',:target))).* FROM taska.invoices i WHERE i.id=:source
+                                """)
+                            .bind("id", id)
+                            .bind("tenant", missing)
+                            .bind("number", "NO-SUB-" + id)
+                            .bind("op", UUID.randomUUID())
+                            .bind("target", id.toString())
+                            .bind("source", invoice)
+                            .then())
+                    .block(WAIT));
+    Throwable cause = error;
+    while (!(cause instanceof io.r2dbc.spi.R2dbcException) && cause.getCause() != null)
+      cause = cause.getCause();
+    assertInstanceOf(io.r2dbc.spi.R2dbcException.class, cause);
+    assertEquals("P0002", ((io.r2dbc.spi.R2dbcException) cause).getSqlState());
+    assertEquals(1, count("invoices"));
+  }
 }

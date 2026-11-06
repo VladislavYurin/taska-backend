@@ -108,14 +108,31 @@ public final class PaymentSettlement {
   }
 
   private Mono<Map<String, Object>> lockSubscription(DatabaseClient db, UUID tenant) {
-    return db.sql(
-            "SELECT s.*,p.state change_state FROM taska.subscriptions s LEFT JOIN"
-                + " taska.subscription_plan_changes p ON p.tenant_id=s.tenant_id AND"
-                + " p.id=s.active_plan_change_id WHERE s.tenant_id=:t FOR UPDATE OF s")
+    return db.sql("SELECT * FROM taska.subscriptions WHERE tenant_id=:t FOR UPDATE")
         .bind("t", tenant)
         .fetch()
         .one()
-        .switchIfEmpty(Mono.error(fail(DomainStatus.NOT_FOUND, "RESOURCE_NOT_FOUND")));
+        .switchIfEmpty(Mono.error(fail(DomainStatus.NOT_FOUND, "RESOURCE_NOT_FOUND")))
+        .flatMap(
+            subscription -> {
+              if (subscription.get("active_plan_change_id") == null) return Mono.just(subscription);
+              // New READ COMMITTED statement after lock acquisition: no pre-wait JOIN snapshot.
+              // Every intent writer owns this subscription lock first (TAS-354).
+              return db.sql(
+                      "SELECT state FROM taska.subscription_plan_changes WHERE tenant_id=:t AND"
+                          + " id=:id")
+                  .bind("t", tenant)
+                  .bind("id", subscription.get("active_plan_change_id"))
+                  .fetch()
+                  .one()
+                  .switchIfEmpty(Mono.error(fail(DomainStatus.ABORTED, "PLAN_SELECTION_CHANGED")))
+                  .map(
+                      intent -> {
+                        var current = new HashMap<String, Object>(subscription);
+                        current.put("change_state", intent.get("state"));
+                        return current;
+                      });
+            });
   }
 
   private Mono<PaymentSettlementResult> settle(
