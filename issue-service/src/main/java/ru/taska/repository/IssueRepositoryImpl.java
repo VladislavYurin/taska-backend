@@ -431,6 +431,9 @@ public class IssueRepositoryImpl implements IssueRepositoryCustom {
     private Flux<Issue> findForBoardLimitedPerColumn(
             Filter filter, Integer pageSizePerColumn, List<String> updatedKeys) {
         SqlWhere where = SqlRenderer.render(filter);
+        // These are merged column order keys chosen by the gateway's first registry type,
+        // not this issue type's DONE keys. All types must supply the same sorted prefix.
+        // The separate doneStatusKeys still control includeDone/doneSince in boardFilter.
         String order =
                 updatedKeys.isEmpty()
                         ? "created_at ASC, id ASC"

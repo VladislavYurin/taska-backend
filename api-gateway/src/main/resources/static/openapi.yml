@@ -2840,7 +2840,7 @@ paths:
     get:
       x-pat-scope: read
       summary: Получение доски задач проекта
-      description: В колонках категории DONE — updatedAt desc, id desc; в остальных и unplacedIssues — createdAt asc, id asc. Категория определяется workflow, а не строкой ключа статуса.
+      description: В колонках категории DONE — updatedAt desc, id desc; в остальных и unplacedIssues — createdAt asc, id asc. Категория определяется workflow, а не строкой ключа статуса. При общем ключе разных категорий порядок колонки задаёт первый тип реестра проекта; фильтры DONE учитывают workflow каждой задачи.
       operationId: getBoard
       tags:
         - board
@@ -2924,7 +2924,7 @@ paths:
     get:
       x-pat-scope: read
       summary: Страница задач колонки доски
-      description: Колонки категории DONE идут в updatedAt desc, id desc; остальные — createdAt asc, id asc. Для DONE передайте afterUpdatedAt и afterId последней задачи, для остальных — afterCreatedAt и afterId. Сохраните те же фильтры, включая doneSince. Курсор исключительный; задачи, добавленные перед ним, появятся после обновления доски. Задачи входят только в статусы workflow своего типа.
+      description: Колонки категории DONE идут в updatedAt desc, id desc; остальные — createdAt asc, id asc. При общем ключе разных категорий порядок колонки задаёт первый тип реестра проекта; фильтры DONE учитывают workflow каждой задачи. Для DONE передайте afterUpdatedAt и afterId последней задачи, для остальных — afterCreatedAt и afterId. Сохраните те же фильтры, включая doneSince. Курсор исключительный; задачи, добавленные перед ним, появятся после обновления доски. Задачи входят только в статусы workflow своего типа.
       operationId: listBoardColumnIssues
       tags:
         - board

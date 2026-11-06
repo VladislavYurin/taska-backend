@@ -301,4 +301,46 @@ class BoardWorkflowStatusIntegrationTest extends AbstractIT {
             assertThat(error.getStatus().getCode()).isEqualTo(io.grpc.Status.Code.INVALID_ARGUMENT);
         }
     }
+
+    @ParameterizedTest
+    @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
+    void sharedColumnUsesExplicitMergedOrderWhileDoneFilterRemainsPerType(boolean updated) {
+        seedDone(150, "FINISHED");
+        db.sql("UPDATE taska.issues SET issue_type='BUG' WHERE project_id=:p"
+                        + " AND status_key='FINISHED' AND issue_number % 2 = 1")
+                .bind("p", project).then().block();
+        // TASK defines FINISHED as DONE, BUG as active. The first registry type decides
+        // the merged column's order, so even BUG must use DESC when TASK comes first.
+        var ordering = ru.taska.api.issue.v1.BoardColumnOrdering.newBuilder();
+        if (updated) ordering.addUpdatedStatusKeys("FINISHED");
+        for (String type : List.of("TASK", "BUG")) {
+            var request = body().setIssueTypeKey(type).setColumnOrdering(ordering)
+                    .setPageSizePerColumn(1);
+            if (type.equals("BUG")) request.clearDoneStatusKeys();
+            int first = updated ? (type.equals("TASK") ? 150 : 149)
+                    : (type.equals("TASK") ? 2 : 1);
+            var initial = read(request);
+            var row = initial.getIssuesList().stream()
+                    .filter(i -> i.getStatusKey().equals("FINISHED")).findFirst().orElseThrow();
+            assertThat(row.getId()).isEqualTo(doneId(first).toString());
+            assertThat(row.getStatusTotalCount()).isEqualTo(75);
+
+            request.setStatusKey("FINISHED");
+            var page = read(request);
+            assertThat(page.getIssues(0).getId()).isEqualTo(row.getId());
+            assertThat(page.getTotalCount()).isEqualTo(75);
+            request.setAfterId(row.getId());
+            if (updated) request.setAfterUpdatedAt(row.getUpdatedAt());
+            else request.setAfterCreatedAt(row.getCreatedAt());
+            assertThat(read(request).getIssues(0).getId())
+                    .isEqualTo(doneId(first + (updated ? -2 : 2)).toString());
+
+            request.clearAfterId().clearAfterCreatedAt().clearAfterUpdatedAt()
+                    .setDoneSince(stamp(BOARD_NOW.minus(Duration.ofDays(14))));
+            var filtered = read(request);
+            assertThat(filtered.getTotalCount()).isEqualTo(type.equals("TASK") ? 8 : 75);
+            int expected = type.equals("TASK") ? (updated ? 150 : 136) : first;
+            assertThat(filtered.getIssues(0).getId()).isEqualTo(doneId(expected).toString());
+        }
+    }
 }

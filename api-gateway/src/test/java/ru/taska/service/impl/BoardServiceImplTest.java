@@ -1425,4 +1425,48 @@ class BoardServiceImplTest {
                         })
                 .verifyComplete();
     }
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    void sharedColumnUsesFirstRegistryCategoryForBothInitialAndCursorPages(boolean doneFirst) {
+        when(issueTypesClient.list(PROJECT_ID, context))
+                .thenReturn(Mono.just(doneFirst ? registry("TASK", "BUG") : registry("BUG", "TASK")));
+        when(workflowClient.getWorkflowForProject(PROJECT_ID, "TASK", context))
+                .thenReturn(Mono.just(new WorkflowResponseDto().statuses(
+                        List.of(workflowStatus("REVIEW", "Task review", "DONE", 1)))));
+        when(workflowClient.getWorkflowForProject(PROJECT_ID, "BUG", context))
+                .thenReturn(Mono.just(new WorkflowResponseDto().statuses(
+                        List.of(workflowStatus("REVIEW", "Bug review", "IN_PROGRESS", 1)))));
+        var task = pageIssue("TASK", "REVIEW", 1, "2026-01-01T00:00:00Z", 1);
+        var bug = pageIssue("BUG", "REVIEW", 2, "2026-01-02T00:00:00Z", 1);
+        var since = java.time.OffsetDateTime.parse("2025-12-31T00:00:00Z");
+        var options = new BoardReadOptions(since.toInstant(),
+                doneFirst ? List.of("REVIEW") : List.of());
+        for (var row : List.of(task, bug)) {
+            String type = row.issue().getIssueType();
+            var ownDone = type.equals("TASK") ? List.of("REVIEW") : List.<String>of();
+            when(issueClient.listIssuesForBoard(PROJECT_ID.toString(), type, null, null,
+                    true, ownDone, null, null, 1, options, context))
+                    .thenReturn(Mono.just(List.of(row)));
+            when(issueClient.listBoardColumnPage(PROJECT_ID.toString(), type, "REVIEW",
+                    null, null, true, ownDone, null, null, 1, null, null, null, options, context))
+                    .thenReturn(Mono.just(new ru.taska.domain.BoardIssuePageData(List.of(row), 1, false)));
+        }
+        var expected = doneFirst ? bug.issue() : task.issue();
+        StepVerifier.create(boardService.getBoard(PROJECT_ID, null, null, null,
+                        true, null, null, 1, since, context))
+                .assertNext(board -> {
+                    var column = board.getColumns().get(0);
+                    assertThat(column.getCategory()).isEqualTo(doneFirst ? "DONE" : "IN_PROGRESS");
+                    assertThat(column.getIssues()).containsExactly(expected);
+                    assertThat(column.getTotalCount()).isEqualTo(2);
+                    assertThat(column.getHasMore()).isTrue();
+                }).verifyComplete();
+        StepVerifier.create(boardService.listBoardColumnIssues(PROJECT_ID, "REVIEW", null, null,
+                        null, null, null, true, null, null, 1, null, since, context))
+                .assertNext(page -> {
+                    assertThat(page.getIssues()).containsExactly(expected);
+                    assertThat(page.getTotalCount()).isEqualTo(2);
+                    assertThat(page.getHasMore()).isTrue();
+                }).verifyComplete();
+    }
 }
