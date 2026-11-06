@@ -328,6 +328,57 @@ public class BillingConfiguration {
   }
 
   @Bean
+  @ConditionalOnMissingBean
+  PaymentSettlementDependencies.EvidenceAuthority verifiedPaymentEvidence() {
+    return (db, tenant, evidence) ->
+        Mono.error(CatalogErrors.fail(DomainStatus.UNAVAILABLE, "PAYMENT_EVIDENCE_UNAVAILABLE"));
+  }
+
+  @Bean
+  @ConditionalOnMissingBean
+  PaymentSettlementDependencies.TenantAuthority paymentTenantAuthority(
+      ObjectProvider<
+              ru.taska.api.b2b.v1.ReactorTenantPaymentStateServiceGrpc
+                  .ReactorTenantPaymentStateServiceStub>
+          stubs,
+      ObjectProvider<RpcContextSecurity> security) {
+    var stub = stubs.getIfAvailable();
+    var trust = security.getIfAvailable();
+    if (stub != null && trust != null)
+      return new GrpcTenantPaymentState(stub, trust, Clock.systemUTC());
+    return tenant ->
+        Mono.error(CatalogErrors.fail(DomainStatus.UNAVAILABLE, "DEPENDENCY_UNAVAILABLE"));
+  }
+
+  @Bean
+  @ConditionalOnMissingBean
+  PaymentSettlementDependencies.InitialPaymentDelivery initialPaymentDelivery(
+      ObjectProvider<
+              ru.taska.api.b2b.v1.ReactorTenantCreationLifecycleServiceGrpc
+                  .ReactorTenantCreationLifecycleServiceStub>
+          stubs,
+      ObjectProvider<RpcContextSecurity> security) {
+    var stub = stubs.getIfAvailable();
+    var trust = security.getIfAvailable();
+    if (stub != null && trust != null)
+      return new GrpcInitialPaymentDelivery(stub, trust, Clock.systemUTC());
+    return (tenant, decision) ->
+        Mono.error(CatalogErrors.fail(DomainStatus.UNAVAILABLE, "DEPENDENCY_UNAVAILABLE"));
+  }
+
+  @Bean
+  @DependsOn("safeRuntimeRole")
+  PaymentSettlement paymentSettlement(
+      SubscriptionStore subscriptions,
+      FinancialLedger ledger,
+      PaymentSettlementDependencies.EvidenceAuthority evidence,
+      PaymentSettlementDependencies.TenantAuthority tenants,
+      PaymentSettlementDependencies.InitialPaymentDelivery delivery) {
+    return new PaymentSettlement(
+        subscriptions, ledger, evidence, tenants, delivery, Clock.systemUTC());
+  }
+
+  @Bean
   @GlobalServerInterceptor
   ServerInterceptor registrySecurity(
       ObjectProvider<RpcContextSecurity> provider,
@@ -337,6 +388,15 @@ public class BillingConfiguration {
       return new TenantServerInterceptor(
           security,
           Map.ofEntries(
+              Map.entry(
+                  ru.taska.api.b2b.v1.PaymentSettlementServiceGrpc.getApplyVerifiedPaymentMethod()
+                      .getFullMethodName(),
+                  new RpcContextSecurity.Policy(true, true)),
+              Map.entry(
+                  ru.taska.api.b2b.v1.PaymentSettlementServiceGrpc
+                      .getGetInitialPaymentDecisionMethod()
+                      .getFullMethodName(),
+                  new RpcContextSecurity.Policy(true, false)),
               Map.entry(
                   BillingServiceGrpc.getGetEntitlementMethod().getFullMethodName(),
                   new RpcContextSecurity.Policy(true, false)),

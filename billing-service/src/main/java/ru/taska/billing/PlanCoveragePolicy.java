@@ -26,7 +26,8 @@ public final class PlanCoveragePolicy {
             c -> {
               var claims = RpcContextBridge.details(c).getContext();
               if (!payment.tenantId().toString().equals(c.tenantId())
-                  || !"applySubscriptionCoverage".equals(c.action())
+                  || !Set.of("applySubscriptionCoverage", "applyVerifiedPayment")
+                      .contains(c.action())
                   || claims.getCredentialKind() != CredentialKind.CREDENTIAL_KIND_SERVICE
                   || !"billing-service".equals(claims.getIssuerService())
                   || !c.scopes().contains("write"))

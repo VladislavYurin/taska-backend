@@ -28,6 +28,23 @@ import tools.jackson.databind.json.JsonMapper;
 
 /** Issuance only. No browser command or timer constitutes a settlement fact. */
 public final class InvoiceStore {
+  /**
+   * Invoice allocated is historical gross; returns do not reopen PAID (B2B contract §5). Pending
+   * matches use current remaining principal, including confirmed unallocated returns.
+   */
+  private static final String CURRENT_INVOICE_SQL =
+      """
+      SELECT i.*,coalesce(a.allocated,0)::bigint allocated_minor,
+        coalesce(m.pending,0)::bigint matched_minor
+      FROM taska.invoices i
+      LEFT JOIN LATERAL (SELECT sum(amount_minor) allocated FROM taska.payment_allocations
+        WHERE tenant_id=i.tenant_id AND invoice_id=i.id) a ON true
+      LEFT JOIN LATERAL (SELECT sum(b.matched_unallocated) pending
+        FROM taska.invoice_payment_matches matches JOIN taska.financial_balances b
+          ON b.tenant_id=matches.tenant_id AND b.id=matches.payment_fact_id
+        WHERE matches.tenant_id=i.tenant_id AND matches.invoice_id=i.id) m ON true
+      """;
+
   private final TenantTransactionExecutor transactions;
   private final FinancialAccess access;
   private final ObligationAuthority obligations;
@@ -642,6 +659,25 @@ public final class InvoiceStore {
         : s.bind(name, time.atOffset(ZoneOffset.UTC));
   }
 
+  private static Invoice currentInvoice(Map<String, Object> row) {
+    Invoice original = parsed((String) row.get("snapshot"));
+    long allocated = ((Number) row.get("allocated_minor")).longValue();
+    long matched = ((Number) row.get("matched_minor")).longValue();
+    long remaining =
+        new BigDecimal(original.getTotal().getAmountMinor())
+            .subtract(BigDecimal.valueOf(allocated))
+            .subtract(BigDecimal.valueOf(matched))
+            .max(BigDecimal.ZERO)
+            .longValueExact();
+    return original.toBuilder()
+        .setState(Invoice.StateValue.valueOf("STATE_" + row.get("state")))
+        .setAllocated(original.getTotal().toBuilder().setAmountMinor(Long.toString(allocated)))
+        .setMatchedUnallocated(
+            original.getTotal().toBuilder().setAmountMinor(Long.toString(matched)))
+        .setRemaining(original.getTotal().toBuilder().setAmountMinor(Long.toString(remaining)))
+        .build();
+  }
+
   public Mono<Invoice> get(GetInvoiceRpcRequest request) {
     UUID tenant = uuid(request.getTenantId()), id = uuid(request.getInvoiceId());
     return access
@@ -651,12 +687,14 @@ public final class InvoiceStore {
                 transactions.execute(
                     db ->
                         db.sql(
-                                "SELECT snapshot FROM taska.invoices WHERE tenant_id=:tenant AND"
-                                    + " id=:id AND state<>'DRAFT'")
+                                CURRENT_INVOICE_SQL
+                                    + " WHERE i.tenant_id=:tenant AND i.id=:id AND"
+                                    + " i.state<>'DRAFT'")
                             .bind("tenant", tenant)
                             .bind("id", id)
-                            .map((r, m) -> parsed(r.get("snapshot", String.class)))
+                            .fetch()
                             .one()
+                            .map(InvoiceStore::currentInvoice)
                             .switchIfEmpty(
                                 Mono.error(fail(DomainStatus.NOT_FOUND, "RESOURCE_NOT_FOUND")))));
   }
@@ -702,10 +740,10 @@ public final class InvoiceStore {
               return transactions.execute(
                   db ->
                       db.sql(
-                              "SELECT snapshot,issued_at,id FROM taska.invoices WHERE"
-                                  + " tenant_id=:tenant AND state<>'DRAFT' AND (:first OR"
-                                  + " (issued_at,id)<(:after,:id)) ORDER BY issued_at DESC,id DESC"
-                                  + " LIMIT :limit")
+                              CURRENT_INVOICE_SQL
+                                  + " WHERE i.tenant_id=:tenant AND i.state<>'DRAFT' AND (:first OR"
+                                  + " (i.issued_at,i.id)<(:after,:id)) ORDER BY i.issued_at"
+                                  + " DESC,i.id DESC LIMIT :limit")
                           .bind("tenant", tenant)
                           .bind("first", pos == null)
                           .bind(
@@ -721,7 +759,7 @@ public final class InvoiceStore {
                               rows -> {
                                 var page = InvoicePage.newBuilder();
                                 for (var row : rows.subList(0, Math.min(rows.size(), limit)))
-                                  page.addItems(parsed((String) row.get("snapshot")));
+                                  page.addItems(currentInvoice(row));
                                 if (rows.size() > limit) {
                                   var row = rows.get(limit - 1);
                                   page.setNextCursor(

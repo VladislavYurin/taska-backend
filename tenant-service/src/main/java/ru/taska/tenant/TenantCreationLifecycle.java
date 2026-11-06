@@ -53,6 +53,41 @@ public final class TenantCreationLifecycle {
         .switchIfEmpty(Mono.error(fail(DomainStatus.NOT_FOUND, "TENANT_NOT_FOUND")));
   }
 
+  /** Minimal primary payment state; excludes directory, credentials and commercial secrets. */
+  public Mono<ru.taska.api.b2b.v1.TenantPaymentState> paymentState(UUID tenant) {
+    return service(tenant, "getTenantPaymentState", "billing-service")
+        .then(
+            transactions.execute(
+                db ->
+                    db.sql(
+                            "SELECT"
+                                + " id,lifecycle,creation_operation_id,plan_version_id,creation_deadline_at,version"
+                                + " FROM taska.tenants WHERE id=:t")
+                        .bind("t", tenant)
+                        .fetch()
+                        .one()
+                        .switchIfEmpty(Mono.error(fail(DomainStatus.NOT_FOUND, "TENANT_NOT_FOUND")))
+                        .map(
+                            row -> {
+                              var b =
+                                  ru.taska.api.b2b.v1.TenantPaymentState.newBuilder()
+                                      .setTenantId(tenant.toString())
+                                      .setLifecycle(
+                                          Tenant.LifecycleValue.valueOf(
+                                              "LIFECYCLE_" + row.get("lifecycle")))
+                                      .setCreationOperationId(
+                                          row.get("creation_operation_id").toString())
+                                      .setPlanVersionId(row.get("plan_version_id").toString())
+                                      .setVersion(row.get("version").toString());
+                              if (row.get("creation_deadline_at") != null)
+                                b.setCreationDeadlineAt(
+                                    ((OffsetDateTime) row.get("creation_deadline_at"))
+                                        .toInstant()
+                                        .toString());
+                              return b.build();
+                            })));
+  }
+
   public Mono<Tenant> cancel(CancelTenantCreationRpcRequest request) {
     return Mono.defer(
         () -> {

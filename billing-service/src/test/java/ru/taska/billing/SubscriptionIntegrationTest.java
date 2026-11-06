@@ -196,9 +196,51 @@ class SubscriptionIntegrationTest {
             .map((r, m) -> r.get("md5sum", String.class))
             .one()
             .block(WAIT);
-    migrateNext(); // Preserve the independently delivered commercial 0004 before ledger 0005.
+    migrateNext(); // commercial 0004
+    migrateNext(); // ledger 0005
+    migrateNext(); // entitlements 0006
+    migrateNext(); // calendar 0007
+    migrateNext(); // plan changes 0008
+    UUID existingIntent = UUID.randomUUID(), existingChangeInvoice = UUID.randomUUID();
+    sql(
+        "INSERT INTO"
+            + " taska.subscription_plan_changes(id,tenant_id,actor_id,request_key,request_hash,owner_id,owner_version,requested_version,selection_generation,previous_plan_version_id,target_plan_version_id,target_terms_snapshot,effect,state,currency,payment_method,created_at)"
+            + " VALUES('"
+            + existingIntent
+            + "','"
+            + upgradeTenant
+            + "','"
+            + OWNER_A
+            + "','upgrade','\\x00','"
+            + OWNER_A
+            + "',1,1,7,'"
+            + PAID
+            + "','"
+            + PAID
+            + "','{}','AFTER_PAYMENT','AWAITING_PAYMENT','EUR','PSP',now())");
+    InvoiceTestFixtures.ensure(
+        operator, upgradeTenant, existingChangeInvoice, PAID, existingIntent, "PLAN_CHANGE");
+    migrate(); // payment settlement0009
+    assertEquals(
+        7L,
+        operator
+            .sql("SELECT selection_generation FROM taska.invoices WHERE id=:id")
+            .bind("id", existingChangeInvoice)
+            .map((row, metadata) -> row.get("selection_generation", Long.class))
+            .one()
+            .block(WAIT));
     migrate();
-    migrate();
+    assertEquals(
+        0L,
+        operator
+            .sql(
+                "SELECT count(*) n FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace"
+                    + " WHERE n.nspname='taska' AND c.relname IN"
+                    + " ('invoices','subscription_plan_changes') AND NOT(c.relrowsecurity AND"
+                    + " c.relforcerowsecurity)")
+            .map((row, metadata) -> row.get("n", Long.class))
+            .one()
+            .block(WAIT));
     assertEquals(
         invoiceChecksum,
         operator
@@ -312,7 +354,7 @@ class SubscriptionIntegrationTest {
   void reset() {
     sql(
         "TRUNCATE"
-            + " taska.renewal_calendar_assignments,taska.entitlement_snapshots,taska.payment_facts,taska.payment_allocations,taska.invoice_payment_matches,taska.financial_command_receipts,taska.invoices,taska.invoice_lines,taska.invoice_command_receipts,taska.subscription_plan_changes,taska.subscriptions,taska.subscription_periods,taska.subscription_command_receipts,taska.outbox_events,taska.idempotency_records,taska.processed_events");
+            + " taska.initial_payment_deliveries,taska.payment_settlements,taska.renewal_calendar_assignments,taska.entitlement_snapshots,taska.payment_facts,taska.payment_allocations,taska.invoice_payment_matches,taska.financial_command_receipts,taska.invoices,taska.invoice_lines,taska.invoice_command_receipts,taska.subscription_plan_changes,taska.subscriptions,taska.subscription_periods,taska.subscription_command_receipts,taska.outbox_events,taska.idempotency_records,taska.processed_events");
     sql("ALTER TABLE taska.catalog_plan_versions DISABLE TRIGGER immutable_plan");
     sql("DELETE FROM taska.catalog_plan_versions WHERE version>1");
     sql("ALTER TABLE taska.catalog_plan_versions ENABLE TRIGGER immutable_plan");
