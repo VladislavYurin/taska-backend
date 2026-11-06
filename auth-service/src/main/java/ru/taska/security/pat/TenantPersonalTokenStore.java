@@ -209,6 +209,8 @@ public class TenantPersonalTokenStore {
             row -> {
               if (!MessageDigest.isEqual(request.digest(), bytes(row.get("request_sha256"))))
                 return Mono.error(failure(DomainStatus.ABORTED, "IDEMPOTENCY_CONFLICT"));
+              // Contract §8: after the 60s receipt window the key stays consumed (409), and a
+              // revoked/expired token's secret is never replayed; a new key starts a new issuance.
               if (row.get("ciphertext") == null
                   || !instant(row.get("receipt_expires")).isAfter(now)
                   || row.get("revoked_at") != null

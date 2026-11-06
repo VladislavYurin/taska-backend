@@ -62,10 +62,10 @@ class TenantPersonalTokenBoundaryTest {
   PlanKind plan = PlanKind.PAID;
   Membership.StateValue membership = Membership.StateValue.STATE_ACTIVE;
   boolean factsAvailable = true;
+  final String credential = UUID.randomUUID().toString();
+  final CapabilityEvaluator evaluator = new CapabilityEvaluator(this::facts, Clock.systemUTC());
   final TenantPersonalTokenGrpcService service =
-      new TenantPersonalTokenGrpcService(
-          store,
-          new TenantPersonalTokenAdmission(new CapabilityEvaluator(this::facts, Clock.systemUTC())));
+      new TenantPersonalTokenGrpcService(store, new TenantPersonalTokenAdmission(evaluator));
 
   {
     for (var flag : Flag.values()) flags.put(flag, true);
@@ -85,7 +85,14 @@ class TenantPersonalTokenBoundaryTest {
             verified.requestId(),
             Instant.now().plusSeconds(20),
             new CapabilityFacts.Identity(
-                true, false, "1", true, null, session.toString(), false, Set.of("read", "write")),
+                true,
+                false,
+                "1",
+                true,
+                credential,
+                session.toString(),
+                false,
+                Set.of("read", "write")),
             MembershipSnapshot.newBuilder()
                 .setTenantId(tenant.toString())
                 .setUserId(user.toString())
@@ -290,6 +297,36 @@ class TenantPersonalTokenBoundaryTest {
     assertEquals("test-secret", created.getSecret());
     verify(store).issue(user, session, tenant, "CI bot", List.of("read", "write"), 30, key, requestId);
     verifyNoMoreInteractions(store);
+  }
+
+  @Test
+  void ordinaryPatCannotChangeAccountOrIssueAnotherPat() throws Exception {
+    var pat =
+        tenantSession().toBuilder()
+            .setCredentialKind(CredentialKind.CREDENTIAL_KIND_USER_PAT)
+            .clearSessionId()
+            .setCredentialId(credential)
+            .build();
+    for (var action :
+        List.of(
+            Action.ACCOUNT_PROFILE_UPDATE,
+            Action.ACCOUNT_AVATAR_WRITE,
+            Action.ACCOUNT_PASSWORD_CHANGE,
+            Action.ACCOUNT_EMAIL_CHANGE,
+            Action.ACCOUNT_DELETE,
+            Action.PAT_CREATE)) {
+      var decision =
+          inbound(
+                  pat,
+                  () ->
+                      RpcContextBridge.inbound(
+                          evaluator.evaluate(
+                              action, new CapabilityFacts.Target(tenant, null, user, null))))
+              .block()
+              .capability();
+      assertEquals(false, decision.getAllowed(), action.toString());
+      assertEquals(List.of(ErrorCode.ERROR_CODE_SESSION_REQUIRED), decision.getDenialCodesList());
+    }
   }
 
   @Test

@@ -285,6 +285,26 @@ class TenantPersonalTokenStoreIntegrationTest {
   }
 
   @Test
+  void concurrentIssuanceWithDifferentKeysCannotExceedActiveLimit() {
+    policy.setMaxActiveTokens(1);
+    var results =
+        Flux.merge(
+                issue(sessionA, A, "first", List.of("read"), UUID.randomUUID())
+                    .map(issued -> "OK")
+                    .onErrorResume(DomainException.class, e -> Mono.just(e.getDetails().get("code")))
+                    .subscribeOn(Schedulers.parallel()),
+                issue(sessionB, B, "second", List.of("read"), UUID.randomUUID())
+                    .map(issued -> "OK")
+                    .onErrorResume(DomainException.class, e -> Mono.just(e.getDetails().get("code")))
+                    .subscribeOn(Schedulers.parallel()))
+            .collectList()
+            .block(WAIT);
+    assertEquals(Set.of("OK", "QUOTA_EXCEEDED"), Set.copyOf(results));
+    assertEquals(1L, count("SELECT count(*) FROM taska.personal_access_tokens"));
+    assertEquals(1L, count("SELECT count(*) FROM taska.integration_grants"));
+  }
+
+  @Test
   void invalidRequestsWriteNothing() {
     for (var scopes : List.of(List.<String>of(), List.of("admin"), List.of("read", "read")))
       rejected(
