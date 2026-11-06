@@ -1,5 +1,6 @@
 package ru.taska.repository;
 
+import ru.taska.board.BoardReadOptions;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
@@ -264,19 +265,30 @@ public class IssueRepositoryImpl implements IssueRepositoryCustom {
             List<UUID> labelIds,
             Integer pageSizePerColumn,
             IssuePriority priority,
-            String query
-    ) {
+            String query,
+            BoardReadOptions options) {
         return resolveLabelFilterIssueIds(labelIds)
-                .map(issueIds -> boardFilter(
-                        projectId, issueType, assigneeId, statusKey, includeDone, doneStatusKeys,
-                        issueIds.orElse(null), priority, query
-                ))
-                .flatMapMany(filter -> {
-                    if (filter.matchesNothing()) {
-                        return Flux.empty();
-                    }
-                    return findForBoardLimitedPerColumn(filter, pageSizePerColumn);
-                });
+                .map(
+                        issueIds ->
+                                boardFilter(
+                                        projectId,
+                                        issueType,
+                                        assigneeId,
+                                        statusKey,
+                                        includeDone,
+                                        doneStatusKeys,
+                                        issueIds.orElse(null),
+                                        priority,
+                                        query,
+                                        options))
+                .flatMapMany(
+                        filter -> {
+                            if (filter.matchesNothing()) {
+                                return Flux.empty();
+                            }
+                            return findForBoardLimitedPerColumn(
+                                    filter, pageSizePerColumn, options.orderKeys(doneStatusKeys));
+                        });
     }
 
     @Override
@@ -292,7 +304,8 @@ public class IssueRepositoryImpl implements IssueRepositoryCustom {
             IssuePriority priority,
             String query,
             Instant afterCreatedAt,
-            UUID afterId) {
+            UUID afterId,
+            BoardReadOptions options) {
         return resolveLabelFilterIssueIds(labelIds)
                 .map(
                         ids ->
@@ -305,13 +318,19 @@ public class IssueRepositoryImpl implements IssueRepositoryCustom {
                                         doneStatusKeys,
                                         ids.orElse(null),
                                         priority,
-                                        query))
+                                        query,
+                                        options))
                 .flatMap(
                         filter ->
                                 filter.matchesNothing()
                                         ? Mono.just(new BoardCursorPage<>(List.of(), 0, false))
                                         : findBoardColumnPage(
-                                                filter, pageSize, afterCreatedAt, afterId));
+                                                filter,
+                                                pageSize,
+                                                afterCreatedAt,
+                                                afterId,
+                                                options.orderKeys(doneStatusKeys)
+                                                        .contains(statusKey)));
     }
 
     /**
@@ -319,8 +338,14 @@ public class IssueRepositoryImpl implements IssueRepositoryCustom {
      * count.
      */
     private Mono<BoardCursorPage<Issue>> findBoardColumnPage(
-            Filter filter, int pageSize, Instant afterCreatedAt, UUID afterId) {
+            Filter filter,
+            int pageSize,
+            Instant afterCreatedAt,
+            UUID afterId,
+            boolean updatedOrder) {
         SqlWhere where = SqlRenderer.render(filter);
+        String column = updatedOrder ? "updated_at" : "created_at";
+        String direction = updatedOrder ? "DESC" : "ASC";
         String sql =
                 """
                 WITH totals AS (
@@ -328,19 +353,28 @@ public class IssueRepositoryImpl implements IssueRepositoryCustom {
                 ), page AS (
                     SELECT * FROM taska.issues WHERE %s
                     %s
-                    ORDER BY created_at ASC, id ASC LIMIT :boardFetchSize
+                    ORDER BY %s %s, id %s LIMIT :boardFetchSize
                 )
                 SELECT page.*, totals.board_total_count
                 FROM totals LEFT JOIN page ON TRUE
-                ORDER BY page.created_at ASC, page.id ASC
+                ORDER BY page.%s %s, page.id %s
                 """
                         .formatted(
                                 where.sql(),
                                 where.sql(),
                                 afterCreatedAt == null
                                         ? ""
-                                        : "AND (created_at, id) > (:boardAfterCreatedAt,"
-                                              + " :boardAfterId)");
+                                        : "AND ("
+                                                + column
+                                                + ", id) "
+                                                + (updatedOrder ? "<" : ">")
+                                                + " (:boardAfterCreatedAt, :boardAfterId)",
+                                column,
+                                direction,
+                                direction,
+                                column,
+                                direction,
+                                direction);
         var spec = where.bindTo(databaseClient.sql(sql)).bind("boardFetchSize", pageSize + 1);
         if (afterCreatedAt != null) {
             spec =
@@ -394,21 +428,38 @@ public class IssueRepositoryImpl implements IssueRepositoryCustom {
     }
 
     /** Count and page share one PostgreSQL statement/snapshot and exactly the same filters. */
-    private Flux<Issue> findForBoardLimitedPerColumn(Filter filter, Integer pageSizePerColumn) {
+    private Flux<Issue> findForBoardLimitedPerColumn(
+            Filter filter, Integer pageSizePerColumn, List<String> updatedKeys) {
         SqlWhere where = SqlRenderer.render(filter);
-        String sql = """
+        // These are merged column order keys chosen by the gateway's first registry type,
+        // not this issue type's DONE keys. All types must supply the same sorted prefix.
+        // The separate doneStatusKeys still control includeDone/doneSince in boardFilter.
+        String order =
+                updatedKeys.isEmpty()
+                        ? "created_at ASC, id ASC"
+                        : "CASE WHEN status_key IN (:boardUpdatedKeys) THEN updated_at END DESC,"
+                              + " CASE WHEN status_key IN (:boardUpdatedKeys) THEN id END DESC,"
+                              + " created_at ASC, id ASC";
+        String sql =
+                """
                 SELECT * FROM (
                     SELECT *,
                            COUNT(*) OVER (PARTITION BY status_key) AS board_total_count,
-                           ROW_NUMBER() OVER (PARTITION BY status_key ORDER BY created_at ASC, id ASC) AS rn
+                           ROW_NUMBER() OVER (PARTITION BY status_key ORDER BY %s) AS rn
                     FROM taska.issues
                     WHERE %s
                 ) t
                 %s
-                ORDER BY status_key ASC, created_at ASC, id ASC
-                """.formatted(where.sql(), pageSizePerColumn == null ? "" : "WHERE rn <= :pageSizePerColumn");
+                ORDER BY status_key ASC, %s
+                """
+                        .formatted(
+                                order,
+                                where.sql(),
+                                pageSizePerColumn == null ? "" : "WHERE rn <= :pageSizePerColumn",
+                                order);
         var query = where.bindTo(r2dbcEntityTemplate.getDatabaseClient().sql(sql));
         if (pageSizePerColumn != null) query = query.bind("pageSizePerColumn", pageSizePerColumn);
+        if (!updatedKeys.isEmpty()) query = query.bind("boardUpdatedKeys", updatedKeys);
         return query.map((row, metadata) -> {
             Issue issue = issueMapper.mapRowToIssue(row, metadata);
             issue.setBoardStatusTotalCount(row.get("board_total_count", Long.class));
@@ -501,8 +552,8 @@ public class IssueRepositoryImpl implements IssueRepositoryCustom {
             List<String> doneStatusKeys,
             List<UUID> labelFilterIssueIds,
             IssuePriority priority,
-            String query
-    ) {
+            String query,
+            BoardReadOptions options) {
         return FilterBuilder.create()
                 .eqRequired("project_id", projectId)
                 .isNull("deleted_at")
@@ -511,9 +562,24 @@ public class IssueRepositoryImpl implements IssueRepositoryCustom {
                 .eq("assignee_id", assigneeId)
                 .eq("status_key", statusKey)
                 .when(!includeDone, b -> b.notIn("status_key", doneStatusKeys))
+                .when(
+                        options.doneSince() != null
+                                && doneStatusKeys != null
+                                && !doneStatusKeys.isEmpty(),
+                        b ->
+                                b.anyOf(
+                                        any ->
+                                                any.notIn("status_key", doneStatusKeys)
+                                                        .gte(
+                                                                "updated_at",
+                                                                options.doneSince()
+                                                                        .atOffset(ZoneOffset.UTC))))
                 .inOrNone("id", labelFilterIssueIds)
-                .anyOf(any -> any.containsIgnoreCase("issue_key", query)
-                        .containsIgnoreCase("summary", query).containsIgnoreCase("description", query))
+                .anyOf(
+                        any ->
+                                any.containsIgnoreCase("issue_key", query)
+                                        .containsIgnoreCase("summary", query)
+                                        .containsIgnoreCase("description", query))
                 .build();
     }
 }

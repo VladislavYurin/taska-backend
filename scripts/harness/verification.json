@@ -15,7 +15,8 @@
     "admin-service",
     "mcp-server",
     "oauth-server",
-    "tenant-service"
+    "tenant-service",
+    "billing-service"
   ],
   "capabilities": {
     "git": {
@@ -85,7 +86,8 @@
         "directory": "common-lib/target/surefire-reports",
         "selectors": [
           "*",
-          "TenantIsolationContractIntegrationTest"
+          "TenantIsolationContractIntegrationTest",
+          "TenantRlsTemplatesIntegrationTest"
         ],
         "noTestsReason": null
       },
@@ -120,7 +122,14 @@
       "reports": {
         "directory": "grpc-common-lib/target/surefire-reports",
         "selectors": [
-          "*"
+          "*",
+          "EntitlementProjectionIntegrationTest",
+          "GrpcEntitlementSourceTest",
+          "CapabilityEvaluatorTest",
+          "CapabilityEvaluatorTransportTest",
+          "GrpcTaskQuotaSourceTest",
+          "PlatformConfigurationSnapshotCacheTest",
+          "VersionedCapabilitySourceIntegrationTest"
         ],
         "noTestsReason": null
       },
@@ -293,7 +302,8 @@
       "reports": {
         "directory": "project-service/target/surefire-reports",
         "selectors": [
-          "*"
+          "*",
+          "TenantProjectStorageIntegrationTest"
         ],
         "noTestsReason": null
       },
@@ -328,7 +338,8 @@
       "reports": {
         "directory": "workflow-service/target/surefire-reports",
         "selectors": [
-          "*"
+          "*",
+          "TenantWorkflowStorageIntegrationTest"
         ],
         "noTestsReason": null
       },
@@ -363,7 +374,8 @@
       "reports": {
         "directory": "issue-service/target/surefire-reports",
         "selectors": [
-          "*"
+          "*",
+          "TenantIssueStorageIntegrationTest"
         ],
         "noTestsReason": null
       },
@@ -572,7 +584,15 @@
         "selectors": [
           "*",
           "TenantRegistryIntegrationTest",
-          "TenantMembershipIntegrationTest"
+          "TenantMembershipIntegrationTest",
+          "PlatformFlagsIntegrationTest",
+          "MerchantConfigurationIntegrationTest",
+          "FreeEligibilityIntegrationTest",
+          "TenantCreationLifecycleIntegrationTest",
+          "TenantProvisioningIntegrationTest",
+          "TenantProvisioningRpcIntegrationTest",
+          "SeatQuotaIntegrationTest",
+          "ProjectQuotaIntegrationTest"
         ],
         "noTestsReason": null
       },
@@ -1031,6 +1051,51 @@
       "timeout": 30,
       "requires": [],
       "writeScope": []
+    },
+    {
+      "id": "billing-service.verify",
+      "module": "billing-service",
+      "group": "java",
+      "tier": "integration",
+      "argv": [
+        "./mvnw",
+        "-B",
+        "-ntp",
+        "-pl",
+        "billing-service",
+        "-am",
+        "clean",
+        "verify"
+      ],
+      "workdir": ".",
+      "prerequisites": [
+        "git",
+        "java",
+        "docker"
+      ],
+      "timeout": 1800,
+      "reports": {
+        "directory": "billing-service/target/surefire-reports",
+        "selectors": [
+          "*",
+          "BillingCatalogIntegrationTest",
+          "SubscriptionIntegrationTest",
+          "EntitlementIntegrationTest",
+          "SubscriptionCalendarTest",
+          "RenewalSchedulingTest",
+          "RenewalCalendarIntegrationTest",
+          "InvoiceIntegrationTest",
+          "FinancialLedgerIntegrationTest",
+          "PaymentSettlementIntegrationTest",
+          "CommercialReadinessIntegrationTest"
+        ],
+        "noTestsReason": null
+      },
+      "requires": [],
+      "writeScope": [
+        "*/target/",
+        "local Maven cache"
+      ]
     }
   ],
   "impactRules": [

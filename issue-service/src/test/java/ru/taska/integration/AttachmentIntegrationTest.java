@@ -169,8 +169,8 @@ class AttachmentIntegrationTest extends AbstractIT {
         Mockito.when(storageClient.createPresignedDownloadUrl(OBJECT_KEY))
                 .thenReturn(Mono.just(DOWNLOAD_URL));
 
-        StepVerifier.create(attachmentService.confirmUpload(
-                        REQUEST_ID, NODE_ID, issueId, USER_ID, OBJECT_KEY, FILE_NAME, CONTENT_TYPE))
+        StepVerifier.create(withTenant(attachmentService.confirmUpload(
+                        REQUEST_ID, NODE_ID, issueId, USER_ID, OBJECT_KEY, FILE_NAME, CONTENT_TYPE)))
                 .assertNext(result -> {
                     Assertions.assertEquals(FILE_NAME, result.issueAttachment().getFileName());
                     Assertions.assertEquals(OBJECT_KEY, result.issueAttachment().getObjectKey());
@@ -196,7 +196,7 @@ class AttachmentIntegrationTest extends AbstractIT {
                 issueId, USER_ID, OBJECT_KEY, FILE_NAME, CONTENT_TYPE, SIZE_BYTES, CHECKSUM);
         UUID attachmentId = attachmentRepository.save(attachment).block().getId();
 
-        StepVerifier.create(attachmentService.deleteAttachment(REQUEST_ID, NODE_ID, attachmentId, USER_ID))
+        StepVerifier.create(withTenant(attachmentService.deleteAttachment(REQUEST_ID, NODE_ID, attachmentId, USER_ID)))
                 .verifyComplete();
 
         List<IssueAttachment> active = attachmentRepository

@@ -1,5 +1,6 @@
 package ru.taska.repository;
 
+import ru.taska.board.BoardReadOptions;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
@@ -106,6 +107,31 @@ public interface IssueRepositoryCustom {
      * Возвращает задачи проекта для отображения на доске.
      */
 
+    default Flux<Issue> findForBoard(
+            UUID projectId,
+            IssueType issueType,
+            UUID assigneeId,
+            String statusKey,
+            boolean includeDone,
+            List<String> doneStatusKeys,
+            List<UUID> labelIds,
+            Integer pageSizePerColumn,
+            IssuePriority priority,
+            String query) {
+        return findForBoard(
+                projectId,
+                issueType,
+                assigneeId,
+                statusKey,
+                includeDone,
+                doneStatusKeys,
+                labelIds,
+                pageSizePerColumn,
+                priority,
+                query,
+                BoardReadOptions.DEFAULT);
+    }
+
     Flux<Issue> findForBoard(
             UUID projectId,
             IssueType issueType,
@@ -116,8 +142,37 @@ public interface IssueRepositoryCustom {
             List<UUID> labelIds,
             Integer pageSizePerColumn,
             IssuePriority priority,
-            String query
-    );
+            String query,
+            BoardReadOptions options);
+
+    default Mono<BoardCursorPage<Issue>> findBoardColumnPage(
+            UUID projectId,
+            IssueType issueType,
+            UUID assigneeId,
+            String statusKey,
+            boolean includeDone,
+            List<String> doneStatusKeys,
+            List<UUID> labelIds,
+            int pageSize,
+            IssuePriority priority,
+            String query,
+            Instant afterCreatedAt,
+            UUID afterId) {
+        return findBoardColumnPage(
+                projectId,
+                issueType,
+                assigneeId,
+                statusKey,
+                includeDone,
+                doneStatusKeys,
+                labelIds,
+                pageSize,
+                priority,
+                query,
+                afterCreatedAt,
+                afterId,
+                BoardReadOptions.DEFAULT);
+    }
 
     Mono<BoardCursorPage<Issue>> findBoardColumnPage(
             UUID projectId,
@@ -131,7 +186,8 @@ public interface IssueRepositoryCustom {
             IssuePriority priority,
             String query,
             Instant afterCreatedAt,
-            UUID afterId);
+            UUID afterId,
+            BoardReadOptions options);
 
     /**
      * Батчево находит идентификаторы меток для списка задач, сгруппированные по issueId.

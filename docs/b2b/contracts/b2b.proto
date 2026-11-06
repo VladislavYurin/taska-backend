@@ -162,6 +162,13 @@ message Tenant {
   optional string creation_deadline = 7;
   string version = 8;
   string owner_version = 9;
+  optional string plan_version_id = 10;
+  optional string creation_operation_id = 11;
+  enum CreationKindValue { CREATION_KIND_UNSPECIFIED = 0; CREATION_KIND_FREE = 1; CREATION_KIND_PAID = 2; }
+  optional CreationKindValue creation_kind = 12;
+  enum CreationClosureReason { CREATION_CLOSURE_REASON_UNSPECIFIED = 0; CREATION_CLOSURE_REASON_AUTO_EXPIRED = 1; CREATION_CLOSURE_REASON_OWNER_CANCELLED = 2; }
+  optional CreationClosureReason creation_closure_reason = 13;
+  optional string creation_closed_at = 14;
 }
 
 message TenantPage {
@@ -528,6 +535,7 @@ message OAuthConsentResult {
 }
 
 message PlanVersion {
+  enum KindValue { KIND_UNSPECIFIED = 0; KIND_FREE = 1; KIND_PAID = 2; }
   enum PeriodValue { PERIOD_UNSPECIFIED = 0; PERIOD_CALENDAR_MONTH = 1; PERIOD_NONE = 2; }
   enum StateValue { STATE_UNSPECIFIED = 0; STATE_DRAFT = 1; STATE_PUBLISHED = 2; STATE_RETIRED = 3; }
   string id = 1;
@@ -540,6 +548,7 @@ message PlanVersion {
   repeated string capabilities = 8;
   StateValue state = 9;
   optional string published_at = 10;
+  KindValue kind = 11;
 }
 
 message PlanVersionPage {
@@ -548,6 +557,7 @@ message PlanVersionPage {
 }
 
 message CreatePlanVersionRequest {
+  PlanVersion.KindValue kind = 7;
   enum PeriodValue { PERIOD_UNSPECIFIED = 0; PERIOD_CALENDAR_MONTH = 1; PERIOD_NONE = 2; }
   string code = 1;
   string name = 2;
@@ -567,6 +577,8 @@ message Subscription {
   string plan_version_id = 2;
   string version = 3;
   optional string current_period_id = 4;
+  // Exclusive end of current paid coverage; absent for FREE/before first payment.
+  // Expired history may retain a past end; field presence is not authorization.
   optional string paid_through = 5;
   optional int64 anchor_day = 6;
   bool renewal_cancelled = 7;
@@ -905,6 +917,7 @@ message Entitlement {
   repeated QuotaLimit limits = 8;
   repeated string features = 9;
   string issued_at = 10;
+  optional string paid_through = 11; // exclusive end of the selected GRANTED period, including expired history
 }
 
 message Capability {
@@ -933,6 +946,12 @@ message PlatformFlag {
   optional bool boolean_value = 3;
   optional string integer_value = 4;
   string version = 5;
+  string effective_at = 6;
+  string owner = 7;
+  optional bool default_boolean_value = 8;
+  optional string default_integer_value = 9;
+  optional string minimum_value = 10;
+  optional string maximum_value = 11;
 }
 
 message PlatformFlagPage {
@@ -1754,3 +1773,6 @@ service TenantMembershipService {
   rpc GetMembership(GetMembershipRpcRequest) returns (MembershipSnapshot);
   rpc BatchValidateMemberships(BatchValidateMembershipsRpcRequest) returns (MembershipValidationBatch);
 }
+
+// Internal current-offer lookup for tenant provisioning; historical invoice/period references remain stored unchanged.
+message ResolvePublishedPlanRpcRequest { RequestContext context = 1; string plan_version_id = 2; }

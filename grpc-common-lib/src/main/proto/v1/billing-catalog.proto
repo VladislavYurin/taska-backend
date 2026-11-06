@@ -1,0 +1,288 @@
+syntax = "proto3";
+package ru.taska.b2b.v1;
+import "v1/tenant-context.proto";
+import "v1/tenant-registry.proto";
+option java_multiple_files = true;
+option java_package = "ru.taska.api.b2b.v1";
+message Money {
+  enum CurrencyValue { CURRENCY_UNSPECIFIED = 0; CURRENCY_EUR = 1; CURRENCY_USD = 2; }
+  string amount_minor = 1;
+  CurrencyValue currency = 2;
+  int64 exponent = 3;
+}
+
+message QuotaLimit {
+  enum KindValue { KIND_UNSPECIFIED = 0; KIND_SEAT = 1; KIND_PROJECT = 2; KIND_STORAGE_BYTES = 3; KIND_TASK_LIFETIME = 4; }
+  KindValue kind = 1;
+  optional string limit = 2;
+  bool unlimited = 3;
+}
+
+message PlanVersion {
+  enum KindValue { KIND_UNSPECIFIED = 0; KIND_FREE = 1; KIND_PAID = 2; }
+  enum PeriodValue { PERIOD_UNSPECIFIED = 0; PERIOD_CALENDAR_MONTH = 1; PERIOD_NONE = 2; }
+  enum StateValue { STATE_UNSPECIFIED = 0; STATE_DRAFT = 1; STATE_PUBLISHED = 2; STATE_RETIRED = 3; }
+  string id = 1;
+  string code = 2;
+  string version = 3;
+  string name = 4;
+  Money price = 5;
+  PeriodValue period = 6;
+  repeated QuotaLimit limits = 7;
+  repeated string capabilities = 8;
+  StateValue state = 9;
+  optional string published_at = 10;
+  KindValue kind = 11;
+}
+
+message PlanVersionPage {
+  repeated PlanVersion items = 1;
+  optional string next_cursor = 2;
+}
+
+message CreatePlanVersionRequest {
+  PlanVersion.KindValue kind = 7;
+  enum PeriodValue { PERIOD_UNSPECIFIED = 0; PERIOD_CALENDAR_MONTH = 1; PERIOD_NONE = 2; }
+  string code = 1;
+  string name = 2;
+  Money price = 3;
+  PeriodValue period = 4;
+  repeated QuotaLimit limits = 5;
+  repeated string capabilities = 6;
+}
+
+message PublishPlanVersionRequest {
+  bool confirmed = 1;
+}
+
+message ListBillingPlansRpcRequest {
+  RequestContext context = 1;
+  PageRequest page = 2;
+}
+
+message CreatePlanVersionRpcRequest {
+  RequestContext context = 1;
+  CreatePlanVersionRequest payload = 2;
+  MutationOptions mutation = 3;
+}
+
+message PublishPlanVersionRpcRequest {
+  RequestContext context = 1;
+  string plan_version_id = 2;
+  PublishPlanVersionRequest payload = 3;
+  MutationOptions mutation = 4;
+}
+// Catalog only. Subscription/payment RPCs are separate implementations.
+message ResolvePublishedPlanRpcRequest { RequestContext context = 1; string plan_version_id = 2; }
+
+message Subscription {
+  enum AutopayStateValue { AUTOPAY_STATE_UNSPECIFIED = 0; AUTOPAY_STATE_DISABLED = 1; AUTOPAY_STATE_CONSENTED = 2; AUTOPAY_STATE_SUSPENDED = 3; }
+  string tenant_id = 1;
+  string plan_version_id = 2;
+  string version = 3;
+  optional string current_period_id = 4;
+  // Exclusive end of current paid coverage; absent for FREE/before first payment.
+  // Expired history may retain a past end; field presence is not authorization.
+  optional string paid_through = 5;
+  optional int64 anchor_day = 6;
+  bool renewal_cancelled = 7;
+  optional string scheduled_plan_version_id = 8;
+  optional string scheduled_effective_at = 9;
+  AutopayStateValue autopay_state = 10;
+}
+
+message SubscriptionPeriod {
+  enum StateValue { STATE_UNSPECIFIED = 0; STATE_GRANTED = 1; STATE_REVOKED = 2; STATE_SUPERSEDED = 3; }
+  enum PaymentSourceValue { PAYMENT_SOURCE_UNSPECIFIED = 0; PAYMENT_SOURCE_PSP = 1; PAYMENT_SOURCE_WIRE = 2; }
+  string id = 1;
+  string tenant_id = 2;
+  string invoice_id = 3;
+  string plan_version_id = 4;
+  string starts_at = 5;
+  string ends_at = 6;
+  int64 anchor_day = 7;
+  StateValue state = 8;
+  string confirmed_at = 9;
+  PaymentSourceValue payment_source = 10;
+}
+
+message SubscriptionPeriodPage {
+  repeated SubscriptionPeriod items = 1;
+  optional string next_cursor = 2;
+}
+
+message ChangePlanRequest {
+  enum CurrencyValue { CURRENCY_UNSPECIFIED=0; CURRENCY_EUR=1; CURRENCY_USD=2; }
+  enum PaymentMethodValue { PAYMENT_METHOD_UNSPECIFIED=0; PAYMENT_METHOD_PSP=1; PAYMENT_METHOD_WIRE=2; }
+  string plan_version_id=1; optional CurrencyValue currency=2; optional PaymentMethodValue payment_method=3; bool confirmed=4;
+}
+message PlanChange {
+  enum EffectValue { EFFECT_UNSPECIFIED=0; EFFECT_IMMEDIATE=1; EFFECT_AFTER_PAYMENT=2; EFFECT_NEXT_PERIOD=3; }
+  Subscription subscription=1; EffectValue effect=2; optional string invoice_id=3; optional string effective_at=4; string operation_id=5;
+}
+message ChangeSubscriptionPlanRpcRequest { RequestContext context=1; string tenant_id=2; ChangePlanRequest payload=3; MutationOptions mutation=4; }
+message CancelSubscriptionRenewalRpcRequest { RequestContext context=1; string tenant_id=2; ConfirmedAction payload=3; MutationOptions mutation=4; }
+message ResumeSubscriptionRenewalRpcRequest { RequestContext context=1; string tenant_id=2; MutationOptions mutation=3; }
+
+message GetSubscriptionRpcRequest {
+  RequestContext context = 1;
+  string tenant_id = 2;
+}
+
+message ListSubscriptionPeriodsRpcRequest {
+  RequestContext context = 1;
+  string tenant_id = 2;
+  PageRequest page = 3;
+}
+
+message FxQuote {
+  enum BaseCurrencyValue { BASE_CURRENCY_UNSPECIFIED = 0; BASE_CURRENCY_EUR = 1; }
+  enum QuoteCurrencyValue { QUOTE_CURRENCY_UNSPECIFIED = 0; QUOTE_CURRENCY_USD = 1; }
+  BaseCurrencyValue base_currency = 1;
+  QuoteCurrencyValue quote_currency = 2;
+  string rate = 3;
+  string source = 4;
+  string observed_at = 5;
+  string expires_at = 6;
+}
+
+message BillingAddress {
+  string country = 1;
+  string postal_code = 2;
+  string city = 3;
+  string line1 = 4;
+  optional string line2 = 5;
+}
+
+message BuyerDetails {
+  enum KindValue { KIND_UNSPECIFIED = 0; KIND_BUSINESS = 1; KIND_CONSUMER = 2; }
+  KindValue kind = 1;
+  string name = 2;
+  string email = 3;
+  BillingAddress address = 4;
+  optional string tax_id = 5;
+}
+
+message SellerSnapshot {
+  string legal_name = 1;
+  string registration_id = 2;
+  optional string tax_id = 3;
+  BillingAddress address = 4;
+}
+
+message TaxLine {
+  string label = 1;
+  string rate = 2;
+  Money amount = 3;
+}
+
+message InvoiceLine {
+  string description = 1;
+  int64 quantity = 2;
+  Money net = 3;
+  repeated TaxLine taxes = 4;
+  Money total = 5;
+}
+
+message WireInstructions {
+  string beneficiary_name = 1;
+  string iban = 2;
+  string bic = 3;
+  string bank_name = 4;
+  string reference = 5;
+}
+
+message Invoice {
+  enum PurposeValue { PURPOSE_UNSPECIFIED = 0; PURPOSE_INITIAL = 1; PURPOSE_RENEWAL = 2; PURPOSE_PLAN_CHANGE = 3; }
+  enum StateValue { STATE_UNSPECIFIED = 0; STATE_DRAFT = 1; STATE_OPEN = 2; STATE_PARTIALLY_PAID = 3; STATE_PAID = 4; STATE_EXPIRED = 5; STATE_VOID = 6; }
+  enum PaymentMethodValue { PAYMENT_METHOD_UNSPECIFIED = 0; PAYMENT_METHOD_PSP = 1; PAYMENT_METHOD_WIRE = 2; }
+  string id = 1;
+  string tenant_id = 2;
+  string number = 3;
+  PurposeValue purpose = 4;
+  StateValue state = 5;
+  string plan_version_id = 6;
+  BuyerDetails buyer = 7;
+  SellerSnapshot seller = 8;
+  repeated InvoiceLine lines = 9;
+  Money total = 10;
+  Money allocated = 11;
+  Money remaining = 12;
+  string issued_at = 13;
+  string due_at = 14;
+  optional FxQuote fx_quote = 15;
+  PaymentMethodValue payment_method = 16;
+  optional WireInstructions wire_instructions = 17;
+  string version = 18;
+  optional string replaces_invoice_id = 19;
+  Money matched_unallocated = 20;
+}
+
+message InvoicePage {
+  repeated Invoice items = 1;
+  optional string next_cursor = 2;
+}
+
+message CreateInvoiceRequest {
+  enum PurposeValue { PURPOSE_UNSPECIFIED = 0; PURPOSE_INITIAL = 1; PURPOSE_RENEWAL = 2; PURPOSE_PLAN_CHANGE = 3; }
+  enum CurrencyValue { CURRENCY_UNSPECIFIED = 0; CURRENCY_EUR = 1; CURRENCY_USD = 2; }
+  enum PaymentMethodValue { PAYMENT_METHOD_UNSPECIFIED = 0; PAYMENT_METHOD_PSP = 1; PAYMENT_METHOD_WIRE = 2; }
+  string plan_version_id = 1;
+  PurposeValue purpose = 2;
+  CurrencyValue currency = 3;
+  PaymentMethodValue payment_method = 4;
+  BuyerDetails buyer = 5;
+}
+
+message ListInvoicesRpcRequest {
+  RequestContext context = 1;
+  string tenant_id = 2;
+  PageRequest page = 3;
+}
+
+message CreateInvoiceRpcRequest {
+  RequestContext context = 1;
+  string tenant_id = 2;
+  CreateInvoiceRequest payload = 3;
+  MutationOptions mutation = 4;
+}
+
+message GetInvoiceRpcRequest {
+  RequestContext context = 1;
+  string tenant_id = 2;
+  string invoice_id = 3;
+}
+
+message Entitlement {
+  string tenant_id = 1;
+  string version = 2;
+  string plan_version_id = 3;
+  optional string coverage_period_id = 4;
+  string valid_from = 5;
+  optional string valid_until = 6;
+  repeated RestrictionCode restrictions = 7;
+  repeated QuotaLimit limits = 8;
+  repeated string features = 9;
+  string issued_at = 10;
+  // Exclusive end of the selected GRANTED paid period, including expired history.
+  optional string paid_through = 11;
+}
+message GetEntitlementRpcRequest {
+  RequestContext context = 1;
+  string tenant_id = 2;
+}
+service BillingService {
+ rpc ChangeSubscriptionPlan(ChangeSubscriptionPlanRpcRequest) returns (PlanChange);
+ rpc CancelSubscriptionRenewal(CancelSubscriptionRenewalRpcRequest) returns (Subscription);
+ rpc ResumeSubscriptionRenewal(ResumeSubscriptionRenewalRpcRequest) returns (Subscription);
+ rpc GetEntitlement(GetEntitlementRpcRequest) returns (Entitlement);
+ rpc ListInvoices(ListInvoicesRpcRequest) returns (InvoicePage);
+ rpc CreateInvoice(CreateInvoiceRpcRequest) returns (Invoice);
+ rpc GetInvoice(GetInvoiceRpcRequest) returns (Invoice);
+ rpc GetSubscription(GetSubscriptionRpcRequest) returns (Subscription);
+ rpc ListSubscriptionPeriods(ListSubscriptionPeriodsRpcRequest) returns (SubscriptionPeriodPage);
+ rpc ResolvePublishedPlan(ResolvePublishedPlanRpcRequest) returns (PlanVersion);
+ rpc ListBillingPlans(ListBillingPlansRpcRequest) returns (PlanVersionPage);
+ rpc CreatePlanVersion(CreatePlanVersionRpcRequest) returns (PlanVersion);
+ rpc PublishPlanVersion(PublishPlanVersionRpcRequest) returns (PlanVersion);
+}

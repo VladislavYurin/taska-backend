@@ -72,11 +72,11 @@ class IssueWatcherIntegrationTest extends AbstractIT {
         UUID targetUserId = manageOtherWatcher ? UUID.randomUUID() : null;
         UUID watcherUserId = manageOtherWatcher ? targetUserId : actorId;
 
-        StepVerifier.create(service.watchIssue(REQUEST_ID, NODE_ID, issue.getId(), actorId, targetUserId))
+        StepVerifier.create(withTenant(service.watchIssue(REQUEST_ID, NODE_ID, issue.getId(), actorId, targetUserId)))
                 .assertNext(result -> Assertions.assertThat(result.watchersCount()).isEqualTo(1))
                 .expectComplete().verify(Duration.ofSeconds(10));
 
-        StepVerifier.create(service.unwatchIssue(REQUEST_ID, NODE_ID, issue.getId(), actorId, targetUserId))
+        StepVerifier.create(withTenant(service.unwatchIssue(REQUEST_ID, NODE_ID, issue.getId(), actorId, targetUserId)))
                 .assertNext(result -> {
                     Assertions.assertThat(result.removed()).isTrue();
                     Assertions.assertThat(result.watchersCount()).isZero();
@@ -85,7 +85,7 @@ class IssueWatcherIntegrationTest extends AbstractIT {
         StepVerifier.create(watcherRepository.existsByIssueIdAndUserId(issue.getId(), watcherUserId))
                 .expectNext(false).expectComplete().verify(Duration.ofSeconds(10));
 
-        StepVerifier.create(service.unwatchIssue(REQUEST_ID, NODE_ID, issue.getId(), actorId, targetUserId))
+        StepVerifier.create(withTenant(service.unwatchIssue(REQUEST_ID, NODE_ID, issue.getId(), actorId, targetUserId)))
                 .assertNext(result -> {
                     Assertions.assertThat(result.removed()).isFalse();
                     Assertions.assertThat(result.watchersCount()).isZero();

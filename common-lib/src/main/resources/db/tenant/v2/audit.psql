@@ -1,0 +1,11 @@
+-- TAS-330 v2: PostgreSQL table identifiers up to 63 ASCII characters; v1 remains immutable.
+\set ON_ERROR_STOP on
+BEGIN;
+SET LOCAL search_path = pg_catalog;
+SELECT set_config('taska.audit_service', :'service', true),
+       set_config('taska.audit_schema', :'schema', true),
+       set_config('taska.audit_table', :'table', true),
+       set_config('taska.audit_column', :'tenant_column', true),
+       set_config('taska.audit_app_access', :'app_access', true);
+\ir audit.sql
+COMMIT;

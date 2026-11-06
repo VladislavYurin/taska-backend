@@ -14,10 +14,10 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static ru.taska.api.b2b.v1.CredentialKind.CREDENTIAL_KIND_SERVICE;
 import static ru.taska.api.b2b.v1.CredentialKind.CREDENTIAL_KIND_ADMIN_PAT;
-import static ru.taska.api.b2b.v1.CredentialKind.CREDENTIAL_KIND_WEB_GLOBAL;
+import static ru.taska.api.b2b.v1.CredentialKind.CREDENTIAL_KIND_SERVICE;
 import static ru.taska.api.b2b.v1.CredentialKind.CREDENTIAL_KIND_USER_PAT;
+import static ru.taska.api.b2b.v1.CredentialKind.CREDENTIAL_KIND_WEB_GLOBAL;
 import static ru.taska.api.b2b.v1.CredentialKind.CREDENTIAL_KIND_WEB_TENANT;
 
 import io.r2dbc.pool.ConnectionPool;
@@ -53,8 +53,6 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.MountableFile;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
-import reactor.core.publisher.Signal;
-import reactor.core.publisher.Sinks;
 import reactor.core.scheduler.Schedulers;
 import reactor.test.StepVerifier;
 import ru.taska.api.b2b.v1.CreateTenantRequest;
@@ -175,7 +173,7 @@ class TenantRegistryIntegrationTest {
     operator
         .sql(
             "TRUNCATE"
-                + " taska.tenants,taska.tenant_memberships,taska.idempotency_records,taska.outbox_events,taska.global_outbox_events,taska.processed_events")
+                + " taska.quota_effects,taska.quota_reservations,taska.quota_counters,taska.tenant_creation_receipts,taska.tenant_provisioning_dispatch,taska.tenant_operations,taska.free_admission_subjects,taska.free_plan_admissions,taska.tenants,taska.tenant_memberships,taska.idempotency_records,taska.outbox_events,taska.global_outbox_events,taska.processed_events")
         .fetch()
         .rowsUpdated()
         .block(WAIT);
@@ -553,8 +551,12 @@ class TenantRegistryIntegrationTest {
   @Test
   void grpcWithoutVerifiedInterceptorContextNeverReachesDatabase() {
     var adapter =
-        new TenantGrpcService(service, org.mockito.Mockito.mock(TenantMembershipService.class),
+        new TenantGrpcService(
+            service,
+            org.mockito.Mockito.mock(TenantMembershipService.class),
+            org.mockito.Mockito.mock(SeatQuotaStore.class),
             org.mockito.Mockito.mock(TenantMembershipMutationService.class));
+
     StepVerifier.create(adapter.createTenant(Mono.just(request("untrusted", PAID, "Company"))))
         .expectErrorSatisfies(
             e ->
@@ -613,6 +615,10 @@ class TenantRegistryIntegrationTest {
     try (var context =
         new org.springframework.boot.builder.SpringApplicationBuilder(
                 TenantServiceApplication.class)
+            // storage-lib is present only for the cross-service quota fixture. Tenant runtime
+            // has no S3 dependency; reproduce that runtime rather than activating fixture imports.
+            .properties(
+                "spring.autoconfigure.exclude=ru.taska.storage.config.StorageAutoConfiguration")
             .initializers(
                 c ->
                     org.springframework.boot.test.util.TestPropertyValues.of(properties).applyTo(c))
@@ -829,7 +835,9 @@ class TenantRegistryIntegrationTest {
             .addService(
                 io.grpc.ServerInterceptors.intercept(
                     new TenantGrpcService(
-                        service, org.mockito.Mockito.mock(TenantMembershipService.class),
+                        service,
+                        org.mockito.Mockito.mock(TenantMembershipService.class),
+                        org.mockito.Mockito.mock(SeatQuotaStore.class),
                         org.mockito.Mockito.mock(TenantMembershipMutationService.class)),
                     new ru.taska.security.tenant.TenantServerInterceptor(
                         recipient, policies, "test")))

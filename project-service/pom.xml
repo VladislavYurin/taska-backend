@@ -173,7 +173,8 @@
                     </annotationProcessorPaths>
                 </configuration>
             </plugin>
-        </plugins>
+        <plugin><groupId>org.apache.maven.plugins</groupId><artifactId>maven-jar-plugin</artifactId><executions><execution><id>quota-fixture</id><phase>process-classes</phase><goals><goal>jar</goal></goals><configuration><classifier>quota-fixture</classifier><outputDirectory>${project.build.directory}/quota-fixture</outputDirectory><includes><include>ru/taska/projectstorage/**</include><include>ru/taska/projectbootstrap/**</include><include>ru/taska/domain/**</include><include>db/project-tenant/**</include></includes></configuration></execution></executions></plugin>
+</plugins>
     </build>
 
 </project>

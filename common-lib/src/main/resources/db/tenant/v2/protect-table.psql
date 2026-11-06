@@ -1,0 +1,12 @@
+-- TAS-330 v2: PostgreSQL table identifiers up to 63 ASCII characters; v1 remains immutable.
+\set ON_ERROR_STOP on
+-- Run as the service migrator. Explicit inputs: service/schema/table/tenant_column.
+BEGIN;
+SET LOCAL search_path = pg_catalog;
+SELECT set_config('taska.guard_service', :'service', true),
+       set_config('taska.guard_schema', :'schema', true),
+       set_config('taska.guard_table', :'table', true),
+       set_config('taska.guard_column', :'tenant_column', true),
+       set_config('taska.guard_app_access', :'app_access', true);
+\ir protect-table.sql
+COMMIT;

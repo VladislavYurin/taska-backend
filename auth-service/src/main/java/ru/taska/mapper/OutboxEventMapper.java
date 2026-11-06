@@ -9,11 +9,12 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import ru.taska.entity.OutboxEvent;
 import ru.taska.event.EventType;
+import ru.taska.event.EventScopeKind;
 import ru.taska.event.TaskaEvent;
+import ru.taska.event.TaskaEventContract;
 import ru.taska.event.payload.authService.UserActivatedPayload;
 import ru.taska.event.payload.authService.UserInvitedPayload;
 
@@ -24,37 +25,38 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class OutboxEventMapper {
 
+    private static final String PRODUCER_SERVICE = "auth-service";
+
     private static final String USER_ID = "userId";
     private static final String EMAIL = "email";
     private static final String INVITED_BY = "invitedBy";
-    private static final String SCHEMA_VERSION = "v1";
     private static final String OLD_STATUS = "oldStatus";
     private static final String NEW_STATUS = "newStatus";
     private static final String ACTOR_ID = "actorUserId";
     private static final String REASON = "reason";
-
-    @Value("${spring.application.name}")
-    private String producerService;
 
     private final ObjectMapper objectMapper;
 
     public TaskaEvent toTaskaEvent(OutboxEvent event) {
         return TaskaEvent.builder()
                 .id(event.getId())
+                .scopeKind(EventScopeKind.GLOBAL_USER)
+                .scopeId(event.getAggregateId())
                 .aggregateType(event.getAggregateType())
                 .aggregateId(event.getAggregateId())
                 .eventType(event.getEventType())
                 .payload(buildPayload(event))
                 .requestId(event.getRequestId())
                 .occurredAt(event.getCreatedAt())
-                .producerService(producerService)
-                .schemaVersion(SCHEMA_VERSION)
+                .producerService(PRODUCER_SERVICE)
+                .schemaVersion(TaskaEventContract.SCHEMA_VERSION)
                 .build();
     }
 
     public String toTaskaEventJsonAsString(OutboxEvent event) {
         try {
-            return objectMapper.writeValueAsString(toTaskaEvent(event));
+            return objectMapper.writeValueAsString(
+                    TaskaEventContract.requireValid(toTaskaEvent(event)));
         } catch (Exception e) {
             log.warn("Failed to serialize TaskaEvent for event id: {}", event.getId(), e);
             throw new RuntimeException("Failed to serialize TaskaEvent", e);
