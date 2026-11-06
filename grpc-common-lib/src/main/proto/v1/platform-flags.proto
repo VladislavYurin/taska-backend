@@ -28,7 +28,16 @@ message UpdatePlatformFlagRpcRequest {
   UpdateFlagRequest payload = 3;
   MutationOptions mutation = 4;
 }
+// Complete public business configuration from one database snapshot. Internal service read;
+// administrative mutation/list authority remains separate. No tenant overrides or secrets.
+message PlatformConfigurationSnapshot {
+  repeated PlatformFlag items = 1;
+  string version = 2;
+  int32 cache_max_age_seconds = 3;
+}
+message GetPlatformConfigurationSnapshotRequest { RequestContext context = 1; }
 service PlatformService {
   rpc ListPlatformFlags(ListPlatformFlagsRpcRequest) returns (PlatformFlagPage);
   rpc UpdatePlatformFlag(UpdatePlatformFlagRpcRequest) returns (PlatformFlag);
+  rpc GetPlatformConfigurationSnapshot(GetPlatformConfigurationSnapshotRequest) returns (PlatformConfigurationSnapshot);
 }

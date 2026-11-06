@@ -25,6 +25,56 @@ to the entitlement plan version. The delivered `GrpcMembershipAccess`,
 `GrpcEntitlementSource` and versioned projection are available building blocks.
 Domain handlers still own concrete adapters and transaction-bound checks.
 
+## Versioned source composition — TAS-334
+
+`VersionedCapabilitySource` composes `PlatformConfigurationSnapshotCache` and
+`EntitlementProjection` with a mandatory online `Authority`. Each subscription first
+authorizes the actual verified actor, credential/grant, membership and target ACL,
+then obtains source data and calls a request-local `Assembler`. The assembler resolves
+catalog kind against the supplied immutable entitlement plan version and supplies
+current lifecycle, integrity, accepted-operation and notification purpose facts.
+No actor/role/grant/channel decision is stored in either cache. Tenant/source versions
+form `Inputs.Key(tenant, flagsVersion, entitlementVersion)`; the platform source is
+shared globally because company overrides are forbidden, while commercial cache
+entries are keyed by tenant and entitlement version. A/B updates remain independent.
+
+The default `Source.current` is for commands: both flags and billing are reconciled
+online even with warm caches. `observations()` is explicitly for display/read policy
+and can reuse hard source leases of at most30 seconds. Do not inject it into mutation,
+secret issuance, download or dequeue admission. Fact expiry is bounded by both source
+deadlines, fresh authority and the signed credential expiration. Facts are bound to
+the actual context, actor, request and target; a tenant mismatch fails before source
+reads. An empty/missing/untrusted mandatory source returns unavailable, never an
+implicit FREE plan or an enabled flag. A capability remains advisory; domain owners
+still serialize/persist the exact accepted operation and policy versions for D86.
+
+`PlatformConfigurationSnapshotCache` reads the complete allowlisted scalar registry
+through the service-only `PlatformService.GetPlatformConfigurationSnapshot` RPC and
+`GrpcPlatformConfigurationSource` with production mTLS/JWS and a five-second deadline.
+The version is a deterministic hash of the complete sorted versioned configuration,
+not the maximum per-key version. Defaults, types, bounds and effectiveAt are validated;
+unknown/private keys, missing entries, conflicting equal versions, older replies or
+future-effective values fail closed. Failed primary reconciliation clears the warm
+entry. Reads, duplicate events and reset do not extend a lease. Version fences survive
+memory clear; a new process must reload the primary before serving a cold cache.
+
+`invalidate(Change)` is an authenticated version fence; event payloads never supply
+replacement configuration values. It requires an explicitly global SERVICE context,
+action `applyPlatformConfiguration`, scope `configuration:invalidate`, and a supplied
+`EventAuthority` that validates actual broker/source identity and purpose. Old/duplicate
+versions cannot roll back state or renew TTL; an in-flight pre-invalidation reply is
+discarded. The event delivery adapter must extract the key/version from the committed
+TAS-462 outbox payload and await this Mono before acknowledging. Shared broker delivery
+and concrete primary domain authority adapters remain deployment/domain integration
+work; no permissive bean or legacy route activation is introduced here.
+
+The existing evaluator still controls mandatory financial/security notifications:
+ordinary EMAIL/TELEGRAM/INBOX flags do not disable an independently authorized control
+message. Public REST capabilities and its action registry are TAS-497, not a second
+policy matrix in this source library.
+
+## Policy decisions
+
 The decision order preserves authentication, credential activity/generation, current
 scopes, channel, administrative scope/level, resource resolution and integrity before
 business exceptions. TENANT_ADMIN inherits project ADMIN without explicit project

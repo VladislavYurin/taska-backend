@@ -31,10 +31,18 @@ checks exact tenant/user/generation, ACTIVE membership and current role, then ca
 mandatory domain/channel/lifecycle `Policy` with that live snapshot. Suspension,
 removal and role changes therefore do not wait for the billing TTL. Service-only
 worklist jobs require their separately scoped Access authority. Pause/block reasons are unioned with financial
-reasons and cannot be cleared by a payment event. Cache keys are tenant UUIDs, capacity
+reasons and cannot be cleared by a payment event. Cache keys contain tenant UUID and entitlement version, capacity
 is bounded and TTL must be positive and at most 30 seconds. Neither cache hits nor a
 process restart extend the durable observation time. Committed events invalidate the
 local cache; a generation fence prevents in-flight older reads repopulating it.
+
+TAS-334 adds `resolveLease(Use)` alongside the compatible `resolve(Use)` API. Its
+absolute `validUntil` starts at the original memory/durable observation and is
+shortened by the next future valid-from, valid-until or paid-through boundary.
+Reading a warm projection does not produce another full TTL. Already-active expiry
+remains a denial reason rather than turning readable expired facts into a source
+failure. The [versioned capability source](../security/capabilities.md#versioned-source-composition--tas-334)
+uses this deadline when joining commercial data with global flags and current authority.
 
 `resolve(NEW_RESOURCE)` always reconciles with billing, even with a warm cache.
 Missing, invalid, unavailable or older-than-required results fail without an unlimited

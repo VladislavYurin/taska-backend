@@ -550,6 +550,9 @@ public class TenantConfiguration {
                   PlatformServiceGrpc.getUpdatePlatformFlagMethod().getFullMethodName(),
                   new RpcContextSecurity.Policy(false, true)),
               java.util.Map.entry(
+                  PlatformServiceGrpc.getGetPlatformConfigurationSnapshotMethod().getFullMethodName(),
+                  new RpcContextSecurity.Policy(false, false)),
+              java.util.Map.entry(
                   TenantServiceGrpc.getCreateTenantMethod().getFullMethodName(),
                   new RpcContextSecurity.Policy(false, true)),
               java.util.Map.entry(

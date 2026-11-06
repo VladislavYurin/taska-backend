@@ -47,7 +47,11 @@ public final class EntitlementProjection {
     }
   }
 
+  /** Absolute source deadline, never renewed by a read of the memory or durable cache. */
+  public record Lease(View view, Instant validUntil) {}
+
   private record Stored(Entitlement snapshot, Instant observed) {}
+  private record CacheKey(UUID tenant, long version) {}
 
   private final TenantTransactionExecutor transactions;
   private final Source source;
@@ -56,7 +60,8 @@ public final class EntitlementProjection {
   private final Clock clock;
   private final Duration ttl;
   private final int capacity;
-  private final Map<UUID, Stored> cache = new ConcurrentHashMap<>();
+  private final Map<CacheKey, Stored> cache = new ConcurrentHashMap<>();
+  private final Map<UUID, CacheKey> currentKeys = new ConcurrentHashMap<>();
   private final AtomicLong epoch = new AtomicLong();
 
   public EntitlementProjection(
@@ -82,6 +87,10 @@ public final class EntitlementProjection {
 
   /** READ can reuse a bounded, trusted snapshot. Every admission reconciles with billing. */
   public Mono<View> resolve(Use use) {
+    return resolveLease(use).map(Lease::view);
+  }
+
+  public Mono<Lease> resolveLease(Use use) {
     return VerifiedTenantContext.current()
         .flatMap(
             context -> {
@@ -92,7 +101,22 @@ public final class EntitlementProjection {
                   .flatMap(
                       reasons ->
                           current(tenant, use == Use.NEW_RESOURCE)
-                              .map(stored -> view(stored.snapshot(), reasons)));
+                              .map(stored -> {
+                                Instant now = clock.instant();
+                                Instant until = stored.observed().plus(ttl);
+                                var snapshot = stored.snapshot();
+                                // Already-active expiry is a denial reason, not an unavailable
+                                // source. Future period boundaries shorten the observation lease.
+                                for (String boundary : List.of(snapshot.getValidFrom(),
+                                    snapshot.hasValidUntil() ? snapshot.getValidUntil() : "",
+                                    snapshot.hasPaidThrough() ? snapshot.getPaidThrough() : "")) {
+                                  if (!boundary.isEmpty()) {
+                                    Instant at = Instant.parse(boundary);
+                                    if (at.isAfter(now) && at.isBefore(until)) until = at;
+                                  }
+                                }
+                                return new Lease(view(snapshot, reasons), until);
+                              }));
             });
   }
 
@@ -100,9 +124,13 @@ public final class EntitlementProjection {
   private Mono<Stored> current(UUID tenant, boolean reconcile) {
     return Mono.defer(
         () -> {
-          long generation = epoch.get();
-          Stored cached = cache.get(tenant);
-          if (!reconcile && fresh(cached)) return Mono.just(cached);
+          long generation;
+          synchronized (cache) {
+            generation = epoch.get();
+            var key = currentKeys.get(tenant);
+            Stored cached = key == null ? null : cache.get(key);
+            if (!reconcile && fresh(cached)) return Mono.just(cached);
+          }
           return transactions
               .execute(db -> load(db, tenant))
               .defaultIfEmpty(new Stored(null, Instant.EPOCH))
@@ -127,17 +155,24 @@ public final class EntitlementProjection {
                                         .execute(db -> save(db, tenant, snapshot, true))
                                         .doOnNext(
                                             ignored -> {
-                                              epoch.incrementAndGet();
-                                              cache.remove(tenant);
+                                              synchronized (cache) {
+                                                epoch.incrementAndGet();
+                                                evict(tenant);
+                                              }
                                             });
                                   }))
               .doOnNext(
                   stored -> {
                     synchronized (cache) {
                       if (generation != epoch.get()) return;
-                      if (cache.size() >= capacity) cache.clear();
-                      cache.put(tenant, stored);
-                      if (generation != epoch.get()) cache.remove(tenant, stored);
+                      evict(tenant);
+                      if (cache.size() >= capacity) {
+                        cache.clear();
+                        currentKeys.clear();
+                      }
+                      var key = new CacheKey(tenant, version(stored.snapshot()));
+                      cache.put(key, stored);
+                      currentKeys.put(tenant, key);
                     }
                   });
         });
@@ -182,8 +217,10 @@ public final class EntitlementProjection {
                                               .then(save(db, event.tenantId(), snapshot, false)))
                                   .doOnNext(
                                       ignored -> {
-                                        epoch.incrementAndGet();
-                                        cache.remove(event.tenantId());
+                                        synchronized (cache) {
+                                          epoch.incrementAndGet();
+                                          evict(event.tenantId());
+                                        }
                                       })
                                   .then();
                             });
@@ -265,6 +302,11 @@ public final class EntitlementProjection {
         && !now.isBefore(value.observed())
         && now.isBefore(value.observed().plus(ttl))
         && temporal(value.snapshot(), now);
+  }
+
+  private void evict(UUID tenant) {
+    var key = currentKeys.remove(tenant);
+    if (key != null) cache.remove(key);
   }
 
   private View view(Entitlement snapshot, Set<RestrictionCode> independent) {
