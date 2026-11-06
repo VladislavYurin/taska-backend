@@ -224,9 +224,23 @@ class GrpcIssueServiceClientTest {
         Mockito.when(stub.listIssuesForBoard(Mockito.any(ru.taska.api.issue.v1.ListIssuesForBoardRequest.class)))
                 .thenReturn(Mono.just(ru.taska.api.issue.v1.ListIssuesForBoardResponse.newBuilder()
                         .addIssues(ru.taska.api.issue.v1.IssueBoardResponse.getDefaultInstance()).build()));
-        StepVerifier.create(client.listIssuesForBoard(PROJECT_ID, "TASK", null, null, true, List.of(), null, null, 50, context))
-                .expectErrorMatches(error -> error instanceof ResponseStatusException status
-                        && status.getStatusCode().value() == 503).verify();
+        StepVerifier.create(
+                        client.listIssuesForBoard(
+                                PROJECT_ID,
+                                "TASK",
+                                null,
+                                null,
+                                true,
+                                List.of(),
+                                null,
+                                null,
+                                50,
+                                context))
+                .expectErrorMatches(
+                        error ->
+                                error instanceof ResponseStatusException status
+                                        && status.getStatusCode().value() == 503)
+                .verify();
     }
 
     @Test
@@ -237,9 +251,20 @@ class GrpcIssueServiceClientTest {
                 .thenReturn(ru.taska.api.issue.v1.IssuePriority.ISSUE_PRIORITY_UNSPECIFIED);
         Mockito.when(stub.listIssuesForBoard(Mockito.any(ru.taska.api.issue.v1.ListIssuesForBoardRequest.class)))
                 .thenReturn(Mono.just(ru.taska.api.issue.v1.ListIssuesForBoardResponse.getDefaultInstance()));
-        StepVerifier.create(client.listIssuesForBoard(PROJECT_ID, "TASK",
-                        ASSIGNEE_ID, LABEL_ID, false, List.of("CLOSED", "RELEASED"), null, null, 50, context))
-                .assertNext(result -> Assertions.assertThat(result).isEmpty()).verifyComplete();
+        StepVerifier.create(
+                        client.listIssuesForBoard(
+                                PROJECT_ID,
+                                "TASK",
+                                ASSIGNEE_ID,
+                                LABEL_ID,
+                                false,
+                                List.of("CLOSED", "RELEASED"),
+                                null,
+                                null,
+                                50,
+                                context))
+                .assertNext(result -> Assertions.assertThat(result).isEmpty())
+                .verifyComplete();
         var captor = ArgumentCaptor.forClass(ru.taska.api.issue.v1.ListIssuesForBoardRequest.class);
         Mockito.verify(stub).listIssuesForBoard(captor.capture());
         var body = captor.getValue().getBody();
@@ -262,9 +287,20 @@ class GrpcIssueServiceClientTest {
         Mockito.when(stub.listIssuesForBoard(Mockito.any(ru.taska.api.issue.v1.ListIssuesForBoardRequest.class)))
                 .thenReturn(Mono.just(ru.taska.api.issue.v1.ListIssuesForBoardResponse.getDefaultInstance()));
 
-        StepVerifier.create(client.listIssuesForBoard(PROJECT_ID, null, null, null,
-                        false, List.of(), ru.taska.domain.dto.IssuePriorityDto.HIGH, "bug fix", 50, context))
-                .assertNext(result -> Assertions.assertThat(result).isEmpty()).verifyComplete();
+        StepVerifier.create(
+                        client.listIssuesForBoard(
+                                PROJECT_ID,
+                                null,
+                                null,
+                                null,
+                                false,
+                                List.of(),
+                                ru.taska.domain.dto.IssuePriorityDto.HIGH,
+                                "bug fix",
+                                50,
+                                context))
+                .assertNext(result -> Assertions.assertThat(result).isEmpty())
+                .verifyComplete();
 
         var captor = ArgumentCaptor.forClass(ru.taska.api.issue.v1.ListIssuesForBoardRequest.class);
         Mockito.verify(stub).listIssuesForBoard(captor.capture());
@@ -398,7 +434,12 @@ class GrpcIssueServiceClientTest {
     @Test
     @DisplayName("Должен вызвать gRPC createIssue и вернуть ответ")
     void createIssue_shouldCallStubAndReturnMappedResponse() {
-        var restRequest = new CreateIssueRequestDto("TASK", SUMMARY, DESCRIPTION, ru.taska.domain.dto.IssuePriorityDto.fromValue("MEDIUM"));
+        var restRequest =
+                new CreateIssueRequestDto(
+                        "TASK",
+                        SUMMARY,
+                        DESCRIPTION,
+                        ru.taska.domain.dto.IssuePriorityDto.fromValue("MEDIUM"));
 
         var grpcRequest = CreateIssueRequest.newBuilder()
                                             .setHeader(
@@ -479,7 +520,11 @@ class GrpcIssueServiceClientTest {
     @Test
     @DisplayName("Должен вызвать gRPC updateIssue и вернуть ответ")
     void updateIssue_shouldCallStubAndReturnMappedResponse() {
-        var restRequest = new UpdateIssueRequestDto(SUMMARY, DESCRIPTION, ru.taska.domain.dto.IssuePriorityDto.fromValue("MEDIUM"));
+        var restRequest =
+                new UpdateIssueRequestDto(
+                        SUMMARY,
+                        DESCRIPTION,
+                        ru.taska.domain.dto.IssuePriorityDto.fromValue("MEDIUM"));
 
         var grpcRequest = UpdateIssueRequest.newBuilder()
                                             .setHeader(
@@ -559,7 +604,9 @@ class GrpcIssueServiceClientTest {
     }
 
     @Test
-    @DisplayName("Должен вернуть статус 409 и актуальную задачу, если gRPC patchIssue вернул конфликт версий")
+    @DisplayName(
+            "Должен вернуть статус 409 и актуальную задачу, если gRPC patchIssue вернул конфликт"
+                + " версий")
     void patchIssue_shouldReturnConflict_whenVersionConflict() {
         var restRequest = new PatchIssueRequestDto();
         restRequest.setSummary(SUMMARY);
@@ -589,7 +636,9 @@ class GrpcIssueServiceClientTest {
     }
 
     @Test
-    @DisplayName("Должен вызвать gRPC patchIssue с пустым DTO (все поля отсутствуют), если тело запроса пустое")
+    @DisplayName(
+            "Должен вызвать gRPC patchIssue с пустым DTO (все поля отсутствуют), если тело запроса"
+                + " пустое")
     void patchIssue_shouldPassEmptyDto_whenRequestMonoIsEmpty() {
         var grpcRequest = PatchIssueRequest.getDefaultInstance();
         var grpcResponse = PatchIssueResponse.getDefaultInstance();
@@ -660,7 +709,9 @@ class GrpcIssueServiceClientTest {
         Mockito.when(issueMapper.toRestIssueWithHistoryResponse(grpcResponse))
                 .thenReturn(restResponse);
 
-        StepVerifier.create(client.transitionIssue(ISSUE_ID, TRANSITION_ID, "\"3\"", Mono.just(restRequest), context))
+        StepVerifier.create(
+                        client.transitionIssue(
+                                ISSUE_ID, TRANSITION_ID, "\"3\"", Mono.just(restRequest), context))
                 .expectNext(restResponse)
                 .verifyComplete();
 
@@ -816,7 +867,9 @@ class GrpcIssueServiceClientTest {
     @Test
     @DisplayName("Должен вызвать gRPC createIssueLink и вернуть ответ")
     void createIssueLink_shouldCallStubAndReturnMappedResponse() {
-        var restRequest = new CreateIssueLinkRequestDto("00000000-0000-0000-0000-000000000006", IssueLinkTypeDto.RELATES_TO);
+        var restRequest =
+                new CreateIssueLinkRequestDto(
+                        "00000000-0000-0000-0000-000000000006", IssueLinkTypeDto.RELATES_TO);
         var grpcResponse = IssueLinkResponse.getDefaultInstance();
         var restResponse = new IssueLinkResponseDto();
 
@@ -842,7 +895,8 @@ class GrpcIssueServiceClientTest {
         Assertions.assertThat(request.getHeader().getRequestId()).isEqualTo(REQUEST_ID);
         Assertions.assertThat(request.getHeader().getNodeId()).isEqualTo(NODE_ID);
         Assertions.assertThat(request.getBody().getSourceIssueId()).isEqualTo(ISSUE_ID);
-        Assertions.assertThat(request.getBody().getTargetIssueId()).isEqualTo("00000000-0000-0000-0000-000000000006");
+        Assertions.assertThat(request.getBody().getTargetIssueId())
+                .isEqualTo("00000000-0000-0000-0000-000000000006");
         Assertions.assertThat(request.getBody().getLinkType()).isEqualTo(IssueLinkType.ISSUE_LINK_TYPE_RELATES_TO);
         Assertions.assertThat(request.getBody().getActorUserId()).isEqualTo(USER_ID);
 
@@ -871,5 +925,118 @@ class GrpcIssueServiceClientTest {
         Assertions.assertThat(request.getBody().getIssueId()).isEqualTo(ISSUE_ID);
         Assertions.assertThat(request.getBody().getLinkId()).isEqualTo(LINK_ID);
         Assertions.assertThat(request.getBody().getActorUserId()).isEqualTo(USER_ID);
+    }
+
+    @Test
+    void newBoardReadsRequireOrderingAcknowledgementFromProducer() {
+        Mockito.when(issueMapper.toGrpcIssueType("TASK")).thenReturn(IssueType.ISSUE_TYPE_TASK);
+        Mockito.when(issueMapper.toGrpcIssuePriority((ru.taska.domain.dto.IssuePriorityDto) null))
+                .thenReturn(IssuePriority.ISSUE_PRIORITY_UNSPECIFIED);
+        var since = java.time.Instant.parse("2026-11-01T00:00:00Z");
+        var options = new ru.taska.board.BoardReadOptions(since, List.of());
+        Mockito.when(
+                        stub.listIssuesForBoard(
+                                Mockito.any(ru.taska.api.issue.v1.ListIssuesForBoardRequest.class)))
+                .thenReturn(
+                        Mono.just(
+                                ru.taska.api.issue.v1.ListIssuesForBoardResponse
+                                        .getDefaultInstance()));
+        StepVerifier.create(
+                        client.listIssuesForBoard(
+                                PROJECT_ID,
+                                "TASK",
+                                null,
+                                null,
+                                true,
+                                List.of("FINISHED"),
+                                null,
+                                null,
+                                50,
+                                options,
+                                context))
+                .expectErrorSatisfies(
+                        error ->
+                                Assertions.assertThat(
+                                                ((ResponseStatusException) error).getStatusCode())
+                                        .isEqualTo(HttpStatus.SERVICE_UNAVAILABLE))
+                .verify();
+        Mockito.when(
+                        stub.listIssuesForBoard(
+                                Mockito.any(ru.taska.api.issue.v1.ListIssuesForBoardRequest.class)))
+                .thenReturn(
+                        Mono.just(
+                                ru.taska.api.issue.v1.ListIssuesForBoardResponse.newBuilder()
+                                        .setBoardReadVersion(1)
+                                        .build()));
+        StepVerifier.create(
+                        client.listIssuesForBoard(
+                                PROJECT_ID,
+                                "TASK",
+                                null,
+                                null,
+                                true,
+                                List.of("FINISHED"),
+                                null,
+                                null,
+                                50,
+                                options,
+                                context))
+                .assertNext(rows -> Assertions.assertThat(rows).isEmpty())
+                .verifyComplete();
+        var request =
+                ArgumentCaptor.forClass(ru.taska.api.issue.v1.ListIssuesForBoardRequest.class);
+        Mockito.verify(stub, Mockito.times(2)).listIssuesForBoard(request.capture());
+        var body = request.getValue().getBody();
+        Assertions.assertThat(body.getDoneSince().getSeconds()).isEqualTo(since.getEpochSecond());
+        Assertions.assertThat(body.hasColumnOrdering()).isTrue();
+        Assertions.assertThat(body.getColumnOrdering().getUpdatedStatusKeysList()).isEmpty();
+    }
+
+    @Test
+    void doneCursorCarriesUpdatedInstant() {
+        Mockito.when(issueMapper.toGrpcIssueType("TASK")).thenReturn(IssueType.ISSUE_TYPE_TASK);
+        Mockito.when(issueMapper.toGrpcIssuePriority((ru.taska.domain.dto.IssuePriorityDto) null))
+                .thenReturn(IssuePriority.ISSUE_PRIORITY_UNSPECIFIED);
+        Mockito.when(
+                        stub.listIssuesForBoard(
+                                Mockito.any(ru.taska.api.issue.v1.ListIssuesForBoardRequest.class)))
+                .thenReturn(
+                        Mono.just(
+                                ru.taska.api.issue.v1.ListIssuesForBoardResponse.newBuilder()
+                                        .setBoardReadVersion(1)
+                                        .setTotalCount(0)
+                                        .setHasMore(false)
+                                        .build()));
+        var after = java.time.OffsetDateTime.parse("2026-11-05T13:00:00.123456+03:00");
+        var id = java.util.UUID.randomUUID();
+        StepVerifier.create(
+                        client.listBoardColumnPage(
+                                PROJECT_ID,
+                                "TASK",
+                                "FINISHED",
+                                null,
+                                null,
+                                true,
+                                List.of("FINISHED"),
+                                null,
+                                null,
+                                50,
+                                null,
+                                id,
+                                after,
+                                new ru.taska.board.BoardReadOptions(null, List.of("FINISHED")),
+                                context))
+                .assertNext(page -> Assertions.assertThat(page.issues()).isEmpty())
+                .verifyComplete();
+        var request =
+                ArgumentCaptor.forClass(ru.taska.api.issue.v1.ListIssuesForBoardRequest.class);
+        Mockito.verify(stub).listIssuesForBoard(request.capture());
+        var body = request.getValue().getBody();
+        Assertions.assertThat(body.hasAfterCreatedAt()).isFalse();
+        Assertions.assertThat(body.hasAfterUpdatedAt()).isTrue();
+        Assertions.assertThat(body.getAfterUpdatedAt().getSeconds())
+                .isEqualTo(after.toEpochSecond());
+        Assertions.assertThat(body.getAfterUpdatedAt().getNanos()).isEqualTo(123456000);
+        Assertions.assertThat(body.getAfterId()).isEqualTo(id.toString());
     }
 }

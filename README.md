@@ -605,23 +605,37 @@ Signup defaults to disabled (`TASKA_SIGNUP_ENABLED=false`). Deploy the auth migr
 Limits are persisted in auth PostgreSQL: one request per canonical email per 60 seconds and `AUTH_SIGNUP_IP_ATTEMPTS_PER_HOUR` (default10) per client IP per hour, shared across replicas. Email retries also consume the IP budget; refusals return429, Retry-After and details.retryAfterSeconds. Expired rate buckets are removed after two hours. Gateway accepts X-Forwarded-For only through `GATEWAY_TRUSTED_PROXY_CIDRS`, walks proxy hops from the right and stops at the first untrusted address. Configure the actual ingress networks; never trust arbitrary client headers. With an empty setting the socket peer is used. When signup is enabled, directory search also requires GLOBAL_ADMIN or membership in any project; a membership RPC outage fails closed.
 
 
-### Продолжение колонки доски (TAS-430)
+### Порядок и продолжение колонок доски (TAS-430, TAS-525)
 
 `GET /api/v1/projects/{projectId}/board/columns/{statusKey}/issues` возвращает
 `{statusKey, issues: BoardIssueDto[], totalCount, hasMore}`. Для следующей страницы
-передавайте `afterCreatedAt` и `afterId` последней полученной карточки вместе с теми
-же `issueType`, `assigneeId`, `labelId`, `includeDone`, `priority`, `query`.
+передавайте дату и `afterId` последней полученной карточки вместе с теми
+же `issueType`, `assigneeId`, `labelId`, `includeDone`, `priority`, `query`, `doneSince`.
 `pageSize` — 1..200, по умолчанию 50; без пары курсоров возвращается первая страница.
-Порядок тот же, что на доске: `createdAt asc, id asc`, включая DONE. Статус считается
+Для колонки категории DONE порядок — `updatedAt desc, id desc`, курсор —
+`afterUpdatedAt`/`afterId`. Для TODO и IN_PROGRESS сохраняются `createdAt asc, id asc`
+и `afterCreatedAt`/`afterId`. Неподходящий вид даты курсора или обе даты сразу дают 400.
+Категория берётся из workflow, а не из имени ключа. Если типы задают разные категории
+одному ключу, порядок общей колонки определяет первый тип в реестре проекта;
+`includeDone` и `doneSince` учитывают категорию в собственном workflow задачи.
+Статус считается
 колонкой только для типов, в чей собственный workflow он входит; `unplacedIssues`
 в этот маршрут не попадают. Метки и профиль исполнителя совпадают с карточкой доски.
 `totalCount` считает все задачи после фильтров, независимо от курсора, в том числе
-на пустой последней странице. Счётчик и окно каждого типа читаются одним SQL-снимком.
+на пустой последней странице. Оба board GET принимают необязательный `doneSince`
+(date-time): у задач категории DONE остаются только строки с `updatedAt >= doneSince`,
+включая точную границу. Фильтр применяется до лимита, `totalCount` и `hasMore`;
+без него ограничения по дате нет. Активные и unplaced задачи не фильтруются по дате,
+порядок unplaced сохраняется. Счётчик и окно каждого типа читаются одним SQL-снимком.
 При вставке между запросами продолжение включает новые задачи после курсора;
 задачи перед ним видны после обновления доски. Удаление самой карточки курсора не
-мешает продолжению. Это чтение текущей доски, а не сохранённого снимка между HTTP-запросами.
+мешает продолжению. Изменение DONE-карточки может перенести её перед курсором;
+для её повторного чтения обновите доску. Это чтение текущей доски, а не сохранённого
+снимка между HTTP-запросами.
 
 Разворачивайте issue-service с миграцией `0012-board-column-cursor.sql` перед
-api-gateway: новый gateway возвращает 503, если старый issue-service не прислал
-метаданные курсорной страницы. Старый маршрут доски и пустой gRPC `status_key`
-без курсора сохраняют поведение. Для нового GET задана PAT scope `read`.
+api-gateway. Для TAS-525 сначала требуется issue-service с `board_read_version=1`:
+новый gateway возвращает 503 при отсутствии подтверждения нового порядка/фильтра,
+а не выдаёт результат старого протокола. Клиент DONE-пагинации должен перейти на
+`afterUpdatedAt`; прежний `afterCreatedAt` для DONE получает 400. Реализация UI —
+отдельная задача. Для GET продолжения задана PAT scope `read`.

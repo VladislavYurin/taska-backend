@@ -55,31 +55,39 @@ public class BoardController implements BoardApi {
             IssuePriorityDto priority,
             String query,
             Integer pageSizePerColumn,
-            ServerWebExchange exchange
-    ) {
+            OffsetDateTime doneSince,
+            ServerWebExchange exchange) {
         return executor.execute(
                 exchange,
                 EndpointSecurity.PROTECTED,
                 context -> {
-                    if (ru.taska.controller.utils.EnumFilterUtils.hasUnknownFilter(exchange, priority, issueType)) {
-                        return issueTypesClient.list(projectId, context)
-                                .thenReturn(ResponseEntity.ok(new BoardResponseDto().projectId(projectId)
-                                        .columns(java.util.List.of()).unplacedIssues(java.util.List.of())
-                                        .unplacedTotalCount(0L).unplacedHasMore(false)));
+                    if (ru.taska.controller.utils.EnumFilterUtils.hasUnknownFilter(
+                            exchange, priority, issueType)) {
+                        return issueTypesClient
+                                .list(projectId, context)
+                                .thenReturn(
+                                        ResponseEntity.ok(
+                                                new BoardResponseDto()
+                                                        .projectId(projectId)
+                                                        .columns(java.util.List.of())
+                                                        .unplacedIssues(java.util.List.of())
+                                                        .unplacedTotalCount(0L)
+                                                        .unplacedHasMore(false)));
                     }
-                    return boardService.getBoard(
-                        projectId,
-                        issueType,
-                        assigneeId,
-                        labelId,
-                        includeDone,
-                        priority,
-                        query,
-                        pageSizePerColumn,
-                        context
-                ).map(ResponseEntity::ok);
-                }
-        );
+                    return boardService
+                            .getBoard(
+                                    projectId,
+                                    issueType,
+                                    assigneeId,
+                                    labelId,
+                                    includeDone,
+                                    priority,
+                                    query,
+                                    pageSizePerColumn,
+                                    doneSince,
+                                    context)
+                            .map(ResponseEntity::ok);
+                });
     }
 
     @Override
@@ -95,16 +103,21 @@ public class BoardController implements BoardApi {
             IssuePriorityDto priority,
             String query,
             Integer pageSize,
+            OffsetDateTime afterUpdatedAt,
+            OffsetDateTime doneSince,
             ServerWebExchange exchange) {
         return executor.execute(
                 exchange,
                 EndpointSecurity.PROTECTED,
                 context -> {
-                    if ((afterCreatedAt == null) != (afterId == null)) {
+                    if (afterCreatedAt != null && afterUpdatedAt != null
+                            || (afterCreatedAt != null || afterUpdatedAt != null)
+                                    != (afterId != null)) {
                         return Mono.error(
                                 new org.springframework.web.server.ResponseStatusException(
                                         org.springframework.http.HttpStatus.BAD_REQUEST,
-                                        "afterCreatedAt and afterId must be supplied together"));
+                                        "Supply afterId with exactly one of"
+                                            + " afterCreatedAt/afterUpdatedAt"));
                     }
                     if (ru.taska.controller.utils.EnumFilterUtils.hasUnknownFilter(
                             exchange, priority, issueType)) {
@@ -131,6 +144,8 @@ public class BoardController implements BoardApi {
                                     priority,
                                     query,
                                     pageSize,
+                                    afterUpdatedAt,
+                                    doneSince,
                                     context)
                             .map(ResponseEntity::ok);
                 });
