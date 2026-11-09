@@ -115,6 +115,8 @@ public class PersonalAccessTokenService {
                     .filter(token -> MessageDigest.isEqual(hash.getBytes(StandardCharsets.US_ASCII),
                             token.getTokenHash().getBytes(StandardCharsets.US_ASCII)))
                     .filter(token -> token.getRevokedAt() == null && token.getExpiresAt().isAfter(now()))
+                    // A tenant-bound token must not degrade into an unbound all-company credential.
+                    .filter(token -> token.getIntegrationGrantId() == null)
                     .switchIfEmpty(Mono.error(unauthenticated()))
                     .flatMap(token -> users.findById(token.getUserId())
                             .filter(user -> user.getStatus() == UserStatus.ACTIVE)

@@ -1,0 +1,1146 @@
+{
+  "revision": "SA-2026-11-02",
+  "baseline": "af7ab57ead44304b89bbd47dabeeba45b761ce16",
+  "status": "DESIGNED_NOT_IMPLEMENTED",
+  "tables": [
+    {
+      "owner": "admin-service",
+      "table": "admin_audit_log",
+      "changeClass": "EXISTING_DISPOSITION",
+      "scope": "PLATFORM_AUDIT",
+      "schemaImplementation": "TAS-350",
+      "additionalConsumers": [
+        "TAS-482",
+        "TAS-520"
+      ],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "auth-service",
+      "table": "credentials",
+      "changeClass": "EXISTING_DISPOSITION",
+      "scope": "GLOBAL",
+      "schemaImplementation": "TAS-327",
+      "additionalConsumers": [],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "auth-service",
+      "table": "invite_tokens",
+      "changeClass": "EXISTING_DISPOSITION",
+      "scope": "GLOBAL",
+      "schemaImplementation": "TAS-327",
+      "additionalConsumers": [],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "auth-service",
+      "table": "oauth_grants",
+      "changeClass": "EXISTING_DISPOSITION",
+      "scope": "GLOBAL",
+      "schemaImplementation": "TAS-498",
+      "additionalConsumers": [],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "auth-service",
+      "table": "oauth_states",
+      "changeClass": "EXISTING_DISPOSITION",
+      "scope": "GLOBAL",
+      "schemaImplementation": "TAS-498",
+      "additionalConsumers": [],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "auth-service",
+      "table": "outbox_events",
+      "changeClass": "EXISTING_DISPOSITION",
+      "scope": "GLOBAL",
+      "schemaImplementation": "TAS-318",
+      "additionalConsumers": [],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "auth-service",
+      "table": "personal_access_tokens",
+      "changeClass": "EXISTING_DISPOSITION",
+      "scope": "GLOBAL",
+      "schemaImplementation": "TAS-463",
+      "additionalConsumers": [],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "auth-service",
+      "table": "refresh_tokens",
+      "changeClass": "EXISTING_DISPOSITION",
+      "scope": "GLOBAL",
+      "schemaImplementation": "TAS-315",
+      "additionalConsumers": [],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "auth-service",
+      "table": "signup_rate_limits",
+      "changeClass": "EXISTING_DISPOSITION",
+      "scope": "GLOBAL",
+      "schemaImplementation": "TAS-327",
+      "additionalConsumers": [],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "auth-service",
+      "table": "user_avatars",
+      "changeClass": "EXISTING_DISPOSITION",
+      "scope": "GLOBAL",
+      "schemaImplementation": "TAS-366",
+      "additionalConsumers": [],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "auth-service",
+      "table": "users",
+      "changeClass": "EXISTING_DISPOSITION",
+      "scope": "GLOBAL",
+      "schemaImplementation": "TAS-477",
+      "additionalConsumers": [
+        "TAS-461",
+        "TAS-479",
+        "TAS-485",
+        "TAS-487",
+        "TAS-496"
+      ],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "issue-service",
+      "table": "idempotency_keys",
+      "changeClass": "EXISTING_DISPOSITION",
+      "scope": "TENANT",
+      "schemaImplementation": "TAS-332",
+      "additionalConsumers": [],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "issue-service",
+      "table": "issue_attachments",
+      "changeClass": "EXISTING_DISPOSITION",
+      "scope": "TENANT",
+      "schemaImplementation": "TAS-365",
+      "additionalConsumers": [],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "issue-service",
+      "table": "issue_comments",
+      "changeClass": "EXISTING_DISPOSITION",
+      "scope": "TENANT",
+      "schemaImplementation": "TAS-362",
+      "additionalConsumers": [],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "issue-service",
+      "table": "issue_history",
+      "changeClass": "EXISTING_DISPOSITION",
+      "scope": "TENANT",
+      "schemaImplementation": "TAS-343",
+      "additionalConsumers": [],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "issue-service",
+      "table": "issue_labels",
+      "changeClass": "EXISTING_DISPOSITION",
+      "scope": "TENANT",
+      "schemaImplementation": "TAS-363",
+      "additionalConsumers": [],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "issue-service",
+      "table": "issue_links",
+      "changeClass": "EXISTING_DISPOSITION",
+      "scope": "TENANT",
+      "schemaImplementation": "TAS-364",
+      "additionalConsumers": [],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "issue-service",
+      "table": "issue_type_move_receipts",
+      "changeClass": "EXISTING_DISPOSITION",
+      "scope": "TENANT",
+      "schemaImplementation": "TAS-343",
+      "additionalConsumers": [],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "issue-service",
+      "table": "issue_watchers",
+      "changeClass": "EXISTING_DISPOSITION",
+      "scope": "TENANT",
+      "schemaImplementation": "TAS-363",
+      "additionalConsumers": [],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "issue-service",
+      "table": "issue_worklogs",
+      "changeClass": "EXISTING_DISPOSITION",
+      "scope": "TENANT",
+      "schemaImplementation": "TAS-362",
+      "additionalConsumers": [],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "issue-service",
+      "table": "issues",
+      "changeClass": "EXISTING_DISPOSITION",
+      "scope": "TENANT",
+      "schemaImplementation": "TAS-343",
+      "additionalConsumers": [],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "issue-service",
+      "table": "outbox_events",
+      "changeClass": "EXISTING_DISPOSITION",
+      "scope": "TENANT",
+      "schemaImplementation": "TAS-318",
+      "additionalConsumers": [],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "issue-service",
+      "table": "project_counters",
+      "changeClass": "EXISTING_DISPOSITION",
+      "scope": "TENANT",
+      "schemaImplementation": "TAS-332",
+      "additionalConsumers": [
+        "TAS-460"
+      ],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "issue-service",
+      "table": "project_labels",
+      "changeClass": "EXISTING_DISPOSITION",
+      "scope": "TENANT",
+      "schemaImplementation": "TAS-363",
+      "additionalConsumers": [],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "issue-service",
+      "table": "workflow_binding_receipts",
+      "changeClass": "EXISTING_DISPOSITION",
+      "scope": "TENANT",
+      "schemaImplementation": "TAS-343",
+      "additionalConsumers": [],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "notification-service",
+      "table": "email_delivery_attempts",
+      "changeClass": "EXISTING_DISPOSITION",
+      "scope": "TENANT",
+      "schemaImplementation": "TAS-326",
+      "additionalConsumers": [],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "notification-service",
+      "table": "invitation_email_deliveries",
+      "changeClass": "EXISTING_DISPOSITION",
+      "scope": "TENANT",
+      "schemaImplementation": "TAS-326",
+      "additionalConsumers": [],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "notification-service",
+      "table": "notification_channel_throttle",
+      "changeClass": "EXISTING_DISPOSITION",
+      "scope": "GLOBAL",
+      "schemaImplementation": "TAS-326",
+      "additionalConsumers": [],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "notification-service",
+      "table": "notification_deliveries",
+      "changeClass": "EXISTING_DISPOSITION",
+      "scope": "TENANT",
+      "schemaImplementation": "TAS-326",
+      "additionalConsumers": [],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "notification-service",
+      "table": "notification_preferences",
+      "changeClass": "EXISTING_DISPOSITION",
+      "scope": "TENANT",
+      "schemaImplementation": "TAS-325",
+      "additionalConsumers": [],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "notification-service",
+      "table": "notifications",
+      "changeClass": "EXISTING_DISPOSITION",
+      "scope": "TENANT",
+      "schemaImplementation": "TAS-325",
+      "additionalConsumers": [],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "notification-service",
+      "table": "processed_events",
+      "changeClass": "EXISTING_DISPOSITION",
+      "scope": "TENANT",
+      "schemaImplementation": "TAS-325",
+      "additionalConsumers": [],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "notification-service",
+      "table": "telegram_link_requests",
+      "changeClass": "EXISTING_DISPOSITION",
+      "scope": "GLOBAL",
+      "schemaImplementation": "TAS-325",
+      "additionalConsumers": [],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "notification-service",
+      "table": "telegram_updates",
+      "changeClass": "EXISTING_DISPOSITION",
+      "scope": "GLOBAL",
+      "schemaImplementation": "TAS-325",
+      "additionalConsumers": [],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "oauth-server",
+      "table": "oauth2_authorization",
+      "changeClass": "EXISTING_DISPOSITION",
+      "scope": "GLOBAL",
+      "schemaImplementation": "TAS-498",
+      "additionalConsumers": [],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "oauth-server",
+      "table": "oauth2_authorization_consent",
+      "changeClass": "EXISTING_DISPOSITION",
+      "scope": "GLOBAL",
+      "schemaImplementation": "TAS-498",
+      "additionalConsumers": [],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "oauth-server",
+      "table": "oauth2_registered_client",
+      "changeClass": "EXISTING_DISPOSITION",
+      "scope": "GLOBAL",
+      "schemaImplementation": "TAS-498",
+      "additionalConsumers": [],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "oauth-server",
+      "table": "oauth_refresh_history",
+      "changeClass": "EXISTING_DISPOSITION",
+      "scope": "GLOBAL",
+      "schemaImplementation": "TAS-498",
+      "additionalConsumers": [],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "oauth-server",
+      "table": "oauth_registration_lock",
+      "changeClass": "EXISTING_DISPOSITION",
+      "scope": "SYSTEM",
+      "schemaImplementation": "TAS-498",
+      "additionalConsumers": [],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "project-service",
+      "table": "issue_type_creations",
+      "changeClass": "EXISTING_DISPOSITION",
+      "scope": "TENANT",
+      "schemaImplementation": "TAS-329",
+      "additionalConsumers": [],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "project-service",
+      "table": "issue_type_deletions",
+      "changeClass": "EXISTING_DISPOSITION",
+      "scope": "TENANT",
+      "schemaImplementation": "TAS-329",
+      "additionalConsumers": [],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "project-service",
+      "table": "outbox_events",
+      "changeClass": "EXISTING_DISPOSITION",
+      "scope": "TENANT",
+      "schemaImplementation": "TAS-318",
+      "additionalConsumers": [],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "project-service",
+      "table": "project_issue_types",
+      "changeClass": "EXISTING_DISPOSITION",
+      "scope": "TENANT",
+      "schemaImplementation": "TAS-329",
+      "additionalConsumers": [],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "project-service",
+      "table": "project_members",
+      "changeClass": "EXISTING_DISPOSITION",
+      "scope": "TENANT",
+      "schemaImplementation": "TAS-329",
+      "additionalConsumers": [],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "project-service",
+      "table": "project_settings",
+      "changeClass": "EXISTING_DISPOSITION",
+      "scope": "TENANT",
+      "schemaImplementation": "TAS-329",
+      "additionalConsumers": [],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "project-service",
+      "table": "project_type_operations",
+      "changeClass": "EXISTING_DISPOSITION",
+      "scope": "TENANT",
+      "schemaImplementation": "TAS-329",
+      "additionalConsumers": [],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "project-service",
+      "table": "projects",
+      "changeClass": "EXISTING_DISPOSITION",
+      "scope": "TENANT",
+      "schemaImplementation": "TAS-329",
+      "additionalConsumers": [],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "workflow-service",
+      "table": "issue_type_creation_workflow_receipts",
+      "changeClass": "EXISTING_DISPOSITION",
+      "scope": "TENANT",
+      "schemaImplementation": "TAS-330",
+      "additionalConsumers": [],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "workflow-service",
+      "table": "issue_type_move_workflow_pins",
+      "changeClass": "EXISTING_DISPOSITION",
+      "scope": "TENANT",
+      "schemaImplementation": "TAS-330",
+      "additionalConsumers": [],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "workflow-service",
+      "table": "statuses",
+      "changeClass": "EXISTING_DISPOSITION",
+      "scope": "TENANT",
+      "schemaImplementation": "TAS-330",
+      "additionalConsumers": [],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "workflow-service",
+      "table": "transitions",
+      "changeClass": "EXISTING_DISPOSITION",
+      "scope": "TENANT",
+      "schemaImplementation": "TAS-330",
+      "additionalConsumers": [],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "workflow-service",
+      "table": "validator_rules",
+      "changeClass": "EXISTING_DISPOSITION",
+      "scope": "TENANT",
+      "schemaImplementation": "TAS-330",
+      "additionalConsumers": [],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "workflow-service",
+      "table": "workflow_binding_changes",
+      "changeClass": "EXISTING_DISPOSITION",
+      "scope": "TENANT",
+      "schemaImplementation": "TAS-330",
+      "additionalConsumers": [],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "workflow-service",
+      "table": "workflow_bindings",
+      "changeClass": "EXISTING_DISPOSITION",
+      "scope": "TENANT",
+      "schemaImplementation": "TAS-330",
+      "additionalConsumers": [],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "workflow-service",
+      "table": "workflows",
+      "changeClass": "EXISTING_DISPOSITION",
+      "scope": "TENANT",
+      "schemaImplementation": "TAS-330",
+      "additionalConsumers": [],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "tenant-service",
+      "table": "tenants",
+      "changeClass": "NEW",
+      "scope": "TENANT",
+      "schemaImplementation": "TAS-310",
+      "additionalConsumers": [
+        "TAS-333",
+        "TAS-337",
+        "TAS-473",
+        "TAS-478",
+        "TAS-480"
+      ],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "tenant-service",
+      "table": "tenant_memberships",
+      "changeClass": "NEW",
+      "scope": "TENANT",
+      "schemaImplementation": "TAS-310",
+      "additionalConsumers": [
+        "TAS-311",
+        "TAS-312",
+        "TAS-323",
+        "TAS-473",
+        "TAS-494"
+      ],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "tenant-service",
+      "table": "tenant_invitations",
+      "changeClass": "NEW",
+      "scope": "TENANT",
+      "schemaImplementation": "TAS-335",
+      "additionalConsumers": [],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "tenant-service",
+      "table": "invitation_project_grants",
+      "changeClass": "NEW",
+      "scope": "TENANT",
+      "schemaImplementation": "TAS-335",
+      "additionalConsumers": [],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "tenant-service",
+      "table": "tenant_restrictions",
+      "changeClass": "NEW",
+      "scope": "TENANT",
+      "schemaImplementation": "TAS-480",
+      "additionalConsumers": [],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "tenant-service",
+      "table": "quota_counters",
+      "changeClass": "NEW",
+      "scope": "TENANT",
+      "schemaImplementation": "TAS-322",
+      "additionalConsumers": [
+        "TAS-324",
+        "TAS-347"
+      ],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "tenant-service",
+      "table": "quota_reservations",
+      "changeClass": "NEW",
+      "scope": "TENANT",
+      "schemaImplementation": "TAS-322",
+      "additionalConsumers": [
+        "TAS-324",
+        "TAS-347"
+      ],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "tenant-service",
+      "table": "quota_effects",
+      "changeClass": "NEW",
+      "scope": "TENANT",
+      "schemaImplementation": "TAS-322",
+      "additionalConsumers": [
+        "TAS-324",
+        "TAS-347"
+      ],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "tenant-service",
+      "table": "free_eligibility_ledger",
+      "changeClass": "NEW",
+      "scope": "GLOBAL",
+      "schemaImplementation": "TAS-472",
+      "additionalConsumers": [],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "tenant-service",
+      "table": "tenant_operations",
+      "changeClass": "NEW",
+      "scope": "TENANT",
+      "schemaImplementation": "TAS-337",
+      "additionalConsumers": [],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "tenant-service",
+      "table": "tenant_deletion_steps",
+      "changeClass": "NEW",
+      "scope": "TENANT",
+      "schemaImplementation": "TAS-474",
+      "additionalConsumers": [],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "tenant-service",
+      "table": "tenant_exports",
+      "changeClass": "NEW",
+      "scope": "TENANT",
+      "schemaImplementation": "TAS-372",
+      "additionalConsumers": [],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "tenant-service",
+      "table": "platform_configuration_versions",
+      "changeClass": "NEW",
+      "scope": "GLOBAL",
+      "schemaImplementation": "TAS-462",
+      "additionalConsumers": [
+        "TAS-518",
+        "TAS-519",
+        "TAS-520"
+      ],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "billing-service",
+      "table": "catalog_plans",
+      "changeClass": "NEW",
+      "scope": "GLOBAL",
+      "schemaImplementation": "TAS-313",
+      "additionalConsumers": [],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "billing-service",
+      "table": "catalog_plan_versions",
+      "changeClass": "NEW",
+      "scope": "GLOBAL",
+      "schemaImplementation": "TAS-313",
+      "additionalConsumers": [],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "billing-service",
+      "table": "subscriptions",
+      "changeClass": "NEW",
+      "scope": "TENANT",
+      "schemaImplementation": "TAS-314",
+      "additionalConsumers": [],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "billing-service",
+      "table": "subscription_periods",
+      "changeClass": "NEW",
+      "scope": "TENANT",
+      "schemaImplementation": "TAS-314",
+      "additionalConsumers": [],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "billing-service",
+      "table": "invoices",
+      "changeClass": "NEW",
+      "scope": "TENANT",
+      "schemaImplementation": "TAS-475",
+      "additionalConsumers": [],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "billing-service",
+      "table": "invoice_lines",
+      "changeClass": "NEW",
+      "scope": "TENANT",
+      "schemaImplementation": "TAS-475",
+      "additionalConsumers": [],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "billing-service",
+      "table": "payment_facts",
+      "changeClass": "NEW",
+      "scope": "TENANT",
+      "schemaImplementation": "TAS-476",
+      "additionalConsumers": [],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "billing-service",
+      "table": "payment_allocations",
+      "changeClass": "NEW",
+      "scope": "TENANT",
+      "schemaImplementation": "TAS-476",
+      "additionalConsumers": [],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "billing-service",
+      "table": "refunds",
+      "changeClass": "NEW",
+      "scope": "TENANT",
+      "schemaImplementation": "TAS-358",
+      "additionalConsumers": [],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "billing-service",
+      "table": "disputes",
+      "changeClass": "NEW",
+      "scope": "TENANT",
+      "schemaImplementation": "TAS-490",
+      "additionalConsumers": [],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "billing-service",
+      "table": "payment_methods",
+      "changeClass": "NEW",
+      "scope": "TENANT",
+      "schemaImplementation": "TAS-349",
+      "additionalConsumers": [],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "billing-service",
+      "table": "autopay_mandates",
+      "changeClass": "NEW",
+      "scope": "TENANT",
+      "schemaImplementation": "TAS-355",
+      "additionalConsumers": [],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "billing-service",
+      "table": "payment_attempts",
+      "changeClass": "NEW",
+      "scope": "TENANT",
+      "schemaImplementation": "TAS-349",
+      "additionalConsumers": [],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "billing-service",
+      "table": "entitlement_snapshots",
+      "changeClass": "NEW",
+      "scope": "TENANT",
+      "schemaImplementation": "TAS-319",
+      "additionalConsumers": [],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "billing-service",
+      "table": "change_notices",
+      "changeClass": "NEW",
+      "scope": "TENANT",
+      "schemaImplementation": "TAS-483",
+      "additionalConsumers": [],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "billing-service",
+      "table": "settlement_cases",
+      "changeClass": "NEW",
+      "scope": "TENANT",
+      "schemaImplementation": "TAS-518",
+      "additionalConsumers": [],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "billing-service",
+      "table": "unmatched_bank_receipts",
+      "changeClass": "NEW",
+      "scope": "GLOBAL_FINANCIAL",
+      "schemaImplementation": "TAS-484",
+      "additionalConsumers": [
+        "TAS-357",
+        "TAS-518"
+      ],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "billing-service",
+      "table": "provider_inbox",
+      "changeClass": "NEW",
+      "scope": "GLOBAL_FINANCIAL",
+      "schemaImplementation": "TAS-351",
+      "additionalConsumers": [],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "billing-service",
+      "table": "fx_quotes",
+      "changeClass": "NEW",
+      "scope": "GLOBAL",
+      "schemaImplementation": "TAS-519",
+      "additionalConsumers": [],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "tenant-service",
+      "table": "idempotency_records",
+      "changeClass": "NEW",
+      "scope": "TENANT",
+      "schemaImplementation": "TAS-310",
+      "additionalConsumers": [],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "tenant-service",
+      "table": "outbox_events",
+      "changeClass": "NEW",
+      "scope": "TENANT",
+      "schemaImplementation": "TAS-310",
+      "additionalConsumers": [
+        "TAS-318"
+      ],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "tenant-service",
+      "table": "global_outbox_events",
+      "changeClass": "NEW",
+      "scope": "GLOBAL",
+      "schemaImplementation": "TAS-310",
+      "additionalConsumers": [
+        "TAS-318"
+      ],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "tenant-service",
+      "table": "processed_events",
+      "changeClass": "NEW",
+      "scope": "TENANT",
+      "schemaImplementation": "TAS-310",
+      "additionalConsumers": [],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "billing-service",
+      "table": "idempotency_records",
+      "changeClass": "NEW",
+      "scope": "TENANT",
+      "schemaImplementation": "TAS-313",
+      "additionalConsumers": [],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "billing-service",
+      "table": "outbox_events",
+      "changeClass": "NEW",
+      "scope": "TENANT",
+      "schemaImplementation": "TAS-313",
+      "additionalConsumers": [
+        "TAS-318"
+      ],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "billing-service",
+      "table": "global_outbox_events",
+      "changeClass": "NEW",
+      "scope": "GLOBAL",
+      "schemaImplementation": "TAS-313",
+      "additionalConsumers": [
+        "TAS-318"
+      ],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "billing-service",
+      "table": "processed_events",
+      "changeClass": "NEW",
+      "scope": "TENANT",
+      "schemaImplementation": "TAS-313",
+      "additionalConsumers": [],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "billing-service",
+      "table": "billing_operations",
+      "changeClass": "NEW",
+      "scope": "TENANT",
+      "schemaImplementation": "TAS-349",
+      "additionalConsumers": [],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "auth-service",
+      "table": "web_sessions",
+      "changeClass": "NEW",
+      "scope": "GLOBAL_ACCOUNT",
+      "schemaImplementation": "TAS-315",
+      "additionalConsumers": [],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "auth-service",
+      "table": "tenant_sessions",
+      "changeClass": "NEW",
+      "scope": "GLOBAL_ACCOUNT",
+      "schemaImplementation": "TAS-315",
+      "additionalConsumers": [],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "auth-service",
+      "table": "integration_grants",
+      "changeClass": "NEW",
+      "scope": "GLOBAL_ACCOUNT",
+      "schemaImplementation": "TAS-463",
+      "additionalConsumers": [
+        "TAS-498",
+        "TAS-499"
+      ],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "auth-service",
+      "table": "integration_grant_tenants",
+      "changeClass": "NEW",
+      "scope": "GLOBAL_ACCOUNT",
+      "schemaImplementation": "TAS-499",
+      "additionalConsumers": [],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "auth-service",
+      "table": "confirmation_challenges",
+      "changeClass": "NEW",
+      "scope": "GLOBAL_ACCOUNT",
+      "schemaImplementation": "TAS-328",
+      "additionalConsumers": [
+        "TAS-373",
+        "TAS-461",
+        "TAS-479",
+        "TAS-481"
+      ],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "auth-service",
+      "table": "account_deletion_operations",
+      "changeClass": "NEW",
+      "scope": "GLOBAL_ACCOUNT",
+      "schemaImplementation": "TAS-461",
+      "additionalConsumers": [],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "auth-service",
+      "table": "avatar_object_manifest",
+      "changeClass": "NEW",
+      "scope": "GLOBAL_ACCOUNT",
+      "schemaImplementation": "TAS-366",
+      "additionalConsumers": [],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "workflow-service",
+      "table": "workflow_templates",
+      "changeClass": "NEW",
+      "scope": "GLOBAL",
+      "schemaImplementation": "TAS-330",
+      "additionalConsumers": [],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "project-service",
+      "table": "resource_operation_receipts",
+      "changeClass": "NEW",
+      "scope": "TENANT",
+      "schemaImplementation": "TAS-324",
+      "additionalConsumers": [],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "issue-service",
+      "table": "resource_operation_receipts",
+      "changeClass": "NEW",
+      "scope": "TENANT",
+      "schemaImplementation": "TAS-365",
+      "additionalConsumers": [],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "issue-service",
+      "table": "attachment_object_manifest",
+      "changeClass": "NEW",
+      "scope": "TENANT",
+      "schemaImplementation": "TAS-365",
+      "additionalConsumers": [],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "notification-service",
+      "table": "account_notification_settings",
+      "changeClass": "NEW",
+      "scope": "GLOBAL_ACCOUNT",
+      "schemaImplementation": "TAS-325",
+      "additionalConsumers": [],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "notification-service",
+      "table": "account_notifications",
+      "changeClass": "NEW",
+      "scope": "GLOBAL_ACCOUNT",
+      "schemaImplementation": "TAS-325",
+      "additionalConsumers": [],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "notification-service",
+      "table": "account_message_deliveries",
+      "changeClass": "NEW",
+      "scope": "GLOBAL_ACCOUNT",
+      "schemaImplementation": "TAS-326",
+      "additionalConsumers": [],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "notification-service",
+      "table": "account_processed_events",
+      "changeClass": "NEW",
+      "scope": "GLOBAL_ACCOUNT",
+      "schemaImplementation": "TAS-325",
+      "additionalConsumers": [],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "project-service",
+      "table": "tenant_work_partitions",
+      "changeClass": "NEW",
+      "scope": "SYSTEM",
+      "schemaImplementation": "TAS-489",
+      "additionalConsumers": [],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "workflow-service",
+      "table": "tenant_work_partitions",
+      "changeClass": "NEW",
+      "scope": "SYSTEM",
+      "schemaImplementation": "TAS-489",
+      "additionalConsumers": [],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "issue-service",
+      "table": "tenant_work_partitions",
+      "changeClass": "NEW",
+      "scope": "SYSTEM",
+      "schemaImplementation": "TAS-489",
+      "additionalConsumers": [],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "notification-service",
+      "table": "tenant_work_partitions",
+      "changeClass": "NEW",
+      "scope": "SYSTEM",
+      "schemaImplementation": "TAS-489",
+      "additionalConsumers": [],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "tenant-service",
+      "table": "tenant_work_partitions",
+      "changeClass": "NEW",
+      "scope": "SYSTEM",
+      "schemaImplementation": "TAS-489",
+      "additionalConsumers": [],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "billing-service",
+      "table": "tenant_work_partitions",
+      "changeClass": "NEW",
+      "scope": "SYSTEM",
+      "schemaImplementation": "TAS-489",
+      "additionalConsumers": [],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "tenant-service",
+      "table": "account_offboarding",
+      "changeClass": "NEW",
+      "scope": "GLOBAL_ACCOUNT",
+      "schemaImplementation": "TAS-461",
+      "additionalConsumers": [],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "tenant-service",
+      "table": "retention_holds",
+      "changeClass": "NEW",
+      "scope": "GLOBAL_CONTROL",
+      "schemaImplementation": "TAS-520",
+      "additionalConsumers": [],
+      "contract": "schemas/target-model.json"
+    },
+    {
+      "owner": "billing-service",
+      "table": "invoice_payment_matches",
+      "changeClass": "NEW",
+      "scope": "TENANT",
+      "schemaImplementation": "TAS-476",
+      "additionalConsumers": [
+        "TAS-357",
+        "TAS-484",
+        "TAS-518"
+      ],
+      "contract": "schemas/target-model.json"
+    }
+  ]
+}

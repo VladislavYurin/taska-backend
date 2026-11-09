@@ -85,7 +85,8 @@ class OutboxEventPublisherTest {
             SenderRecord<String, String, UUID> record = captor.getValue().block();
             Assertions.assertThat(record).isNotNull();
             Assertions.assertThat(record.topic()).isEqualTo(TOPIC);
-            Assertions.assertThat(record.key()).isEqualTo(event.getAggregateId().toString());
+            Assertions.assertThat(record.key()).isEqualTo(
+                    "g:GLOBAL_USER:%s:%s".formatted(event.getAggregateId(), event.getAggregateId()));
             Assertions.assertThat(record.value()).isEqualTo(expectedJson);
             Assertions.assertThat(record.correlationMetadata()).isEqualTo(event.getId());
         }

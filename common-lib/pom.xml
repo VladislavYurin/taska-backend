@@ -68,6 +68,11 @@
 
         <!-- Tests -->
         <dependency>
+            <groupId>io.r2dbc</groupId>
+            <artifactId>r2dbc-pool</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>
             <scope>test</scope>
@@ -109,7 +114,20 @@
         </extensions>
 
         <plugins>
-
+            <!-- Only the reusable fixture is exported, never executable tests or production authority. -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <version>3.4.2</version>
+                <executions>
+                    <execution>
+                        <goals><goal>test-jar</goal></goals>
+                        <configuration>
+                            <includes><include>ru/taska/security/tenant/TenantIsolationFixture*.class</include></includes>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
         </plugins>
     </build>
 

@@ -750,6 +750,11 @@ paths:
           content:
             application/json:
               schema: {$ref: '#/components/schemas/RestErrorResponse'}
+        '503':
+          description: UNAVAILABLE, "Project membership service is unavailable" when signup is enabled and the membership check cannot reach project-service. No details.reason is supplied; retry after the dependency recovers.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/RestErrorResponse'}
         default:
           $ref: '#/components/responses/ErrorResponse'
 
@@ -1310,7 +1315,12 @@ paths:
     get:
       x-pat-scope: read
       summary: Контекст проекта — проект, участники, метки, все workflows
-      description: При публикации нового набора типов или workflow возвращает 409 ABORTED с details.reason ISSUE_TYPE_OPERATION_PENDING; повторите чтение после завершения операции.
+      description: >
+        При публикации нового набора типов или workflow возвращает 409 ABORTED с details.reason
+        ISSUE_TYPE_OPERATION_PENDING; повторите чтение после завершения операции.
+        Ошибка чтения workflow отдельного типа не отменяет ответ 200: этот тип отсутствует в workflows,
+        остальные доступные данные сохраняются. Отказ основных источников проекта, участников или меток
+        продолжает возвращать ошибку; проверка членства проекта выполняется до чтения workflow.
       operationId: getProjectContext
       tags:
         - project
@@ -1375,6 +1385,10 @@ paths:
         (основной workflow проекта). Для пустого реестра обязателен workflowId; иначе 400 FAILED_PRECONDITION
         с reason ISSUE_TYPE_WORKFLOW_REQUIRED. Чужой workflow — 400 WORKFLOW_NOT_IN_PROJECT.
         Изменившееся поколение реестра — 409 ABORTED с reason ISSUE_TYPES_CHANGED; перечитайте реестр.
+        При отказе привязки workflow 400 INVALID_ARGUMENT возвращает WORKFLOW_NOT_AVAILABLE,
+        ISSUE_TYPE_ALREADY_REGISTERED, ISSUE_TYPE_CREATION_NOT_PENDING или
+        ISSUE_TYPE_CREATION_NOT_RESERVED в details.reason. Последние три причины означают
+        несогласованное состояние внутренней операции; повторяйте только с исходным X-Request-Id.
         При отказе тип не появляется в реестре.
         Для безопасного повтора передайте тот же X-Request-Id и ту же команду; другой payload с тем же
         ключом — 409 с reason REQUEST_ID_REUSED. Другая операция с типами — 409 ABORTED
@@ -1492,6 +1506,8 @@ paths:
         (400 FAILED_PRECONDITION, details.reason LAST_ISSUE_TYPE), тип с живыми задачами
         получает ISSUE_TYPE_IN_USE и строковый details.issueCount. Удалённые задачи не учитываются.
         moveIssuesTo переносит все живые задачи в другой тип того же проекта, затем удаляет исходный тип.
+        Цель должна быть другим зарегистрированным типом проекта; иначе 400 INVALID_ARGUMENT
+        с details.reason ISSUE_TYPE_TARGET_INVALID без создания операции.
         Если статус задачи отсутствует в workflow целевого типа, передайте statusMappings;
         иначе 400 FAILED_PRECONDITION с reason ISSUE_STATUSES_UNMAPPED, statusKeys и targetStatusKeys
         (списки ключей через запятую; targetStatusKeys — порядок колонок целевого workflow).
@@ -2840,6 +2856,7 @@ paths:
     get:
       x-pat-scope: read
       summary: Получение доски задач проекта
+      description: В колонках категории DONE — updatedAt desc, id desc; в остальных и unplacedIssues — createdAt asc, id asc. Категория определяется workflow, а не строкой ключа статуса. При общем ключе разных категорий порядок колонки задаёт первый тип реестра проекта; фильтры DONE учитывают workflow каждой задачи.
       operationId: getBoard
       tags:
         - board
@@ -2899,6 +2916,13 @@ paths:
             minimum: 1
             maximum: 200
             default: 50
+        - name: doneSince
+          in: query
+          required: false
+          description: В статусах категории DONE собственного workflow оставить updatedAt >= doneSince. Без параметра отсечки нет. TODO/IN_PROGRESS и unplacedIssues не фильтруются. totalCount и hasMore учитывают отсечку.
+          schema:
+            type: string
+            format: date-time
       responses:
         '200':
           description: Доска успешно сформирована
@@ -2916,7 +2940,7 @@ paths:
     get:
       x-pat-scope: read
       summary: Страница задач колонки доски
-      description: Порядок createdAt asc, id asc для всех колонок, включая DONE. Передайте оба курсора из последней задачи предыдущей страницы и те же фильтры, что при чтении доски. Курсор исключительный; задачи, добавленные перед ним, появятся после обновления доски. Задачи входят только в статусы workflow своего типа.
+      description: Колонки категории DONE идут в updatedAt desc, id desc; остальные — createdAt asc, id asc. При общем ключе разных категорий порядок колонки задаёт первый тип реестра проекта; фильтры DONE учитывают workflow каждой задачи. Для DONE передайте afterUpdatedAt и afterId последней задачи, для остальных — afterCreatedAt и afterId. Сохраните те же фильтры, включая doneSince. Курсор исключительный; задачи, добавленные перед ним, появятся после обновления доски. Задачи входят только в статусы workflow своего типа.
       operationId: listBoardColumnIssues
       tags:
         - board
@@ -2939,14 +2963,14 @@ paths:
         - name: afterCreatedAt
           in: query
           required: false
-          description: createdAt последней задачи; обязателен вместе с afterId.
+          description: createdAt последней задачи для колонки не категории DONE; обязателен вместе с afterId и несовместим с afterUpdatedAt.
           schema:
             type: string
             format: date-time
         - name: afterId
           in: query
           required: false
-          description: id последней задачи; обязателен вместе с afterCreatedAt.
+          description: id последней задачи; обязателен вместе с afterCreatedAt либо afterUpdatedAt в зависимости от категории колонки.
           schema:
             type: string
             format: uuid
@@ -2997,6 +3021,20 @@ paths:
             minimum: 1
             maximum: 200
             default: 50
+        - name: afterUpdatedAt
+          in: query
+          required: false
+          description: updatedAt последней задачи колонки категории DONE; обязателен вместе с afterId, несовместим с afterCreatedAt. Для других колонок используйте afterCreatedAt.
+          schema:
+            type: string
+            format: date-time
+        - name: doneSince
+          in: query
+          required: false
+          description: В статусах категории DONE собственного workflow оставить updatedAt >= doneSince. Без параметра отсечки нет. TODO/IN_PROGRESS и unplacedIssues не фильтруются. totalCount и hasMore учитывают отсечку.
+          schema:
+            type: string
+            format: date-time
       responses:
         '200':
           description: Страница колонки успешно получена
@@ -3287,6 +3325,8 @@ paths:
         statusMappings. targetStatusKeys — алфавитно упорядоченное пересечение допустимых статусов
         всех целевых workflow; ключи разделены запятыми. Некорректное сопоставление — 400
         WORKFLOW_STATUS_MAPPING_INVALID. Пустой issueTypes — 400 WORKFLOW_ISSUE_TYPES_EMPTY.
+        Тип, не зарегистрированный в проекте, даёт 400 INVALID_ARGUMENT с
+        details.reason WORKFLOW_ISSUE_TYPE_NOT_IN_PROJECT.
         Изменившийся реестр — 409 ABORTED с reason ISSUE_TYPES_CHANGED; другая операция с типами —
         409 ABORTED с reason ISSUE_TYPE_OPERATION_PENDING. Превышение 5000 задач для миграции — WORKFLOW_MIGRATION_LIMIT без изменений.
         Если внутренний план превышает транспортный предел, возвращается 400 WORKFLOW_BINDING_PLAN_TOO_LARGE;
@@ -4620,6 +4660,8 @@ paths:
         набор типов своего workflow: добавленные переносятся сюда с default или другого своего workflow,
         удалённые возвращаются на общий default. Пустой набор запрещён с reason WORKFLOW_ISSUE_TYPES_EMPTY;
         неизвестные типы — 400. Донор без типов сохраняется и остаётся доступным в списке workflow.
+        Тип вне реестра проекта возвращает 400 INVALID_ARGUMENT с
+        details.reason WORKFLOW_ISSUE_TYPE_NOT_IN_PROJECT.
         При issueTypes обязателен version; конфликт версии — 409. Без issueTypes прежний name-only PATCH
         сохраняет необязательный version. Для отсутствующих в целевом workflow статусов задач нужны
         statusMappings; иначе WORKFLOW_ISSUES_UNMAPPED с issueCount/statusKeys/targetStatusKeys.
@@ -6912,6 +6954,11 @@ components:
             WORKFLOW_STATUS_MAPPING_INVALID и ISSUE_TYPE_STATUS_MAPPING_INVALID — INVALID_ARGUMENT (400),
             неверное сопоставление статусов; WORKFLOW_NOT_IN_PROJECT — INVALID_ARGUMENT (400),
             выбранный workflow не принадлежит проекту и не является общим default.
+            ISSUE_TYPE_TARGET_INVALID — INVALID_ARGUMENT (400), цель переноса не является другим
+            зарегистрированным типом; WORKFLOW_ISSUE_TYPE_NOT_IN_PROJECT — INVALID_ARGUMENT (400),
+            тип привязки workflow не зарегистрирован в проекте. При создании типа
+            WORKFLOW_NOT_AVAILABLE, ISSUE_TYPE_ALREADY_REGISTERED, ISSUE_TYPE_CREATION_NOT_PENDING
+            и ISSUE_TYPE_CREATION_NOT_RESERVED — INVALID_ARGUMENT (400) от внутренней привязки.
           example:
             lockedUntil: '2026-09-22T11:55:50.398486Z'
 
@@ -7997,7 +8044,7 @@ components:
           type: string
         issues:
           type: array
-          description: Те же BoardIssueDto и порядок createdAt asc, id asc, что в первой странице доски.
+          description: Те же BoardIssueDto и порядок, что в первой странице доски — updatedAt desc, id desc для DONE; createdAt asc, id asc для остальных.
           items:
             $ref: '#/components/schemas/BoardIssueDto'
         totalCount:
@@ -8034,7 +8081,7 @@ components:
           description: В колонке есть задачи за пределами первой страницы.
         issues:
           type: array
-          description: Порядок createdAt asc, id asc независимо от типа.
+          description: Порядок updatedAt desc, id desc для колонки категории DONE; createdAt asc, id asc для остальных, независимо от типа.
           items:
             $ref: '#/components/schemas/BoardIssueDto'
 

@@ -12,7 +12,10 @@ import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 import ru.taska.api.common.v1.Header;
 import ru.taska.api.issue.v1.ReactorIssueServiceGrpc;
-import ru.taska.api.registry.v1.*;
+import ru.taska.api.registry.v1.IssueTypeMoveOutcome;
+import ru.taska.api.registry.v1.IssueTypeMoveState;
+import ru.taska.api.registry.v1.ReactorIssueTypeIssueMigrationGrpc;
+import ru.taska.api.registry.v1.ReactorIssueTypeWorkflowReservationGrpc;
 import ru.taska.api.workflow.v1.ReactorWorkflowServiceGrpc;
 import ru.taska.domain.ActionMetadata;
 import ru.taska.domain.IssueTypeDeletion;
@@ -29,7 +32,7 @@ public class IssueTypeDeletionCoordinator {
   private final IssueTypeDeletionRepository journal;
   private final ReactorIssueServiceGrpc.ReactorIssueServiceStub issueStub;
   private final ReactorWorkflowServiceGrpc.ReactorWorkflowServiceStub workflowStub;
-  private static final Set<DomainStatus> REJECTED=Set.of(DomainStatus.INVALID_ARGUMENT,DomainStatus.FAILED_PRECONDITION,
+  private static final Set<DomainStatus> REJECTED=Set.of(DomainStatus.INVALID_ARGUMENT,DomainStatus.FAILED_PRECONDITION,DomainStatus.ABORTED,
       DomainStatus.PERMISSION_DENIED,DomainStatus.UNAUTHENTICATED,DomainStatus.NOT_FOUND,DomainStatus.ALREADY_EXISTS);
 
   public Mono<Void> delete(UUID project,UUID actor,String source,String target,Map<String,String> mapping,

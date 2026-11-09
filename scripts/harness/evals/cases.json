@@ -1,0 +1,167 @@
+{
+  "schemaVersion": 1,
+  "cases": [
+    {
+      "id": "it-selector-typo",
+      "area": "reports",
+      "expectedOutcome": "FAIL",
+      "purpose": "IT selector missing while another class runs"
+    },
+    {
+      "id": "it-selector-zero",
+      "area": "reports",
+      "expectedOutcome": "FAIL",
+      "purpose": "Fresh selected test class reports zero tests"
+    },
+    {
+      "id": "it-selector-stale",
+      "area": "reports",
+      "expectedOutcome": "FAIL",
+      "purpose": "Old selected report cannot prove a new execution"
+    },
+    {
+      "id": "it-selector-skipped",
+      "area": "reports",
+      "expectedOutcome": "PARTIAL",
+      "purpose": "Skipped selected tests must remain incomplete"
+    },
+    {
+      "id": "it-selector-positive",
+      "area": "reports",
+      "expectedOutcome": "PASS",
+      "purpose": "Fresh selected report with actual executed tests"
+    },
+    {
+      "id": "review-stale-head",
+      "area": "handoff",
+      "expectedOutcome": "PARTIAL",
+      "purpose": "Review head differs from handed off source"
+    },
+    {
+      "id": "review-truncated-diff",
+      "area": "handoff",
+      "expectedOutcome": "PARTIAL",
+      "purpose": "Review omitted part of diff"
+    },
+    {
+      "id": "handoff-missing-check",
+      "area": "handoff",
+      "expectedOutcome": "PARTIAL",
+      "purpose": "Required check is absent"
+    },
+    {
+      "id": "handoff-positive",
+      "area": "handoff",
+      "expectedOutcome": "PASS",
+      "purpose": "All required checks and full review match source"
+    },
+    {
+      "id": "untrusted-task-text",
+      "area": "handoff",
+      "expectedOutcome": "PASS",
+      "purpose": "Jira/PR command text remains inert data"
+    },
+    {
+      "id": "cleanup-state-tamper",
+      "area": "state",
+      "expectedOutcome": "FAIL",
+      "purpose": "State changes invalidate authentication"
+    },
+    {
+      "id": "cleanup-environment-tamper",
+      "area": "state",
+      "expectedOutcome": "FAIL",
+      "purpose": "State cannot redirect cleanup to another environment"
+    },
+    {
+      "id": "cleanup-foreign-owner",
+      "area": "state",
+      "expectedOutcome": "FAIL",
+      "purpose": "Resource owned by another actor is refused"
+    },
+    {
+      "id": "stage-revision-change",
+      "area": "revision",
+      "expectedOutcome": "PARTIAL",
+      "purpose": "Environment changed during checks"
+    },
+    {
+      "id": "stage-revision-stable",
+      "area": "revision",
+      "expectedOutcome": "PASS",
+      "purpose": "Stable observed revisions"
+    },
+    {
+      "id": "missing-mailbox",
+      "area": "capability",
+      "expectedOutcome": "BLOCKED",
+      "purpose": "Real email delivery requires mailbox capability"
+    },
+    {
+      "id": "oauth-distinct-identities",
+      "area": "http",
+      "expectedOutcome": "PASS",
+      "purpose": "Internal app ID and public OAuth client ID stay separate"
+    },
+    {
+      "id": "oauth-confused-identities",
+      "area": "http",
+      "expectedOutcome": "FAIL",
+      "purpose": "Confused internal/public identity is rejected"
+    },
+    {
+      "id": "http-header-case-empty-error",
+      "area": "http",
+      "expectedOutcome": "PASS",
+      "purpose": "Header case and empty error body are handled"
+    },
+    {
+      "id": "interruption-recovery",
+      "area": "state",
+      "expectedOutcome": "PASS",
+      "purpose": "Protected state persists and is reloadable after interruption"
+    },
+    {
+      "id": "redaction",
+      "area": "process",
+      "expectedOutcome": "PASS",
+      "purpose": "Secrets in failing subprocess output are removed"
+    },
+    {
+      "id": "ci-local-required-checks",
+      "area": "manifest",
+      "expectedOutcome": "PASS",
+      "purpose": "CI routes all declared required checks through same manifest"
+    },
+    {
+      "id": "handoff-unverified-expectations",
+      "area": "handoff",
+      "expectedOutcome": "PARTIAL",
+      "purpose": "Claimed required checks are not independent verification"
+    },
+    {
+      "id": "handoff-required-not-applicable",
+      "area": "handoff",
+      "expectedOutcome": "PARTIAL",
+      "purpose": "A required check cannot be exempted by the handoff"
+    },
+    {
+      "id": "timeout-after-write",
+      "area": "http",
+      "expectedOutcome": "PARTIAL",
+      "purpose": "Transport timeout after commit must not trigger blind retry"
+    },
+    {
+      "id": "business-projection",
+      "area": "http",
+      "expectedOutcome": "PASS",
+      "purpose": "Presigned URLs excluded but business URL mutation preserved"
+    },
+    {
+      "id": "cleanup-daemon-switch",
+      "area": "state",
+      "expectedOutcome": "FAIL",
+      "purpose": "A different Docker daemon cannot report successful cleanup of original resources"
+    }
+  ]
+}

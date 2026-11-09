@@ -678,8 +678,8 @@ class ProjectServiceImplTest {
         @EnumSource(value = Status.Code.class, names = {
                 "PERMISSION_DENIED", "UNAVAILABLE", "DEADLINE_EXCEEDED", "INTERNAL", "FAILED_PRECONDITION"
         })
-        @DisplayName("ошибки этих типов пробрасываются")
-        void asMember_workflowGrpcFailurePropagates(Status.Code code) {
+        @DisplayName("отказ workflow одного типа сохраняет доступный контекст и остальные типы")
+        void asMember_workflowGrpcFailureKeepsOtherType(Status.Code code) {
             Mockito.when(projectRepository.findProjectMemberShipDtoByProjectIdAndUserId(projectId, actorUserId))
                     .thenReturn(Mono.just(memberProjectDto));
             Mockito.when(projectMemberService.getProjectMembers(requestId, nodeId, projectId, actorUserId))
@@ -711,8 +711,13 @@ class ProjectServiceImplTest {
 
             StepVerifier.create(projectService.getProjectContext(
                             requestId, nodeId, projectId, actorUserId, GlobalRole.USER))
-                    .expectErrorSatisfies(error -> Assertions.assertSame(failure, error))
-                    .verify();
+                    .assertNext(ctx -> {
+                        Assertions.assertEquals(1, ctx.workflows().size());
+                        Assertions.assertEquals("REQUEST", ctx.workflows().getFirst().issueType());
+                        Assertions.assertEquals(List.of(label), ctx.labels());
+                        Assertions.assertEquals(memberProjectDto, ctx.project());
+                    })
+                    .verifyComplete();
         }
 
         @Test

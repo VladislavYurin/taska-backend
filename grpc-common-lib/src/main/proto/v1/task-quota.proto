@@ -1,0 +1,20 @@
+syntax = "proto3";
+package ru.taska.b2b.v1;
+import "v1/tenant-context.proto";
+import "v1/quota-admission.proto";
+option java_multiple_files = true;
+option java_package = "ru.taska.api.b2b.v1";
+message GetProjectTaskQuotaRpcRequest { RequestContext context = 1; string tenant_id = 2; string project_id = 3; }
+message GetTenantTaskQuotaSummaryRequest { RequestContext context = 1; string tenant_id = 2; }
+// Internal aggregate: maximum lifetime count among live projects, never a sum. No project IDs.
+message TenantTaskQuotaSummary {
+  string tenant_id = 1;
+  string maximum_created = 2;
+  string version = 3;
+  string entitlement_version = 4;
+  bool over_limit = 5;
+}
+service ProjectQuotaReadService {
+  rpc GetProjectTaskQuota(GetProjectTaskQuotaRpcRequest) returns (QuotaUsage);
+  rpc GetTenantTaskQuotaSummary(GetTenantTaskQuotaSummaryRequest) returns (TenantTaskQuotaSummary);
+}

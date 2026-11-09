@@ -273,18 +273,19 @@ public class ProjectServiceImpl implements ProjectService {
         return Flux.fromIterable(issueTypes)
                 .map(ru.taska.domain.ProjectIssueType::code)
                 .flatMap(issueType ->
-                        workflowServiceClient.getWorkflowForProject(
+                        Mono.defer(() -> workflowServiceClient.getWorkflowForProject(
                                         projectId, issueType, actorUserId, requestId, nodeId
-                                )
+                                ))
                                 .onErrorResume(error -> {
                                     if (Status.fromThrowable(error).getCode() == Status.Code.NOT_FOUND) {
                                         log.debug("[{}][{}] Workflow not found for project {} and issue type {}",
                                                 requestId, nodeId, projectId, issueType);
                                         return Mono.empty();
                                     }
-                                    log.warn("[{}][{}] Failed to load workflow for project {} and issue type {}",
-                                            requestId, nodeId, projectId, issueType, error);
-                                    return Mono.<ProjectWorkflowDto>error(error);
+                                    log.warn("[{}][{}] Workflow unavailable for project {} and issue type {}: status={}",
+                                            requestId, nodeId, projectId, issueType,
+                                            Status.fromThrowable(error).getCode());
+                                    return Mono.empty();
                                 })
                 )
                 .collectList();

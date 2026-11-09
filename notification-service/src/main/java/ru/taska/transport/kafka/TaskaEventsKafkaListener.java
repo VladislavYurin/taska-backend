@@ -27,6 +27,7 @@ public class TaskaEventsKafkaListener {
 
     private final ObjectMapper objectMapper;
     private final NotificationEventHandler eventHandler;
+    private final TaskaEventRegistry eventRegistry;
 
     @KafkaListener(
             topics = {
@@ -41,7 +42,7 @@ public class TaskaEventsKafkaListener {
                           @Header(KafkaHeaders.RECEIVED_TOPIC) String topic) {
         TaskaEvent event = null;
         try {
-            event = objectMapper.readValue(message, TaskaEvent.class);
+            event = eventRegistry.validate(topic, objectMapper.readValue(message, TaskaEvent.class));
             log.info("Processing event: topic={}, eventId={}, type={}", topic, event.id(), event.eventType());
             eventHandler.handle(event).block();
             ack.acknowledge();

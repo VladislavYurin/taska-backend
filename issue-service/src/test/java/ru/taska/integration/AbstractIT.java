@@ -1,5 +1,7 @@
 package ru.taska.integration;
 
+import java.util.UUID;
+import org.mockito.Mockito;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -7,6 +9,9 @@ import org.springframework.test.annotation.DirtiesContext;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
+import ru.taska.security.tenant.VerifiedTenantContext;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE)
 @Testcontainers
@@ -40,5 +45,21 @@ public abstract class AbstractIT {
         registry.add("app.grpc.client.project-service.host", () -> "127.0.0.1");
         registry.add("app.grpc.client.project-service.port", () -> "9090");
 
+    }
+
+    protected static <T> Mono<T> withTenant(Mono<T> operation) {
+        var verified = verifiedTenant();
+        return operation.contextWrite(context -> context.put(VerifiedTenantContext.class, verified));
+    }
+
+    protected static <T> Flux<T> withTenant(Flux<T> operation) {
+        var verified = verifiedTenant();
+        return operation.contextWrite(context -> context.put(VerifiedTenantContext.class, verified));
+    }
+
+    private static VerifiedTenantContext verifiedTenant() {
+        var verified = Mockito.mock(VerifiedTenantContext.class);
+        Mockito.when(verified.tenantId()).thenReturn(UUID.randomUUID().toString());
+        return verified;
     }
 }

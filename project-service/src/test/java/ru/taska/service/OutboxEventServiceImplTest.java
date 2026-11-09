@@ -11,12 +11,14 @@ import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 import reactor.core.publisher.Mono;
+import reactor.test.StepVerifier;
 import ru.taska.domain.OutboxEvent;
 import ru.taska.domain.Project;
 import ru.taska.domain.ProjectMember;
 import ru.taska.domain.ProjectRole;
 import ru.taska.event.OutboxEventStatus;
 import ru.taska.repository.OutboxEventRepository;
+import ru.taska.security.tenant.VerifiedTenantContext;
 import ru.taska.service.impl.OutboxEventServiceImpl;
 import tools.jackson.databind.ObjectMapper;
 
@@ -27,6 +29,7 @@ class OutboxEventServiceImplTest {
 
     private static final UUID PROJECT_ID = UUID.randomUUID();
     private static final UUID USER_ID = UUID.randomUUID();
+    private static final UUID TENANT_ID = UUID.randomUUID();
     private static final String REQUEST_ID = "test-request-id";
     private static final String NODE_ID = "test-node-id";
 
@@ -37,12 +40,15 @@ class OutboxEventServiceImplTest {
     private ru.taska.repository.ProjectRepository projectRepository;
 
     private OutboxEventServiceImpl outboxEventService;
+    private VerifiedTenantContext tenantContext;
 
     @BeforeEach
     void setUp() {
         outboxEventService = new OutboxEventServiceImpl(outboxEventRepository, new ObjectMapper(), projectRepository);
+        tenantContext = Mockito.mock(VerifiedTenantContext.class);
+        Mockito.lenient().when(tenantContext.tenantId()).thenReturn(TENANT_ID.toString());
         Mockito.lenient().when(projectRepository.findById(PROJECT_ID)).thenReturn(Mono.just(project()));
-        Mockito.when(outboxEventRepository.save(ArgumentMatchers.any()))
+        Mockito.lenient().when(outboxEventRepository.save(ArgumentMatchers.any()))
                .thenAnswer(invocation -> Mono.just((OutboxEvent) invocation.getArgument(0)));
     }
 
@@ -66,14 +72,14 @@ class OutboxEventServiceImplTest {
 
     @Test
     void roleChangesIncludeProjectKeyInStoredEvent() {
-        outboxEventService.saveMemberUpdated(REQUEST_ID, NODE_ID, USER_ID, ProjectRole.ADMIN, PROJECT_ID).block();
+        withTenant(outboxEventService.saveMemberUpdated(REQUEST_ID, NODE_ID, USER_ID, ProjectRole.ADMIN, PROJECT_ID)).block();
         Assertions.assertThat(capture().getPayload().get("projectKey").asString()).isEqualTo("ABC");
     }
 
     @Test
     void missingProjectDoesNotPreventRemovalEvent() {
         Mockito.when(projectRepository.findById(PROJECT_ID)).thenReturn(Mono.empty());
-        outboxEventService.saveMemberRemoved(REQUEST_ID, NODE_ID, USER_ID, PROJECT_ID).block();
+        withTenant(outboxEventService.saveMemberRemoved(REQUEST_ID, NODE_ID, USER_ID, PROJECT_ID)).block();
         Assertions.assertThat(capture().getPayload().get("projectKey").asString()).isEmpty();
     }
 
@@ -83,12 +89,27 @@ class OutboxEventServiceImplTest {
         return captor.getValue();
     }
 
+    private Mono<OutboxEvent> withTenant(Mono<OutboxEvent> event) {
+        return event.contextWrite(context -> context.put(VerifiedTenantContext.class, tenantContext));
+    }
+
+    @Test
+    void rejectsEventBeforeSaveWhenVerifiedTenantIsMissing() {
+        StepVerifier.create(outboxEventService.saveProjectCreated(REQUEST_ID, NODE_ID, project()))
+                .expectErrorSatisfies(error -> Assertions.assertThat(error)
+                        .isInstanceOf(IllegalStateException.class)
+                        .hasMessage("Verified context required"))
+                .verify();
+
+        Mockito.verifyNoInteractions(outboxEventRepository);
+    }
+
     @Nested
     class SaveProjectCreated {
 
         @Test
         void shouldBuildProjectCreatedEvent() {
-            outboxEventService.saveProjectCreated(REQUEST_ID, NODE_ID, project()).block();
+            withTenant(outboxEventService.saveProjectCreated(REQUEST_ID, NODE_ID, project())).block();
 
             OutboxEvent event = capture();
             Assertions.assertThat(event.getAggregateType()).isEqualTo("project");
@@ -97,6 +118,7 @@ class OutboxEventServiceImplTest {
             Assertions.assertThat(event.getStatus()).isEqualTo(OutboxEventStatus.NEW);
             Assertions.assertThat(event.getAttempts()).isEqualTo(0);
             Assertions.assertThat(event.getPayload()).isNotNull();
+            Assertions.assertThat(event.getTenantId()).isEqualTo(TENANT_ID);
             Assertions.assertThat(event.getPayload().get("projectKey").asString()).isEqualTo("ABC");
         }
     }
@@ -106,7 +128,7 @@ class OutboxEventServiceImplTest {
 
         @Test
         void shouldBuildMemberAddedEvent() {
-            outboxEventService.saveMemberAdded(REQUEST_ID, NODE_ID, member()).block();
+            withTenant(outboxEventService.saveMemberAdded(REQUEST_ID, NODE_ID, member())).block();
 
             OutboxEvent event = capture();
             Assertions.assertThat(event.getAggregateType()).isEqualTo("project");
@@ -124,7 +146,7 @@ class OutboxEventServiceImplTest {
 
         @Test
         void shouldBuildMemberRemovedEvent() {
-            outboxEventService.saveMemberRemoved(REQUEST_ID, NODE_ID, member().getUserId(), member().getProjectId()).block();
+            withTenant(outboxEventService.saveMemberRemoved(REQUEST_ID, NODE_ID, member().getUserId(), member().getProjectId())).block();
 
             OutboxEvent event = capture();
             Assertions.assertThat(event.getAggregateType()).isEqualTo("project");

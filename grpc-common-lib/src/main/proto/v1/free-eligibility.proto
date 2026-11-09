@@ -1,0 +1,34 @@
+syntax = "proto3";
+package ru.taska.b2b.v1;
+import "v1/tenant-context.proto";
+import "v1/billing-catalog.proto";
+option java_multiple_files = true;
+option java_package = "ru.taska.api.b2b.v1";
+enum FreeEligibilityState { FREE_ELIGIBILITY_UNSPECIFIED = 0; FREE_ELIGIBILITY_AVAILABLE = 1; FREE_ELIGIBILITY_USED = 2; }
+message TenantCreationOptionsRequest { RequestContext context = 1; }
+message TenantCreationOptions {
+  repeated PlanVersion plans = 1;
+  FreeEligibilityState free_eligibility = 2; // Never identifies the company/identity that consumed it.
+}
+message AdmitFreeTenantRequest {
+  RequestContext context = 1;
+  string tenant_id = 2;
+  string operation_id = 3;
+  string expected_owner_version = 4;
+}
+message FreeAdmissionReceipt {string tenant_id=1;string operation_id=2;string owner_user_id=3;string owner_version=4;string accepted_at=5;bool admitted=6;string cancelled_at=7;}
+message FreeAdmissionResult { bool admitted = 1; optional FreeAdmissionReceipt receipt=2; }
+message GetFreeAdmissionReceiptRequest {RequestContext context=1;string tenant_id=2;string operation_id=3;string owner_user_id=4;string owner_version=5;}
+message CancelFreeTenantAdmissionRequest {RequestContext context=1;string tenant_id=2;string operation_id=3;string owner_user_id=4;string owner_version=5;}
+message ApplyFreeEligibilityDispositionRequest { RequestContext context = 1; string case_id = 2; }
+message FreeDispositionResult { bool applied = 1; }
+service FreeEligibilityService {
+  rpc GetTenantCreationOptions(TenantCreationOptionsRequest) returns (TenantCreationOptions);
+  // Internal TAS-354 admission; target owner is loaded/locked from tenant DB, never supplied by caller.
+  rpc AdmitFreeTenant(AdmitFreeTenantRequest) returns (FreeAdmissionResult);
+  // Read-only durable proof for an accepted billing intent; no second FREE admission.
+  rpc GetFreeAdmissionReceipt(GetFreeAdmissionReceiptRequest) returns (FreeAdmissionReceipt);
+  rpc CancelFreeTenantAdmission(CancelFreeTenantAdmissionRequest) returns (FreeAdmissionReceipt);
+  // Internal closed retention cases only; no public email lookup/erasure API.
+  rpc ApplyFreeEligibilityDisposition(ApplyFreeEligibilityDispositionRequest) returns (FreeDispositionResult);
+}

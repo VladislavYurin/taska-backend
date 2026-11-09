@@ -1,0 +1,3813 @@
+{
+  "schemaVersion": 1,
+  "baseline": "af7ab57ead44304b89bbd47dabeeba45b761ce16",
+  "status": "TARGET_NOT_IMPLEMENTED",
+  "source": "Confluence 60751880 v39 D01-D249 plus current source anchors in async-paths.json",
+  "roleRule": "OWNER implies active TENANT_ADMIN; TENANT_ADMIN implies project ADMIN in every same-tenant project. Project roles apply only in explicit project membership. GLOBAL_ADMIN bypass applies only after administrative channel authorization; ordinary user PAT/OAuth never inherits it.",
+  "credentialKinds": [
+    "WEB_GLOBAL",
+    "WEB_TENANT",
+    "USER_PAT",
+    "USER_OAUTH",
+    "ADMIN_PAT",
+    "ADMIN_OAUTH",
+    "SERVICE"
+  ],
+  "adminScopeKinds": [
+    "TENANT_SET",
+    "PLATFORM"
+  ],
+  "adminLevels": [
+    "READ",
+    "MODIFY"
+  ],
+  "decisionOrder": [
+    "AUTHENTICATE",
+    "CHANNEL_AND_GRANT_SCOPE",
+    "RESOLVE_RESOURCE_WITHIN_SCOPE",
+    "CURRENT_MEMBERSHIP_AND_ACL",
+    "LIFECYCLE_AND_CAPABILITY",
+    "ATOMIC_QUOTA_ADMISSION",
+    "VERSION_AND_CONFIRMATION",
+    "COMMIT_WITH_OUTBOX"
+  ],
+  "restrictionReasonOrder": [
+    "PLATFORM_BLOCK",
+    "OWNER_PAUSE",
+    "PAYMENT_DISPUTE",
+    "PENDING_FIRST_PAYMENT",
+    "PAYMENT_EXPIRED",
+    "OVER_QUOTA"
+  ],
+  "actions": [
+    {
+      "action": "tenant.create",
+      "effect": "MODIFY",
+      "resourceScope": "NEW_TENANT",
+      "roles": {
+        "OWNER": "ALLOW",
+        "TENANT_ADMIN": "ALLOW",
+        "PROJECT_ADMIN": "ALLOW",
+        "MEMBER": "ALLOW",
+        "VIEWER": "ALLOW",
+        "GLOBAL_ADMIN": "ADMIN_PATH"
+      },
+      "conditions": [
+        "active global account",
+        "FREE eligibility only if FREE requested",
+        "global web context; administrative integration needs explicit PLATFORM"
+      ],
+      "lifecyclePolicy": "ACCOUNT",
+      "channels": {
+        "WEB": "ROLE_AND_POLICY",
+        "USER_PAT": "SESSION_REQUIRED",
+        "USER_OAUTH": "SESSION_REQUIRED",
+        "ADMIN_PAT": "MODIFY",
+        "ADMIN_OAUTH": "MODIFY",
+        "MCP": "PRESENTED_CREDENTIAL_RULES; tool availability does not grant permission",
+        "SERVICE_WORKER": "DENY unless separately listed workerPurpose"
+      },
+      "adminRequirements": [
+        "current GLOBAL_ADMIN",
+        "explicit credential kind ADMIN",
+        "target in TENANT_SET or explicit PLATFORM",
+        "adequate access level"
+      ],
+      "targetTasks": [
+        "TAS-310",
+        "TAS-337",
+        "TAS-472"
+      ]
+    },
+    {
+      "action": "tenant.list",
+      "effect": "READ",
+      "resourceScope": "ACCOUNT_VISIBLE_TENANTS",
+      "roles": {
+        "OWNER": "ALLOW",
+        "TENANT_ADMIN": "ALLOW",
+        "PROJECT_ADMIN": "ALLOW",
+        "MEMBER": "ALLOW",
+        "VIEWER": "ALLOW",
+        "GLOBAL_ADMIN": "ADMIN_PATH"
+      },
+      "conditions": [
+        "USER integration result restricted to its one bound tenant; web may enumerate active own memberships"
+      ],
+      "lifecyclePolicy": "CONTROL",
+      "channels": {
+        "WEB": "ROLE_AND_POLICY",
+        "USER_PAT": "READ",
+        "USER_OAUTH": "READ",
+        "ADMIN_PAT": "READ",
+        "ADMIN_OAUTH": "READ",
+        "MCP": "PRESENTED_CREDENTIAL_RULES; tool availability does not grant permission",
+        "SERVICE_WORKER": "DENY unless separately listed workerPurpose"
+      },
+      "adminRequirements": [
+        "current GLOBAL_ADMIN",
+        "explicit credential kind ADMIN",
+        "target in TENANT_SET or explicit PLATFORM",
+        "adequate access level"
+      ],
+      "targetTasks": [
+        "TAS-338"
+      ]
+    },
+    {
+      "action": "tenant.read",
+      "effect": "READ",
+      "resourceScope": "TENANT",
+      "roles": {
+        "OWNER": "ALLOW",
+        "TENANT_ADMIN": "ALLOW",
+        "PROJECT_ADMIN": "ALLOW",
+        "MEMBER": "ALLOW",
+        "VIEWER": "ALLOW",
+        "GLOBAL_ADMIN": "ADMIN_PATH"
+      },
+      "conditions": [],
+      "lifecyclePolicy": "CONTROL",
+      "channels": {
+        "WEB": "ROLE_AND_POLICY",
+        "USER_PAT": "READ",
+        "USER_OAUTH": "READ",
+        "ADMIN_PAT": "READ",
+        "ADMIN_OAUTH": "READ",
+        "MCP": "PRESENTED_CREDENTIAL_RULES; tool availability does not grant permission",
+        "SERVICE_WORKER": "DENY unless separately listed workerPurpose"
+      },
+      "adminRequirements": [
+        "current GLOBAL_ADMIN",
+        "explicit credential kind ADMIN",
+        "target in TENANT_SET or explicit PLATFORM",
+        "adequate access level"
+      ],
+      "targetTasks": [
+        "TAS-338"
+      ]
+    },
+    {
+      "action": "tenant.update",
+      "effect": "MODIFY",
+      "resourceScope": "TENANT",
+      "roles": {
+        "OWNER": "ALLOW",
+        "TENANT_ADMIN": "DENY",
+        "PROJECT_ADMIN": "DENY",
+        "MEMBER": "DENY",
+        "VIEWER": "DENY",
+        "GLOBAL_ADMIN": "ADMIN_PATH"
+      },
+      "conditions": [
+        "owner only rename"
+      ],
+      "lifecyclePolicy": "NORMAL",
+      "channels": {
+        "WEB": "ROLE_AND_POLICY",
+        "USER_PAT": "WRITE",
+        "USER_OAUTH": "WRITE",
+        "ADMIN_PAT": "MODIFY",
+        "ADMIN_OAUTH": "MODIFY",
+        "MCP": "PRESENTED_CREDENTIAL_RULES; tool availability does not grant permission",
+        "SERVICE_WORKER": "DENY unless separately listed workerPurpose"
+      },
+      "adminRequirements": [
+        "current GLOBAL_ADMIN",
+        "explicit credential kind ADMIN",
+        "target in TENANT_SET or explicit PLATFORM",
+        "adequate access level"
+      ],
+      "targetTasks": [
+        "TAS-333"
+      ]
+    },
+    {
+      "action": "tenant.pause",
+      "effect": "MODIFY",
+      "resourceScope": "TENANT",
+      "roles": {
+        "OWNER": "ALLOW",
+        "TENANT_ADMIN": "DENY",
+        "PROJECT_ADMIN": "DENY",
+        "MEMBER": "DENY",
+        "VIEWER": "DENY",
+        "GLOBAL_ADMIN": "ADMIN_PATH"
+      },
+      "conditions": [],
+      "lifecyclePolicy": "OWNER_CONTROL",
+      "channels": {
+        "WEB": "ROLE_AND_POLICY",
+        "USER_PAT": "WRITE",
+        "USER_OAUTH": "WRITE",
+        "ADMIN_PAT": "MODIFY",
+        "ADMIN_OAUTH": "MODIFY",
+        "MCP": "PRESENTED_CREDENTIAL_RULES; tool availability does not grant permission",
+        "SERVICE_WORKER": "DENY unless separately listed workerPurpose"
+      },
+      "adminRequirements": [
+        "current GLOBAL_ADMIN",
+        "explicit credential kind ADMIN",
+        "target in TENANT_SET or explicit PLATFORM",
+        "adequate access level"
+      ],
+      "targetTasks": [
+        "TAS-480"
+      ]
+    },
+    {
+      "action": "tenant.resume",
+      "effect": "MODIFY",
+      "resourceScope": "TENANT",
+      "roles": {
+        "OWNER": "ALLOW",
+        "TENANT_ADMIN": "DENY",
+        "PROJECT_ADMIN": "DENY",
+        "MEMBER": "DENY",
+        "VIEWER": "DENY",
+        "GLOBAL_ADMIN": "ADMIN_PATH"
+      },
+      "conditions": [
+        "only clear OWNER_PAUSE; do not clear other restrictions"
+      ],
+      "lifecyclePolicy": "OWNER_CONTROL",
+      "channels": {
+        "WEB": "ROLE_AND_POLICY",
+        "USER_PAT": "WRITE",
+        "USER_OAUTH": "WRITE",
+        "ADMIN_PAT": "MODIFY",
+        "ADMIN_OAUTH": "MODIFY",
+        "MCP": "PRESENTED_CREDENTIAL_RULES; tool availability does not grant permission",
+        "SERVICE_WORKER": "DENY unless separately listed workerPurpose"
+      },
+      "adminRequirements": [
+        "current GLOBAL_ADMIN",
+        "explicit credential kind ADMIN",
+        "target in TENANT_SET or explicit PLATFORM",
+        "adequate access level"
+      ],
+      "targetTasks": [
+        "TAS-480"
+      ]
+    },
+    {
+      "action": "tenant.cancel_creation",
+      "effect": "MODIFY",
+      "resourceScope": "TENANT",
+      "roles": {
+        "OWNER": "ALLOW",
+        "TENANT_ADMIN": "DENY",
+        "PROJECT_ADMIN": "DENY",
+        "MEMBER": "DENY",
+        "VIEWER": "DENY",
+        "GLOBAL_ADMIN": "ADMIN_PATH"
+      },
+      "conditions": [
+        "PENDING_FIRST_PAYMENT only",
+        "explicit confirmation",
+        "never extends deadline"
+      ],
+      "lifecyclePolicy": "PENDING_CONTROL",
+      "channels": {
+        "WEB": "ROLE_AND_POLICY",
+        "USER_PAT": "WRITE",
+        "USER_OAUTH": "WRITE",
+        "ADMIN_PAT": "MODIFY",
+        "ADMIN_OAUTH": "MODIFY",
+        "MCP": "PRESENTED_CREDENTIAL_RULES; tool availability does not grant permission",
+        "SERVICE_WORKER": "DENY unless separately listed workerPurpose"
+      },
+      "adminRequirements": [
+        "current GLOBAL_ADMIN",
+        "explicit credential kind ADMIN",
+        "target in TENANT_SET or explicit PLATFORM",
+        "adequate access level"
+      ],
+      "targetTasks": [
+        "TAS-478"
+      ]
+    },
+    {
+      "action": "tenant.transfer_ownership",
+      "effect": "MODIFY",
+      "resourceScope": "TENANT",
+      "roles": {
+        "OWNER": "ALLOW",
+        "TENANT_ADMIN": "DENY",
+        "PROJECT_ADMIN": "DENY",
+        "MEMBER": "DENY",
+        "VIEWER": "DENY",
+        "GLOBAL_ADMIN": "ADMIN_PATH"
+      },
+      "conditions": [
+        "active paid coverage",
+        "transfer flag on",
+        "recipient ACTIVE same tenant",
+        "explicit confirmation; no extra OTP",
+        "old autopay consent disabled"
+      ],
+      "lifecyclePolicy": "TRANSFER",
+      "channels": {
+        "WEB": "ROLE_AND_POLICY",
+        "USER_PAT": "WRITE",
+        "USER_OAUTH": "WRITE",
+        "ADMIN_PAT": "MODIFY",
+        "ADMIN_OAUTH": "MODIFY",
+        "MCP": "PRESENTED_CREDENTIAL_RULES; tool availability does not grant permission",
+        "SERVICE_WORKER": "DENY unless separately listed workerPurpose"
+      },
+      "adminRequirements": [
+        "current GLOBAL_ADMIN",
+        "explicit credential kind ADMIN",
+        "target in TENANT_SET or explicit PLATFORM",
+        "adequate access level"
+      ],
+      "targetTasks": [
+        "TAS-473"
+      ]
+    },
+    {
+      "action": "tenant.delete",
+      "effect": "MODIFY",
+      "resourceScope": "TENANT",
+      "roles": {
+        "OWNER": "ALLOW",
+        "TENANT_ADMIN": "DENY",
+        "PROJECT_ADMIN": "DENY",
+        "MEMBER": "DENY",
+        "VIEWER": "DENY",
+        "GLOBAL_ADMIN": "ADMIN_PATH"
+      },
+      "conditions": [
+        "double confirmation",
+        "purpose TENANT_DELETE one-time verified email/prelinked Telegram code",
+        "integrity check repeated at commit"
+      ],
+      "lifecyclePolicy": "COMPANY_DELETE",
+      "channels": {
+        "WEB": "ROLE_AND_POLICY",
+        "USER_PAT": "WRITE",
+        "USER_OAUTH": "WRITE",
+        "ADMIN_PAT": "MODIFY",
+        "ADMIN_OAUTH": "MODIFY",
+        "MCP": "PRESENTED_CREDENTIAL_RULES; tool availability does not grant permission",
+        "SERVICE_WORKER": "DENY unless separately listed workerPurpose"
+      },
+      "adminRequirements": [
+        "current GLOBAL_ADMIN",
+        "explicit credential kind ADMIN",
+        "target in TENANT_SET or explicit PLATFORM",
+        "adequate access level"
+      ],
+      "targetTasks": [
+        "TAS-373",
+        "TAS-474"
+      ]
+    },
+    {
+      "action": "membership.read",
+      "effect": "READ",
+      "resourceScope": "TENANT",
+      "roles": {
+        "OWNER": "ALLOW",
+        "TENANT_ADMIN": "ALLOW",
+        "PROJECT_ADMIN": "ALLOW",
+        "MEMBER": "ALLOW",
+        "VIEWER": "ALLOW",
+        "GLOBAL_ADMIN": "ADMIN_PATH"
+      },
+      "conditions": [],
+      "lifecyclePolicy": "DIRECTORY",
+      "channels": {
+        "WEB": "ROLE_AND_POLICY",
+        "USER_PAT": "READ",
+        "USER_OAUTH": "READ",
+        "ADMIN_PAT": "READ",
+        "ADMIN_OAUTH": "READ",
+        "MCP": "PRESENTED_CREDENTIAL_RULES; tool availability does not grant permission",
+        "SERVICE_WORKER": "DENY unless separately listed workerPurpose"
+      },
+      "adminRequirements": [
+        "current GLOBAL_ADMIN",
+        "explicit credential kind ADMIN",
+        "target in TENANT_SET or explicit PLATFORM",
+        "adequate access level"
+      ],
+      "targetTasks": [
+        "TAS-311",
+        "TAS-321"
+      ]
+    },
+    {
+      "action": "membership.role_update",
+      "effect": "MODIFY",
+      "resourceScope": "TENANT",
+      "roles": {
+        "OWNER": "ALLOW",
+        "TENANT_ADMIN": "ALLOW",
+        "PROJECT_ADMIN": "DENY",
+        "MEMBER": "DENY",
+        "VIEWER": "DENY",
+        "GLOBAL_ADMIN": "ADMIN_PATH"
+      },
+      "conditions": [
+        "protect owner and last ACTIVE tenant admin",
+        "role version compare-and-set"
+      ],
+      "lifecyclePolicy": "NORMAL",
+      "channels": {
+        "WEB": "ROLE_AND_POLICY",
+        "USER_PAT": "WRITE",
+        "USER_OAUTH": "WRITE",
+        "ADMIN_PAT": "MODIFY",
+        "ADMIN_OAUTH": "MODIFY",
+        "MCP": "PRESENTED_CREDENTIAL_RULES; tool availability does not grant permission",
+        "SERVICE_WORKER": "DENY unless separately listed workerPurpose"
+      },
+      "adminRequirements": [
+        "current GLOBAL_ADMIN",
+        "explicit credential kind ADMIN",
+        "target in TENANT_SET or explicit PLATFORM",
+        "adequate access level"
+      ],
+      "targetTasks": [
+        "TAS-312"
+      ]
+    },
+    {
+      "action": "membership.suspend",
+      "effect": "MODIFY",
+      "resourceScope": "TENANT",
+      "roles": {
+        "OWNER": "ALLOW",
+        "TENANT_ADMIN": "ALLOW",
+        "PROJECT_ADMIN": "DENY",
+        "MEMBER": "DENY",
+        "VIEWER": "DENY",
+        "GLOBAL_ADMIN": "ADMIN_PATH"
+      },
+      "conditions": [
+        "protect owner/last admin",
+        "keep seat; revoke project access and assignment generation"
+      ],
+      "lifecyclePolicy": "NORMAL",
+      "channels": {
+        "WEB": "ROLE_AND_POLICY",
+        "USER_PAT": "WRITE",
+        "USER_OAUTH": "WRITE",
+        "ADMIN_PAT": "MODIFY",
+        "ADMIN_OAUTH": "MODIFY",
+        "MCP": "PRESENTED_CREDENTIAL_RULES; tool availability does not grant permission",
+        "SERVICE_WORKER": "DENY unless separately listed workerPurpose"
+      },
+      "adminRequirements": [
+        "current GLOBAL_ADMIN",
+        "explicit credential kind ADMIN",
+        "target in TENANT_SET or explicit PLATFORM",
+        "adequate access level"
+      ],
+      "targetTasks": [
+        "TAS-323"
+      ]
+    },
+    {
+      "action": "membership.reactivate",
+      "effect": "MODIFY",
+      "resourceScope": "TENANT",
+      "roles": {
+        "OWNER": "ALLOW",
+        "TENANT_ADMIN": "ALLOW",
+        "PROJECT_ADMIN": "DENY",
+        "MEMBER": "DENY",
+        "VIEWER": "DENY",
+        "GLOBAL_ADMIN": "ADMIN_PATH"
+      },
+      "conditions": [
+        "restore MEMBER only; do not restore former projects or assignee"
+      ],
+      "lifecyclePolicy": "NORMAL",
+      "channels": {
+        "WEB": "ROLE_AND_POLICY",
+        "USER_PAT": "WRITE",
+        "USER_OAUTH": "WRITE",
+        "ADMIN_PAT": "MODIFY",
+        "ADMIN_OAUTH": "MODIFY",
+        "MCP": "PRESENTED_CREDENTIAL_RULES; tool availability does not grant permission",
+        "SERVICE_WORKER": "DENY unless separately listed workerPurpose"
+      },
+      "adminRequirements": [
+        "current GLOBAL_ADMIN",
+        "explicit credential kind ADMIN",
+        "target in TENANT_SET or explicit PLATFORM",
+        "adequate access level"
+      ],
+      "targetTasks": [
+        "TAS-323"
+      ]
+    },
+    {
+      "action": "membership.remove",
+      "effect": "MODIFY",
+      "resourceScope": "TENANT",
+      "roles": {
+        "OWNER": "ALLOW",
+        "TENANT_ADMIN": "ALLOW",
+        "PROJECT_ADMIN": "DENY",
+        "MEMBER": "DENY",
+        "VIEWER": "DENY",
+        "GLOBAL_ADMIN": "ADMIN_PATH"
+      },
+      "conditions": [
+        "protect owner/last admin",
+        "release seat after durable membership removal",
+        "cancel inviter pending invitations"
+      ],
+      "lifecyclePolicy": "RECOVERY",
+      "channels": {
+        "WEB": "ROLE_AND_POLICY",
+        "USER_PAT": "WRITE",
+        "USER_OAUTH": "WRITE",
+        "ADMIN_PAT": "MODIFY",
+        "ADMIN_OAUTH": "MODIFY",
+        "MCP": "PRESENTED_CREDENTIAL_RULES; tool availability does not grant permission",
+        "SERVICE_WORKER": "DENY unless separately listed workerPurpose"
+      },
+      "adminRequirements": [
+        "current GLOBAL_ADMIN",
+        "explicit credential kind ADMIN",
+        "target in TENANT_SET or explicit PLATFORM",
+        "adequate access level"
+      ],
+      "targetTasks": [
+        "TAS-323"
+      ]
+    },
+    {
+      "action": "membership.leave",
+      "effect": "MODIFY",
+      "resourceScope": "TENANT",
+      "roles": {
+        "OWNER": "ALLOW",
+        "TENANT_ADMIN": "ALLOW",
+        "PROJECT_ADMIN": "ALLOW",
+        "MEMBER": "ALLOW",
+        "VIEWER": "ALLOW",
+        "GLOBAL_ADMIN": "ADMIN_PATH"
+      },
+      "conditions": [
+        "self only",
+        "not OWNER or last ACTIVE TENANT_ADMIN"
+      ],
+      "lifecyclePolicy": "LEAVE",
+      "channels": {
+        "WEB": "ROLE_AND_POLICY",
+        "USER_PAT": "WRITE",
+        "USER_OAUTH": "WRITE",
+        "ADMIN_PAT": "MODIFY",
+        "ADMIN_OAUTH": "MODIFY",
+        "MCP": "PRESENTED_CREDENTIAL_RULES; tool availability does not grant permission",
+        "SERVICE_WORKER": "DENY unless separately listed workerPurpose"
+      },
+      "adminRequirements": [
+        "current GLOBAL_ADMIN",
+        "explicit credential kind ADMIN",
+        "target in TENANT_SET or explicit PLATFORM",
+        "adequate access level"
+      ],
+      "targetTasks": [
+        "TAS-323"
+      ]
+    },
+    {
+      "action": "invitation.create",
+      "effect": "MODIFY",
+      "resourceScope": "TENANT",
+      "roles": {
+        "OWNER": "ALLOW",
+        "TENANT_ADMIN": "ALLOW",
+        "PROJECT_ADMIN": "DENY",
+        "MEMBER": "DENY",
+        "VIEWER": "DENY",
+        "GLOBAL_ADMIN": "ADMIN_PATH"
+      },
+      "conditions": [
+        "seat reservation",
+        "ACTIVE inviter admin",
+        "target projects in same tenant"
+      ],
+      "lifecyclePolicy": "NORMAL",
+      "channels": {
+        "WEB": "ROLE_AND_POLICY",
+        "USER_PAT": "WRITE",
+        "USER_OAUTH": "WRITE",
+        "ADMIN_PAT": "MODIFY",
+        "ADMIN_OAUTH": "MODIFY",
+        "MCP": "PRESENTED_CREDENTIAL_RULES; tool availability does not grant permission",
+        "SERVICE_WORKER": "DENY unless separately listed workerPurpose"
+      },
+      "adminRequirements": [
+        "current GLOBAL_ADMIN",
+        "explicit credential kind ADMIN",
+        "target in TENANT_SET or explicit PLATFORM",
+        "adequate access level"
+      ],
+      "targetTasks": [
+        "TAS-335"
+      ]
+    },
+    {
+      "action": "invitation.accept",
+      "effect": "MODIFY",
+      "resourceScope": "TENANT",
+      "roles": {
+        "OWNER": "ALLOW",
+        "TENANT_ADMIN": "ALLOW",
+        "PROJECT_ADMIN": "ALLOW",
+        "MEMBER": "ALLOW",
+        "VIEWER": "ALLOW",
+        "GLOBAL_ADMIN": "ADMIN_PATH"
+      },
+      "conditions": [
+        "valid purpose token and verified email",
+        "existing active reservation; consume once",
+        "skip unavailable project grants explicitly"
+      ],
+      "lifecyclePolicy": "INVITE_ACCEPT",
+      "channels": {
+        "WEB": "ROLE_AND_POLICY",
+        "USER_PAT": "WRITE",
+        "USER_OAUTH": "WRITE",
+        "ADMIN_PAT": "MODIFY",
+        "ADMIN_OAUTH": "MODIFY",
+        "MCP": "PRESENTED_CREDENTIAL_RULES; tool availability does not grant permission",
+        "SERVICE_WORKER": "DENY unless separately listed workerPurpose",
+        "PUBLIC_INVITATION": "VERIFIED_PURPOSE_TOKEN_NEW_IDENTITY_ONLY; existing identity requires web session same verified email"
+      },
+      "adminRequirements": [
+        "current GLOBAL_ADMIN",
+        "explicit credential kind ADMIN",
+        "target in TENANT_SET or explicit PLATFORM",
+        "adequate access level"
+      ],
+      "targetTasks": [
+        "TAS-336"
+      ]
+    },
+    {
+      "action": "invitation.resend",
+      "effect": "MODIFY",
+      "resourceScope": "TENANT",
+      "roles": {
+        "OWNER": "ALLOW",
+        "TENANT_ADMIN": "ALLOW",
+        "PROJECT_ADMIN": "DENY",
+        "MEMBER": "DENY",
+        "VIEWER": "DENY",
+        "GLOBAL_ADMIN": "ADMIN_PATH"
+      },
+      "conditions": [
+        "do not reserve extra seat or silently extend original expiry"
+      ],
+      "lifecyclePolicy": "NORMAL",
+      "channels": {
+        "WEB": "ROLE_AND_POLICY",
+        "USER_PAT": "WRITE",
+        "USER_OAUTH": "WRITE",
+        "ADMIN_PAT": "MODIFY",
+        "ADMIN_OAUTH": "MODIFY",
+        "MCP": "PRESENTED_CREDENTIAL_RULES; tool availability does not grant permission",
+        "SERVICE_WORKER": "DENY unless separately listed workerPurpose"
+      },
+      "adminRequirements": [
+        "current GLOBAL_ADMIN",
+        "explicit credential kind ADMIN",
+        "target in TENANT_SET or explicit PLATFORM",
+        "adequate access level"
+      ],
+      "targetTasks": [
+        "TAS-339"
+      ]
+    },
+    {
+      "action": "invitation.revoke",
+      "effect": "MODIFY",
+      "resourceScope": "TENANT",
+      "roles": {
+        "OWNER": "ALLOW",
+        "TENANT_ADMIN": "ALLOW",
+        "PROJECT_ADMIN": "DENY",
+        "MEMBER": "DENY",
+        "VIEWER": "DENY",
+        "GLOBAL_ADMIN": "ADMIN_PATH"
+      },
+      "conditions": [
+        "release reservation once"
+      ],
+      "lifecyclePolicy": "RECOVERY",
+      "channels": {
+        "WEB": "ROLE_AND_POLICY",
+        "USER_PAT": "WRITE",
+        "USER_OAUTH": "WRITE",
+        "ADMIN_PAT": "MODIFY",
+        "ADMIN_OAUTH": "MODIFY",
+        "MCP": "PRESENTED_CREDENTIAL_RULES; tool availability does not grant permission",
+        "SERVICE_WORKER": "DENY unless separately listed workerPurpose"
+      },
+      "adminRequirements": [
+        "current GLOBAL_ADMIN",
+        "explicit credential kind ADMIN",
+        "target in TENANT_SET or explicit PLATFORM",
+        "adequate access level"
+      ],
+      "targetTasks": [
+        "TAS-339"
+      ]
+    },
+    {
+      "action": "project.read",
+      "effect": "READ",
+      "resourceScope": "PROJECT",
+      "roles": {
+        "OWNER": "ALLOW",
+        "TENANT_ADMIN": "ALLOW",
+        "PROJECT_ADMIN": "ALLOW",
+        "MEMBER": "ALLOW",
+        "VIEWER": "ALLOW",
+        "GLOBAL_ADMIN": "ADMIN_PATH"
+      },
+      "conditions": [
+        "TA/owner implicit ADMIN; others explicit project membership"
+      ],
+      "lifecyclePolicy": "CONTENT_READ",
+      "channels": {
+        "WEB": "ROLE_AND_POLICY",
+        "USER_PAT": "READ",
+        "USER_OAUTH": "READ",
+        "ADMIN_PAT": "READ",
+        "ADMIN_OAUTH": "READ",
+        "MCP": "PRESENTED_CREDENTIAL_RULES; tool availability does not grant permission",
+        "SERVICE_WORKER": "DENY unless separately listed workerPurpose"
+      },
+      "adminRequirements": [
+        "current GLOBAL_ADMIN",
+        "explicit credential kind ADMIN",
+        "target in TENANT_SET or explicit PLATFORM",
+        "adequate access level"
+      ],
+      "targetTasks": [
+        "TAS-340"
+      ]
+    },
+    {
+      "action": "project.create",
+      "effect": "MODIFY",
+      "resourceScope": "TENANT",
+      "roles": {
+        "OWNER": "ALLOW",
+        "TENANT_ADMIN": "ALLOW",
+        "PROJECT_ADMIN": "DENY",
+        "MEMBER": "DENY",
+        "VIEWER": "DENY",
+        "GLOBAL_ADMIN": "ADMIN_PATH"
+      },
+      "conditions": [
+        "project reservation + flag",
+        "archived projects count quota"
+      ],
+      "lifecyclePolicy": "NORMAL",
+      "channels": {
+        "WEB": "ROLE_AND_POLICY",
+        "USER_PAT": "WRITE",
+        "USER_OAUTH": "WRITE",
+        "ADMIN_PAT": "MODIFY",
+        "ADMIN_OAUTH": "MODIFY",
+        "MCP": "PRESENTED_CREDENTIAL_RULES; tool availability does not grant permission",
+        "SERVICE_WORKER": "DENY unless separately listed workerPurpose"
+      },
+      "adminRequirements": [
+        "current GLOBAL_ADMIN",
+        "explicit credential kind ADMIN",
+        "target in TENANT_SET or explicit PLATFORM",
+        "adequate access level"
+      ],
+      "targetTasks": [
+        "TAS-324",
+        "TAS-340"
+      ]
+    },
+    {
+      "action": "project.update",
+      "effect": "MODIFY",
+      "resourceScope": "PROJECT",
+      "roles": {
+        "OWNER": "ALLOW",
+        "TENANT_ADMIN": "ALLOW",
+        "PROJECT_ADMIN": "ALLOW",
+        "MEMBER": "DENY",
+        "VIEWER": "DENY",
+        "GLOBAL_ADMIN": "ADMIN_PATH"
+      },
+      "conditions": [
+        "same tenant",
+        "restore checks lifecycle; no new project quota"
+      ],
+      "lifecyclePolicy": "NORMAL",
+      "channels": {
+        "WEB": "ROLE_AND_POLICY",
+        "USER_PAT": "WRITE",
+        "USER_OAUTH": "WRITE",
+        "ADMIN_PAT": "MODIFY",
+        "ADMIN_OAUTH": "MODIFY",
+        "MCP": "PRESENTED_CREDENTIAL_RULES; tool availability does not grant permission",
+        "SERVICE_WORKER": "DENY unless separately listed workerPurpose"
+      },
+      "adminRequirements": [
+        "current GLOBAL_ADMIN",
+        "explicit credential kind ADMIN",
+        "target in TENANT_SET or explicit PLATFORM",
+        "adequate access level"
+      ],
+      "targetTasks": [
+        "TAS-340",
+        "TAS-341"
+      ]
+    },
+    {
+      "action": "project.archive",
+      "effect": "MODIFY",
+      "resourceScope": "PROJECT",
+      "roles": {
+        "OWNER": "ALLOW",
+        "TENANT_ADMIN": "ALLOW",
+        "PROJECT_ADMIN": "ALLOW",
+        "MEMBER": "DENY",
+        "VIEWER": "DENY",
+        "GLOBAL_ADMIN": "ADMIN_PATH"
+      },
+      "conditions": [
+        "same tenant",
+        "restore checks lifecycle; no new project quota"
+      ],
+      "lifecyclePolicy": "NORMAL",
+      "channels": {
+        "WEB": "ROLE_AND_POLICY",
+        "USER_PAT": "WRITE",
+        "USER_OAUTH": "WRITE",
+        "ADMIN_PAT": "MODIFY",
+        "ADMIN_OAUTH": "MODIFY",
+        "MCP": "PRESENTED_CREDENTIAL_RULES; tool availability does not grant permission",
+        "SERVICE_WORKER": "DENY unless separately listed workerPurpose"
+      },
+      "adminRequirements": [
+        "current GLOBAL_ADMIN",
+        "explicit credential kind ADMIN",
+        "target in TENANT_SET or explicit PLATFORM",
+        "adequate access level"
+      ],
+      "targetTasks": [
+        "TAS-340",
+        "TAS-341"
+      ]
+    },
+    {
+      "action": "project.restore",
+      "effect": "MODIFY",
+      "resourceScope": "PROJECT",
+      "roles": {
+        "OWNER": "ALLOW",
+        "TENANT_ADMIN": "ALLOW",
+        "PROJECT_ADMIN": "ALLOW",
+        "MEMBER": "DENY",
+        "VIEWER": "DENY",
+        "GLOBAL_ADMIN": "ADMIN_PATH"
+      },
+      "conditions": [
+        "same tenant",
+        "restore checks lifecycle; no new project quota"
+      ],
+      "lifecyclePolicy": "NORMAL",
+      "channels": {
+        "WEB": "ROLE_AND_POLICY",
+        "USER_PAT": "WRITE",
+        "USER_OAUTH": "WRITE",
+        "ADMIN_PAT": "MODIFY",
+        "ADMIN_OAUTH": "MODIFY",
+        "MCP": "PRESENTED_CREDENTIAL_RULES; tool availability does not grant permission",
+        "SERVICE_WORKER": "DENY unless separately listed workerPurpose"
+      },
+      "adminRequirements": [
+        "current GLOBAL_ADMIN",
+        "explicit credential kind ADMIN",
+        "target in TENANT_SET or explicit PLATFORM",
+        "adequate access level"
+      ],
+      "targetTasks": [
+        "TAS-340",
+        "TAS-341"
+      ]
+    },
+    {
+      "action": "project.delete",
+      "effect": "MODIFY",
+      "resourceScope": "PROJECT",
+      "roles": {
+        "OWNER": "ALLOW",
+        "TENANT_ADMIN": "ALLOW",
+        "PROJECT_ADMIN": "ALLOW",
+        "MEMBER": "DENY",
+        "VIEWER": "DENY",
+        "GLOBAL_ADMIN": "ADMIN_PATH"
+      },
+      "conditions": [
+        "confirmed irreversible deletion",
+        "project quota released only completed offboarding",
+        "financial READ_ONLY recovery restricted to OWNER/TENANT_ADMIN"
+      ],
+      "lifecyclePolicy": "RECOVERY",
+      "channels": {
+        "WEB": "ROLE_AND_POLICY",
+        "USER_PAT": "WRITE",
+        "USER_OAUTH": "WRITE",
+        "ADMIN_PAT": "MODIFY",
+        "ADMIN_OAUTH": "MODIFY",
+        "MCP": "PRESENTED_CREDENTIAL_RULES; tool availability does not grant permission",
+        "SERVICE_WORKER": "DENY unless separately listed workerPurpose"
+      },
+      "adminRequirements": [
+        "current GLOBAL_ADMIN",
+        "explicit credential kind ADMIN",
+        "target in TENANT_SET or explicit PLATFORM",
+        "adequate access level"
+      ],
+      "targetTasks": [
+        "TAS-324",
+        "TAS-474"
+      ]
+    },
+    {
+      "action": "project.membership_update",
+      "effect": "MODIFY",
+      "resourceScope": "PROJECT",
+      "roles": {
+        "OWNER": "ALLOW",
+        "TENANT_ADMIN": "ALLOW",
+        "PROJECT_ADMIN": "ALLOW",
+        "MEMBER": "DENY",
+        "VIEWER": "DENY",
+        "GLOBAL_ADMIN": "ADMIN_PATH"
+      },
+      "conditions": [
+        "target ACTIVE tenant member",
+        "no cross-tenant invitation through project endpoint",
+        "project last ADMIN integrity retained"
+      ],
+      "lifecyclePolicy": "NORMAL",
+      "channels": {
+        "WEB": "ROLE_AND_POLICY",
+        "USER_PAT": "WRITE",
+        "USER_OAUTH": "WRITE",
+        "ADMIN_PAT": "MODIFY",
+        "ADMIN_OAUTH": "MODIFY",
+        "MCP": "PRESENTED_CREDENTIAL_RULES; tool availability does not grant permission",
+        "SERVICE_WORKER": "DENY unless separately listed workerPurpose"
+      },
+      "adminRequirements": [
+        "current GLOBAL_ADMIN",
+        "explicit credential kind ADMIN",
+        "target in TENANT_SET or explicit PLATFORM",
+        "adequate access level"
+      ],
+      "targetTasks": [
+        "TAS-340"
+      ]
+    },
+    {
+      "action": "workflow.read",
+      "effect": "READ",
+      "resourceScope": "PROJECT",
+      "roles": {
+        "OWNER": "ALLOW",
+        "TENANT_ADMIN": "ALLOW",
+        "PROJECT_ADMIN": "ALLOW",
+        "MEMBER": "ALLOW",
+        "VIEWER": "ALLOW",
+        "GLOBAL_ADMIN": "ADMIN_PATH"
+      },
+      "conditions": [],
+      "lifecyclePolicy": "CONTENT_READ",
+      "channels": {
+        "WEB": "ROLE_AND_POLICY",
+        "USER_PAT": "READ",
+        "USER_OAUTH": "READ",
+        "ADMIN_PAT": "READ",
+        "ADMIN_OAUTH": "READ",
+        "MCP": "PRESENTED_CREDENTIAL_RULES; tool availability does not grant permission",
+        "SERVICE_WORKER": "DENY unless separately listed workerPurpose"
+      },
+      "adminRequirements": [
+        "current GLOBAL_ADMIN",
+        "explicit credential kind ADMIN",
+        "target in TENANT_SET or explicit PLATFORM",
+        "adequate access level"
+      ],
+      "targetTasks": [
+        "TAS-342"
+      ]
+    },
+    {
+      "action": "issue_type.read",
+      "effect": "READ",
+      "resourceScope": "PROJECT",
+      "roles": {
+        "OWNER": "ALLOW",
+        "TENANT_ADMIN": "ALLOW",
+        "PROJECT_ADMIN": "ALLOW",
+        "MEMBER": "ALLOW",
+        "VIEWER": "ALLOW",
+        "GLOBAL_ADMIN": "ADMIN_PATH"
+      },
+      "conditions": [],
+      "lifecyclePolicy": "CONTENT_READ",
+      "channels": {
+        "WEB": "ROLE_AND_POLICY",
+        "USER_PAT": "READ",
+        "USER_OAUTH": "READ",
+        "ADMIN_PAT": "READ",
+        "ADMIN_OAUTH": "READ",
+        "MCP": "PRESENTED_CREDENTIAL_RULES; tool availability does not grant permission",
+        "SERVICE_WORKER": "DENY unless separately listed workerPurpose"
+      },
+      "adminRequirements": [
+        "current GLOBAL_ADMIN",
+        "explicit credential kind ADMIN",
+        "target in TENANT_SET or explicit PLATFORM",
+        "adequate access level"
+      ],
+      "targetTasks": [
+        "TAS-342"
+      ]
+    },
+    {
+      "action": "workflow.configure",
+      "effect": "MODIFY",
+      "resourceScope": "PROJECT",
+      "roles": {
+        "OWNER": "ALLOW",
+        "TENANT_ADMIN": "ALLOW",
+        "PROJECT_ADMIN": "ALLOW",
+        "MEMBER": "DENY",
+        "VIEWER": "DENY",
+        "GLOBAL_ADMIN": "ADMIN_PATH"
+      },
+      "conditions": [
+        "config flag on",
+        "nested IDs same tenant/project",
+        "generation + version + operation receipt"
+      ],
+      "lifecyclePolicy": "NORMAL",
+      "channels": {
+        "WEB": "ROLE_AND_POLICY",
+        "USER_PAT": "WRITE",
+        "USER_OAUTH": "WRITE",
+        "ADMIN_PAT": "MODIFY",
+        "ADMIN_OAUTH": "MODIFY",
+        "MCP": "PRESENTED_CREDENTIAL_RULES; tool availability does not grant permission",
+        "SERVICE_WORKER": "DENY unless separately listed workerPurpose"
+      },
+      "adminRequirements": [
+        "current GLOBAL_ADMIN",
+        "explicit credential kind ADMIN",
+        "target in TENANT_SET or explicit PLATFORM",
+        "adequate access level"
+      ],
+      "targetTasks": [
+        "TAS-342"
+      ]
+    },
+    {
+      "action": "issue_type.configure",
+      "effect": "MODIFY",
+      "resourceScope": "PROJECT",
+      "roles": {
+        "OWNER": "ALLOW",
+        "TENANT_ADMIN": "ALLOW",
+        "PROJECT_ADMIN": "ALLOW",
+        "MEMBER": "DENY",
+        "VIEWER": "DENY",
+        "GLOBAL_ADMIN": "ADMIN_PATH"
+      },
+      "conditions": [
+        "config flag on",
+        "nested IDs same tenant/project",
+        "generation + version + operation receipt"
+      ],
+      "lifecyclePolicy": "NORMAL",
+      "channels": {
+        "WEB": "ROLE_AND_POLICY",
+        "USER_PAT": "WRITE",
+        "USER_OAUTH": "WRITE",
+        "ADMIN_PAT": "MODIFY",
+        "ADMIN_OAUTH": "MODIFY",
+        "MCP": "PRESENTED_CREDENTIAL_RULES; tool availability does not grant permission",
+        "SERVICE_WORKER": "DENY unless separately listed workerPurpose"
+      },
+      "adminRequirements": [
+        "current GLOBAL_ADMIN",
+        "explicit credential kind ADMIN",
+        "target in TENANT_SET or explicit PLATFORM",
+        "adequate access level"
+      ],
+      "targetTasks": [
+        "TAS-342"
+      ]
+    },
+    {
+      "action": "issue.read",
+      "effect": "READ",
+      "resourceScope": "ISSUE",
+      "roles": {
+        "OWNER": "ALLOW",
+        "TENANT_ADMIN": "ALLOW",
+        "PROJECT_ADMIN": "ALLOW",
+        "MEMBER": "ALLOW",
+        "VIEWER": "ALLOW",
+        "GLOBAL_ADMIN": "ADMIN_PATH"
+      },
+      "conditions": [
+        "predicate before aggregate/page; nested resources same tenant/project"
+      ],
+      "lifecyclePolicy": "CONTENT_READ",
+      "channels": {
+        "WEB": "ROLE_AND_POLICY",
+        "USER_PAT": "READ",
+        "USER_OAUTH": "READ",
+        "ADMIN_PAT": "READ",
+        "ADMIN_OAUTH": "READ",
+        "MCP": "PRESENTED_CREDENTIAL_RULES; tool availability does not grant permission",
+        "SERVICE_WORKER": "DENY unless separately listed workerPurpose"
+      },
+      "adminRequirements": [
+        "current GLOBAL_ADMIN",
+        "explicit credential kind ADMIN",
+        "target in TENANT_SET or explicit PLATFORM",
+        "adequate access level"
+      ],
+      "targetTasks": [
+        "TAS-343",
+        "TAS-344"
+      ]
+    },
+    {
+      "action": "issue.search",
+      "effect": "READ",
+      "resourceScope": "ISSUE",
+      "roles": {
+        "OWNER": "ALLOW",
+        "TENANT_ADMIN": "ALLOW",
+        "PROJECT_ADMIN": "ALLOW",
+        "MEMBER": "ALLOW",
+        "VIEWER": "ALLOW",
+        "GLOBAL_ADMIN": "ADMIN_PATH"
+      },
+      "conditions": [
+        "predicate before aggregate/page; nested resources same tenant/project"
+      ],
+      "lifecyclePolicy": "CONTENT_READ",
+      "channels": {
+        "WEB": "ROLE_AND_POLICY",
+        "USER_PAT": "READ",
+        "USER_OAUTH": "READ",
+        "ADMIN_PAT": "READ",
+        "ADMIN_OAUTH": "READ",
+        "MCP": "PRESENTED_CREDENTIAL_RULES; tool availability does not grant permission",
+        "SERVICE_WORKER": "DENY unless separately listed workerPurpose"
+      },
+      "adminRequirements": [
+        "current GLOBAL_ADMIN",
+        "explicit credential kind ADMIN",
+        "target in TENANT_SET or explicit PLATFORM",
+        "adequate access level"
+      ],
+      "targetTasks": [
+        "TAS-343",
+        "TAS-344"
+      ]
+    },
+    {
+      "action": "issue.board",
+      "effect": "READ",
+      "resourceScope": "ISSUE",
+      "roles": {
+        "OWNER": "ALLOW",
+        "TENANT_ADMIN": "ALLOW",
+        "PROJECT_ADMIN": "ALLOW",
+        "MEMBER": "ALLOW",
+        "VIEWER": "ALLOW",
+        "GLOBAL_ADMIN": "ADMIN_PATH"
+      },
+      "conditions": [
+        "predicate before aggregate/page; nested resources same tenant/project"
+      ],
+      "lifecyclePolicy": "CONTENT_READ",
+      "channels": {
+        "WEB": "ROLE_AND_POLICY",
+        "USER_PAT": "READ",
+        "USER_OAUTH": "READ",
+        "ADMIN_PAT": "READ",
+        "ADMIN_OAUTH": "READ",
+        "MCP": "PRESENTED_CREDENTIAL_RULES; tool availability does not grant permission",
+        "SERVICE_WORKER": "DENY unless separately listed workerPurpose"
+      },
+      "adminRequirements": [
+        "current GLOBAL_ADMIN",
+        "explicit credential kind ADMIN",
+        "target in TENANT_SET or explicit PLATFORM",
+        "adequate access level"
+      ],
+      "targetTasks": [
+        "TAS-343",
+        "TAS-344"
+      ]
+    },
+    {
+      "action": "issue.history",
+      "effect": "READ",
+      "resourceScope": "ISSUE",
+      "roles": {
+        "OWNER": "ALLOW",
+        "TENANT_ADMIN": "ALLOW",
+        "PROJECT_ADMIN": "ALLOW",
+        "MEMBER": "ALLOW",
+        "VIEWER": "ALLOW",
+        "GLOBAL_ADMIN": "ADMIN_PATH"
+      },
+      "conditions": [
+        "predicate before aggregate/page; nested resources same tenant/project"
+      ],
+      "lifecyclePolicy": "CONTENT_READ",
+      "channels": {
+        "WEB": "ROLE_AND_POLICY",
+        "USER_PAT": "READ",
+        "USER_OAUTH": "READ",
+        "ADMIN_PAT": "READ",
+        "ADMIN_OAUTH": "READ",
+        "MCP": "PRESENTED_CREDENTIAL_RULES; tool availability does not grant permission",
+        "SERVICE_WORKER": "DENY unless separately listed workerPurpose"
+      },
+      "adminRequirements": [
+        "current GLOBAL_ADMIN",
+        "explicit credential kind ADMIN",
+        "target in TENANT_SET or explicit PLATFORM",
+        "adequate access level"
+      ],
+      "targetTasks": [
+        "TAS-343",
+        "TAS-344"
+      ]
+    },
+    {
+      "action": "issue.create",
+      "effect": "MODIFY",
+      "resourceScope": "ISSUE",
+      "roles": {
+        "OWNER": "ALLOW",
+        "TENANT_ADMIN": "ALLOW",
+        "PROJECT_ADMIN": "ALLOW",
+        "MEMBER": "ALLOW",
+        "VIEWER": "DENY",
+        "GLOBAL_ADMIN": "ADMIN_PATH"
+      },
+      "conditions": [
+        "unarchived project",
+        "version/idempotency",
+        "assignee ACTIVE membership when changed",
+        "lifetime counter on create even admin bypass"
+      ],
+      "lifecyclePolicy": "NORMAL",
+      "channels": {
+        "WEB": "ROLE_AND_POLICY",
+        "USER_PAT": "WRITE",
+        "USER_OAUTH": "WRITE",
+        "ADMIN_PAT": "MODIFY",
+        "ADMIN_OAUTH": "MODIFY",
+        "MCP": "PRESENTED_CREDENTIAL_RULES; tool availability does not grant permission",
+        "SERVICE_WORKER": "DENY unless separately listed workerPurpose"
+      },
+      "adminRequirements": [
+        "current GLOBAL_ADMIN",
+        "explicit credential kind ADMIN",
+        "target in TENANT_SET or explicit PLATFORM",
+        "adequate access level"
+      ],
+      "targetTasks": [
+        "TAS-343",
+        "TAS-460"
+      ]
+    },
+    {
+      "action": "issue.update",
+      "effect": "MODIFY",
+      "resourceScope": "ISSUE",
+      "roles": {
+        "OWNER": "ALLOW",
+        "TENANT_ADMIN": "ALLOW",
+        "PROJECT_ADMIN": "ALLOW",
+        "MEMBER": "ALLOW",
+        "VIEWER": "DENY",
+        "GLOBAL_ADMIN": "ADMIN_PATH"
+      },
+      "conditions": [
+        "unarchived project",
+        "version/idempotency",
+        "assignee ACTIVE membership when changed",
+        "lifetime counter on create even admin bypass"
+      ],
+      "lifecyclePolicy": "NORMAL",
+      "channels": {
+        "WEB": "ROLE_AND_POLICY",
+        "USER_PAT": "WRITE",
+        "USER_OAUTH": "WRITE",
+        "ADMIN_PAT": "MODIFY",
+        "ADMIN_OAUTH": "MODIFY",
+        "MCP": "PRESENTED_CREDENTIAL_RULES; tool availability does not grant permission",
+        "SERVICE_WORKER": "DENY unless separately listed workerPurpose"
+      },
+      "adminRequirements": [
+        "current GLOBAL_ADMIN",
+        "explicit credential kind ADMIN",
+        "target in TENANT_SET or explicit PLATFORM",
+        "adequate access level"
+      ],
+      "targetTasks": [
+        "TAS-343",
+        "TAS-460"
+      ]
+    },
+    {
+      "action": "issue.delete",
+      "effect": "MODIFY",
+      "resourceScope": "ISSUE",
+      "roles": {
+        "OWNER": "ALLOW",
+        "TENANT_ADMIN": "ALLOW",
+        "PROJECT_ADMIN": "ALLOW",
+        "MEMBER": "ALLOW",
+        "VIEWER": "DENY",
+        "GLOBAL_ADMIN": "ADMIN_PATH"
+      },
+      "conditions": [
+        "unarchived project",
+        "version/idempotency",
+        "assignee ACTIVE membership when changed",
+        "lifetime counter on create even admin bypass"
+      ],
+      "lifecyclePolicy": "NORMAL",
+      "channels": {
+        "WEB": "ROLE_AND_POLICY",
+        "USER_PAT": "WRITE",
+        "USER_OAUTH": "WRITE",
+        "ADMIN_PAT": "MODIFY",
+        "ADMIN_OAUTH": "MODIFY",
+        "MCP": "PRESENTED_CREDENTIAL_RULES; tool availability does not grant permission",
+        "SERVICE_WORKER": "DENY unless separately listed workerPurpose"
+      },
+      "adminRequirements": [
+        "current GLOBAL_ADMIN",
+        "explicit credential kind ADMIN",
+        "target in TENANT_SET or explicit PLATFORM",
+        "adequate access level"
+      ],
+      "targetTasks": [
+        "TAS-343",
+        "TAS-460"
+      ]
+    },
+    {
+      "action": "issue.assign",
+      "effect": "MODIFY",
+      "resourceScope": "ISSUE",
+      "roles": {
+        "OWNER": "ALLOW",
+        "TENANT_ADMIN": "ALLOW",
+        "PROJECT_ADMIN": "ALLOW",
+        "MEMBER": "ALLOW",
+        "VIEWER": "DENY",
+        "GLOBAL_ADMIN": "ADMIN_PATH"
+      },
+      "conditions": [
+        "unarchived project",
+        "version/idempotency",
+        "assignee ACTIVE membership when changed",
+        "lifetime counter on create even admin bypass"
+      ],
+      "lifecyclePolicy": "NORMAL",
+      "channels": {
+        "WEB": "ROLE_AND_POLICY",
+        "USER_PAT": "WRITE",
+        "USER_OAUTH": "WRITE",
+        "ADMIN_PAT": "MODIFY",
+        "ADMIN_OAUTH": "MODIFY",
+        "MCP": "PRESENTED_CREDENTIAL_RULES; tool availability does not grant permission",
+        "SERVICE_WORKER": "DENY unless separately listed workerPurpose"
+      },
+      "adminRequirements": [
+        "current GLOBAL_ADMIN",
+        "explicit credential kind ADMIN",
+        "target in TENANT_SET or explicit PLATFORM",
+        "adequate access level"
+      ],
+      "targetTasks": [
+        "TAS-343",
+        "TAS-460"
+      ]
+    },
+    {
+      "action": "issue.transition",
+      "effect": "MODIFY",
+      "resourceScope": "ISSUE",
+      "roles": {
+        "OWNER": "ALLOW",
+        "TENANT_ADMIN": "ALLOW",
+        "PROJECT_ADMIN": "ALLOW",
+        "MEMBER": "ALLOW",
+        "VIEWER": "DENY",
+        "GLOBAL_ADMIN": "ADMIN_PATH"
+      },
+      "conditions": [
+        "unarchived project",
+        "version/idempotency",
+        "assignee ACTIVE membership when changed",
+        "lifetime counter on create even admin bypass"
+      ],
+      "lifecyclePolicy": "NORMAL",
+      "channels": {
+        "WEB": "ROLE_AND_POLICY",
+        "USER_PAT": "WRITE",
+        "USER_OAUTH": "WRITE",
+        "ADMIN_PAT": "MODIFY",
+        "ADMIN_OAUTH": "MODIFY",
+        "MCP": "PRESENTED_CREDENTIAL_RULES; tool availability does not grant permission",
+        "SERVICE_WORKER": "DENY unless separately listed workerPurpose"
+      },
+      "adminRequirements": [
+        "current GLOBAL_ADMIN",
+        "explicit credential kind ADMIN",
+        "target in TENANT_SET or explicit PLATFORM",
+        "adequate access level"
+      ],
+      "targetTasks": [
+        "TAS-343",
+        "TAS-460"
+      ]
+    },
+    {
+      "action": "comment.read",
+      "effect": "READ",
+      "resourceScope": "ISSUE",
+      "roles": {
+        "OWNER": "ALLOW",
+        "TENANT_ADMIN": "ALLOW",
+        "PROJECT_ADMIN": "ALLOW",
+        "MEMBER": "ALLOW",
+        "VIEWER": "ALLOW",
+        "GLOBAL_ADMIN": "ADMIN_PATH"
+      },
+      "conditions": [
+        "all parent/nested IDs must resolve within scope"
+      ],
+      "lifecyclePolicy": "CONTENT_READ",
+      "channels": {
+        "WEB": "ROLE_AND_POLICY",
+        "USER_PAT": "READ",
+        "USER_OAUTH": "READ",
+        "ADMIN_PAT": "READ",
+        "ADMIN_OAUTH": "READ",
+        "MCP": "PRESENTED_CREDENTIAL_RULES; tool availability does not grant permission",
+        "SERVICE_WORKER": "DENY unless separately listed workerPurpose"
+      },
+      "adminRequirements": [
+        "current GLOBAL_ADMIN",
+        "explicit credential kind ADMIN",
+        "target in TENANT_SET or explicit PLATFORM",
+        "adequate access level"
+      ],
+      "targetTasks": [
+        "TAS-362",
+        "TAS-363",
+        "TAS-364",
+        "TAS-367"
+      ]
+    },
+    {
+      "action": "worklog.read",
+      "effect": "READ",
+      "resourceScope": "ISSUE",
+      "roles": {
+        "OWNER": "ALLOW",
+        "TENANT_ADMIN": "ALLOW",
+        "PROJECT_ADMIN": "ALLOW",
+        "MEMBER": "ALLOW",
+        "VIEWER": "ALLOW",
+        "GLOBAL_ADMIN": "ADMIN_PATH"
+      },
+      "conditions": [
+        "all parent/nested IDs must resolve within scope"
+      ],
+      "lifecyclePolicy": "CONTENT_READ",
+      "channels": {
+        "WEB": "ROLE_AND_POLICY",
+        "USER_PAT": "READ",
+        "USER_OAUTH": "READ",
+        "ADMIN_PAT": "READ",
+        "ADMIN_OAUTH": "READ",
+        "MCP": "PRESENTED_CREDENTIAL_RULES; tool availability does not grant permission",
+        "SERVICE_WORKER": "DENY unless separately listed workerPurpose"
+      },
+      "adminRequirements": [
+        "current GLOBAL_ADMIN",
+        "explicit credential kind ADMIN",
+        "target in TENANT_SET or explicit PLATFORM",
+        "adequate access level"
+      ],
+      "targetTasks": [
+        "TAS-362",
+        "TAS-363",
+        "TAS-364",
+        "TAS-367"
+      ]
+    },
+    {
+      "action": "label.read",
+      "effect": "READ",
+      "resourceScope": "ISSUE",
+      "roles": {
+        "OWNER": "ALLOW",
+        "TENANT_ADMIN": "ALLOW",
+        "PROJECT_ADMIN": "ALLOW",
+        "MEMBER": "ALLOW",
+        "VIEWER": "ALLOW",
+        "GLOBAL_ADMIN": "ADMIN_PATH"
+      },
+      "conditions": [
+        "all parent/nested IDs must resolve within scope"
+      ],
+      "lifecyclePolicy": "CONTENT_READ",
+      "channels": {
+        "WEB": "ROLE_AND_POLICY",
+        "USER_PAT": "READ",
+        "USER_OAUTH": "READ",
+        "ADMIN_PAT": "READ",
+        "ADMIN_OAUTH": "READ",
+        "MCP": "PRESENTED_CREDENTIAL_RULES; tool availability does not grant permission",
+        "SERVICE_WORKER": "DENY unless separately listed workerPurpose"
+      },
+      "adminRequirements": [
+        "current GLOBAL_ADMIN",
+        "explicit credential kind ADMIN",
+        "target in TENANT_SET or explicit PLATFORM",
+        "adequate access level"
+      ],
+      "targetTasks": [
+        "TAS-362",
+        "TAS-363",
+        "TAS-364",
+        "TAS-367"
+      ]
+    },
+    {
+      "action": "watcher.read",
+      "effect": "READ",
+      "resourceScope": "ISSUE",
+      "roles": {
+        "OWNER": "ALLOW",
+        "TENANT_ADMIN": "ALLOW",
+        "PROJECT_ADMIN": "ALLOW",
+        "MEMBER": "ALLOW",
+        "VIEWER": "ALLOW",
+        "GLOBAL_ADMIN": "ADMIN_PATH"
+      },
+      "conditions": [
+        "all parent/nested IDs must resolve within scope"
+      ],
+      "lifecyclePolicy": "CONTENT_READ",
+      "channels": {
+        "WEB": "ROLE_AND_POLICY",
+        "USER_PAT": "READ",
+        "USER_OAUTH": "READ",
+        "ADMIN_PAT": "READ",
+        "ADMIN_OAUTH": "READ",
+        "MCP": "PRESENTED_CREDENTIAL_RULES; tool availability does not grant permission",
+        "SERVICE_WORKER": "DENY unless separately listed workerPurpose"
+      },
+      "adminRequirements": [
+        "current GLOBAL_ADMIN",
+        "explicit credential kind ADMIN",
+        "target in TENANT_SET or explicit PLATFORM",
+        "adequate access level"
+      ],
+      "targetTasks": [
+        "TAS-362",
+        "TAS-363",
+        "TAS-364",
+        "TAS-367"
+      ]
+    },
+    {
+      "action": "link.read",
+      "effect": "READ",
+      "resourceScope": "ISSUE",
+      "roles": {
+        "OWNER": "ALLOW",
+        "TENANT_ADMIN": "ALLOW",
+        "PROJECT_ADMIN": "ALLOW",
+        "MEMBER": "ALLOW",
+        "VIEWER": "ALLOW",
+        "GLOBAL_ADMIN": "ADMIN_PATH"
+      },
+      "conditions": [
+        "all parent/nested IDs must resolve within scope"
+      ],
+      "lifecyclePolicy": "CONTENT_READ",
+      "channels": {
+        "WEB": "ROLE_AND_POLICY",
+        "USER_PAT": "READ",
+        "USER_OAUTH": "READ",
+        "ADMIN_PAT": "READ",
+        "ADMIN_OAUTH": "READ",
+        "MCP": "PRESENTED_CREDENTIAL_RULES; tool availability does not grant permission",
+        "SERVICE_WORKER": "DENY unless separately listed workerPurpose"
+      },
+      "adminRequirements": [
+        "current GLOBAL_ADMIN",
+        "explicit credential kind ADMIN",
+        "target in TENANT_SET or explicit PLATFORM",
+        "adequate access level"
+      ],
+      "targetTasks": [
+        "TAS-362",
+        "TAS-363",
+        "TAS-364",
+        "TAS-367"
+      ]
+    },
+    {
+      "action": "attachment.read",
+      "effect": "READ",
+      "resourceScope": "ISSUE",
+      "roles": {
+        "OWNER": "ALLOW",
+        "TENANT_ADMIN": "ALLOW",
+        "PROJECT_ADMIN": "ALLOW",
+        "MEMBER": "ALLOW",
+        "VIEWER": "ALLOW",
+        "GLOBAL_ADMIN": "ADMIN_PATH"
+      },
+      "conditions": [
+        "all parent/nested IDs must resolve within scope"
+      ],
+      "lifecyclePolicy": "CONTENT_READ",
+      "channels": {
+        "WEB": "ROLE_AND_POLICY",
+        "USER_PAT": "READ",
+        "USER_OAUTH": "READ",
+        "ADMIN_PAT": "READ",
+        "ADMIN_OAUTH": "READ",
+        "MCP": "PRESENTED_CREDENTIAL_RULES; tool availability does not grant permission",
+        "SERVICE_WORKER": "DENY unless separately listed workerPurpose"
+      },
+      "adminRequirements": [
+        "current GLOBAL_ADMIN",
+        "explicit credential kind ADMIN",
+        "target in TENANT_SET or explicit PLATFORM",
+        "adequate access level"
+      ],
+      "targetTasks": [
+        "TAS-362",
+        "TAS-363",
+        "TAS-364",
+        "TAS-367"
+      ]
+    },
+    {
+      "action": "comment.create",
+      "effect": "MODIFY",
+      "resourceScope": "ISSUE",
+      "roles": {
+        "OWNER": "ALLOW",
+        "TENANT_ADMIN": "ALLOW",
+        "PROJECT_ADMIN": "ALLOW",
+        "MEMBER": "ALLOW",
+        "VIEWER": "DENY",
+        "GLOBAL_ADMIN": "ADMIN_PATH"
+      },
+      "conditions": [
+        "body only in comment row, no raw body in history/outbox"
+      ],
+      "lifecyclePolicy": "NORMAL",
+      "channels": {
+        "WEB": "ROLE_AND_POLICY",
+        "USER_PAT": "WRITE",
+        "USER_OAUTH": "WRITE",
+        "ADMIN_PAT": "MODIFY",
+        "ADMIN_OAUTH": "MODIFY",
+        "MCP": "PRESENTED_CREDENTIAL_RULES; tool availability does not grant permission",
+        "SERVICE_WORKER": "DENY unless separately listed workerPurpose"
+      },
+      "adminRequirements": [
+        "current GLOBAL_ADMIN",
+        "explicit credential kind ADMIN",
+        "target in TENANT_SET or explicit PLATFORM",
+        "adequate access level"
+      ],
+      "targetTasks": [
+        "TAS-362"
+      ]
+    },
+    {
+      "action": "comment.update",
+      "effect": "MODIFY",
+      "resourceScope": "ISSUE",
+      "roles": {
+        "OWNER": "ALLOW",
+        "TENANT_ADMIN": "ALLOW",
+        "PROJECT_ADMIN": "ALLOW",
+        "MEMBER": "ALLOW",
+        "VIEWER": "DENY",
+        "GLOBAL_ADMIN": "ADMIN_PATH"
+      },
+      "conditions": [
+        "ordinary actor must be comment author, including project ADMIN/TA/owner",
+        "GA administrative override preserves honest actor"
+      ],
+      "lifecyclePolicy": "NORMAL",
+      "channels": {
+        "WEB": "ROLE_AND_POLICY",
+        "USER_PAT": "WRITE",
+        "USER_OAUTH": "WRITE",
+        "ADMIN_PAT": "MODIFY",
+        "ADMIN_OAUTH": "MODIFY",
+        "MCP": "PRESENTED_CREDENTIAL_RULES; tool availability does not grant permission",
+        "SERVICE_WORKER": "DENY unless separately listed workerPurpose"
+      },
+      "adminRequirements": [
+        "current GLOBAL_ADMIN",
+        "explicit credential kind ADMIN",
+        "target in TENANT_SET or explicit PLATFORM",
+        "adequate access level"
+      ],
+      "targetTasks": [
+        "TAS-362"
+      ]
+    },
+    {
+      "action": "comment.delete",
+      "effect": "MODIFY",
+      "resourceScope": "ISSUE",
+      "roles": {
+        "OWNER": "ALLOW",
+        "TENANT_ADMIN": "ALLOW",
+        "PROJECT_ADMIN": "ALLOW",
+        "MEMBER": "ALLOW",
+        "VIEWER": "DENY",
+        "GLOBAL_ADMIN": "ADMIN_PATH"
+      },
+      "conditions": [
+        "ordinary actor must be comment author, including project ADMIN/TA/owner",
+        "GA administrative override preserves honest actor"
+      ],
+      "lifecyclePolicy": "NORMAL",
+      "channels": {
+        "WEB": "ROLE_AND_POLICY",
+        "USER_PAT": "WRITE",
+        "USER_OAUTH": "WRITE",
+        "ADMIN_PAT": "MODIFY",
+        "ADMIN_OAUTH": "MODIFY",
+        "MCP": "PRESENTED_CREDENTIAL_RULES; tool availability does not grant permission",
+        "SERVICE_WORKER": "DENY unless separately listed workerPurpose"
+      },
+      "adminRequirements": [
+        "current GLOBAL_ADMIN",
+        "explicit credential kind ADMIN",
+        "target in TENANT_SET or explicit PLATFORM",
+        "adequate access level"
+      ],
+      "targetTasks": [
+        "TAS-362"
+      ]
+    },
+    {
+      "action": "worklog.create",
+      "effect": "MODIFY",
+      "resourceScope": "ISSUE",
+      "roles": {
+        "OWNER": "ALLOW",
+        "TENANT_ADMIN": "ALLOW",
+        "PROJECT_ADMIN": "ALLOW",
+        "MEMBER": "ALLOW",
+        "VIEWER": "DENY",
+        "GLOBAL_ADMIN": "ADMIN_PATH"
+      },
+      "conditions": [
+        "MEMBER own worklog; effective project ADMIN may manage others",
+        "version and time totals transaction"
+      ],
+      "lifecyclePolicy": "NORMAL",
+      "channels": {
+        "WEB": "ROLE_AND_POLICY",
+        "USER_PAT": "WRITE",
+        "USER_OAUTH": "WRITE",
+        "ADMIN_PAT": "MODIFY",
+        "ADMIN_OAUTH": "MODIFY",
+        "MCP": "PRESENTED_CREDENTIAL_RULES; tool availability does not grant permission",
+        "SERVICE_WORKER": "DENY unless separately listed workerPurpose"
+      },
+      "adminRequirements": [
+        "current GLOBAL_ADMIN",
+        "explicit credential kind ADMIN",
+        "target in TENANT_SET or explicit PLATFORM",
+        "adequate access level"
+      ],
+      "targetTasks": [
+        "TAS-362"
+      ]
+    },
+    {
+      "action": "worklog.update",
+      "effect": "MODIFY",
+      "resourceScope": "ISSUE",
+      "roles": {
+        "OWNER": "ALLOW",
+        "TENANT_ADMIN": "ALLOW",
+        "PROJECT_ADMIN": "ALLOW",
+        "MEMBER": "ALLOW",
+        "VIEWER": "DENY",
+        "GLOBAL_ADMIN": "ADMIN_PATH"
+      },
+      "conditions": [
+        "MEMBER own worklog; effective project ADMIN may manage others",
+        "version and time totals transaction"
+      ],
+      "lifecyclePolicy": "NORMAL",
+      "channels": {
+        "WEB": "ROLE_AND_POLICY",
+        "USER_PAT": "WRITE",
+        "USER_OAUTH": "WRITE",
+        "ADMIN_PAT": "MODIFY",
+        "ADMIN_OAUTH": "MODIFY",
+        "MCP": "PRESENTED_CREDENTIAL_RULES; tool availability does not grant permission",
+        "SERVICE_WORKER": "DENY unless separately listed workerPurpose"
+      },
+      "adminRequirements": [
+        "current GLOBAL_ADMIN",
+        "explicit credential kind ADMIN",
+        "target in TENANT_SET or explicit PLATFORM",
+        "adequate access level"
+      ],
+      "targetTasks": [
+        "TAS-362"
+      ]
+    },
+    {
+      "action": "worklog.delete",
+      "effect": "MODIFY",
+      "resourceScope": "ISSUE",
+      "roles": {
+        "OWNER": "ALLOW",
+        "TENANT_ADMIN": "ALLOW",
+        "PROJECT_ADMIN": "ALLOW",
+        "MEMBER": "ALLOW",
+        "VIEWER": "DENY",
+        "GLOBAL_ADMIN": "ADMIN_PATH"
+      },
+      "conditions": [
+        "MEMBER own worklog; effective project ADMIN may manage others",
+        "version and time totals transaction"
+      ],
+      "lifecyclePolicy": "NORMAL",
+      "channels": {
+        "WEB": "ROLE_AND_POLICY",
+        "USER_PAT": "WRITE",
+        "USER_OAUTH": "WRITE",
+        "ADMIN_PAT": "MODIFY",
+        "ADMIN_OAUTH": "MODIFY",
+        "MCP": "PRESENTED_CREDENTIAL_RULES; tool availability does not grant permission",
+        "SERVICE_WORKER": "DENY unless separately listed workerPurpose"
+      },
+      "adminRequirements": [
+        "current GLOBAL_ADMIN",
+        "explicit credential kind ADMIN",
+        "target in TENANT_SET or explicit PLATFORM",
+        "adequate access level"
+      ],
+      "targetTasks": [
+        "TAS-362"
+      ]
+    },
+    {
+      "action": "label.configure",
+      "effect": "MODIFY",
+      "resourceScope": "PROJECT",
+      "roles": {
+        "OWNER": "ALLOW",
+        "TENANT_ADMIN": "ALLOW",
+        "PROJECT_ADMIN": "ALLOW",
+        "MEMBER": "DENY",
+        "VIEWER": "DENY",
+        "GLOBAL_ADMIN": "ADMIN_PATH"
+      },
+      "conditions": [
+        "referenced user ACTIVE same tenant and permitted project"
+      ],
+      "lifecyclePolicy": "NORMAL",
+      "channels": {
+        "WEB": "ROLE_AND_POLICY",
+        "USER_PAT": "WRITE",
+        "USER_OAUTH": "WRITE",
+        "ADMIN_PAT": "MODIFY",
+        "ADMIN_OAUTH": "MODIFY",
+        "MCP": "PRESENTED_CREDENTIAL_RULES; tool availability does not grant permission",
+        "SERVICE_WORKER": "DENY unless separately listed workerPurpose"
+      },
+      "adminRequirements": [
+        "current GLOBAL_ADMIN",
+        "explicit credential kind ADMIN",
+        "target in TENANT_SET or explicit PLATFORM",
+        "adequate access level"
+      ],
+      "targetTasks": [
+        "TAS-363"
+      ]
+    },
+    {
+      "action": "watcher.manage",
+      "effect": "MODIFY",
+      "resourceScope": "PROJECT",
+      "roles": {
+        "OWNER": "ALLOW",
+        "TENANT_ADMIN": "ALLOW",
+        "PROJECT_ADMIN": "ALLOW",
+        "MEMBER": "DENY",
+        "VIEWER": "DENY",
+        "GLOBAL_ADMIN": "ADMIN_PATH"
+      },
+      "conditions": [
+        "referenced user ACTIVE same tenant and permitted project"
+      ],
+      "lifecyclePolicy": "NORMAL",
+      "channels": {
+        "WEB": "ROLE_AND_POLICY",
+        "USER_PAT": "WRITE",
+        "USER_OAUTH": "WRITE",
+        "ADMIN_PAT": "MODIFY",
+        "ADMIN_OAUTH": "MODIFY",
+        "MCP": "PRESENTED_CREDENTIAL_RULES; tool availability does not grant permission",
+        "SERVICE_WORKER": "DENY unless separately listed workerPurpose"
+      },
+      "adminRequirements": [
+        "current GLOBAL_ADMIN",
+        "explicit credential kind ADMIN",
+        "target in TENANT_SET or explicit PLATFORM",
+        "adequate access level"
+      ],
+      "targetTasks": [
+        "TAS-363"
+      ]
+    },
+    {
+      "action": "label.attach",
+      "effect": "MODIFY",
+      "resourceScope": "ISSUE",
+      "roles": {
+        "OWNER": "ALLOW",
+        "TENANT_ADMIN": "ALLOW",
+        "PROJECT_ADMIN": "ALLOW",
+        "MEMBER": "ALLOW",
+        "VIEWER": "DENY",
+        "GLOBAL_ADMIN": "ADMIN_PATH"
+      },
+      "conditions": [
+        "both link ends same tenant and readable/writable as operation requires",
+        "label belongs project; self watcher actor only"
+      ],
+      "lifecyclePolicy": "NORMAL",
+      "channels": {
+        "WEB": "ROLE_AND_POLICY",
+        "USER_PAT": "WRITE",
+        "USER_OAUTH": "WRITE",
+        "ADMIN_PAT": "MODIFY",
+        "ADMIN_OAUTH": "MODIFY",
+        "MCP": "PRESENTED_CREDENTIAL_RULES; tool availability does not grant permission",
+        "SERVICE_WORKER": "DENY unless separately listed workerPurpose"
+      },
+      "adminRequirements": [
+        "current GLOBAL_ADMIN",
+        "explicit credential kind ADMIN",
+        "target in TENANT_SET or explicit PLATFORM",
+        "adequate access level"
+      ],
+      "targetTasks": [
+        "TAS-363",
+        "TAS-364"
+      ]
+    },
+    {
+      "action": "label.detach",
+      "effect": "MODIFY",
+      "resourceScope": "ISSUE",
+      "roles": {
+        "OWNER": "ALLOW",
+        "TENANT_ADMIN": "ALLOW",
+        "PROJECT_ADMIN": "ALLOW",
+        "MEMBER": "ALLOW",
+        "VIEWER": "DENY",
+        "GLOBAL_ADMIN": "ADMIN_PATH"
+      },
+      "conditions": [
+        "both link ends same tenant and readable/writable as operation requires",
+        "label belongs project; self watcher actor only"
+      ],
+      "lifecyclePolicy": "NORMAL",
+      "channels": {
+        "WEB": "ROLE_AND_POLICY",
+        "USER_PAT": "WRITE",
+        "USER_OAUTH": "WRITE",
+        "ADMIN_PAT": "MODIFY",
+        "ADMIN_OAUTH": "MODIFY",
+        "MCP": "PRESENTED_CREDENTIAL_RULES; tool availability does not grant permission",
+        "SERVICE_WORKER": "DENY unless separately listed workerPurpose"
+      },
+      "adminRequirements": [
+        "current GLOBAL_ADMIN",
+        "explicit credential kind ADMIN",
+        "target in TENANT_SET or explicit PLATFORM",
+        "adequate access level"
+      ],
+      "targetTasks": [
+        "TAS-363",
+        "TAS-364"
+      ]
+    },
+    {
+      "action": "watcher.self",
+      "effect": "MODIFY",
+      "resourceScope": "ISSUE",
+      "roles": {
+        "OWNER": "ALLOW",
+        "TENANT_ADMIN": "ALLOW",
+        "PROJECT_ADMIN": "ALLOW",
+        "MEMBER": "ALLOW",
+        "VIEWER": "DENY",
+        "GLOBAL_ADMIN": "ADMIN_PATH"
+      },
+      "conditions": [
+        "both link ends same tenant and readable/writable as operation requires",
+        "label belongs project; self watcher actor only"
+      ],
+      "lifecyclePolicy": "NORMAL",
+      "channels": {
+        "WEB": "ROLE_AND_POLICY",
+        "USER_PAT": "WRITE",
+        "USER_OAUTH": "WRITE",
+        "ADMIN_PAT": "MODIFY",
+        "ADMIN_OAUTH": "MODIFY",
+        "MCP": "PRESENTED_CREDENTIAL_RULES; tool availability does not grant permission",
+        "SERVICE_WORKER": "DENY unless separately listed workerPurpose"
+      },
+      "adminRequirements": [
+        "current GLOBAL_ADMIN",
+        "explicit credential kind ADMIN",
+        "target in TENANT_SET or explicit PLATFORM",
+        "adequate access level"
+      ],
+      "targetTasks": [
+        "TAS-363",
+        "TAS-364"
+      ]
+    },
+    {
+      "action": "link.create",
+      "effect": "MODIFY",
+      "resourceScope": "ISSUE",
+      "roles": {
+        "OWNER": "ALLOW",
+        "TENANT_ADMIN": "ALLOW",
+        "PROJECT_ADMIN": "ALLOW",
+        "MEMBER": "ALLOW",
+        "VIEWER": "DENY",
+        "GLOBAL_ADMIN": "ADMIN_PATH"
+      },
+      "conditions": [
+        "both link ends same tenant and readable/writable as operation requires",
+        "label belongs project; self watcher actor only"
+      ],
+      "lifecyclePolicy": "NORMAL",
+      "channels": {
+        "WEB": "ROLE_AND_POLICY",
+        "USER_PAT": "WRITE",
+        "USER_OAUTH": "WRITE",
+        "ADMIN_PAT": "MODIFY",
+        "ADMIN_OAUTH": "MODIFY",
+        "MCP": "PRESENTED_CREDENTIAL_RULES; tool availability does not grant permission",
+        "SERVICE_WORKER": "DENY unless separately listed workerPurpose"
+      },
+      "adminRequirements": [
+        "current GLOBAL_ADMIN",
+        "explicit credential kind ADMIN",
+        "target in TENANT_SET or explicit PLATFORM",
+        "adequate access level"
+      ],
+      "targetTasks": [
+        "TAS-363",
+        "TAS-364"
+      ]
+    },
+    {
+      "action": "link.delete",
+      "effect": "MODIFY",
+      "resourceScope": "ISSUE",
+      "roles": {
+        "OWNER": "ALLOW",
+        "TENANT_ADMIN": "ALLOW",
+        "PROJECT_ADMIN": "ALLOW",
+        "MEMBER": "ALLOW",
+        "VIEWER": "DENY",
+        "GLOBAL_ADMIN": "ADMIN_PATH"
+      },
+      "conditions": [
+        "both link ends same tenant and readable/writable as operation requires",
+        "label belongs project; self watcher actor only"
+      ],
+      "lifecyclePolicy": "NORMAL",
+      "channels": {
+        "WEB": "ROLE_AND_POLICY",
+        "USER_PAT": "WRITE",
+        "USER_OAUTH": "WRITE",
+        "ADMIN_PAT": "MODIFY",
+        "ADMIN_OAUTH": "MODIFY",
+        "MCP": "PRESENTED_CREDENTIAL_RULES; tool availability does not grant permission",
+        "SERVICE_WORKER": "DENY unless separately listed workerPurpose"
+      },
+      "adminRequirements": [
+        "current GLOBAL_ADMIN",
+        "explicit credential kind ADMIN",
+        "target in TENANT_SET or explicit PLATFORM",
+        "adequate access level"
+      ],
+      "targetTasks": [
+        "TAS-363",
+        "TAS-364"
+      ]
+    },
+    {
+      "action": "attachment.upload",
+      "effect": "MODIFY",
+      "resourceScope": "ISSUE",
+      "roles": {
+        "OWNER": "ALLOW",
+        "TENANT_ADMIN": "ALLOW",
+        "PROJECT_ADMIN": "ALLOW",
+        "MEMBER": "ALLOW",
+        "VIEWER": "DENY",
+        "GLOBAL_ADMIN": "ADMIN_PATH"
+      },
+      "conditions": [
+        "owned reservation/staging pinned version",
+        "confirm current ACL and lifecycle",
+        "actual size <= reserved"
+      ],
+      "lifecyclePolicy": "UPLOAD",
+      "channels": {
+        "WEB": "ROLE_AND_POLICY",
+        "USER_PAT": "WRITE",
+        "USER_OAUTH": "WRITE",
+        "ADMIN_PAT": "MODIFY",
+        "ADMIN_OAUTH": "MODIFY",
+        "MCP": "PRESENTED_CREDENTIAL_RULES; tool availability does not grant permission",
+        "SERVICE_WORKER": "DENY unless separately listed workerPurpose"
+      },
+      "adminRequirements": [
+        "current GLOBAL_ADMIN",
+        "explicit credential kind ADMIN",
+        "target in TENANT_SET or explicit PLATFORM",
+        "adequate access level"
+      ],
+      "targetTasks": [
+        "TAS-347",
+        "TAS-365"
+      ]
+    },
+    {
+      "action": "attachment.confirm",
+      "effect": "MODIFY",
+      "resourceScope": "ISSUE",
+      "roles": {
+        "OWNER": "ALLOW",
+        "TENANT_ADMIN": "ALLOW",
+        "PROJECT_ADMIN": "ALLOW",
+        "MEMBER": "ALLOW",
+        "VIEWER": "DENY",
+        "GLOBAL_ADMIN": "ADMIN_PATH"
+      },
+      "conditions": [
+        "owned reservation/staging pinned version",
+        "confirm current ACL and lifecycle",
+        "actual size <= reserved"
+      ],
+      "lifecyclePolicy": "UPLOAD_FINISH",
+      "channels": {
+        "WEB": "ROLE_AND_POLICY",
+        "USER_PAT": "WRITE",
+        "USER_OAUTH": "WRITE",
+        "ADMIN_PAT": "MODIFY",
+        "ADMIN_OAUTH": "MODIFY",
+        "MCP": "PRESENTED_CREDENTIAL_RULES; tool availability does not grant permission",
+        "SERVICE_WORKER": "DENY unless separately listed workerPurpose"
+      },
+      "adminRequirements": [
+        "current GLOBAL_ADMIN",
+        "explicit credential kind ADMIN",
+        "target in TENANT_SET or explicit PLATFORM",
+        "adequate access level"
+      ],
+      "targetTasks": [
+        "TAS-347",
+        "TAS-365"
+      ]
+    },
+    {
+      "action": "attachment.delete",
+      "effect": "MODIFY",
+      "resourceScope": "ISSUE",
+      "roles": {
+        "OWNER": "ALLOW",
+        "TENANT_ADMIN": "ALLOW",
+        "PROJECT_ADMIN": "ALLOW",
+        "MEMBER": "ALLOW",
+        "VIEWER": "DENY",
+        "GLOBAL_ADMIN": "ADMIN_PATH"
+      },
+      "conditions": [
+        "MEMBER only uploaded-by-self; ADMIN/TA/owner any",
+        "no special permission under storage READ_ONLY",
+        "S3 confirmation before quota release"
+      ],
+      "lifecyclePolicy": "NORMAL",
+      "channels": {
+        "WEB": "ROLE_AND_POLICY",
+        "USER_PAT": "WRITE",
+        "USER_OAUTH": "WRITE",
+        "ADMIN_PAT": "MODIFY",
+        "ADMIN_OAUTH": "MODIFY",
+        "MCP": "PRESENTED_CREDENTIAL_RULES; tool availability does not grant permission",
+        "SERVICE_WORKER": "DENY unless separately listed workerPurpose"
+      },
+      "adminRequirements": [
+        "current GLOBAL_ADMIN",
+        "explicit credential kind ADMIN",
+        "target in TENANT_SET or explicit PLATFORM",
+        "adequate access level"
+      ],
+      "targetTasks": [
+        "TAS-367"
+      ]
+    },
+    {
+      "action": "export.create",
+      "effect": "MODIFY",
+      "resourceScope": "TENANT_PROJECT_SUBSET",
+      "roles": {
+        "OWNER": "ALLOW",
+        "TENANT_ADMIN": "ALLOW",
+        "PROJECT_ADMIN": "ALLOW",
+        "MEMBER": "ALLOW",
+        "VIEWER": "ALLOW",
+        "GLOBAL_ADMIN": "ADMIN_PATH"
+      },
+      "conditions": [
+        "read ACL defines included projects",
+        "export flag on",
+        "exclude finances/credentials",
+        "admin READ grant disallows creation: job is persistent business state"
+      ],
+      "lifecyclePolicy": "EXPORT",
+      "channels": {
+        "WEB": "ROLE_AND_POLICY",
+        "USER_PAT": "WRITE",
+        "USER_OAUTH": "WRITE",
+        "ADMIN_PAT": "MODIFY",
+        "ADMIN_OAUTH": "MODIFY",
+        "MCP": "PRESENTED_CREDENTIAL_RULES; tool availability does not grant permission",
+        "SERVICE_WORKER": "DENY unless separately listed workerPurpose"
+      },
+      "adminRequirements": [
+        "current GLOBAL_ADMIN",
+        "explicit credential kind ADMIN",
+        "target in TENANT_SET or explicit PLATFORM",
+        "adequate access level"
+      ],
+      "targetTasks": [
+        "TAS-372"
+      ]
+    },
+    {
+      "action": "export.download",
+      "effect": "READ",
+      "resourceScope": "TENANT_PROJECT_SUBSET",
+      "roles": {
+        "OWNER": "ALLOW",
+        "TENANT_ADMIN": "ALLOW",
+        "PROJECT_ADMIN": "ALLOW",
+        "MEMBER": "ALLOW",
+        "VIEWER": "ALLOW",
+        "GLOBAL_ADMIN": "ADMIN_PATH"
+      },
+      "conditions": [
+        "current ACL for entire manifest",
+        "READY and before firstReadyAt+TTL",
+        "flag off alone does not invalidate ready archive"
+      ],
+      "lifecyclePolicy": "CONTENT_READ",
+      "channels": {
+        "WEB": "ROLE_AND_POLICY",
+        "USER_PAT": "READ",
+        "USER_OAUTH": "READ",
+        "ADMIN_PAT": "READ",
+        "ADMIN_OAUTH": "READ",
+        "MCP": "PRESENTED_CREDENTIAL_RULES; tool availability does not grant permission",
+        "SERVICE_WORKER": "DENY unless separately listed workerPurpose"
+      },
+      "adminRequirements": [
+        "current GLOBAL_ADMIN",
+        "explicit credential kind ADMIN",
+        "target in TENANT_SET or explicit PLATFORM",
+        "adequate access level"
+      ],
+      "targetTasks": [
+        "TAS-372"
+      ]
+    },
+    {
+      "action": "notification.read",
+      "effect": "READ",
+      "resourceScope": "TENANT",
+      "roles": {
+        "OWNER": "ALLOW",
+        "TENANT_ADMIN": "ALLOW",
+        "PROJECT_ADMIN": "ALLOW",
+        "MEMBER": "ALLOW",
+        "VIEWER": "ALLOW",
+        "GLOBAL_ADMIN": "ADMIN_PATH"
+      },
+      "conditions": [
+        "own recipient; current resource ACL; no old payload leakage"
+      ],
+      "lifecyclePolicy": "INBOX",
+      "channels": {
+        "WEB": "ROLE_AND_POLICY",
+        "USER_PAT": "READ",
+        "USER_OAUTH": "READ",
+        "ADMIN_PAT": "READ",
+        "ADMIN_OAUTH": "READ",
+        "MCP": "PRESENTED_CREDENTIAL_RULES; tool availability does not grant permission",
+        "SERVICE_WORKER": "DENY unless separately listed workerPurpose"
+      },
+      "adminRequirements": [
+        "current GLOBAL_ADMIN",
+        "explicit credential kind ADMIN",
+        "target in TENANT_SET or explicit PLATFORM",
+        "adequate access level"
+      ],
+      "targetTasks": [
+        "TAS-325"
+      ]
+    },
+    {
+      "action": "notification.mark_read",
+      "effect": "MODIFY",
+      "resourceScope": "TENANT",
+      "roles": {
+        "OWNER": "ALLOW",
+        "TENANT_ADMIN": "ALLOW",
+        "PROJECT_ADMIN": "ALLOW",
+        "MEMBER": "ALLOW",
+        "VIEWER": "ALLOW",
+        "GLOBAL_ADMIN": "ADMIN_PATH"
+      },
+      "conditions": [
+        "own recipient; not shared business mutation but admin grant MODIFY by persisted effect"
+      ],
+      "lifecyclePolicy": "PERSONAL_INBOX",
+      "channels": {
+        "WEB": "ROLE_AND_POLICY",
+        "USER_PAT": "WRITE",
+        "USER_OAUTH": "WRITE",
+        "ADMIN_PAT": "MODIFY",
+        "ADMIN_OAUTH": "MODIFY",
+        "MCP": "PRESENTED_CREDENTIAL_RULES; tool availability does not grant permission",
+        "SERVICE_WORKER": "DENY unless separately listed workerPurpose"
+      },
+      "adminRequirements": [
+        "current GLOBAL_ADMIN",
+        "explicit credential kind ADMIN",
+        "target in TENANT_SET or explicit PLATFORM",
+        "adequate access level"
+      ],
+      "targetTasks": [
+        "TAS-325"
+      ]
+    },
+    {
+      "action": "notification.preferences",
+      "effect": "MODIFY",
+      "resourceScope": "TENANT",
+      "roles": {
+        "OWNER": "ALLOW",
+        "TENANT_ADMIN": "ALLOW",
+        "PROJECT_ADMIN": "ALLOW",
+        "MEMBER": "ALLOW",
+        "VIEWER": "ALLOW",
+        "GLOBAL_ADMIN": "ADMIN_PATH"
+      },
+      "conditions": [
+        "own settings; mandatory owner notices unaffected"
+      ],
+      "lifecyclePolicy": "PERSONAL_INBOX",
+      "channels": {
+        "WEB": "ROLE_AND_POLICY",
+        "USER_PAT": "WRITE",
+        "USER_OAUTH": "WRITE",
+        "ADMIN_PAT": "MODIFY",
+        "ADMIN_OAUTH": "MODIFY",
+        "MCP": "PRESENTED_CREDENTIAL_RULES; tool availability does not grant permission",
+        "SERVICE_WORKER": "DENY unless separately listed workerPurpose"
+      },
+      "adminRequirements": [
+        "current GLOBAL_ADMIN",
+        "explicit credential kind ADMIN",
+        "target in TENANT_SET or explicit PLATFORM",
+        "adequate access level"
+      ],
+      "targetTasks": [
+        "TAS-325"
+      ]
+    },
+    {
+      "action": "billing.read",
+      "effect": "READ",
+      "resourceScope": "TENANT_FINANCE",
+      "roles": {
+        "OWNER": "ALLOW",
+        "TENANT_ADMIN": "DENY",
+        "PROJECT_ADMIN": "DENY",
+        "MEMBER": "DENY",
+        "VIEWER": "DENY",
+        "GLOBAL_ADMIN": "ADMIN_PATH"
+      },
+      "conditions": [
+        "financial documents outside work export"
+      ],
+      "lifecyclePolicy": "FINANCE_READ",
+      "channels": {
+        "WEB": "ROLE_AND_POLICY",
+        "USER_PAT": "READ",
+        "USER_OAUTH": "READ",
+        "ADMIN_PAT": "READ",
+        "ADMIN_OAUTH": "READ",
+        "MCP": "PRESENTED_CREDENTIAL_RULES; tool availability does not grant permission",
+        "SERVICE_WORKER": "DENY unless separately listed workerPurpose"
+      },
+      "adminRequirements": [
+        "current GLOBAL_ADMIN",
+        "explicit credential kind ADMIN",
+        "target in TENANT_SET or explicit PLATFORM",
+        "adequate access level"
+      ],
+      "targetTasks": [
+        "TAS-475",
+        "TAS-482"
+      ]
+    },
+    {
+      "action": "billing.pay",
+      "effect": "MODIFY",
+      "resourceScope": "TENANT_FINANCE",
+      "roles": {
+        "OWNER": "ALLOW",
+        "TENANT_ADMIN": "DENY",
+        "PROJECT_ADMIN": "DENY",
+        "MEMBER": "DENY",
+        "VIEWER": "DENY",
+        "GLOBAL_ADMIN": "ADMIN_PATH"
+      },
+      "conditions": [
+        "verified provider fact activates; user callback never PAID"
+      ],
+      "lifecyclePolicy": "PAYMENT",
+      "channels": {
+        "WEB": "ROLE_AND_POLICY",
+        "USER_PAT": "WRITE",
+        "USER_OAUTH": "WRITE",
+        "ADMIN_PAT": "MODIFY",
+        "ADMIN_OAUTH": "MODIFY",
+        "MCP": "PRESENTED_CREDENTIAL_RULES; tool availability does not grant permission",
+        "SERVICE_WORKER": "DENY unless separately listed workerPurpose"
+      },
+      "adminRequirements": [
+        "current GLOBAL_ADMIN",
+        "explicit credential kind ADMIN",
+        "target in TENANT_SET or explicit PLATFORM",
+        "adequate access level"
+      ],
+      "targetTasks": [
+        "TAS-348",
+        "TAS-357"
+      ]
+    },
+    {
+      "action": "billing.subscription_change",
+      "effect": "MODIFY",
+      "resourceScope": "TENANT_FINANCE",
+      "roles": {
+        "OWNER": "ALLOW",
+        "TENANT_ADMIN": "DENY",
+        "PROJECT_ADMIN": "DENY",
+        "MEMBER": "DENY",
+        "VIEWER": "DENY",
+        "GLOBAL_ADMIN": "ADMIN_PATH"
+      },
+      "conditions": [
+        "catalog/free eligibility/paid period rules; independent restriction unchanged"
+      ],
+      "lifecyclePolicy": "FINANCE_RECOVERY",
+      "channels": {
+        "WEB": "ROLE_AND_POLICY",
+        "USER_PAT": "WRITE",
+        "USER_OAUTH": "WRITE",
+        "ADMIN_PAT": "MODIFY",
+        "ADMIN_OAUTH": "MODIFY",
+        "MCP": "PRESENTED_CREDENTIAL_RULES; tool availability does not grant permission",
+        "SERVICE_WORKER": "DENY unless separately listed workerPurpose"
+      },
+      "adminRequirements": [
+        "current GLOBAL_ADMIN",
+        "explicit credential kind ADMIN",
+        "target in TENANT_SET or explicit PLATFORM",
+        "adequate access level"
+      ],
+      "targetTasks": [
+        "TAS-354"
+      ]
+    },
+    {
+      "action": "billing.autopay_consent",
+      "effect": "MODIFY",
+      "resourceScope": "TENANT_FINANCE",
+      "roles": {
+        "OWNER": "ALLOW",
+        "TENANT_ADMIN": "DENY",
+        "PROJECT_ADMIN": "DENY",
+        "MEMBER": "DENY",
+        "VIEWER": "DENY",
+        "GLOBAL_ADMIN": "ADMIN_PATH"
+      },
+      "conditions": [
+        "explicit current owner consent; separate from manual payment"
+      ],
+      "lifecyclePolicy": "AUTOPAY",
+      "channels": {
+        "WEB": "ROLE_AND_POLICY",
+        "USER_PAT": "WRITE",
+        "USER_OAUTH": "WRITE",
+        "ADMIN_PAT": "MODIFY",
+        "ADMIN_OAUTH": "MODIFY",
+        "MCP": "PRESENTED_CREDENTIAL_RULES; tool availability does not grant permission",
+        "SERVICE_WORKER": "DENY unless separately listed workerPurpose"
+      },
+      "adminRequirements": [
+        "current GLOBAL_ADMIN",
+        "explicit credential kind ADMIN",
+        "target in TENANT_SET or explicit PLATFORM",
+        "adequate access level"
+      ],
+      "targetTasks": [
+        "TAS-355"
+      ]
+    },
+    {
+      "action": "billing.refund_request",
+      "effect": "MODIFY",
+      "resourceScope": "TENANT_FINANCE",
+      "roles": {
+        "OWNER": "ALLOW",
+        "TENANT_ADMIN": "DENY",
+        "PROJECT_ADMIN": "DENY",
+        "MEMBER": "DENY",
+        "VIEWER": "DENY",
+        "GLOBAL_ADMIN": "ADMIN_PATH"
+      },
+      "conditions": [
+        "supported full subscription payment refund or unallocated excess rules only"
+      ],
+      "lifecyclePolicy": "FINANCE_RECOVERY",
+      "channels": {
+        "WEB": "ROLE_AND_POLICY",
+        "USER_PAT": "WRITE",
+        "USER_OAUTH": "WRITE",
+        "ADMIN_PAT": "MODIFY",
+        "ADMIN_OAUTH": "MODIFY",
+        "MCP": "PRESENTED_CREDENTIAL_RULES; tool availability does not grant permission",
+        "SERVICE_WORKER": "DENY unless separately listed workerPurpose"
+      },
+      "adminRequirements": [
+        "current GLOBAL_ADMIN",
+        "explicit credential kind ADMIN",
+        "target in TENANT_SET or explicit PLATFORM",
+        "adequate access level"
+      ],
+      "targetTasks": [
+        "TAS-358",
+        "TAS-486"
+      ]
+    },
+    {
+      "action": "billing.bank_confirm",
+      "effect": "MODIFY",
+      "resourceScope": "TENANT_FINANCE",
+      "roles": {
+        "OWNER": "DENY",
+        "TENANT_ADMIN": "DENY",
+        "PROJECT_ADMIN": "DENY",
+        "MEMBER": "DENY",
+        "VIEWER": "DENY",
+        "GLOBAL_ADMIN": "ADMIN_PATH"
+      },
+      "conditions": [
+        "evidence and ledger invariants",
+        "explicit confirmation; no extra OTP D248",
+        "scope and grant level cannot be bypassed"
+      ],
+      "lifecyclePolicy": "ADMIN",
+      "channels": {
+        "WEB": "ROLE_AND_POLICY",
+        "USER_PAT": "WRITE",
+        "USER_OAUTH": "WRITE",
+        "ADMIN_PAT": "MODIFY",
+        "ADMIN_OAUTH": "MODIFY",
+        "MCP": "PRESENTED_CREDENTIAL_RULES; tool availability does not grant permission",
+        "SERVICE_WORKER": "DENY unless separately listed workerPurpose"
+      },
+      "adminRequirements": [
+        "current GLOBAL_ADMIN",
+        "explicit credential kind ADMIN",
+        "target in TENANT_SET or explicit PLATFORM",
+        "adequate access level"
+      ],
+      "targetTasks": [
+        "TAS-357",
+        "TAS-358",
+        "TAS-490"
+      ]
+    },
+    {
+      "action": "billing.refund_confirm",
+      "effect": "MODIFY",
+      "resourceScope": "TENANT_FINANCE",
+      "roles": {
+        "OWNER": "DENY",
+        "TENANT_ADMIN": "DENY",
+        "PROJECT_ADMIN": "DENY",
+        "MEMBER": "DENY",
+        "VIEWER": "DENY",
+        "GLOBAL_ADMIN": "ADMIN_PATH"
+      },
+      "conditions": [
+        "evidence and ledger invariants",
+        "explicit confirmation; no extra OTP D248",
+        "scope and grant level cannot be bypassed"
+      ],
+      "lifecyclePolicy": "ADMIN",
+      "channels": {
+        "WEB": "ROLE_AND_POLICY",
+        "USER_PAT": "WRITE",
+        "USER_OAUTH": "WRITE",
+        "ADMIN_PAT": "MODIFY",
+        "ADMIN_OAUTH": "MODIFY",
+        "MCP": "PRESENTED_CREDENTIAL_RULES; tool availability does not grant permission",
+        "SERVICE_WORKER": "DENY unless separately listed workerPurpose"
+      },
+      "adminRequirements": [
+        "current GLOBAL_ADMIN",
+        "explicit credential kind ADMIN",
+        "target in TENANT_SET or explicit PLATFORM",
+        "adequate access level"
+      ],
+      "targetTasks": [
+        "TAS-357",
+        "TAS-358",
+        "TAS-490"
+      ]
+    },
+    {
+      "action": "billing.dispute_decide",
+      "effect": "MODIFY",
+      "resourceScope": "TENANT_FINANCE",
+      "roles": {
+        "OWNER": "DENY",
+        "TENANT_ADMIN": "DENY",
+        "PROJECT_ADMIN": "DENY",
+        "MEMBER": "DENY",
+        "VIEWER": "DENY",
+        "GLOBAL_ADMIN": "ADMIN_PATH"
+      },
+      "conditions": [
+        "evidence and ledger invariants",
+        "explicit confirmation; no extra OTP D248",
+        "scope and grant level cannot be bypassed"
+      ],
+      "lifecyclePolicy": "ADMIN",
+      "channels": {
+        "WEB": "ROLE_AND_POLICY",
+        "USER_PAT": "WRITE",
+        "USER_OAUTH": "WRITE",
+        "ADMIN_PAT": "MODIFY",
+        "ADMIN_OAUTH": "MODIFY",
+        "MCP": "PRESENTED_CREDENTIAL_RULES; tool availability does not grant permission",
+        "SERVICE_WORKER": "DENY unless separately listed workerPurpose"
+      },
+      "adminRequirements": [
+        "current GLOBAL_ADMIN",
+        "explicit credential kind ADMIN",
+        "target in TENANT_SET or explicit PLATFORM",
+        "adequate access level"
+      ],
+      "targetTasks": [
+        "TAS-357",
+        "TAS-358",
+        "TAS-490"
+      ]
+    },
+    {
+      "action": "account.self_read",
+      "effect": "READ",
+      "resourceScope": "GLOBAL_SELF",
+      "roles": {
+        "OWNER": "ALLOW",
+        "TENANT_ADMIN": "ALLOW",
+        "PROJECT_ADMIN": "ALLOW",
+        "MEMBER": "ALLOW",
+        "VIEWER": "ALLOW",
+        "GLOBAL_ADMIN": "SELF_READ"
+      },
+      "conditions": [
+        "only own non-secret profile metadata"
+      ],
+      "lifecyclePolicy": "ACCOUNT",
+      "channels": {
+        "WEB": "ROLE_AND_POLICY",
+        "USER_PAT": "READ",
+        "USER_OAUTH": "READ",
+        "ADMIN_PAT": "READ",
+        "ADMIN_OAUTH": "READ",
+        "MCP": "PRESENTED_CREDENTIAL_RULES; tool availability does not grant permission",
+        "SERVICE_WORKER": "DENY unless separately listed workerPurpose"
+      },
+      "adminRequirements": [
+        "current GLOBAL_ADMIN",
+        "explicit credential kind ADMIN",
+        "target in TENANT_SET or explicit PLATFORM",
+        "adequate access level"
+      ],
+      "targetTasks": [
+        "TAS-477"
+      ]
+    },
+    {
+      "action": "account.profile_update",
+      "effect": "MODIFY",
+      "resourceScope": "GLOBAL_SELF",
+      "roles": {
+        "OWNER": "ALLOW",
+        "TENANT_ADMIN": "ALLOW",
+        "PROJECT_ADMIN": "ALLOW",
+        "MEMBER": "ALLOW",
+        "VIEWER": "ALLOW",
+        "GLOBAL_ADMIN": "WEB_SELF_ONLY"
+      },
+      "conditions": [
+        "own global account; completed ordinary web session"
+      ],
+      "lifecyclePolicy": "ACCOUNT",
+      "channels": {
+        "WEB": "ROLE_AND_POLICY",
+        "USER_PAT": "SESSION_REQUIRED",
+        "USER_OAUTH": "SESSION_REQUIRED",
+        "ADMIN_PAT": "SESSION_REQUIRED",
+        "ADMIN_OAUTH": "SESSION_REQUIRED",
+        "MCP": "PRESENTED_CREDENTIAL_RULES; tool availability does not grant permission",
+        "SERVICE_WORKER": "DENY unless separately listed workerPurpose"
+      },
+      "adminRequirements": [
+        "current GLOBAL_ADMIN",
+        "explicit credential kind ADMIN",
+        "target in TENANT_SET or explicit PLATFORM",
+        "adequate access level"
+      ],
+      "targetTasks": [
+        "TAS-461",
+        "TAS-477",
+        "TAS-479",
+        "TAS-494",
+        "TAS-366",
+        "TAS-463"
+      ]
+    },
+    {
+      "action": "account.avatar_write",
+      "effect": "MODIFY",
+      "resourceScope": "GLOBAL_SELF",
+      "roles": {
+        "OWNER": "ALLOW",
+        "TENANT_ADMIN": "ALLOW",
+        "PROJECT_ADMIN": "ALLOW",
+        "MEMBER": "ALLOW",
+        "VIEWER": "ALLOW",
+        "GLOBAL_ADMIN": "WEB_SELF_ONLY"
+      },
+      "conditions": [
+        "own global account; completed ordinary web session"
+      ],
+      "lifecyclePolicy": "ACCOUNT",
+      "channels": {
+        "WEB": "ROLE_AND_POLICY",
+        "USER_PAT": "SESSION_REQUIRED",
+        "USER_OAUTH": "SESSION_REQUIRED",
+        "ADMIN_PAT": "SESSION_REQUIRED",
+        "ADMIN_OAUTH": "SESSION_REQUIRED",
+        "MCP": "PRESENTED_CREDENTIAL_RULES; tool availability does not grant permission",
+        "SERVICE_WORKER": "DENY unless separately listed workerPurpose"
+      },
+      "adminRequirements": [
+        "current GLOBAL_ADMIN",
+        "explicit credential kind ADMIN",
+        "target in TENANT_SET or explicit PLATFORM",
+        "adequate access level"
+      ],
+      "targetTasks": [
+        "TAS-461",
+        "TAS-477",
+        "TAS-479",
+        "TAS-494",
+        "TAS-366",
+        "TAS-463"
+      ]
+    },
+    {
+      "action": "account.password_change",
+      "effect": "MODIFY",
+      "resourceScope": "GLOBAL_SELF",
+      "roles": {
+        "OWNER": "ALLOW",
+        "TENANT_ADMIN": "ALLOW",
+        "PROJECT_ADMIN": "ALLOW",
+        "MEMBER": "ALLOW",
+        "VIEWER": "ALLOW",
+        "GLOBAL_ADMIN": "WEB_SELF_ONLY"
+      },
+      "conditions": [
+        "own global account; completed ordinary web session"
+      ],
+      "lifecyclePolicy": "ACCOUNT",
+      "channels": {
+        "WEB": "ROLE_AND_POLICY",
+        "USER_PAT": "SESSION_REQUIRED",
+        "USER_OAUTH": "SESSION_REQUIRED",
+        "ADMIN_PAT": "SESSION_REQUIRED",
+        "ADMIN_OAUTH": "SESSION_REQUIRED",
+        "MCP": "PRESENTED_CREDENTIAL_RULES; tool availability does not grant permission",
+        "SERVICE_WORKER": "DENY unless separately listed workerPurpose"
+      },
+      "adminRequirements": [
+        "current GLOBAL_ADMIN",
+        "explicit credential kind ADMIN",
+        "target in TENANT_SET or explicit PLATFORM",
+        "adequate access level"
+      ],
+      "targetTasks": [
+        "TAS-461",
+        "TAS-477",
+        "TAS-479",
+        "TAS-494",
+        "TAS-366",
+        "TAS-463"
+      ]
+    },
+    {
+      "action": "account.email_change",
+      "effect": "MODIFY",
+      "resourceScope": "GLOBAL_SELF",
+      "roles": {
+        "OWNER": "ALLOW",
+        "TENANT_ADMIN": "ALLOW",
+        "PROJECT_ADMIN": "ALLOW",
+        "MEMBER": "ALLOW",
+        "VIEWER": "ALLOW",
+        "GLOBAL_ADMIN": "WEB_SELF_ONLY"
+      },
+      "conditions": [
+        "own global account; completed ordinary web session"
+      ],
+      "lifecyclePolicy": "ACCOUNT",
+      "channels": {
+        "WEB": "ROLE_AND_POLICY",
+        "USER_PAT": "SESSION_REQUIRED",
+        "USER_OAUTH": "SESSION_REQUIRED",
+        "ADMIN_PAT": "SESSION_REQUIRED",
+        "ADMIN_OAUTH": "SESSION_REQUIRED",
+        "MCP": "PRESENTED_CREDENTIAL_RULES; tool availability does not grant permission",
+        "SERVICE_WORKER": "DENY unless separately listed workerPurpose"
+      },
+      "adminRequirements": [
+        "current GLOBAL_ADMIN",
+        "explicit credential kind ADMIN",
+        "target in TENANT_SET or explicit PLATFORM",
+        "adequate access level"
+      ],
+      "targetTasks": [
+        "TAS-461",
+        "TAS-477",
+        "TAS-479",
+        "TAS-494",
+        "TAS-366",
+        "TAS-463"
+      ]
+    },
+    {
+      "action": "account.delete",
+      "effect": "MODIFY",
+      "resourceScope": "GLOBAL_SELF",
+      "roles": {
+        "OWNER": "ALLOW",
+        "TENANT_ADMIN": "ALLOW",
+        "PROJECT_ADMIN": "ALLOW",
+        "MEMBER": "ALLOW",
+        "VIEWER": "ALLOW",
+        "GLOBAL_ADMIN": "WEB_SELF_ONLY"
+      },
+      "conditions": [
+        "own global account; completed ordinary web session",
+        "no owned tenants anywhere",
+        "not last ACTIVE TA anywhere",
+        "purpose ACCOUNT_DELETE separate one-time code",
+        "D249 company pause/block/dispute does not block",
+        "tenant-service global account admission fence prevents new ownership/admin/membership duties during execution"
+      ],
+      "lifecyclePolicy": "ACCOUNT_DELETE",
+      "channels": {
+        "WEB": "ROLE_AND_POLICY",
+        "USER_PAT": "SESSION_REQUIRED",
+        "USER_OAUTH": "SESSION_REQUIRED",
+        "ADMIN_PAT": "SESSION_REQUIRED",
+        "ADMIN_OAUTH": "SESSION_REQUIRED",
+        "MCP": "PRESENTED_CREDENTIAL_RULES; tool availability does not grant permission",
+        "SERVICE_WORKER": "DENY unless separately listed workerPurpose"
+      },
+      "adminRequirements": [
+        "current GLOBAL_ADMIN",
+        "explicit credential kind ADMIN",
+        "target in TENANT_SET or explicit PLATFORM",
+        "adequate access level"
+      ],
+      "targetTasks": [
+        "TAS-461",
+        "TAS-477",
+        "TAS-479",
+        "TAS-494",
+        "TAS-366",
+        "TAS-463"
+      ]
+    },
+    {
+      "action": "pat.create",
+      "effect": "MODIFY",
+      "resourceScope": "GLOBAL_SELF",
+      "roles": {
+        "OWNER": "ALLOW",
+        "TENANT_ADMIN": "ALLOW",
+        "PROJECT_ADMIN": "ALLOW",
+        "MEMBER": "ALLOW",
+        "VIEWER": "ALLOW",
+        "GLOBAL_ADMIN": "WEB_SELF_ONLY"
+      },
+      "conditions": [
+        "own global account; completed ordinary web session"
+      ],
+      "lifecyclePolicy": "ACCOUNT",
+      "channels": {
+        "WEB": "ROLE_AND_POLICY",
+        "USER_PAT": "SESSION_REQUIRED",
+        "USER_OAUTH": "SESSION_REQUIRED",
+        "ADMIN_PAT": "SESSION_REQUIRED",
+        "ADMIN_OAUTH": "SESSION_REQUIRED",
+        "MCP": "PRESENTED_CREDENTIAL_RULES; tool availability does not grant permission",
+        "SERVICE_WORKER": "DENY unless separately listed workerPurpose"
+      },
+      "adminRequirements": [
+        "current GLOBAL_ADMIN",
+        "explicit credential kind ADMIN",
+        "target in TENANT_SET or explicit PLATFORM",
+        "adequate access level"
+      ],
+      "targetTasks": [
+        "TAS-461",
+        "TAS-477",
+        "TAS-479",
+        "TAS-494",
+        "TAS-366",
+        "TAS-463"
+      ]
+    },
+    {
+      "action": "pat.metadata_revoke",
+      "effect": "MODIFY",
+      "resourceScope": "GLOBAL_SELF",
+      "roles": {
+        "OWNER": "ALLOW",
+        "TENANT_ADMIN": "ALLOW",
+        "PROJECT_ADMIN": "ALLOW",
+        "MEMBER": "ALLOW",
+        "VIEWER": "ALLOW",
+        "GLOBAL_ADMIN": "WEB_SELF_ONLY"
+      },
+      "conditions": [
+        "own tokens; remains available if PAT flag off; ordinary session required"
+      ],
+      "lifecyclePolicy": "ACCOUNT",
+      "channels": {
+        "WEB": "ROLE_AND_POLICY",
+        "USER_PAT": "SESSION_REQUIRED",
+        "USER_OAUTH": "SESSION_REQUIRED",
+        "ADMIN_PAT": "SESSION_REQUIRED",
+        "ADMIN_OAUTH": "SESSION_REQUIRED",
+        "MCP": "PRESENTED_CREDENTIAL_RULES; tool availability does not grant permission",
+        "SERVICE_WORKER": "DENY unless separately listed workerPurpose"
+      },
+      "adminRequirements": [
+        "current GLOBAL_ADMIN",
+        "explicit credential kind ADMIN",
+        "target in TENANT_SET or explicit PLATFORM",
+        "adequate access level"
+      ],
+      "targetTasks": [
+        "TAS-463"
+      ]
+    },
+    {
+      "action": "oauth.refresh_revoke",
+      "effect": "PROTOCOL",
+      "resourceScope": "EXISTING_GRANT",
+      "roles": {
+        "OWNER": "EXISTING_GRANT_OWNER",
+        "TENANT_ADMIN": "EXISTING_GRANT_OWNER",
+        "PROJECT_ADMIN": "EXISTING_GRANT_OWNER",
+        "MEMBER": "EXISTING_GRANT_OWNER",
+        "VIEWER": "EXISTING_GRANT_OWNER",
+        "GLOBAL_ADMIN": "EXISTING_GRANT_OWNER"
+      },
+      "conditions": [
+        "valid existing grant; no scope/tenant/level increase",
+        "refresh replay revokes family",
+        "revoke own family only"
+      ],
+      "lifecyclePolicy": "PROTOCOL",
+      "channels": {
+        "WEB": "ROLE_AND_POLICY",
+        "USER_PAT": "NOT_APPLICABLE",
+        "USER_OAUTH": "EXISTING_GRANT_PROTOCOL_ONLY",
+        "ADMIN_PAT": "NOT_APPLICABLE",
+        "ADMIN_OAUTH": "EXISTING_GRANT_PROTOCOL_ONLY",
+        "MCP": "PRESENTED_CREDENTIAL_RULES; tool availability does not grant permission",
+        "SERVICE_WORKER": "DENY unless separately listed workerPurpose"
+      },
+      "adminRequirements": [
+        "current GLOBAL_ADMIN",
+        "explicit credential kind ADMIN",
+        "target in TENANT_SET or explicit PLATFORM",
+        "adequate access level"
+      ],
+      "targetTasks": [
+        "TAS-498",
+        "TAS-499"
+      ]
+    },
+    {
+      "action": "admin.grant_issue_expand",
+      "effect": "MODIFY",
+      "resourceScope": "PLATFORM",
+      "roles": {
+        "OWNER": "DENY",
+        "TENANT_ADMIN": "DENY",
+        "PROJECT_ADMIN": "DENY",
+        "MEMBER": "DENY",
+        "VIEWER": "DENY",
+        "GLOBAL_ADMIN": "WEB_MFA_ONLY"
+      },
+      "conditions": [
+        "current GLOBAL_ADMIN and completed email MFA",
+        "explicit tenant selection/platform + level + account-management right"
+      ],
+      "lifecyclePolicy": "ADMIN_WEB",
+      "channels": {
+        "WEB": "ROLE_AND_POLICY",
+        "USER_PAT": "SESSION_REQUIRED",
+        "USER_OAUTH": "SESSION_REQUIRED",
+        "ADMIN_PAT": "SESSION_REQUIRED",
+        "ADMIN_OAUTH": "SESSION_REQUIRED",
+        "MCP": "PRESENTED_CREDENTIAL_RULES; tool availability does not grant permission",
+        "SERVICE_WORKER": "DENY unless separately listed workerPurpose"
+      },
+      "adminRequirements": [
+        "current GLOBAL_ADMIN",
+        "explicit credential kind ADMIN",
+        "target in TENANT_SET or explicit PLATFORM",
+        "adequate access level"
+      ],
+      "targetTasks": [
+        "TAS-499"
+      ]
+    },
+    {
+      "action": "admin.account_block",
+      "effect": "MODIFY",
+      "resourceScope": "GLOBAL_ACCOUNT",
+      "roles": {
+        "OWNER": "DENY",
+        "TENANT_ADMIN": "DENY",
+        "PROJECT_ADMIN": "DENY",
+        "MEMBER": "DENY",
+        "VIEWER": "DENY",
+        "GLOBAL_ADMIN": "ADMIN_PATH"
+      },
+      "conditions": [
+        "explicit PLATFORM scope required; selected set never sufficient",
+        "account integrity/deletion safeguards remain"
+      ],
+      "lifecyclePolicy": "ADMIN",
+      "channels": {
+        "WEB": "ROLE_AND_POLICY",
+        "USER_PAT": "WRITE",
+        "USER_OAUTH": "WRITE",
+        "ADMIN_PAT": "MODIFY",
+        "ADMIN_OAUTH": "MODIFY",
+        "MCP": "PRESENTED_CREDENTIAL_RULES; tool availability does not grant permission",
+        "SERVICE_WORKER": "DENY unless separately listed workerPurpose"
+      },
+      "adminRequirements": [
+        "current GLOBAL_ADMIN",
+        "explicit credential kind ADMIN",
+        "target in TENANT_SET or explicit PLATFORM",
+        "adequate access level",
+        "accounts:manage"
+      ],
+      "targetTasks": [
+        "TAS-485",
+        "TAS-487",
+        "TAS-499"
+      ]
+    },
+    {
+      "action": "admin.account_role_update",
+      "effect": "MODIFY",
+      "resourceScope": "GLOBAL_ACCOUNT",
+      "roles": {
+        "OWNER": "DENY",
+        "TENANT_ADMIN": "DENY",
+        "PROJECT_ADMIN": "DENY",
+        "MEMBER": "DENY",
+        "VIEWER": "DENY",
+        "GLOBAL_ADMIN": "ADMIN_PATH"
+      },
+      "conditions": [
+        "explicit PLATFORM scope required; selected set never sufficient",
+        "account integrity/deletion safeguards remain"
+      ],
+      "lifecyclePolicy": "ADMIN",
+      "channels": {
+        "WEB": "ROLE_AND_POLICY",
+        "USER_PAT": "WRITE",
+        "USER_OAUTH": "WRITE",
+        "ADMIN_PAT": "MODIFY",
+        "ADMIN_OAUTH": "MODIFY",
+        "MCP": "PRESENTED_CREDENTIAL_RULES; tool availability does not grant permission",
+        "SERVICE_WORKER": "DENY unless separately listed workerPurpose"
+      },
+      "adminRequirements": [
+        "current GLOBAL_ADMIN",
+        "explicit credential kind ADMIN",
+        "target in TENANT_SET or explicit PLATFORM",
+        "adequate access level",
+        "accounts:manage"
+      ],
+      "targetTasks": [
+        "TAS-485",
+        "TAS-487",
+        "TAS-499"
+      ]
+    },
+    {
+      "action": "admin.account_delete",
+      "effect": "MODIFY",
+      "resourceScope": "GLOBAL_ACCOUNT",
+      "roles": {
+        "OWNER": "DENY",
+        "TENANT_ADMIN": "DENY",
+        "PROJECT_ADMIN": "DENY",
+        "MEMBER": "DENY",
+        "VIEWER": "DENY",
+        "GLOBAL_ADMIN": "ADMIN_PATH"
+      },
+      "conditions": [
+        "explicit PLATFORM scope required; selected set never sufficient",
+        "account integrity/deletion safeguards remain"
+      ],
+      "lifecyclePolicy": "ADMIN",
+      "channels": {
+        "WEB": "ROLE_AND_POLICY",
+        "USER_PAT": "WRITE",
+        "USER_OAUTH": "WRITE",
+        "ADMIN_PAT": "MODIFY",
+        "ADMIN_OAUTH": "MODIFY",
+        "MCP": "PRESENTED_CREDENTIAL_RULES; tool availability does not grant permission",
+        "SERVICE_WORKER": "DENY unless separately listed workerPurpose"
+      },
+      "adminRequirements": [
+        "current GLOBAL_ADMIN",
+        "explicit credential kind ADMIN",
+        "target in TENANT_SET or explicit PLATFORM",
+        "adequate access level",
+        "accounts:manage"
+      ],
+      "targetTasks": [
+        "TAS-485",
+        "TAS-487",
+        "TAS-499"
+      ]
+    },
+    {
+      "action": "admin.query",
+      "effect": "READ",
+      "resourceScope": "ADMIN_SELECTED_SCOPE",
+      "roles": {
+        "OWNER": "DENY",
+        "TENANT_ADMIN": "DENY",
+        "PROJECT_ADMIN": "DENY",
+        "MEMBER": "DENY",
+        "VIEWER": "DENY",
+        "GLOBAL_ADMIN": "ADMIN_PATH"
+      },
+      "conditions": [
+        "scope before SQL count/page/row; global audit PLATFORM only",
+        "masked credentials"
+      ],
+      "lifecyclePolicy": "ADMIN",
+      "channels": {
+        "WEB": "ROLE_AND_POLICY",
+        "USER_PAT": "READ",
+        "USER_OAUTH": "READ",
+        "ADMIN_PAT": "READ",
+        "ADMIN_OAUTH": "READ",
+        "MCP": "PRESENTED_CREDENTIAL_RULES; tool availability does not grant permission",
+        "SERVICE_WORKER": "DENY unless separately listed workerPurpose"
+      },
+      "adminRequirements": [
+        "current GLOBAL_ADMIN",
+        "explicit credential kind ADMIN",
+        "target in TENANT_SET or explicit PLATFORM",
+        "adequate access level"
+      ],
+      "targetTasks": [
+        "TAS-346",
+        "TAS-350"
+      ]
+    },
+    {
+      "action": "admin.audit_read",
+      "effect": "READ",
+      "resourceScope": "ADMIN_SELECTED_SCOPE",
+      "roles": {
+        "OWNER": "DENY",
+        "TENANT_ADMIN": "DENY",
+        "PROJECT_ADMIN": "DENY",
+        "MEMBER": "DENY",
+        "VIEWER": "DENY",
+        "GLOBAL_ADMIN": "ADMIN_PATH"
+      },
+      "conditions": [
+        "scope before SQL count/page/row; global audit PLATFORM only",
+        "masked credentials"
+      ],
+      "lifecyclePolicy": "ADMIN",
+      "channels": {
+        "WEB": "ROLE_AND_POLICY",
+        "USER_PAT": "READ",
+        "USER_OAUTH": "READ",
+        "ADMIN_PAT": "READ",
+        "ADMIN_OAUTH": "READ",
+        "MCP": "PRESENTED_CREDENTIAL_RULES; tool availability does not grant permission",
+        "SERVICE_WORKER": "DENY unless separately listed workerPurpose"
+      },
+      "adminRequirements": [
+        "current GLOBAL_ADMIN",
+        "explicit credential kind ADMIN",
+        "target in TENANT_SET or explicit PLATFORM",
+        "adequate access level"
+      ],
+      "targetTasks": [
+        "TAS-346",
+        "TAS-350"
+      ]
+    },
+    {
+      "action": "admin.outbox_retry",
+      "effect": "MODIFY",
+      "resourceScope": "ADMIN_SELECTED_SCOPE",
+      "roles": {
+        "OWNER": "DENY",
+        "TENANT_ADMIN": "DENY",
+        "PROJECT_ADMIN": "DENY",
+        "MEMBER": "DENY",
+        "VIEWER": "DENY",
+        "GLOBAL_ADMIN": "ADMIN_PATH"
+      },
+      "conditions": [
+        "same eventId/tenant/payload",
+        "FAILED or stale processing only",
+        "audit and CAS"
+      ],
+      "lifecyclePolicy": "ADMIN",
+      "channels": {
+        "WEB": "ROLE_AND_POLICY",
+        "USER_PAT": "WRITE",
+        "USER_OAUTH": "WRITE",
+        "ADMIN_PAT": "MODIFY",
+        "ADMIN_OAUTH": "MODIFY",
+        "MCP": "PRESENTED_CREDENTIAL_RULES; tool availability does not grant permission",
+        "SERVICE_WORKER": "DENY unless separately listed workerPurpose"
+      },
+      "adminRequirements": [
+        "current GLOBAL_ADMIN",
+        "explicit credential kind ADMIN",
+        "target in TENANT_SET or explicit PLATFORM",
+        "adequate access level"
+      ],
+      "targetTasks": [
+        "TAS-350"
+      ]
+    },
+    {
+      "action": "admin.tenant_block",
+      "effect": "MODIFY",
+      "resourceScope": "TENANT",
+      "roles": {
+        "OWNER": "DENY",
+        "TENANT_ADMIN": "DENY",
+        "PROJECT_ADMIN": "DENY",
+        "MEMBER": "DENY",
+        "VIEWER": "DENY",
+        "GLOBAL_ADMIN": "ADMIN_PATH"
+      },
+      "conditions": [
+        "only explicit platform administrative role/channel; owner cannot clear platform block"
+      ],
+      "lifecyclePolicy": "ADMIN",
+      "channels": {
+        "WEB": "ROLE_AND_POLICY",
+        "USER_PAT": "WRITE",
+        "USER_OAUTH": "WRITE",
+        "ADMIN_PAT": "MODIFY",
+        "ADMIN_OAUTH": "MODIFY",
+        "MCP": "PRESENTED_CREDENTIAL_RULES; tool availability does not grant permission",
+        "SERVICE_WORKER": "DENY unless separately listed workerPurpose"
+      },
+      "adminRequirements": [
+        "current GLOBAL_ADMIN",
+        "explicit credential kind ADMIN",
+        "target in TENANT_SET or explicit PLATFORM",
+        "adequate access level"
+      ],
+      "targetTasks": [
+        "TAS-480"
+      ]
+    },
+    {
+      "action": "admin.configuration_write",
+      "effect": "MODIFY",
+      "resourceScope": "PLATFORM",
+      "roles": {
+        "OWNER": "DENY",
+        "TENANT_ADMIN": "DENY",
+        "PROJECT_ADMIN": "DENY",
+        "MEMBER": "DENY",
+        "VIEWER": "DENY",
+        "GLOBAL_ADMIN": "ADMIN_PATH"
+      },
+      "conditions": [
+        "PLATFORM grant mandatory for global settings/catalog; no tenant overrides"
+      ],
+      "lifecyclePolicy": "ADMIN",
+      "channels": {
+        "WEB": "ROLE_AND_POLICY",
+        "USER_PAT": "WRITE",
+        "USER_OAUTH": "WRITE",
+        "ADMIN_PAT": "MODIFY",
+        "ADMIN_OAUTH": "MODIFY",
+        "MCP": "PRESENTED_CREDENTIAL_RULES; tool availability does not grant permission",
+        "SERVICE_WORKER": "DENY unless separately listed workerPurpose"
+      },
+      "adminRequirements": [
+        "current GLOBAL_ADMIN",
+        "explicit credential kind ADMIN",
+        "target in TENANT_SET or explicit PLATFORM",
+        "adequate access level"
+      ],
+      "targetTasks": [
+        "TAS-462",
+        "TAS-499"
+      ]
+    },
+    {
+      "action": "admin.account_profile_update",
+      "effect": "MODIFY",
+      "resourceScope": "GLOBAL_ACCOUNT",
+      "roles": {
+        "OWNER": "DENY",
+        "TENANT_ADMIN": "DENY",
+        "PROJECT_ADMIN": "DENY",
+        "MEMBER": "DENY",
+        "VIEWER": "DENY",
+        "GLOBAL_ADMIN": "ADMIN_PATH"
+      },
+      "conditions": [
+        "existing admin displayName update endpoint",
+        "global profile requires explicit PLATFORM and accounts:manage",
+        "preserve user attribution and current account state"
+      ],
+      "lifecyclePolicy": "ADMIN",
+      "channels": {
+        "WEB": "ROLE_AND_POLICY",
+        "USER_PAT": "WRITE",
+        "USER_OAUTH": "WRITE",
+        "ADMIN_PAT": "MODIFY",
+        "ADMIN_OAUTH": "MODIFY",
+        "MCP": "PRESENTED_CREDENTIAL_RULES; tool availability does not grant permission",
+        "SERVICE_WORKER": "DENY unless separately listed workerPurpose"
+      },
+      "adminRequirements": [
+        "current GLOBAL_ADMIN",
+        "explicit credential kind ADMIN",
+        "target in TENANT_SET or explicit PLATFORM",
+        "adequate access level",
+        "accounts:manage"
+      ],
+      "targetTasks": [
+        "TAS-345",
+        "TAS-477",
+        "TAS-499"
+      ]
+    }
+  ],
+  "workerPurposes": [
+    {
+      "purpose": "OUTBOX_PUBLISH",
+      "scope": "row-owned scope",
+      "authority": "committed event fact; no new business mutation"
+    },
+    {
+      "purpose": "NOTIFICATION_DELIVER",
+      "scope": "tenant or GLOBAL_USER",
+      "authority": "durable delivery lease + online current recipient ACL"
+    },
+    {
+      "purpose": "OPERATION_RECOVER",
+      "scope": "tenant/project/operation/generation",
+      "authority": "durable admitted journal; APPLIED receipt forward completion"
+    },
+    {
+      "purpose": "MEMBERSHIP_CLEANUP",
+      "scope": "tenant/user/old membership generation",
+      "authority": "durable revoke event; conditional old assignment only"
+    },
+    {
+      "purpose": "STORAGE_CLEANUP",
+      "scope": "owned manifest/object generation",
+      "authority": "durable DELETING/EXPIRED manifest; never arbitrary object key"
+    },
+    {
+      "purpose": "EXPORT_BUILD",
+      "scope": "tenant/requester/current project subset",
+      "authority": "current requester/grant rights at every page"
+    },
+    {
+      "purpose": "BILLING_RECONCILE",
+      "scope": "tenant/invoice/provider fact",
+      "authority": "verified external fact + ledger idempotency, never customer callback"
+    },
+    {
+      "purpose": "ACCOUNT_DELETE",
+      "scope": "global user deletion operation plus explicit tenant child",
+      "authority": "committed account deletion with owner/last-admin guard"
+    }
+  ],
+  "excludedProductFeatures": [
+    "project move between tenants D222",
+    "partial refund of subscription fee D228",
+    "tenant logo",
+    "limited support-session product"
+  ],
+  "minorDecisions": {
+    "signedAssertionMaxTtlSeconds": 30,
+    "signedAssertionClockSkewSeconds": 5,
+    "readAuthorizationHardTtlSeconds": 30,
+    "negativeAuthorizationTtlSeconds": 5,
+    "uploadPresignMaxTtlSeconds": 300,
+    "uploadReservationTtlSeconds": 900,
+    "downloadMode": "AUTHENTICATED_STREAMING_PROXY_WITH_RANGE",
+    "downloadAccessLeaseMaxSeconds": 30,
+    "mfaCodeDigits": 8,
+    "mfaChallengeTtlSeconds": 600,
+    "mfaMaxAttempts": 5,
+    "mfaResendCooldownSeconds": 60,
+    "mfaMaxResends": 3
+  },
+  "lifecyclePolicies": {
+    "NORMAL": {
+      "deniedReasons": [
+        "PLATFORM_BLOCK",
+        "OWNER_PAUSE",
+        "PAYMENT_DISPUTE",
+        "PENDING_FIRST_PAYMENT",
+        "PAYMENT_EXPIRED",
+        "OVER_QUOTA"
+      ],
+      "checks": [
+        "ACL",
+        "flags",
+        "resource generation",
+        "unarchived project",
+        "quota for admitted resource"
+      ]
+    },
+    "CONTENT_READ": {
+      "deniedReasons": [
+        "PENDING_FIRST_PAYMENT"
+      ],
+      "conditionalDeny": {
+        "PLATFORM_BLOCK": "contentReadWhenRestricted=false",
+        "OWNER_PAUSE": "contentReadWhenRestricted=false"
+      },
+      "checks": [
+        "current ACL",
+        "object expiry/tombstone"
+      ]
+    },
+    "DIRECTORY": {
+      "inherits": "CONTENT_READ",
+      "checks": [
+        "ACTIVE same tenant",
+        "global profile tombstone"
+      ]
+    },
+    "RECOVERY": {
+      "deniedReasons": [
+        "PLATFORM_BLOCK",
+        "OWNER_PAUSE",
+        "PAYMENT_DISPUTE",
+        "PENDING_FIRST_PAYMENT"
+      ],
+      "checks": [
+        "only OWNER/TENANT_ADMIN removal/revoke/project deletion",
+        "owner/last-admin integrity"
+      ]
+    },
+    "INVITE_ACCEPT": {
+      "deniedReasons": [
+        "PLATFORM_BLOCK",
+        "OWNER_PAUSE",
+        "PAYMENT_DISPUTE",
+        "PENDING_FIRST_PAYMENT"
+      ],
+      "checks": [
+        "purpose token",
+        "verified same email",
+        "existing live seat reservation",
+        "inviter current admin generation"
+      ]
+    },
+    "TRANSFER": {
+      "deniedReasons": [
+        "PLATFORM_BLOCK",
+        "PAYMENT_DISPUTE",
+        "PENDING_FIRST_PAYMENT",
+        "PAYMENT_EXPIRED",
+        "OVER_QUOTA"
+      ],
+      "checks": [
+        "owner",
+        "active paid coverage",
+        "transfer flag",
+        "active recipient",
+        "explicit confirmation"
+      ],
+      "allowedDespite": [
+        "OWNER_PAUSE"
+      ]
+    },
+    "COMPANY_DELETE": {
+      "deniedReasons": [
+        "PLATFORM_BLOCK",
+        "PAYMENT_DISPUTE",
+        "PENDING_FIRST_PAYMENT"
+      ],
+      "checks": [
+        "owner",
+        "double confirmation",
+        "purpose code"
+      ],
+      "allowedDespite": [
+        "OWNER_PAUSE",
+        "PAYMENT_EXPIRED",
+        "OVER_QUOTA"
+      ]
+    },
+    "LEAVE": {
+      "deniedReasons": [],
+      "checks": [
+        "self",
+        "not owner",
+        "not last ACTIVE TA"
+      ]
+    },
+    "ACCOUNT": {
+      "deniedReasons": [],
+      "checks": [
+        "global account/channel authorization"
+      ]
+    },
+    "ACCOUNT_DELETE": {
+      "deniedReasons": [],
+      "checks": [
+        "WEB self",
+        "global admission fence",
+        "not owner anywhere",
+        "not last ACTIVE TA anywhere",
+        "ACCOUNT_DELETE purpose code"
+      ]
+    },
+    "CONTROL": {
+      "deniedReasons": [],
+      "checks": [
+        "authorized status only; no hidden project payload"
+      ]
+    },
+    "FINANCE_READ": {
+      "deniedReasons": [],
+      "checks": [
+        "owner or admin path; selected tenant finance only"
+      ]
+    },
+    "OWNER_CONTROL": {
+      "deniedReasons": [
+        "PLATFORM_BLOCK",
+        "PAYMENT_DISPUTE",
+        "PENDING_FIRST_PAYMENT"
+      ],
+      "checks": [
+        "owner",
+        "only ownerPause changes; unrelated reasons persist"
+      ]
+    },
+    "PENDING_CONTROL": {
+      "requiredLifecycle": "AWAITING_PAYMENT",
+      "checks": [
+        "owner",
+        "explicit cancellation confirmation",
+        "never reset creation deadline"
+      ]
+    },
+    "PAYMENT": {
+      "checks": [
+        "owner",
+        "financial fact verification",
+        "new autopay disallowed by pause/block/dispute",
+        "manual financial recovery follows D251/D252 state-machine action; missing/corrupt required policy fails503"
+      ]
+    },
+    "FINANCE_RECOVERY": {
+      "checks": [
+        "owner",
+        "supported finance request under independent restrictions",
+        "D251/D252 configured final outcomes allowed; missing/corrupt WIRE_RETURN_ES_V1 fails503 only for affected command, read/fact recording continues"
+      ]
+    },
+    "AUTOPAY": {
+      "deniedReasons": [
+        "PLATFORM_BLOCK",
+        "OWNER_PAUSE",
+        "PAYMENT_DISPUTE",
+        "PENDING_FIRST_PAYMENT"
+      ],
+      "checks": [
+        "current owner/ownerVersion",
+        "explicit mandate",
+        "new attempt only; accepted attempts always reconcile"
+      ]
+    },
+    "EXPORT": {
+      "inherits": "CONTENT_READ",
+      "checks": [
+        "export flag",
+        "persistent job requires write/modify grant",
+        "own permitted project subset"
+      ]
+    },
+    "INBOX": {
+      "inherits": "CONTENT_READ",
+      "checks": [
+        "own recipient",
+        "control/security/finance messages separately authorized"
+      ]
+    },
+    "PERSONAL_INBOX": {
+      "deniedReasons": [],
+      "checks": [
+        "own recipient/preferences only",
+        "do not expose inaccessible project payload"
+      ]
+    },
+    "UPLOAD": {
+      "inherits": "NORMAL",
+      "checks": [
+        "upload flag",
+        "reservation quota admission"
+      ]
+    },
+    "UPLOAD_FINISH": {
+      "inherits": "NORMAL",
+      "checks": [
+        "owned admitted reservation",
+        "ignore changed upload flag for accepted reservation only",
+        "no second quota admission",
+        "online current ACL/lifecycle",
+        "actual size <=reserved"
+      ]
+    },
+    "ADMIN": {
+      "deniedReasons": [],
+      "checks": [
+        "current GLOBAL_ADMIN",
+        "verified admin credential",
+        "scope/level/extra permission",
+        "all integrity/receipt/financial evidence constraints retained"
+      ]
+    },
+    "ADMIN_WEB": {
+      "deniedReasons": [],
+      "checks": [
+        "completed GA email MFA web session",
+        "explicit grant selection/expansion"
+      ]
+    },
+    "PROTOCOL": {
+      "deniedReasons": [],
+      "checks": [
+        "valid existing grant family",
+        "no scope expansion",
+        "refresh/revoke semantics"
+      ]
+    }
+  },
+  "errors": {
+    "source": "../contracts/README.md#6-http--grpc-errors",
+    "format": "application/problem+json",
+    "fields": [
+      "code",
+      "requestId",
+      "reasons"
+    ],
+    "failClosed": "DEPENDENCY_UNAVAILABLE/503; POLICY_NOT_CONFIGURED/503",
+    "concealment": "RESOURCE_NOT_FOUND/404 for cross-scope resource"
+  },
+  "channelColumnNote": "WEB/MCP/SERVICE_WORKER are policy presentation families; wire credential_kind values are in credentialKinds and contracts/b2b.proto.",
+  "runtimeEvaluator": {
+    "task": "TAS-360",
+    "module": "grpc-common-lib",
+    "actions": "src/main/java/ru/taska/capability/Action.java",
+    "rules": "src/main/resources/capability/actions.json",
+    "status": "CORE_IMPLEMENTED_DOMAIN_ADAPTERS_PENDING",
+    "integrationTasks": [
+      "TAS-491",
+      "TAS-493",
+      "TAS-495",
+      "TAS-463"
+    ]
+  }
+}

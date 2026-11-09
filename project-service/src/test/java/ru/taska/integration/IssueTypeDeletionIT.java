@@ -1,7 +1,8 @@
 package ru.taska.integration;
 
-import static org.assertj.core.api.Assertions.*;
-import static org.mockito.Mockito.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.when;
 
 import com.google.protobuf.Empty;
 import io.grpc.ManagedChannel;
@@ -35,7 +36,12 @@ import reactor.core.publisher.Mono;
 import reactor.core.publisher.Sinks;
 import ru.taska.api.common.v1.Header;
 import ru.taska.api.issue.v1.ReactorIssueServiceGrpc;
-import ru.taska.api.registry.v1.*;
+import ru.taska.api.registry.v1.IssueTypeDeletionKey;
+import ru.taska.api.registry.v1.IssueTypeMoveOutcome;
+import ru.taska.api.registry.v1.IssueTypeMoveState;
+import ru.taska.api.registry.v1.IssueTypeMoveWorkflowSnapshot;
+import ru.taska.api.registry.v1.ReactorIssueTypeIssueMigrationGrpc;
+import ru.taska.api.registry.v1.ReactorIssueTypeWorkflowReservationGrpc;
 import ru.taska.api.workflow.v1.ReactorWorkflowServiceGrpc;
 import ru.taska.domain.ActionChannel;
 import ru.taska.domain.ActionMetadata;
@@ -67,6 +73,7 @@ class IssueTypeDeletionIT extends AbstractIT {
     private UUID project,actor,token;
     private Header original;
     private final AtomicBoolean loseApplyReply=new AtomicBoolean();
+    private final AtomicBoolean rejectReserveChanged=new AtomicBoolean();
     private final AtomicInteger reserveCalls=new AtomicInteger(),releaseCalls=new AtomicInteger();
     private final AtomicReference<IssueTypeMoveOutcome> rejection=new AtomicReference<>();
     private final Set<UUID> reserved=ConcurrentHashMap.newKeySet();
@@ -79,7 +86,7 @@ class IssueTypeDeletionIT extends AbstractIT {
         project=UUID.randomUUID();actor=UUID.randomUUID();token=UUID.randomUUID();
         original=Header.newBuilder().setRequestId("initial-"+UUID.randomUUID()).setNodeId("original-gateway")
                 .setActionChannel("MCP").setTokenId(token.toString()).build();
-        loseApplyReply.set(false);reserveCalls.set(0);releaseCalls.set(0);
+        loseApplyReply.set(false);rejectReserveChanged.set(false);reserveCalls.set(0);releaseCalls.set(0);
         rejection.set(null);reserved.clear();observedHeaders.clear();holdApply=null;applyHeld=null;
         db.sql("CREATE TABLE IF NOT EXISTS taska.test_433_peer_receipts(operation_id uuid PRIMARY KEY,project_id uuid NOT NULL,state text NOT NULL)")
                 .then().block(TIMEOUT);
@@ -275,6 +282,45 @@ class IssueTypeDeletionIT extends AbstractIT {
         assertThat(releaseCalls.get()).isEqualTo(2);
     }
 
+    @Test
+    void changedRegistryDuringReservationCancelsDeletionAndFreesProjectGate() {
+        rejectReserveChanged.set(true);
+        rejected(() -> delete("TASK","BUG",Map.of(),null),DomainStatus.ABORTED,"ISSUE_TYPES_CHANGED");
+        var cancelled=latest();
+        assertThat(cancelled.state()).isEqualTo("CANCELLED");
+        assertThat(cancelled.reservationReleased()).isTrue();
+        assertThat(cancelled.errorDetails()).containsEntry("reason","ISSUE_TYPES_CHANGED");
+        assertThat(receipt(cancelled.id()).block(TIMEOUT).getState()).isEqualTo(IssueTypeMoveState.ISSUE_TYPE_MOVE_STATE_CANCELLED);
+        assertThat(types.find(project,"TASK").block(TIMEOUT).pendingOperationId()).isNull();
+        assertThat(types.find(project,"BUG").block(TIMEOUT).pendingOperationId()).isNull();
+        assertThat(appliedEffects()).isZero();
+        assertThat(releaseCalls.get()).isEqualTo(1);
+
+        rejectReserveChanged.set(false);
+        original=original.toBuilder().setRequestId("retry-"+UUID.randomUUID()).build();
+        delete("TASK","BUG",Map.of(),null);
+        assertCompleted(latest().id());
+        assertThat(journalCount()).isEqualTo(2);
+        assertThat(appliedEffects()).isEqualTo(1);
+    }
+
+    @Test
+    void changedRegistryDuringIssueMoveCancelsDeletionInsteadOfRetryingForever() {
+        rejection.set(IssueTypeMoveOutcome.newBuilder().setState(IssueTypeMoveState.ISSUE_TYPE_MOVE_STATE_REJECTED)
+                .setRejectionStatus("ABORTED").setRejectionMessage("Registry lifecycle changed")
+                .putRejectionDetails("reason","ISSUE_TYPE_CHANGED").build());
+        rejected(() -> delete("TASK","BUG",Map.of(),null),DomainStatus.ABORTED,"ISSUE_TYPE_CHANGED");
+        var cancelled=latest();
+        assertThat(cancelled.state()).isEqualTo("CANCELLED");
+        assertThat(cancelled.reservationReleased()).isTrue();
+        assertThat(receipt(cancelled.id()).block(TIMEOUT).getState()).isEqualTo(IssueTypeMoveState.ISSUE_TYPE_MOVE_STATE_CANCELLED);
+        assertThat(types.find(project,"TASK").block(TIMEOUT).pendingOperationId()).isNull();
+        assertThat(types.find(project,"BUG").block(TIMEOUT).pendingOperationId()).isNull();
+        assertThat(appliedEffects()).isZero();
+        coordinator.recover().block(TIMEOUT);
+        assertThat(latest().state()).isEqualTo("CANCELLED");
+    }
+
     private void recreateTaskFixture() {
         types.insert(new ru.taska.domain.ProjectIssueType(project,"TASK","Task","blue",null,"square",10,null,null))
                 .flatMap(saved -> types.syncLegacySettings(project,actor).thenReturn(saved)).block(TIMEOUT);
@@ -447,9 +493,12 @@ class IssueTypeDeletionIT extends AbstractIT {
     private class WorkflowPeer extends ReactorIssueTypeWorkflowReservationGrpc.IssueTypeWorkflowReservationImplBase {
         @Override public Mono<IssueTypeMoveWorkflowSnapshot> reserve(Mono<IssueTypeDeletionKey> request) {
             return request.flatMap(key -> journal.find(UUID.fromString(key.getProjectId()),UUID.fromString(key.getOperationId()))
-                    .map(item -> {assertThat(item.state()).isEqualTo("PENDING");reserved.add(item.id());reserveCalls.incrementAndGet();
-                        return IssueTypeMoveWorkflowSnapshot.newBuilder().setProjectId(item.projectId().toString()).setOperationId(item.id().toString())
-                                .setWorkflowId(new UUID(0,1).toString()).addValidStatusKeys("TODO").addValidStatusKeys("DONE").build();}));
+                    .flatMap(item -> {assertThat(item.state()).isEqualTo("PENDING");reserveCalls.incrementAndGet();
+                        if(rejectReserveChanged.get())return Mono.error(Status.ABORTED.withDescription("Issue types changed")
+                                .asRuntimeException(mapper.GrpcErrorDetails.encode(Map.of("reason","ISSUE_TYPES_CHANGED"))));
+                        reserved.add(item.id());
+                        return Mono.just(IssueTypeMoveWorkflowSnapshot.newBuilder().setProjectId(item.projectId().toString()).setOperationId(item.id().toString())
+                                .setWorkflowId(new UUID(0,1).toString()).addValidStatusKeys("TODO").addValidStatusKeys("DONE").build());}));
         }
         @Override public Mono<Empty> release(Mono<IssueTypeDeletionKey> request) {
             return request.flatMap(key -> journal.find(UUID.fromString(key.getProjectId()),UUID.fromString(key.getOperationId()))

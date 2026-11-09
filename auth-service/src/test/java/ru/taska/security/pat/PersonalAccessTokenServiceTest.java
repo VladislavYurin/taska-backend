@@ -50,6 +50,14 @@ class PersonalAccessTokenServiceTest {
         verifyNoInteractions(tokens, users, outbox);
     }
 
+    @Test void tenantBoundTokenNeverAuthenticatesAsUnboundLegacyCredential() {
+        var token = token().integrationGrantId(UUID.randomUUID()).build();
+        when(tokens.findByTokenHash(DigestUtils.sha256Hex(SECRET))).thenReturn(Mono.just(token));
+        StepVerifier.create(service.validate(SECRET)).expectErrorMatches(this::unauthenticated).verify();
+        verifyNoInteractions(users, outbox);
+        verify(tokens, never()).touchIfStale(any(), any(), any());
+    }
+
     @Test void corruptStoredHashCannotAuthenticateAfterLookup() {
         var token = token().tokenHash("f".repeat(64)).build();
         when(tokens.findByTokenHash(DigestUtils.sha256Hex(SECRET))).thenReturn(Mono.just(token));
