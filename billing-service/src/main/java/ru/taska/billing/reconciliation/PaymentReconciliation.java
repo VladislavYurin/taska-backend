@@ -46,12 +46,36 @@ public final class PaymentReconciliation {
                     .flatMap(a -> reconcile(job, a))
                     .onErrorResume(
                         error -> {
+                          // Authorization and lease admission are outside this handler. Never
+                          // hide a downstream authorization/integrity failure as provider outage.
+                          if (error instanceof IllegalStateException
+                              || error instanceof IllegalArgumentException)
+                            return Mono.error(error);
+                          if (error instanceof DomainException d
+                              && (d.getStatus() == DomainStatus.PERMISSION_DENIED
+                                  || d.getStatus() == DomainStatus.UNAUTHENTICATED
+                                  || d.getStatus() == DomainStatus.INVALID_ARGUMENT))
+                            return Mono.error(error);
+                          var rpc = io.grpc.Status.fromThrowable(error).getCode();
+                          if (rpc == io.grpc.Status.Code.PERMISSION_DENIED
+                              || rpc == io.grpc.Status.Code.UNAUTHENTICATED
+                              || rpc == io.grpc.Status.Code.INVALID_ARGUMENT)
+                            return Mono.error(error);
                           if (error instanceof ProviderException p
                               && p.reason() != ProviderException.Reason.UNKNOWN_OUTCOME)
                             return jobs.manual(job, "PROVIDER_" + p.reason().name());
                           if (error instanceof DomainException d
                               && d.getStatus() == DomainStatus.FAILED_PRECONDITION)
-                            return jobs.manual(job, "PAYMENT_EVIDENCE_CONFLICT");
+                            return jobs.manual(
+                                job,
+                                java.util.Set.of(
+                                            "PAYMENT_BINDING_MISMATCH",
+                                            "INVALID_OCCURRENCE",
+                                            "PAYMENT_FACT_CONFLICT",
+                                            "PAYMENT_OCCURRENCE_CONFLICT")
+                                        .contains(d.getMessage())
+                                    ? d.getMessage()
+                                    : "PAYMENT_EVIDENCE_CONFLICT");
                           return jobs.retry(job, "DEPENDENCY_UNAVAILABLE");
                         }));
   }

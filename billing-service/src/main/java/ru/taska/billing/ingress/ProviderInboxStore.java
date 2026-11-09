@@ -428,20 +428,36 @@ public final class ProviderInboxStore {
                                 .rowsUpdated()
                                 .then(
                                     tx.sql(
-                                            "SELECT evidence_digest FROM"
+                                            "SELECT evidence_digest,occurred_at FROM"
                                                 + " taska.provider_payment_proofs WHERE id=:id AND"
                                                 + " tenant_id=:tenant")
                                         .bind("id", evidence)
                                         .bind("tenant", attempt.tenantId())
-                                        .map((r, m) -> r.get("evidence_digest", String.class))
+                                        .fetch()
                                         .one())
-                                .filter(digest::equals)
                                 .switchIfEmpty(
                                     Mono.error(
                                         failure(
                                             DomainStatus.FAILED_PRECONDITION,
                                             "PAYMENT_FACT_CONFLICT")))
-                                .thenReturn(evidence);
+                                .flatMap(
+                                    proof -> {
+                                      if (digest.equals(proof.get("evidence_digest")))
+                                        return Mono.just(evidence);
+                                      // Occurrence affects expiry and activation; never overwrite a
+                                      // committed financial timestamp with a conflicting
+                                      // observation.
+                                      boolean changedTime =
+                                          !occurred.equals(
+                                              ((OffsetDateTime) proof.get("occurred_at"))
+                                                  .toInstant());
+                                      return Mono.error(
+                                          failure(
+                                              DomainStatus.FAILED_PRECONDITION,
+                                              changedTime
+                                                  ? "PAYMENT_OCCURRENCE_CONFLICT"
+                                                  : "PAYMENT_FACT_CONFLICT"));
+                                    });
                           }));
         });
   }

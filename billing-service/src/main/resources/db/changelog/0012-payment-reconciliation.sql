@@ -13,12 +13,14 @@ CREATE TABLE taska.payment_reconciliation (
  CHECK((lease_token IS NULL)=(lease_until IS NULL))
 );
 CREATE INDEX payment_reconciliation_due ON taska.payment_reconciliation(next_attempt_at,attempt_id) WHERE state='PENDING';
+CREATE INDEX payment_reconciliation_open_summary ON taska.payment_reconciliation(state,created_at) WHERE state<>'DONE';
 CREATE FUNCTION taska.enqueue_payment_reconciliation() RETURNS trigger LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog AS $$
 BEGIN
  INSERT INTO taska.payment_reconciliation(tenant_id,attempt_id,correlation_id,created_at,next_attempt_at)
  VALUES(NEW.tenant_id,NEW.id,NEW.operation_id,NEW.accepted_at,NEW.accepted_at+interval '1 minute');
  RETURN NEW;
 END $$;
+ALTER FUNCTION taska.enqueue_payment_reconciliation() OWNER TO taska_billing_migrator;
 CREATE TRIGGER enqueue_payment_reconciliation AFTER INSERT ON taska.payment_attempts
  FOR EACH ROW EXECUTE FUNCTION taska.enqueue_payment_reconciliation();
 INSERT INTO taska.payment_reconciliation(tenant_id,attempt_id,correlation_id,created_at,next_attempt_at)

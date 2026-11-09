@@ -404,7 +404,77 @@ class PaymentReconciliationIntegrationTest {
   }
 
   @Test
+  void concurrentCallbackAndConflictingLookupTimeRetainOneOriginalProofAndRequireReview() {
+    doAnswer(
+            invocation -> {
+              return RegistryTestContext.withClaims(
+                      f.worker(A, "registerProviderPayment", "billing-service", "inbox:map"),
+                      f.inbox.bind(A, f.base.invoice, f.identity, f.payment.providerPaymentId()))
+                  .then(f.receive(f.webhook))
+                  .flatMap(r -> f.process(r.id()))
+                  .thenReturn(
+                      new PaymentProvider.Payment(
+                          attempt.providerPaymentId(),
+                          attempt.invoiceId(),
+                          new PaymentProvider.Money(2000, "EUR"),
+                          PaymentProvider.State.SUCCEEDED,
+                          NOW.plusSeconds(1)));
+            })
+        .when(provider)
+        .fetchPayment(any(), any());
+    assertEquals("MANUAL", process());
+    assertEquals("PAYMENT_OCCURRENCE_CONFLICT", jobs.manual(1).block(WAIT).getFirst().reason());
+    assertEquals(1, count("provider_payment_proofs"));
+    assertEquals(1, count("payment_facts"));
+    assertEquals(1, count("subscription_periods"));
+    assertEquals(
+        NOW,
+        operator
+            .sql("SELECT occurred_at FROM taska.provider_payment_proofs")
+            .map((r, m) -> r.get("occurred_at", java.time.OffsetDateTime.class).toInstant())
+            .one()
+            .block(WAIT));
+    verify(provider, never()).createCheckout(any(), any(), any(), any());
+  }
+
+  @Test
+  void downstreamAuthorizationFailurePropagatesWithoutSchedulingRetry() {
+    service =
+        new PaymentReconciliation(
+            jobs,
+            attempts,
+            operations,
+            new PaymentProviderRegistry(
+                Map.of(
+                    new PaymentProviderRegistry.Identity(
+                        f.identity.provider(), f.identity.merchant()),
+                    new PaymentProviderRegistry.Registration(provider, Set.of("v1")))),
+            f.registry,
+            f.store,
+            (t, e) ->
+                Mono.error(
+                    new ru.taska.exception.DomainException(
+                        ru.taska.exception.DomainStatus.PERMISSION_DENIED, "SCOPE_DENIED")));
+    var job = claim();
+    assertThrows(ru.taska.exception.DomainException.class, () -> run(job).block(WAIT));
+    assertEquals(job, jobs.lease(job.tenantId(), job.attemptId(), job.token()).block(WAIT));
+    assertEquals(0, count("payment_facts"));
+    assertEquals(1, jobs.summary().block(WAIT).pending());
+    assertTrue(jobs.manual(1).block(WAIT).isEmpty());
+  }
+
+  @Test
   void queueOriginCannotBeOverwrittenOrDeleted() {
+    assertTrue(
+        db.sql(
+                "SELECT p.prosecdef AND pg_get_userbyid(p.proowner)='taska_billing_migrator' AND"
+                    + " p.proconfig=ARRAY['search_path=pg_catalog'] AS safe FROM pg_proc p WHERE"
+                    + " p.oid='taska.enqueue_payment_reconciliation()'::regprocedure")
+            .map((r, m) -> r.get("safe", Boolean.class))
+            .one()
+            .block(WAIT));
+    assertEquals(1, jobs.summary().block(WAIT).pending());
+
     assertThrows(
         Exception.class,
         () ->

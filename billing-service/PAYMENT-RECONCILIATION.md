@@ -56,3 +56,16 @@ PostgreSQL/RLS and actual mTLS/JWS tests cover lost callbacks, duplicate workers
 restart/Root-ACK loss, stable replay, provider outage/backoff, TTL expiry without resubmission,
 identity/occurrence failures, late callbacks and deleted-company settlement. These local fixtures
 do not establish real Stripe credentials, a deployed enabled worker or public checkout readiness.
+
+Multiple billing replicas may poll concurrently; SKIP LOCKED and lease tokens distribute work.
+The summary is a per-replica view of shared outstanding work: dashboards must use max, not sum,
+across replicas. No leader election is required for correctness. An index and explicit unresolved
+predicate exclude completed history from repeated summary scans. The PostgreSQL tests verify
+app-role enqueue without direct INSERT permission, the fixed migrator function owner/search_path,
+and concurrent claims. This directory is also the durable dead-letter handoff: MANUAL retains
+origin/correlation; there is no external message-broker/DLT transport in this worker.
+
+A timestamp mismatch is a financial occurrence conflict, even for the same provider object:
+timely/late rules depend on that fact. Reconciliation never overwrites an existing proof/time or
+silently picks a more convenient timestamp. A simultaneous conflicting callback/lookup requires
+manual review; matching callbacks and lookups share one proof and financial effect.

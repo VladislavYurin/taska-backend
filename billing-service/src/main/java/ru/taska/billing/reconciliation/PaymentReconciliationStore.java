@@ -179,7 +179,7 @@ public final class PaymentReconciliationStore {
             "SELECT count(*) FILTER(WHERE state='MANUAL') AS manual,count(*) FILTER(WHERE"
                 + " state='PENDING') AS pending,coalesce(extract(epoch FROM (:now-min(created_at)"
                 + " FILTER(WHERE state<>'DONE')))::bigint,0) AS age FROM"
-                + " taska.payment_reconciliation")
+                + " taska.payment_reconciliation WHERE state<>'DONE'")
         .bind("now", clock.instant())
         .map(
             (r, m) ->
