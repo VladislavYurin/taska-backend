@@ -9,11 +9,12 @@ import trusted_rpc_e2e as t
 class TrustedReadinessTest(unittest.TestCase):
     def test_only_safe_get_retries_transient_unavailability(self):
         client = Mock()
-        client.request.side_effect = [SimpleNamespace(status=503), SimpleNamespace(status=404)]
+        client.request.side_effect = [t.e.Blocked('owned transport unavailable'),
+                                      SimpleNamespace(status=503), SimpleNamespace(status=404)]
         with patch.object(t.time, 'sleep'):
-            self.assertEqual(t.wait_protected_read(client, '/api/v1/issues/owned', 404), 2)
+            self.assertEqual(t.wait_protected_read(client, '/api/v1/issues/owned', 404), 3)
         self.assertEqual(client.request.call_args_list,
-                         [unittest.mock.call('GET', '/api/v1/issues/owned')] * 2)
+                         [unittest.mock.call('GET', '/api/v1/issues/owned')] * 3)
 
     def test_authorization_denial_is_an_immediate_failure(self):
         for status in (401, 403):
@@ -29,6 +30,14 @@ class TrustedReadinessTest(unittest.TestCase):
         with patch.object(t.time, 'monotonic', side_effect=[0, 1, 2, 46]), patch.object(t.time, 'sleep'):
             with self.assertRaises(t.e.Blocked):
                 t.wait_protected_read(client, '/api/v1/issues/owned', 404)
+
+    def test_persistent_transport_failure_never_counts_as_ready(self):
+        client = Mock()
+        client.request.side_effect = t.e.Blocked('owned transport unavailable')
+        with patch.object(t.time, 'monotonic', side_effect=[0, 1, 2, 46]), patch.object(t.time, 'sleep'):
+            with self.assertRaises(t.e.Blocked):
+                t.wait_protected_read(client, '/api/v1/issues/owned', 404)
+        self.assertEqual(client.request.call_count, 1)
 
 
 if __name__ == '__main__':
