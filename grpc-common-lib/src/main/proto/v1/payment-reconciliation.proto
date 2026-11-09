@@ -1,0 +1,17 @@
+syntax = "proto3";
+package ru.taska.b2b.v1;
+import "v1/tenant-context.proto";
+option java_multiple_files = true;
+option java_package = "ru.taska.api.b2b.v1";
+option java_outer_classname = "PaymentReconciliationApiProto";
+// Private billing worker only. Origin and correlation are loaded from the durable leased job.
+message ReconcilePaymentAttemptRequest {
+ RequestContext context = 1;
+ string tenant_id = 2;
+ string attempt_id = 3;
+ string lease_token = 4;
+}
+message PaymentReconciliationResult { string state = 1; string reason_code = 2; }
+service PaymentReconciliationService {
+ rpc ReconcilePaymentAttempt(ReconcilePaymentAttemptRequest) returns (PaymentReconciliationResult);
+}

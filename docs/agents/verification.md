@@ -217,3 +217,9 @@ TAS-351 adds required ProviderInboxIntegrationTest, ProviderInboxRpcIntegrationT
 TAS-349: billing-service.verify requires `PaymentAttemptIntegrationTest`; [durable claim, original-provider routing and activation](../../billing-service/PAYMENT-ATTEMPTS.md).
 
 TAS-383: [workflow integrity and upgrade preflight](../tas-383-workflow-integrity.md); `WorkflowSortOrderMigrationTest` is mandatory in workflow verify; creation/edit/read ITs run explicitly.
+
+TAS-353: billing verify обязательно включает `PaymentReconciliationIntegrationTest` и
+`PaymentReconciliationConfigurationTest`; `PaymentReconciliationRpcIntegrationTest` проверяет новый
+private RPC по mTLS/JWS. Контракт и эксплуатационные границы —
+[billing recovery](../../billing-service/PAYMENT-RECONCILIATION.md). Это локальные PG/RPC
+фикстуры, не подтверждение реального Stripe или включённого worker на стенде.

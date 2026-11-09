@@ -85,7 +85,12 @@ public interface PaymentProvider {
             State state,
             String providerIdempotencyKey) {}
 
-    record Payment(String providerPaymentId, UUID invoiceId, Money amount, State state) {}
+    /** Provider-reported financial occurrence; null means insufficient evidence for settlement. */
+    record Payment(String providerPaymentId, UUID invoiceId, Money amount, State state, Instant occurredAt) {
+        public Payment(String providerPaymentId, UUID invoiceId, Money amount, State state) {
+            this(providerPaymentId, invoiceId, amount, state, null);
+        }
+    }
 
     record Refund(
             String providerRefundId,

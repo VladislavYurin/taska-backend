@@ -39,3 +39,5 @@ merchant/env/invoice denial, concurrent same/different keys, stale terminal upda
 and restart, committed-claim crash, original PSP selection, lost mapping ACK, immutable SQL
 identity and A/B reads. ProviderInboxRpcIntegrationTest checks actual mTLS/JWS mapping/delivery.
 These checks do not establish real Stripe or public gateway/stage E2E readiness.
+
+Background recovery and manual handoff are implemented by [TAS-353](PAYMENT-RECONCILIATION.md).

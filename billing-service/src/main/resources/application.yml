@@ -20,7 +20,7 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info
+        include: health,info,prometheus
   endpoint:
     health:
       probes:
@@ -29,6 +29,10 @@ management:
 
 taska:
   billing:
+    reconciliation:
+      enabled: ${TASKA_BILLING_RECONCILIATION_ENABLED:false}
+      max-attempts: ${TASKA_BILLING_RECONCILIATION_MAX_ATTEMPTS:8}
+      batch-size: ${TASKA_BILLING_RECONCILIATION_BATCH_SIZE:10}
     attempts:
       enabled: ${TASKA_BILLING_ATTEMPTS_ENABLED:false}
     ingress:

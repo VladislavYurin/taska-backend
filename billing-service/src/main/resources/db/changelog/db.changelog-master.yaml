@@ -405,6 +405,21 @@
           }
         ]
       }
+    },
+    {
+      "changeSet": {
+        "id": "billing-payment-reconciliation-0012",
+        "author": "taska",
+        "changes": [
+          {
+            "sqlFile": {
+              "path": "0012-payment-reconciliation.sql",
+              "relativeToChangelogFile": true,
+              "splitStatements": false
+            }
+          }
+        ]
+      }
     }
   ]
 }

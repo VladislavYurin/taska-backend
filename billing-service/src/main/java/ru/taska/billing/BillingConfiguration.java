@@ -401,6 +401,7 @@ public class BillingConfiguration {
       return new TenantServerInterceptor(
           security,
           Map.ofEntries(
+              Map.entry(ru.taska.api.b2b.v1.PaymentReconciliationServiceGrpc.getReconcilePaymentAttemptMethod().getFullMethodName(),new RpcContextSecurity.Policy(true,true)),
               Map.entry(
                   ru.taska.api.b2b.v1.ProviderInboxServiceGrpc.getObserveProviderWebhookMethod()
                       .getFullMethodName(),

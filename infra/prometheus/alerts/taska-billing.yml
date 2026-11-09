@@ -1,0 +1,19 @@
+groups:
+  - name: taska-billing-reconciliation
+    rules:
+      - alert: TaskaPaymentReconciliationManual
+        expr: taska_billing_reconciliation_manual > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Payment reconciliation requires manual review
+          description: Inspect the private financial work directory by immutable attempt and correlation ID. Never resubmit an uncertain charge.
+      - alert: TaskaPaymentReconciliationOld
+        expr: taska_billing_reconciliation_oldest_seconds > 86400
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: Payment reconciliation has unresolved work older than 24 hours
+          description: Check original provider access and durable retry reasons. Age is informational and never confirms payment.
