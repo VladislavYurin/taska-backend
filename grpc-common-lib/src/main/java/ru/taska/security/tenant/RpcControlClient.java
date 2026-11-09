@@ -43,6 +43,16 @@ public final class RpcControlClient implements RpcTrustBackend, AutoCloseable {
         .map(RpcTrustDecision::getAllowed);
   }
 
+  public Mono<Boolean> currentKey(
+      String recipient, String issuer, String kid, String peerFingerprint) {
+    var request =
+        CheckRpcKeyRequest.newBuilder().setRecipient(recipient).setIssuer(issuer).setKid(kid);
+    if (peerFingerprint != null) request.setPeerCertificateSha256(peerFingerprint);
+    return stub.withDeadlineAfter(3, TimeUnit.SECONDS)
+        .checkRpcKey(request.build())
+        .map(RpcTrustDecision::getAllowed);
+  }
+
   @Override
   public void close() {
     channel.shutdownNow();

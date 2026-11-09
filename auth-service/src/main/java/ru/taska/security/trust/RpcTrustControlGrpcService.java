@@ -34,6 +34,7 @@ public class RpcTrustControlGrpcService
                   r.getRpc(),
                   new RpcContextSecurity.Policy(r.getTenantRequired(), r.getMutation()));
             })
+        .switchIfEmpty(Mono.error(ManagedRpcTrust.unavailable()))
         .map(v -> RpcTrustDecision.newBuilder().setAllowed(v).build())
         .onErrorMap(
             e -> e instanceof io.grpc.StatusRuntimeException ? e : ManagedRpcTrust.unavailable());
@@ -53,6 +54,28 @@ public class RpcTrustControlGrpcService
                   r.getAssertionId(),
                   Instant.parse(r.getRetainUntil()));
             })
+        .switchIfEmpty(Mono.error(ManagedRpcTrust.unavailable()))
+        .map(v -> RpcTrustDecision.newBuilder().setAllowed(v).build())
+        .onErrorMap(
+            e -> e instanceof io.grpc.StatusRuntimeException ? e : ManagedRpcTrust.unavailable());
+  }
+
+  @Override
+  public Mono<RpcTrustDecision> checkRpcKey(Mono<CheckRpcKeyRequest> input) {
+    String peer = ManagedRpcPeerInterceptor.PEER.get();
+    return input
+        .flatMap(
+            r -> {
+              String fingerprint = r.getPeerCertificateSha256();
+              boolean signing = fingerprint.isEmpty() && r.getRecipient().equals(r.getIssuer());
+              if (peer == null
+                  || !peer.equals(r.getRecipient())
+                  || (!signing && !fingerprint.matches("[a-f0-9]{64}")))
+                return Mono.error(Status.PERMISSION_DENIED.asRuntimeException());
+              return backend.currentKey(
+                  r.getRecipient(), r.getIssuer(), r.getKid(), signing ? null : fingerprint);
+            })
+        .switchIfEmpty(Mono.error(ManagedRpcTrust.unavailable()))
         .map(v -> RpcTrustDecision.newBuilder().setAllowed(v).build())
         .onErrorMap(
             e -> e instanceof io.grpc.StatusRuntimeException ? e : ManagedRpcTrust.unavailable());

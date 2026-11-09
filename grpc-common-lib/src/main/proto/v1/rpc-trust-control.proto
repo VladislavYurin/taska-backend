@@ -18,7 +18,15 @@ message ConsumeRpcAssertionRequest {
   string assertion_id = 3;
   string retain_until = 4;
 }
+message CheckRpcKeyRequest {
+  string recipient = 1;
+  string issuer = 2;
+  string kid = 3;
+  // Receiver obtains this from the actual TLS peer, never from protobuf/Header claims.
+  string peer_certificate_sha256 = 4;
+}
 service RpcTrustControlService {
   rpc CheckRpcAuthority(CheckRpcAuthorityRequest) returns (RpcTrustDecision);
   rpc ConsumeRpcAssertion(ConsumeRpcAssertionRequest) returns (RpcTrustDecision);
+  rpc CheckRpcKey(CheckRpcKeyRequest) returns (RpcTrustDecision);
 }

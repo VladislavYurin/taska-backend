@@ -12,7 +12,6 @@ import org.springframework.core.annotation.Order;
 import org.springframework.core.env.Environment;
 import org.springframework.grpc.server.GlobalServerInterceptor;
 import reactor.core.publisher.Mono;
-import ru.taska.api.b2b.v1.CredentialKind;
 import ru.taska.security.tenant.*;
 
 @AutoConfiguration
@@ -65,12 +64,6 @@ public class ManagedRpcTrustAutoConfiguration {
             Mono.defer(
                 () -> {
                   if (!trust.allowed(context, rpc, policy)) return Mono.just(false);
-                  // A SERVICE generation/purpose is managed authority, not a user/session lookup.
-                  // This avoids
-                  // recursive auth -> tenant membership -> auth checks; mutation replay remains
-                  // mandatory.
-                  if (context.getContext().getCredentialKind()
-                      == CredentialKind.CREDENTIAL_KIND_SERVICE) return Mono.just(true);
                   var current = backend.getIfAvailable();
                   return current == null
                       ? Mono.error(ManagedRpcTrust.unavailable())
@@ -88,7 +81,15 @@ public class ManagedRpcTrustAutoConfiguration {
                       ? Mono.error(ManagedRpcTrust.unavailable())
                       : current.consume(service, issuer, jti, until);
                 }),
-        authority);
+        authority,
+        (issuer, kid, fingerprint) ->
+            Mono.defer(
+                () -> {
+                  var current = backend.getIfAvailable();
+                  return current == null
+                      ? Mono.error(ManagedRpcTrust.unavailable())
+                      : current.currentKey(service, issuer, kid, fingerprint);
+                }));
   }
 
   @Bean

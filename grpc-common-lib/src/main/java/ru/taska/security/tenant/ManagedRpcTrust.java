@@ -169,6 +169,18 @@ public final class ManagedRpcTrust implements RpcContextSecurity.Keys {
     return k == null ? null : publicKey(k);
   }
 
+  /** One primary snapshot checks both the exact signing key and the original TLS peer. */
+  public boolean currentKey(String recipient, String issuer, String kid, String fingerprint) {
+    var s = snapshot();
+    var identity = s.services().get(issuer);
+    if (!s.services().containsKey(recipient)
+        || identity == null
+        || identity.certificates().isEmpty()
+        || (fingerprint != null && !identity.certificates().contains(fingerprint))) return false;
+    var k = key(s, issuer, kid);
+    return k != null && publicKey(k) != null;
+  }
+
   @Override
   public RpcContextSecurity.SigningKey signingKey(String issuer) {
     try {

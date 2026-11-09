@@ -281,7 +281,8 @@
           "TenantPersonalTokenStoreIntegrationTest",
           "TenantPersonalTokenBoundaryTest",
           "GatewayCredentialResolverIntegrationTest",
-          "AuthRpcTrustIntegrationTest"
+          "AuthRpcTrustIntegrationTest",
+          "RpcTrustControlBoundaryTest"
         ],
         "noTestsReason": null
       },

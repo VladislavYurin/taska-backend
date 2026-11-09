@@ -36,6 +36,15 @@ public final class AuthRpcTrustBackend implements RpcTrustBackend {
     return id;
   }
 
+  public Mono<Boolean> currentKey(String recipient, String issuer, String kid, String fingerprint) {
+    return Mono.fromCallable(
+            () -> {
+              if (fingerprint == null && !recipient.equals(issuer)) return false;
+              return trust.currentKey(recipient, issuer, kid, fingerprint);
+            })
+        .subscribeOn(reactor.core.scheduler.Schedulers.boundedElastic());
+  }
+
   public Mono<Boolean> allowed(
       RequestContext request, String rpc, RpcContextSecurity.Policy policy) {
     return Mono.defer(

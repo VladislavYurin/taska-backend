@@ -383,4 +383,157 @@ class AuthRpcTrustIntegrationTest {
       server.shutdownNow().awaitTermination();
     }
   }
+
+  @Test
+  void primaryRevokesServicePolicyKeyAndOriginalCertificateDespiteStaleLocalTrust()
+      throws Exception {
+    fixture.edges.add(
+        new ManagedRpcTrust.Edge(
+            "api-gateway",
+            "project-service",
+            RPC,
+            ACTION,
+            Set.of("SERVICE"),
+            Set.of("write"),
+            "outbox",
+            Set.of("api-gateway"),
+            "BOUND",
+            Set.of()));
+    fixture.addKey(
+        "api-gateway",
+        "two",
+        java.security.KeyPairGenerator.getInstance("Ed25519").generateKeyPair());
+    fixture.write();
+    java.nio.file.Files.copy(fixture.path("trust.json"), fixture.path("stale.json"));
+    var stale =
+        new ManagedRpcTrust(
+            fixture.path("stale.json"),
+            fixture.path("api-gateway.signing.json"),
+            "api-gateway",
+            "test",
+            Clock.systemUTC());
+    var read = new RpcContextSecurity.Policy(true, false);
+    var source =
+        new RpcContextSecurity(
+            "api-gateway",
+            Clock.systemUTC(),
+            stale,
+            (i, j, t) -> Mono.just(true),
+            (c, r, p) -> Mono.just(stale.allowed(c, r, p)));
+    var original = context();
+    var service =
+        original.toBuilder()
+            .setContext(
+                original.getContext().toBuilder()
+                    .clearActorUserId()
+                    .clearSessionId()
+                    .clearCredentialId()
+                    .clearMembershipGeneration()
+                    .clearScopes()
+                    .addScopes("write")
+                    .setCredentialKind(CredentialKind.CREDENTIAL_KIND_SERVICE)
+                    .setServicePurpose("outbox")
+                    .setServiceIdentity("api-gateway"))
+            .build();
+    var message = GetMembershipRpcRequest.newBuilder().setContext(service).build();
+    String assertion =
+        source
+            .sign(source.authorize(service, RPC, read).block(WAIT), message, RPC, read)
+            .block(WAIT);
+    String fingerprint = fixture.services.get("api-gateway").certificates().iterator().next();
+    var ssl =
+        GrpcSslContexts.forServer(
+                fixture.path("auth-service.crt").toFile(),
+                fixture.path("auth-service.key").toFile())
+            .trustManager(fixture.path("ca.crt").toFile())
+            .clientAuth(ClientAuth.REQUIRE)
+            .build();
+    var server =
+        NettyServerBuilder.forAddress(new java.net.InetSocketAddress("127.0.0.1", 0))
+            .sslContext(ssl)
+            .addService(
+                ServerInterceptors.interceptForward(
+                    new RpcTrustControlGrpcService(backend),
+                    new ManagedRpcPeerInterceptor(fixture.trust("auth-service"), "test")))
+            .build()
+            .start();
+    var channel =
+        new FileMtlsRpcChannels(
+                fixture.path("ca.crt"),
+                fixture.path("project-service.crt"),
+                fixture.path("project-service.key"),
+                "test")
+            .create("localhost", server.getPort(), "auth-service");
+    try (var control = new RpcControlClient(channel)) {
+      var target =
+          new RpcContextSecurity(
+              "project-service",
+              Clock.systemUTC(),
+              stale,
+              (i, j, t) -> Mono.just(true),
+              control::allowed,
+              (i, k, f) -> control.currentKey("project-service", i, k, f));
+      var hits = new java.util.concurrent.atomic.AtomicInteger();
+      java.util.function.Supplier<Mono<Integer>> invoke =
+          () ->
+              target
+                  .verify(message, assertion, RPC, "api-gateway", fingerprint, read)
+                  .map(verified -> hits.incrementAndGet());
+      assertEquals(1, invoke.get().block(WAIT));
+      var edge = fixture.edges.remove(fixture.edges.size() - 1);
+      fixture.write();
+      assertEquals(
+          Status.Code.PERMISSION_DENIED,
+          Status.fromThrowable(
+                  assertThrows(StatusRuntimeException.class, () -> invoke.get().block(WAIT)))
+              .getCode());
+      fixture.edges.add(edge);
+      var identity = fixture.services.get("api-gateway");
+      fixture.services.put(
+          "api-gateway", new ManagedRpcTrust.Service("2", identity.certificates()));
+      fixture.write();
+      assertEquals(
+          Status.Code.PERMISSION_DENIED,
+          Status.fromThrowable(
+                  assertThrows(StatusRuntimeException.class, () -> invoke.get().block(WAIT)))
+              .getCode());
+      fixture.services.put("api-gateway", new ManagedRpcTrust.Service("1", Set.of("a".repeat(64))));
+      fixture.write();
+      assertEquals(
+          Status.Code.UNAUTHENTICATED,
+          Status.fromThrowable(
+                  assertThrows(StatusRuntimeException.class, () -> invoke.get().block(WAIT)))
+              .getCode());
+      fixture.services.put("api-gateway", identity);
+      fixture.keys.replaceAll(
+          k ->
+              k.issuer().equals("api-gateway") && k.kid().equals("one")
+                  ? new ManagedRpcTrust.Key(
+                      k.issuer(), k.kid(), k.publicKey(), k.notBefore(), k.notAfter(), true)
+                  : k);
+      fixture.write();
+      assertNotNull(stale.verificationKey("api-gateway", "one"));
+      assertEquals(
+          true,
+          control.currentKey("project-service", "api-gateway", "two", fingerprint).block(WAIT));
+      assertEquals(
+          Status.Code.UNAUTHENTICATED,
+          Status.fromThrowable(
+                  assertThrows(StatusRuntimeException.class, () -> invoke.get().block(WAIT)))
+              .getCode());
+      assertEquals(1, hits.get());
+      assertEquals(
+          Status.Code.PERMISSION_DENIED,
+          Status.fromThrowable(
+                  assertThrows(
+                      StatusRuntimeException.class,
+                      () ->
+                          control
+                              .currentKey("auth-service", "api-gateway", "two", fingerprint)
+                              .block(WAIT)))
+              .getCode());
+    } finally {
+      server.shutdownNow().awaitTermination();
+    }
+  }
 }

@@ -62,6 +62,12 @@ primary проверки отвергаются; наличие `GLOBAL_ADMIN` �
 относится к исходному service principal. Edge разрешает конкретные serviceIdentities,
 поэтому смена промежуточного issuer не стирает источник полномочий. SERVICE не становится
 пользователем или admin grant; actor/session/credential/grant/admin поля запрещены.
+SERVICE также проверяет актуальную edge и generation через auth primary на каждом вызове;
+только user membership lookup пропускается, поэтому SERVICE membership-вызов не рекурсирует.
+После локальной проверки подписи recipient сверяет в primary конкретный `kid` и SHA-256
+leaf certificate исходного TLS peer. Это закрывает отзыв при ещё действующем устаревшем
+локальном snapshot, включая overlap нескольких ключей одного issuer. При подписи issuer
+также проверяет актуальность выбранного `kid`; отсутствие ответа primary закрывает допуск.
 Доменные jobs по-прежнему подключают собственные узкие adapters; эта конфигурация не
 запускает неподключённые workers и не даёт им общий admin bypass.
 
@@ -77,6 +83,8 @@ primary проверки отвергаются; наличие `GLOBAL_ADMIN` �
 Проверку claims может запросить только issuer или recipient этой edge; consume —
 только сам recipient. Control channel не использует business assertion interceptor,
 поэтому его создание не зависит циклически от `RpcContextSecurity`.
+Проверку key/fingerprint запрашивает только recipient; проверка собственного signing key
+разрешена issuer без fingerprint. Пустой результат любого control RPC явно даёт `UNAVAILABLE`.
 
 `taska.rpc_assertion_replay` в auth primary имеет PK `(recipient,issuer,assertion_id)`.
 Все реплики одного recipient используют ту же таблицу. Consume — отдельное autocommit
@@ -88,6 +96,8 @@ auth primary и recipient; bounded cleanup удаляет только истё�
 к хранению nonce, а границы exp−iat и receiver skew остаются прежними. Auth/replay
 pool должен иметь запас соединений для control plane отдельно от приостановленных
 business transactions. Отказ auth не обходится локальной in-memory таблицей.
+Планировщик не запускает следующий cleanup до завершения предыдущего; timeout освобождает
+локальный guard для следующей попытки. Очистка не меняет срок приёма assertion.
 
 ## Ротация и emergency revoke
 

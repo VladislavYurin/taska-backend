@@ -65,6 +65,7 @@ public final class ManagedRpcPeerInterceptor implements ServerInterceptor {
                         if (!cancelled) {
                           cancelled = true;
                           message = null;
+                          if (delegate != null) delegate.onCancel();
                           call.close(
                               error instanceof StatusRuntimeException
                                   ? Status.fromThrowable(error)

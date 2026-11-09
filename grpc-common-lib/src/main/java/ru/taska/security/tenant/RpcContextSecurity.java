@@ -37,6 +37,11 @@ public final class RpcContextSecurity {
     Mono<Boolean> allowed(RequestContext context, String rpc, Policy policy);
   }
 
+  /** Online emergency revocation in addition to the local cryptographic verification material. */
+  public interface KeyAuthority {
+    Mono<Boolean> current(String issuer, String kid, String peerFingerprint);
+  }
+
   private static final JsonMapper JSON =
       JsonMapper.builder()
           .enable(tools.jackson.core.StreamReadFeature.STRICT_DUPLICATE_DETECTION)
@@ -48,14 +53,43 @@ public final class RpcContextSecurity {
   private final Keys keys;
   private final ReplayGuard replay;
   private final Authority authority;
+  private final KeyAuthority keyAuthority;
 
   public RpcContextSecurity(
       String service, Clock clock, Keys keys, ReplayGuard replay, Authority authority) {
+    this(
+        service,
+        clock,
+        keys,
+        replay,
+        authority,
+        (issuer, kid, peer) -> Mono.fromCallable(() -> keys.verificationKey(issuer, kid) != null));
+  }
+
+  public RpcContextSecurity(
+      String service,
+      Clock clock,
+      Keys keys,
+      ReplayGuard replay,
+      Authority authority,
+      KeyAuthority keyAuthority) {
     this.service = Objects.requireNonNull(service);
     this.clock = Objects.requireNonNull(clock);
     this.keys = Objects.requireNonNull(keys);
     this.replay = Objects.requireNonNull(replay);
     this.authority = Objects.requireNonNull(authority);
+    this.keyAuthority = Objects.requireNonNull(keyAuthority);
+  }
+
+  private Mono<Void> currentKey(String issuer, String kid, String fingerprint) {
+    return Mono.defer(() -> keyAuthority.current(issuer, kid, fingerprint))
+        .switchIfEmpty(Mono.error(Status.UNAVAILABLE.asRuntimeException()))
+        .onErrorMap(
+            e ->
+                Status.UNAVAILABLE
+                    .withDescription("RPC key authority unavailable")
+                    .asRuntimeException())
+        .flatMap(allowed -> allowed ? Mono.empty() : Mono.error(unauthenticated()));
   }
 
   public static RequestContext context(Message message) {
@@ -267,38 +301,60 @@ public final class RpcContextSecurity {
                 throw Status.PERMISSION_DENIED.asRuntimeException();
               RpcMessageClaims.validate(request, rpc, r);
               return authorize(r, rpc, policy)
-                  .map(
+                  .publishOn(reactor.core.scheduler.Schedulers.boundedElastic())
+                  .flatMap(
                       ignored -> {
                         try {
                           var k = keys.signingKey(service);
-                          String header =
-                              encode(Map.of("alg", "EdDSA", "kid", k.kid(), "typ", "JWT"));
-                          String body =
-                              encode(
-                                  Map.of(
-                                      "iss",
-                                      service,
-                                      "aud",
-                                      c.getAudienceService(),
-                                      "iat",
-                                      Instant.parse(c.getIssuedAt()).getEpochSecond(),
-                                      "exp",
-                                      Instant.parse(c.getExpiresAt()).getEpochSecond(),
-                                      "jti",
-                                      c.getAssertionId(),
-                                      "request_id",
-                                      r.getHeader().getRequestId(),
-                                      "rpc",
-                                      rpc,
-                                      "context_sha256",
-                                      digest(r),
-                                      "request_sha256",
-                                      digest(request)));
-                          String input = header + "." + body;
-                          var signer = Signature.getInstance("Ed25519");
-                          signer.initSign(k.key());
-                          signer.update(input.getBytes(StandardCharsets.US_ASCII));
-                          return input + "." + ENCODE.encodeToString(signer.sign());
+                          return currentKey(service, k.kid(), null)
+                              .then(
+                                  Mono.fromCallable(
+                                          () -> {
+                                            try {
+                                              String header =
+                                                  encode(
+                                                      Map.of(
+                                                          "alg", "EdDSA", "kid", k.kid(), "typ",
+                                                          "JWT"));
+                                              String body =
+                                                  encode(
+                                                      Map.of(
+                                                          "iss",
+                                                          service,
+                                                          "aud",
+                                                          c.getAudienceService(),
+                                                          "iat",
+                                                          Instant.parse(c.getIssuedAt())
+                                                              .getEpochSecond(),
+                                                          "exp",
+                                                          Instant.parse(c.getExpiresAt())
+                                                              .getEpochSecond(),
+                                                          "jti",
+                                                          c.getAssertionId(),
+                                                          "request_id",
+                                                          r.getHeader().getRequestId(),
+                                                          "rpc",
+                                                          rpc,
+                                                          "context_sha256",
+                                                          digest(r),
+                                                          "request_sha256",
+                                                          digest(request)));
+                                              String input = header + "." + body;
+                                              var signer = Signature.getInstance("Ed25519");
+                                              signer.initSign(k.key());
+                                              signer.update(
+                                                  input.getBytes(StandardCharsets.US_ASCII));
+                                              return input
+                                                  + "."
+                                                  + ENCODE.encodeToString(signer.sign());
+                                            } catch (Exception e) {
+                                              throw Status.UNAVAILABLE
+                                                  .withDescription("RPC signing unavailable")
+                                                  .asRuntimeException();
+                                            }
+                                          })
+                                      .subscribeOn(
+                                          reactor.core.scheduler.Schedulers.boundedElastic()));
                         } catch (Exception e) {
                           throw Status.UNAVAILABLE
                               .withDescription("RPC signing unavailable")
@@ -312,11 +368,22 @@ public final class RpcContextSecurity {
 
   public Mono<VerifiedTenantContext> verify(
       Message request, String assertion, String rpc, String peer, Policy policy) {
+    return verify(request, assertion, rpc, peer, null, policy);
+  }
+
+  public Mono<VerifiedTenantContext> verify(
+      Message request,
+      String assertion,
+      String rpc,
+      String peer,
+      String peerFingerprint,
+      Policy policy) {
     return Mono.defer(
             () -> {
               var r = context(request);
               validate(r, policy);
               var c = r.getContext();
+              final String kid;
               try {
                 if (assertion == null || assertion.length() > 16384) throw unauthenticated();
                 String[] parts = assertion.split("\\.", -1);
@@ -347,6 +414,7 @@ public final class RpcContextSecurity {
                   throw Status.UNAVAILABLE.asRuntimeException();
                 }
                 if (key == null) throw unauthenticated();
+                kid = h.path("kid").asText();
                 var verifier = Signature.getInstance("Ed25519");
                 verifier.initVerify(key);
                 verifier.update((parts[0] + "." + parts[1]).getBytes(StandardCharsets.US_ASCII));
@@ -357,7 +425,8 @@ public final class RpcContextSecurity {
                 throw unauthenticated();
               }
               RpcMessageClaims.validate(request, rpc, r);
-              return authorize(r, rpc, policy)
+              return currentKey(peer, kid, peerFingerprint)
+                  .then(authorize(r, rpc, policy))
                   .flatMap(
                       v -> {
                         if (!policy.mutation()) return Mono.just(v);

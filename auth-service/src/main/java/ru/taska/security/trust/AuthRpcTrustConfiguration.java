@@ -53,6 +53,8 @@ public class AuthRpcTrustConfiguration {
     private static final org.slf4j.Logger LOG =
         org.slf4j.LoggerFactory.getLogger(RpcReplayCleanup.class);
     private final AuthRpcTrustBackend backend;
+    private final java.util.concurrent.atomic.AtomicBoolean running =
+        new java.util.concurrent.atomic.AtomicBoolean();
 
     RpcReplayCleanup(AuthRpcTrustBackend backend) {
       this.backend = backend;
@@ -60,7 +62,11 @@ public class AuthRpcTrustConfiguration {
 
     @Scheduled(fixedDelayString = "${taska.rpc.trust.replay-cleanup-delay:60000}")
     public void cleanup() {
-      backend.cleanup().subscribe(ignored -> {}, e -> LOG.warn("RPC replay cleanup unavailable"));
+      if (!running.compareAndSet(false, true)) return;
+      reactor.core.publisher.Mono.defer(backend::cleanup)
+          .timeout(java.time.Duration.ofSeconds(30))
+          .doFinally(ignored -> running.set(false))
+          .subscribe(ignored -> {}, e -> LOG.warn("RPC replay cleanup unavailable"));
     }
   }
 }
