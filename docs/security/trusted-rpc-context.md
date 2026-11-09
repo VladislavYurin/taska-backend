@@ -1,6 +1,6 @@
 # Подписанный контекст RPC
 
-Библиотека в common-lib/grpc-common-lib предоставляет opt-in протокол. Подключение legacy RPC описано ниже (TAS-316), production trust providers и включение — TAS-317; SQL executor — TAS-307. Новые типы находятся в v1/tenant-context.proto; существующий Header/UserContext сохранён.
+Библиотека в common-lib/grpc-common-lib предоставляет opt-in протокол. Подключение legacy RPC описано ниже (TAS-316), production providers — [service identity/rotation](rpc-service-identity.md), включение требует операторского cutover; SQL executor — TAS-307. Новые типы находятся в v1/tenant-context.proto; существующий Header/UserContext сохранён.
 
 Получатель регистрирует точное имя каждого метода и Policy(tenantRequired, mutation), RpcContextSecurity и TenantServerInterceptor. Поддерживаются unary requests (в том числе server-streaming responses); остальные методы запрещены. Server interceptor извлекает SPIFFE identity из проверенной SSLSession и допускает message в handler только после проверки JWS, полного request hash, актуальной authority и атомарного replay consume.
 
@@ -17,7 +17,7 @@
 - ReplayGuard: общий для всех реплик atomic consume(issuer,jti,retainUntil). Сохранять до expiresAt+5s; consume не отменяется при error/cancel. Недоступность/пустой ответ — UNAVAILABLE. In-memory реализация подходит только тестам.
 - Clock: доверенные UTC часы. Assertion TTL (exp−iat) ≤30s; receiver clock skew≤5s: now<exp+5s, на границе отказ. Skew компенсирует разницу часов, не увеличивает exp−iat. Future iat>now+5s запрещён.
 
-Ошибки проверки credential возвращают UNAUTHENTICATED. Не логировать raw assertions, контекст и payload. Сам протокол не создаёт production trust providers. Их поставка, ротация и проверка развёрнутого контура относятся к TAS-317.
+Ошибки проверки credential возвращают UNAUTHENTICATED. Не логировать raw assertions, контекст и payload. Production providers и их подключение реализованы в TAS-317; [контракт ротации и deployment](rpc-service-identity.md). Фактическое включение и SQL cutover проверяются отдельно.
 
 Проверка: RpcContextSecurityTest — подмена сообщения/метода/tenant, authority/replay failure, конкурентный replay, narrowing/nested hop, deadline/cancellation, параллельный Reactor context. TenantTransportTest поднимает loopback gRPC с mTLS, генерирует временный CA и сертификаты через openssl, проверяет допуск и отсутствие повторных business handler вызовов. Тестовые ключи остаются в @TempDir.
 

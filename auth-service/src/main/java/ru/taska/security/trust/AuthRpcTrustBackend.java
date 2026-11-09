@@ -1,0 +1,195 @@
+package ru.taska.security.trust;
+
+import io.r2dbc.spi.*;
+import java.time.*;
+import java.util.*;
+import org.springframework.r2dbc.core.DatabaseClient;
+import reactor.core.publisher.Mono;
+import ru.taska.api.b2b.v1.*;
+import ru.taska.security.session.WebSessionStore;
+import ru.taska.security.tenant.*;
+
+/** Uncached primary-state validation. An active account alone never validates a credential. */
+public final class AuthRpcTrustBackend implements RpcTrustBackend {
+  private final DatabaseClient db;
+  private final ConnectionFactory connections;
+  private final WebSessionStore.MembershipAuthority memberships;
+  private final ManagedRpcTrust trust;
+  private final Clock clock;
+
+  public AuthRpcTrustBackend(
+      DatabaseClient db,
+      ConnectionFactory connections,
+      WebSessionStore.MembershipAuthority memberships,
+      ManagedRpcTrust trust,
+      Clock clock) {
+    this.db = db;
+    this.connections = connections;
+    this.memberships = memberships;
+    this.trust = trust;
+    this.clock = clock;
+  }
+
+  private static UUID id(String value) {
+    var id = UUID.fromString(value);
+    if (!id.toString().equals(value)) throw new IllegalArgumentException();
+    return id;
+  }
+
+  public Mono<Boolean> allowed(
+      RequestContext request, String rpc, RpcContextSecurity.Policy policy) {
+    return Mono.defer(
+            () -> {
+              if (!trust.allowed(request, rpc, policy)) return Mono.just(false);
+              var c = request.getContext();
+              if (c.getCredentialKind() == CredentialKind.CREDENTIAL_KIND_SERVICE)
+                return Mono.just(true);
+              if (!c.hasActorUserId()
+                  || !c.hasCredentialId()
+                  || c.hasAdministrativeScope()
+                  || c.hasAdministrativeLevel()
+                  || c.getManageGlobalAccounts()) return Mono.just(false);
+              UUID user = id(c.getActorUserId());
+              long generation = Long.parseLong(c.getActorGeneration());
+              UUID credential = id(c.getCredentialId());
+              boolean tenant = c.getCredentialKind() == CredentialKind.CREDENTIAL_KIND_WEB_TENANT;
+              boolean global = c.getCredentialKind() == CredentialKind.CREDENTIAL_KIND_WEB_GLOBAL;
+              boolean pat = c.getCredentialKind() == CredentialKind.CREDENTIAL_KIND_USER_PAT;
+              if (!tenant && !global && !pat) return Mono.just(false);
+              if ((tenant || pat) && (!c.hasTenantId() || !c.hasMembershipGeneration()))
+                return Mono.just(false);
+              if (global && (c.hasTenantId() || c.hasGrantId() || c.hasMembershipGeneration()))
+                return Mono.just(false);
+              if ((tenant || global)
+                  && (!c.hasSessionId()
+                      || !c.getSessionId().equals(c.getCredentialId())
+                      || c.hasGrantId())) return Mono.just(false);
+              var scopes = Set.copyOf(c.getScopesList());
+              if (scopes.isEmpty()
+                  || !(global
+                          ? Set.of("tenants:select", "tenants:create", "account:read")
+                          : Set.of("read", "write"))
+                      .containsAll(scopes)) return Mono.just(false);
+              String sql;
+              if (pat) {
+                if (c.hasSessionId() || !c.hasGrantId() || !c.hasGrantGeneration())
+                  return Mono.just(false);
+                sql =
+                    "SELECT p.scopes FROM taska.personal_access_tokens p JOIN"
+                        + " taska.integration_grants g ON g.id=p.integration_grant_id AND"
+                        + " g.user_id=p.user_id JOIN taska.users u ON u.id=p.user_id WHERE"
+                        + " p.id=:credential AND p.user_id=:user AND p.revoked_at IS NULL AND"
+                        + " p.expires_at>:now AND g.id=:grant AND g.version=:grantVersion AND"
+                        + " g.kind='USER' AND g.scope_type='ONE_TENANT' AND g.tenant_id=:tenant AND"
+                        + " g.revoked_at IS NULL AND (g.expires_at IS NULL OR g.expires_at>:now)"
+                        + " AND u.auth_version=:generation AND u.status='ACTIVE'";
+              } else if (tenant) {
+                sql =
+                    "SELECT ARRAY['read','write']::text[] AS scopes FROM taska.tenant_sessions s"
+                        + " JOIN taska.web_sessions w ON w.id=s.web_session_id AND"
+                        + " w.user_id=s.user_id JOIN taska.users u ON u.id=s.user_id WHERE"
+                        + " s.id=:credential AND s.user_id=:user AND s.tenant_id=:tenant AND"
+                        + " s.membership_version=:memberVersion AND s.revoked_at IS NULL AND"
+                        + " s.expires_at>:now AND w.state='ACTIVE' AND w.revoked_at IS NULL AND"
+                        + " w.expires_at>:now AND w.auth_version=:generation AND"
+                        + " u.auth_version=:generation AND u.status='ACTIVE'";
+              } else {
+                sql =
+                    "SELECT ARRAY['tenants:select','tenants:create','account:read']::text[] AS"
+                        + " scopes FROM taska.web_sessions w JOIN taska.users u ON u.id=w.user_id"
+                        + " WHERE w.id=:credential AND w.user_id=:user AND w.state='ACTIVE' AND"
+                        + " w.revoked_at IS NULL AND w.expires_at>:now AND"
+                        + " w.auth_version=:generation AND u.auth_version=:generation AND"
+                        + " u.status='ACTIVE'";
+              }
+              var query =
+                  db.sql(sql)
+                      .bind("credential", credential)
+                      .bind("user", user)
+                      .bind("now", clock.instant())
+                      .bind("generation", generation);
+              if (tenant || pat) query = query.bind("tenant", id(c.getTenantId()));
+              if (tenant)
+                query = query.bind("memberVersion", Long.parseLong(c.getMembershipGeneration()));
+              if (pat)
+                query =
+                    query
+                        .bind("grant", id(c.getGrantId()))
+                        .bind("grantVersion", Long.parseLong(c.getGrantGeneration()));
+              return query
+                  .map((r, m) -> Set.of(r.get("scopes", String[].class)).containsAll(scopes))
+                  .one()
+                  .defaultIfEmpty(false)
+                  .flatMap(
+                      valid -> {
+                        if (!valid || global) return Mono.just(valid);
+                        long expected = Long.parseLong(c.getMembershipGeneration());
+                        return memberships
+                            .current(id(c.getTenantId()), user)
+                            .timeout(Duration.ofSeconds(3))
+                            .map(current -> current > 0 && current == expected)
+                            .defaultIfEmpty(false);
+                      });
+            })
+        .onErrorResume(IllegalArgumentException.class, e -> Mono.just(false))
+        .onErrorResume(
+            ru.taska.exception.DomainException.class,
+            e ->
+                java.util.Set.of(
+                            ru.taska.exception.DomainStatus.PERMISSION_DENIED,
+                            ru.taska.exception.DomainStatus.UNAUTHENTICATED,
+                            ru.taska.exception.DomainStatus.NOT_FOUND)
+                        .contains(e.getStatus())
+                    ? Mono.just(false)
+                    : Mono.error(e))
+        .subscribeOn(reactor.core.scheduler.Schedulers.boundedElastic());
+  }
+
+  public Mono<Boolean> consume(String recipient, String issuer, String jti, Instant retainUntil) {
+    return Mono.defer(
+            () -> {
+              var services = trust.snapshot().services();
+              var now = clock.instant();
+              if (!services.containsKey(recipient)
+                  || !services.containsKey(issuer)
+                  || !retainUntil.isAfter(now)
+                  || retainUntil.isAfter(now.plusSeconds(40))) return Mono.just(false);
+              UUID assertion = id(jti);
+              // Acquire directly from the pool, outside a caller's reactive transaction.
+              // Consumption must
+              // survive rollback/cancellation of the domain transaction and be visible to other
+              // replicas.
+              return Mono.usingWhen(
+                  Mono.from(connections.create()),
+                  connection ->
+                      Mono.from(connection.setAutoCommit(true))
+                          .then(
+                              Mono.from(
+                                  connection
+                                      .createStatement(
+                                          "INSERT INTO"
+                                              + " taska.rpc_assertion_replay(recipient,issuer,assertion_id,retain_until)"
+                                              + " VALUES($1,$2,$3,$4) ON CONFLICT DO NOTHING")
+                                      .bind(0, recipient)
+                                      .bind(1, issuer)
+                                      .bind(2, assertion)
+                                      .bind(3, retainUntil.atOffset(ZoneOffset.UTC))
+                                      .execute()))
+                          .flatMap(result -> Mono.from(result.getRowsUpdated()))
+                          .map(count -> count == 1),
+                  connection -> Mono.from(connection.close()));
+            })
+        .subscribeOn(reactor.core.scheduler.Schedulers.boundedElastic())
+        .cache();
+  }
+
+  public Mono<Void> cleanup() {
+    return db.sql(
+            "DELETE FROM taska.rpc_assertion_replay WHERE ctid IN (SELECT ctid FROM"
+                + " taska.rpc_assertion_replay WHERE retain_until<:now LIMIT 10000)")
+        .bind("now", clock.instant())
+        .fetch()
+        .rowsUpdated()
+        .then();
+  }
+}

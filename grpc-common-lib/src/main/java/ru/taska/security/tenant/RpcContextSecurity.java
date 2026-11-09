@@ -156,18 +156,25 @@ public final class RpcContextSecurity {
    */
   public Mono<VerifiedTenantContext> authorize(RequestContext r, String rpc, Policy policy) {
     return Mono.defer(
-        () -> {
-          validate(r, policy);
-          return Mono.defer(() -> authority.allowed(r, rpc, policy))
-              .switchIfEmpty(Mono.error(Status.UNAVAILABLE.asRuntimeException()))
-              .onErrorMap(e -> Status.UNAVAILABLE.asRuntimeException())
-              // This operator precedes the explicit denial: false must remain PERMISSION_DENIED.
-              .flatMap(
-                  ok ->
-                      ok
-                          ? Mono.just(verified(r))
-                          : Mono.error(Status.PERMISSION_DENIED.asRuntimeException()));
-        });
+            () -> {
+              validate(r, policy);
+              return Mono.defer(() -> authority.allowed(r, rpc, policy))
+                  .switchIfEmpty(Mono.error(Status.UNAVAILABLE.asRuntimeException()))
+                  .onErrorMap(
+                      e ->
+                          Status.UNAVAILABLE
+                              .withDescription("RPC authority unavailable")
+                              .withCause(e)
+                              .asRuntimeException())
+                  // This operator precedes the explicit denial: false must remain
+                  // PERMISSION_DENIED.
+                  .flatMap(
+                      ok ->
+                          ok
+                              ? Mono.just(verified(r))
+                              : Mono.error(Status.PERMISSION_DENIED.asRuntimeException()));
+            })
+        .subscribeOn(reactor.core.scheduler.Schedulers.boundedElastic());
   }
 
   /** Construct the next hop from verified provenance, with a new attempt identity. */
@@ -245,121 +252,127 @@ public final class RpcContextSecurity {
   public Mono<String> sign(
       VerifiedTenantContext parent, Message request, String rpc, Policy policy) {
     return Mono.defer(
-        () -> {
-          RequestContext r = context(request);
-          var c = r.getContext();
-          RequestContext original;
-          try {
-            original = RequestContext.parseFrom(parent.wire());
-          } catch (Exception e) {
-            throw unauthenticated();
-          }
-          if (!samePrincipal(original.getContext(), c)
-              || !original.getHeader().getRequestId().equals(r.getHeader().getRequestId())
-              || !service.equals(c.getIssuerService()))
-            throw Status.PERMISSION_DENIED.asRuntimeException();
-          RpcMessageClaims.validate(request,rpc,r);
-          return authorize(r, rpc, policy)
-              .map(
-                  ignored -> {
-                    try {
-                      var k = keys.signingKey(service);
-                      String header = encode(Map.of("alg", "EdDSA", "kid", k.kid(), "typ", "JWT"));
-                      String body =
-                          encode(
-                              Map.of(
-                                  "iss",
-                                  service,
-                                  "aud",
-                                  c.getAudienceService(),
-                                  "iat",
-                                  Instant.parse(c.getIssuedAt()).getEpochSecond(),
-                                  "exp",
-                                  Instant.parse(c.getExpiresAt()).getEpochSecond(),
-                                  "jti",
-                                  c.getAssertionId(),
-                                  "request_id",
-                                  r.getHeader().getRequestId(),
-                                  "rpc",
-                                  rpc,
-                                  "context_sha256",
-                                  digest(r),
-                                  "request_sha256",
-                                  digest(request)));
-                      String input = header + "." + body;
-                      var signer = Signature.getInstance("Ed25519");
-                      signer.initSign(k.key());
-                      signer.update(input.getBytes(StandardCharsets.US_ASCII));
-                      return input + "." + ENCODE.encodeToString(signer.sign());
-                    } catch (Exception e) {
-                      throw Status.UNAVAILABLE.asRuntimeException();
-                    }
-                  });
-        });
+            () -> {
+              RequestContext r = context(request);
+              var c = r.getContext();
+              RequestContext original;
+              try {
+                original = RequestContext.parseFrom(parent.wire());
+              } catch (Exception e) {
+                throw unauthenticated();
+              }
+              if (!samePrincipal(original.getContext(), c)
+                  || !original.getHeader().getRequestId().equals(r.getHeader().getRequestId())
+                  || !service.equals(c.getIssuerService()))
+                throw Status.PERMISSION_DENIED.asRuntimeException();
+              RpcMessageClaims.validate(request, rpc, r);
+              return authorize(r, rpc, policy)
+                  .map(
+                      ignored -> {
+                        try {
+                          var k = keys.signingKey(service);
+                          String header =
+                              encode(Map.of("alg", "EdDSA", "kid", k.kid(), "typ", "JWT"));
+                          String body =
+                              encode(
+                                  Map.of(
+                                      "iss",
+                                      service,
+                                      "aud",
+                                      c.getAudienceService(),
+                                      "iat",
+                                      Instant.parse(c.getIssuedAt()).getEpochSecond(),
+                                      "exp",
+                                      Instant.parse(c.getExpiresAt()).getEpochSecond(),
+                                      "jti",
+                                      c.getAssertionId(),
+                                      "request_id",
+                                      r.getHeader().getRequestId(),
+                                      "rpc",
+                                      rpc,
+                                      "context_sha256",
+                                      digest(r),
+                                      "request_sha256",
+                                      digest(request)));
+                          String input = header + "." + body;
+                          var signer = Signature.getInstance("Ed25519");
+                          signer.initSign(k.key());
+                          signer.update(input.getBytes(StandardCharsets.US_ASCII));
+                          return input + "." + ENCODE.encodeToString(signer.sign());
+                        } catch (Exception e) {
+                          throw Status.UNAVAILABLE
+                              .withDescription("RPC signing unavailable")
+                              .withCause(e)
+                              .asRuntimeException();
+                        }
+                      });
+            })
+        .subscribeOn(reactor.core.scheduler.Schedulers.boundedElastic());
   }
 
   public Mono<VerifiedTenantContext> verify(
       Message request, String assertion, String rpc, String peer, Policy policy) {
     return Mono.defer(
-        () -> {
-          var r = context(request);
-          validate(r, policy);
-          var c = r.getContext();
-          try {
-            if (assertion == null || assertion.length() > 16384) throw unauthenticated();
-            String[] parts = assertion.split("\\.", -1);
-            if (parts.length != 3) throw unauthenticated();
-            JsonNode h = JSON.readTree(DECODE.decode(parts[0])),
-                b = JSON.readTree(DECODE.decode(parts[1]));
-            if (!"EdDSA".equals(h.path("alg").asText())
-                || !"JWT".equals(h.path("typ").asText())
-                || h.size() != 3
-                || h.path("kid").asText().isBlank()
-                || b.size() != 9
-                || !service.equals(c.getAudienceService())
-                || !c.getIssuerService().equals(peer)
-                || !c.getIssuerService().equals(b.path("iss").asText())
-                || !service.equals(b.path("aud").asText())
-                || !rpc.equals(b.path("rpc").asText())
-                || !c.getAssertionId().equals(b.path("jti").asText())
-                || !r.getHeader().getRequestId().equals(b.path("request_id").asText())
-                || Instant.parse(c.getIssuedAt()).getEpochSecond() != b.path("iat").asLong()
-                || Instant.parse(c.getExpiresAt()).getEpochSecond() != b.path("exp").asLong()
-                || !digest(r).equals(b.path("context_sha256").asText())
-                || !digest(request).equals(b.path("request_sha256").asText()))
-              throw unauthenticated();
-            PublicKey key;
-            try {
-              key = keys.verificationKey(peer, h.path("kid").asText());
-            } catch (Exception e) {
-              throw Status.UNAVAILABLE.asRuntimeException();
-            }
-            if (key == null) throw unauthenticated();
-            var verifier = Signature.getInstance("Ed25519");
-            verifier.initVerify(key);
-            verifier.update((parts[0] + "." + parts[1]).getBytes(StandardCharsets.US_ASCII));
-            if (!verifier.verify(DECODE.decode(parts[2]))) throw unauthenticated();
-          } catch (io.grpc.StatusRuntimeException e) {
-            throw e;
-          } catch (Exception e) {
-            throw unauthenticated();
-          }
-          RpcMessageClaims.validate(request,rpc,r);
-          return authorize(r, rpc, policy)
-              .flatMap(
-                  v -> {
-                    if (!policy.mutation()) return Mono.just(v);
-                    return Mono.defer(
-                            () ->
-                                replay.consume(
-                                    peer,
-                                    c.getAssertionId(),
-                                    Instant.parse(c.getExpiresAt()).plusSeconds(5)))
-                        .switchIfEmpty(Mono.error(Status.UNAVAILABLE.asRuntimeException()))
-                        .onErrorMap(e -> Status.UNAVAILABLE.asRuntimeException())
-                        .flatMap(ok -> ok ? Mono.just(v) : Mono.error(unauthenticated()));
-                  });
-        });
+            () -> {
+              var r = context(request);
+              validate(r, policy);
+              var c = r.getContext();
+              try {
+                if (assertion == null || assertion.length() > 16384) throw unauthenticated();
+                String[] parts = assertion.split("\\.", -1);
+                if (parts.length != 3) throw unauthenticated();
+                JsonNode h = JSON.readTree(DECODE.decode(parts[0])),
+                    b = JSON.readTree(DECODE.decode(parts[1]));
+                if (!"EdDSA".equals(h.path("alg").asText())
+                    || !"JWT".equals(h.path("typ").asText())
+                    || h.size() != 3
+                    || h.path("kid").asText().isBlank()
+                    || b.size() != 9
+                    || !service.equals(c.getAudienceService())
+                    || !c.getIssuerService().equals(peer)
+                    || !c.getIssuerService().equals(b.path("iss").asText())
+                    || !service.equals(b.path("aud").asText())
+                    || !rpc.equals(b.path("rpc").asText())
+                    || !c.getAssertionId().equals(b.path("jti").asText())
+                    || !r.getHeader().getRequestId().equals(b.path("request_id").asText())
+                    || Instant.parse(c.getIssuedAt()).getEpochSecond() != b.path("iat").asLong()
+                    || Instant.parse(c.getExpiresAt()).getEpochSecond() != b.path("exp").asLong()
+                    || !digest(r).equals(b.path("context_sha256").asText())
+                    || !digest(request).equals(b.path("request_sha256").asText()))
+                  throw unauthenticated();
+                PublicKey key;
+                try {
+                  key = keys.verificationKey(peer, h.path("kid").asText());
+                } catch (Exception e) {
+                  throw Status.UNAVAILABLE.asRuntimeException();
+                }
+                if (key == null) throw unauthenticated();
+                var verifier = Signature.getInstance("Ed25519");
+                verifier.initVerify(key);
+                verifier.update((parts[0] + "." + parts[1]).getBytes(StandardCharsets.US_ASCII));
+                if (!verifier.verify(DECODE.decode(parts[2]))) throw unauthenticated();
+              } catch (io.grpc.StatusRuntimeException e) {
+                throw e;
+              } catch (Exception e) {
+                throw unauthenticated();
+              }
+              RpcMessageClaims.validate(request, rpc, r);
+              return authorize(r, rpc, policy)
+                  .flatMap(
+                      v -> {
+                        if (!policy.mutation()) return Mono.just(v);
+                        return Mono.defer(
+                                () ->
+                                    replay.consume(
+                                        peer,
+                                        c.getAssertionId(),
+                                        Instant.parse(c.getExpiresAt()).plusSeconds(5)))
+                            .switchIfEmpty(Mono.error(Status.UNAVAILABLE.asRuntimeException()))
+                            .onErrorMap(e -> Status.UNAVAILABLE.asRuntimeException())
+                            .flatMap(ok -> ok ? Mono.just(v) : Mono.error(unauthenticated()));
+                      });
+            })
+        .subscribeOn(reactor.core.scheduler.Schedulers.boundedElastic());
   }
 
   static io.grpc.StatusRuntimeException unauthenticated() {

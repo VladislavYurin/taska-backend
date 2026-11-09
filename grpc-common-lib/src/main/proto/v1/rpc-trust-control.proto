@@ -1,0 +1,24 @@
+syntax = "proto3";
+package ru.taska.b2b.v1;
+import "v1/tenant-context.proto";
+option java_multiple_files = true;
+option java_package = "ru.taska.api.b2b.v1";
+// Private control plane. Each call requires a currently allowlisted mTLS certificate.
+// Deliberately separate from assertions, so online validation cannot recurse through itself.
+message CheckRpcAuthorityRequest {
+  RequestContext context = 1;
+  string rpc = 2;
+  bool tenant_required = 3;
+  bool mutation = 4;
+}
+message RpcTrustDecision { bool allowed = 1; }
+message ConsumeRpcAssertionRequest {
+  string recipient = 1;
+  string issuer = 2;
+  string assertion_id = 3;
+  string retain_until = 4;
+}
+service RpcTrustControlService {
+  rpc CheckRpcAuthority(CheckRpcAuthorityRequest) returns (RpcTrustDecision);
+  rpc ConsumeRpcAssertion(ConsumeRpcAssertionRequest) returns (RpcTrustDecision);
+}

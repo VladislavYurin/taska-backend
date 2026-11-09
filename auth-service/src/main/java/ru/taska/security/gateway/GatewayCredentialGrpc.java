@@ -9,7 +9,7 @@ import ru.taska.exception.DomainException;
 
 @GrpcService
 @ConditionalOnProperty(name = "taska.rpc.context.enabled", havingValue = "true")
-public final class GatewayCredentialGrpc
+public class GatewayCredentialGrpc
     extends ReactorGatewayCredentialServiceGrpc.GatewayCredentialServiceImplBase {
   private final GatewayCredentialResolver resolver;
 
