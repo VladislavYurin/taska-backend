@@ -138,6 +138,11 @@ Maven cache/network. Ed25519 fixture keys создаёт Java source launcher, �
 macOS LibreSSL не подменяет Ed25519 другим алгоритмом. Runner использует отдельные БД,
 runtime RLS roles, CA/key каждой службы, signed run-state и ownership-checked cleanup.
 Никакие shared данные/ключи не меняются. Отчёты и diagnostics остаются в ignored target.
+После Actuator runner проверяет защищённые read paths, включая lazy mTLS/control channels:
+в течение 45 секунд допускает повтор только GET при 503/transport unavailable, а 401/403
+останавливают приёмку. Число попыток сохраняется в отчёте; записи не повторяются, штатные
+RPC deadlines и credential TTL не увеличиваются. Это функциональная приёмка после
+готовности зависимостей, а не гарантия latency первого холодного write.
 
 Сценарий: REST → real auth/session → online tenant membership → signed nested
 project/issue/workflow RPC → domain + outbox transaction → Kafka, два tenant с одним

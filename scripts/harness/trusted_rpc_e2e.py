@@ -29,6 +29,24 @@ def instant(delta=0):
     return (datetime.now(timezone.utc) + timedelta(seconds=delta)).isoformat()
 
 
+def wait_protected_read(client, path, expected):
+    """Read-only readiness for lazy mTLS/control channels; never retry a mutation."""
+    deadline, attempts = time.monotonic() + 45, 0
+    while time.monotonic() < deadline:
+        attempts += 1
+        try:
+            status = client.request('GET', path).status
+        except e.Blocked:
+            status = 503
+        if time.monotonic() >= deadline:
+            break
+        if status == expected:
+            return attempts
+        e.require(status == 503, 'Protected readiness returned unexpected status %s' % status)
+        time.sleep(1)
+    raise e.Blocked('Protected RPC readiness deadline exceeded')
+
+
 class TrustedLocal(e.Local):
     def __init__(self, root, store, state):
         super().__init__(root, store, state)
@@ -270,10 +288,19 @@ class TrustedLocal(e.Local):
 
     def scenarios(self):
         actor, clients = self.seed()
+        # Actuator readiness does not establish lazy business/control mTLS channels.
+        # Check authenticated read paths before measuring writes; retain normal deadlines.
+        readiness = []
+        initial = self.counts()
+        for _, client in clients:
+            for resource in ('projects', 'issues'):
+                readiness.append(wait_protected_read(client, '/api/v1/' + resource + '/' + str(uuid.uuid4()), 404))
+        e.require(self.counts() == initial, 'Protected read readiness changed domain/outbox state')
         projects = []
         for tenant, client in clients:
             project = client.expect('POST', '/api/v1/projects', 201, {'projectKey': 'OWNED', 'name': 'Owned'}).json()
             projects.append(project['id'])
+            readiness.append(wait_protected_read(client, '/api/v1/projects/' + project['id'] + '/context', 200))
             issue = client.expect('POST', '/api/v1/projects/' + project['id'] + '/issues', 201,
                 {'issueType': 'TASK', 'summary': 'Owned', 'description': '', 'priority': 'MEDIUM'},
                 {'Idempotency-Key': 'owned-same-business-key'}).json()
@@ -319,7 +346,8 @@ class TrustedLocal(e.Local):
         e.require(self.counts() == before, 'Trust outage changed domain/outbox state')
         e.require(not self.refresh_error, 'Trust refresher failed during run')
         return {'restAuthNestedRpcRlsOutboxKafka': 'PASS', 'tenants': 2, 'rotationRevokeOutage': 'PASS',
-                'membershipRevocation': 'PASS', 'statePreservation': 'PASS'}
+                'membershipRevocation': 'PASS', 'statePreservation': 'PASS',
+                'protectedReadinessAttempts': readiness}
 
 
 def main():
