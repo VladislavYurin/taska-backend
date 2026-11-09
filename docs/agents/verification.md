@@ -214,4 +214,6 @@ TAS-320: billing-service.verify additionally requires FakePaymentProviderTest an
 
 TAS-351 adds required ProviderInboxIntegrationTest, ProviderInboxRpcIntegrationTest and InboxCipherTest: durable ACK/rollback, scoped mapping, canonical proof, real PostgreSQL/mTLS self-processing, lost Root response and private payload rotation/retention. [Scope and activation](../../billing-service/PROVIDER-INBOX.md). External PSP/public gateway E2E remains separate.
 
+TAS-349: billing-service.verify requires `PaymentAttemptIntegrationTest`; [durable claim, original-provider routing and activation](../../billing-service/PAYMENT-ATTEMPTS.md).
+
 TAS-383: [workflow integrity and upgrade preflight](../tas-383-workflow-integrity.md); `WorkflowSortOrderMigrationTest` is mandatory in workflow verify; creation/edit/read ITs run explicitly.

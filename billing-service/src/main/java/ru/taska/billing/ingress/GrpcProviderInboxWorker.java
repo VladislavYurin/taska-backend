@@ -58,6 +58,41 @@ public final class GrpcProviderInboxWorker implements ProviderInbox.SettlementDe
         .then();
   }
 
+  /** Persist the trusted route after the PSP identity is durable, including after lost ACK. */
+  public Mono<Void> register(ru.taska.billing.payment.PaymentAttemptStore.Attempt attempt) {
+    if (attempt == null
+        || attempt.providerPaymentId() == null
+        || attempt.providerPaymentId().isBlank())
+      return Mono.error(
+          new ru.taska.billing.payment.ProviderException(
+              ru.taska.billing.payment.ProviderException.Reason.INVALID_STATE));
+    return call(
+            attempt.tenantId(),
+            ProviderInboxServiceGrpc.getRegisterProviderPaymentMethod().getFullMethodName(),
+            "registerProviderPayment",
+            "inbox:map",
+            c ->
+                RegisterProviderPaymentRequest.newBuilder()
+                    .setContext(c)
+                    .setTenantId(attempt.tenantId().toString())
+                    .setInvoiceId(attempt.invoiceId().toString())
+                    .setProvider(attempt.provider())
+                    .setProviderAccountId(attempt.merchantAccount())
+                    .setEnvironment(
+                        attempt.environment()
+                                == ru.taska.billing.payment.PaymentProvider.Environment.TEST
+                            ? ProviderEnvironment.PROVIDER_ENVIRONMENT_TEST
+                            : ProviderEnvironment.PROVIDER_ENVIRONMENT_LIVE)
+                    .setProviderPaymentId(attempt.providerPaymentId())
+                    .build(),
+            (r, h) ->
+                inbox
+                    .withInterceptors(h)
+                    .withDeadlineAfter(20, TimeUnit.SECONDS)
+                    .registerProviderPayment(r))
+        .then();
+  }
+
   @Override
   public Mono<Void> apply(UUID tenant, UUID evidence) {
     return call(

@@ -354,7 +354,7 @@ class SubscriptionIntegrationTest {
   void reset() {
     sql(
         "TRUNCATE"
-            + " taska.provider_inbox,taska.provider_payment_proofs,taska.provider_pay_routes,taska.provider_ingress_limits,taska.initial_payment_deliveries,taska.payment_settlements,taska.renewal_calendar_assignments,taska.entitlement_snapshots,taska.payment_facts,taska.payment_allocations,taska.invoice_payment_matches,taska.financial_command_receipts,taska.invoices,taska.invoice_lines,taska.invoice_command_receipts,taska.subscription_plan_changes,taska.subscriptions,taska.subscription_periods,taska.subscription_command_receipts,taska.outbox_events,taska.idempotency_records,taska.processed_events");
+            + " taska.payment_attempts,taska.billing_operations,taska.payment_methods,taska.provider_inbox,taska.provider_payment_proofs,taska.provider_pay_routes,taska.provider_ingress_limits,taska.initial_payment_deliveries,taska.payment_settlements,taska.renewal_calendar_assignments,taska.entitlement_snapshots,taska.payment_facts,taska.payment_allocations,taska.invoice_payment_matches,taska.financial_command_receipts,taska.invoices,taska.invoice_lines,taska.invoice_command_receipts,taska.subscription_plan_changes,taska.subscriptions,taska.subscription_periods,taska.subscription_command_receipts,taska.outbox_events,taska.idempotency_records,taska.processed_events");
     sql("ALTER TABLE taska.catalog_plan_versions DISABLE TRIGGER immutable_plan");
     sql("DELETE FROM taska.catalog_plan_versions WHERE version>1");
     sql("ALTER TABLE taska.catalog_plan_versions ENABLE TRIGGER immutable_plan");

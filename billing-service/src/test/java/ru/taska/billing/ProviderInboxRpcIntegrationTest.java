@@ -284,6 +284,12 @@ class ProviderInboxRpcIntegrationTest {
               receiver,
               Clock.systemUTC(),
               "service-1"));
+      // Domain transport fixture; the protected handler derives the sealed invoice/profile from PostgreSQL.
+      worker.get().register(new ru.taska.billing.payment.PaymentAttemptStore.Attempt(
+          UUID.randomUUID(),A,f.base.invoice,UUID.randomUUID(),f.identity.provider(),"wire-binding",
+          f.payment.providerPaymentId(),"{}",f.identity.account(),f.identity.environment(),
+          ru.taska.billing.payment.PaymentAttemptStore.State.SUCCEEDED,java.time.Instant.now(),
+          java.time.Instant.now(),1,2000,"EUR","v1")).block(WAIT);
       var pending = new ProviderInboxStore.Pending(UUID.fromString(accepted.getId()), A);
       f.base.loseDelivery.set(true);
       assertThrows(
