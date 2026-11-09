@@ -24,7 +24,7 @@ import ru.taska.service.AuthService;
 /** B2B session RPC. Tenant commands require the verified gateway context. */
 @GrpcService
 @ConditionalOnProperty(name = "taska.b2b.sessions.enabled", havingValue = "true")
-public final class AuthSessionGrpcService
+public class AuthSessionGrpcService
     extends ReactorAuthSessionServiceGrpc.AuthSessionServiceImplBase {
   private final AuthService auth;
   private final WebSessionStore sessions;

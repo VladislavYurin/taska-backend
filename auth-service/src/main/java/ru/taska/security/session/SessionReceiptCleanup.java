@@ -21,6 +21,7 @@ public final class SessionReceiptCleanup {
   private final Clock clock;
   private final AtomicBoolean running = new AtomicBoolean();
 
+  @org.springframework.beans.factory.annotation.Autowired
   public SessionReceiptCleanup(DatabaseClient db) {
     this(db, Clock.systemUTC());
   }

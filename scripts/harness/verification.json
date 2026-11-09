@@ -132,7 +132,8 @@
           "VersionedCapabilitySourceIntegrationTest",
           "LegacyRpcTransportTest",
           "TenantRpcTransactionManagerIntegrationTest",
-          "RpcMessageClaimsTest"
+          "RpcMessageClaimsTest",
+          "ManagedRpcTrustTest"
         ],
         "noTestsReason": null
       },
@@ -237,7 +238,8 @@
         "selectors": [
           "*",
           "TrustedGatewayContextTest",
-          "TrustedRpcConfigurationTest"
+          "TrustedRpcConfigurationTest",
+          "ManagedRpcStartupTest"
         ],
         "noTestsReason": null
       },
@@ -278,7 +280,9 @@
           "AuthSessionBoundaryTest",
           "TenantPersonalTokenStoreIntegrationTest",
           "TenantPersonalTokenBoundaryTest",
-          "GatewayCredentialResolverIntegrationTest"
+          "GatewayCredentialResolverIntegrationTest",
+          "AuthRpcTrustIntegrationTest",
+          "RpcTrustControlBoundaryTest"
         ],
         "noTestsReason": null
       },

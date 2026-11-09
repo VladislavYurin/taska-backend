@@ -26,7 +26,7 @@ public final class TenantServerInterceptor implements ServerInterceptor {
     this.environment = Objects.requireNonNull(environment);
   }
 
-  public static String peerIdentity(Attributes attributes,String environment) {
+  public static String peerIdentity(Attributes attributes, String environment) {
     try {
       SSLSession session = attributes.get(Grpc.TRANSPORT_ATTR_SSL_SESSION);
       if (session == null) throw RpcContextSecurity.unauthenticated();
@@ -55,6 +55,19 @@ public final class TenantServerInterceptor implements ServerInterceptor {
     }
   }
 
+  public static String peerFingerprint(Attributes attributes) {
+    try {
+      var session = attributes.get(Grpc.TRANSPORT_ATTR_SSL_SESSION);
+      if (session == null) throw RpcContextSecurity.unauthenticated();
+      return java.util.HexFormat.of()
+          .formatHex(
+              java.security.MessageDigest.getInstance("SHA-256")
+                  .digest(session.getPeerCertificates()[0].getEncoded()));
+    } catch (Exception e) {
+      throw RpcContextSecurity.unauthenticated();
+    }
+  }
+
   @Override
   public <Req, Resp> ServerCall.Listener<Req> interceptCall(
       ServerCall<Req, Resp> call, Metadata headers, ServerCallHandler<Req, Resp> next) {
@@ -66,7 +79,7 @@ public final class TenantServerInterceptor implements ServerInterceptor {
     }
     final String peer;
     try {
-      peer = peerIdentity(call.getAttributes(),environment);
+      peer = peerIdentity(call.getAttributes(), environment);
       var assertions = headers.getAll(ASSERTION);
       int count = 0;
       if (assertions != null) for (String ignored : assertions) count++;
@@ -95,7 +108,13 @@ public final class TenantServerInterceptor implements ServerInterceptor {
         received = true;
         verification =
             security
-                .verify(proto, headers.get(ASSERTION), method.getFullMethodName(), peer, policy)
+                .verify(
+                    proto,
+                    headers.get(ASSERTION),
+                    method.getFullMethodName(),
+                    peer,
+                    peerFingerprint(call.getAttributes()),
+                    policy)
                 .subscribe(
                     v -> {
                       synchronized (this) {

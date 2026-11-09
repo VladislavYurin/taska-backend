@@ -47,6 +47,10 @@ message TrustedTenantContext {
   optional AdminGrant.LevelValue administrative_level = 18;
   bool manage_global_accounts = 19;
   uint32 context_version = 20;
+  // SERVICE-only purpose; never inferred from nodeId, role or a queue payload.
+  optional string service_purpose = 21;
+  // Original service principal; preserved when another service delegates the same purpose.
+  optional string service_identity = 22;
 }
 
 message RequestContext {

@@ -14,6 +14,7 @@
     <packaging>jar</packaging>
 
     <dependencies>
+        <dependency><groupId>ru.taska</groupId><artifactId>grpc-common-lib</artifactId><version>${project.version}</version><type>test-jar</type><scope>test</scope></dependency>
 
         <!-- cloud gateway on webFlux -->
         <dependency>
