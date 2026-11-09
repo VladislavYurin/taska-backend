@@ -5,23 +5,32 @@ import java.util.UUID;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
+import ru.taska.RegistryFixtures;
+import ru.taska.domain.IssueType;
+import ru.taska.domain.StatusCategory;
+import ru.taska.domain.WorkflowAggregate;
 import ru.taska.entity.StatusEntity;
 import ru.taska.entity.TransitionEntity;
 import ru.taska.entity.WorkflowBindingEntity;
 import ru.taska.entity.WorkflowEntity;
 import ru.taska.exception.DomainException;
-import ru.taska.domain.StatusCategory;
 import ru.taska.exception.DomainStatus;
 import ru.taska.mapper.WorkflowMapper;
 import ru.taska.repository.StatusRepository;
 import ru.taska.repository.TransitionRepository;
 import ru.taska.repository.WorkflowBindingRepository;
 import ru.taska.repository.WorkflowRepository;
+import ru.taska.service.IssueTypeBindingIdentity;
 import ru.taska.service.WorkflowService;
+import ru.taska.transport.grpc.project.GrpcProjectServiceClient;
+import ru.taska.transport.grpc.project.ProjectRoleChecker;
 
-class WorkflowServiceIT extends AbstractIT{
+class WorkflowServiceIT extends LegacyWorkflowOperationsFixture {
 
     @Autowired
     private WorkflowService workflowService;
@@ -41,6 +50,12 @@ class WorkflowServiceIT extends AbstractIT{
     @Autowired
     private TransitionRepository transitionRepository;
 
+    @MockitoBean
+    private GrpcProjectServiceClient projectClient;
+
+    @MockitoBean
+    private ProjectRoleChecker projectRoleChecker;
+
     private static final UUID PROJECT_ID = UUID.fromString("00000000-0000-0000-0000-000000000001");
     private static final String ISSUE_TYPE = "TASK";
     private static final String CUSTOM_ISSUE_TYPE = "ISSUE";
@@ -52,6 +67,15 @@ class WorkflowServiceIT extends AbstractIT{
     void setUp() {
         cleanAll();
         seedAll();
+    }
+
+    @BeforeEach
+    void stubProjectRegistry() {
+        Mockito.when(projectClient.getIssueTypesInternal(Mockito.any()))
+                .thenAnswer(invocation -> Mono.just(RegistryFixtures.types(
+                        invocation.getArgument(0),
+                        IssueType.TASK, IssueType.BUG, IssueType.STORY,
+                        IssueType.valueOf(CUSTOM_ISSUE_TYPE))));
     }
 
     @Test
@@ -98,6 +122,114 @@ class WorkflowServiceIT extends AbstractIT{
                         Assertions.assertEquals(result.workflow().getName(), TEST_WORKFLOW_NAME);
                     })
                     .verifyComplete();
+    }
+
+    @Test
+    void incrementVersion_WithStaleVersion_ReturnsZeroAndKeepsVersion() {
+        WorkflowEntity workflow = workflowRepository.save(WorkflowEntity.builder()
+                        .name("Versioned workflow")
+                        .version(1)
+                        .active(true)
+                        .build())
+                .block();
+
+        StepVerifier.create(workflowRepository.incrementVersion(workflow.getId(), 1))
+                .expectNext(1)
+                .verifyComplete();
+
+        StepVerifier.create(workflowRepository.incrementVersion(workflow.getId(), 1))
+                .expectNext(0)
+                .verifyComplete();
+
+        Assertions.assertEquals(2, workflowRepository.findById(workflow.getId()).block().getVersion());
+    }
+
+    @Test
+    void boundWorkflowWithoutStatuses_returnsEmptyStatusesAndTransitions() {
+        WorkflowEntity workflow = saveWorkflow();
+        saveBinding(workflow.getId(), CUSTOM_ISSUE_TYPE);
+
+        StepVerifier.create(workflowService.getWorkflow(PROJECT_ID, CUSTOM_ISSUE_TYPE))
+                .assertNext(result -> {
+                    assertResolved(workflow, result);
+                    Assertions.assertAll(
+                            () -> Assertions.assertTrue(result.statuses().isEmpty()),
+                            () -> Assertions.assertTrue(result.transitions().isEmpty()));
+                })
+                .verifyComplete();
+    }
+
+    @Test
+    void boundWorkflowWithOnlyHiddenTransitions_returnsStatusesAndEmptyTransitions() {
+        WorkflowEntity workflow = saveWorkflow();
+        StatusEntity todo = saveStatus(workflow.getId(), "TODO", StatusCategory.TODO, 10);
+        StatusEntity inProgress = saveStatus(workflow.getId(), "IN_PROGRESS", StatusCategory.IN_PROGRESS, 20);
+        saveTransition(workflow.getId(), todo.getId(), inProgress.getId(), "Start Progress", true, 10);
+        saveBinding(workflow.getId(), CUSTOM_ISSUE_TYPE);
+
+        StepVerifier.create(workflowService.getWorkflow(PROJECT_ID, CUSTOM_ISSUE_TYPE))
+                .assertNext(result -> {
+                    assertResolved(workflow, result);
+                    Assertions.assertAll(
+                            () -> Assertions.assertEquals(List.of("TODO", "IN_PROGRESS"), statusKeys(result)),
+                            () -> Assertions.assertTrue(result.transitions().isEmpty()));
+                })
+                .verifyComplete();
+    }
+
+    private WorkflowEntity saveWorkflow() {
+        return workflowRepository.save(WorkflowEntity.builder()
+                        .name(TEST_WORKFLOW_NAME)
+                        .version(1)
+                        .active(true)
+                        .build())
+                .block();
+    }
+
+    private WorkflowBindingEntity saveBinding(UUID workflowId, String issueType) {
+        return workflowBindingRepository.save(WorkflowBindingEntity.builder()
+                        .workflowId(workflowId)
+                        .projectId(PROJECT_ID)
+                        .issueType(issueType)
+                        .issueTypeGeneration(IssueTypeBindingIdentity.initialGeneration(PROJECT_ID, issueType))
+                        .build())
+                .block();
+    }
+
+    private StatusEntity saveStatus(UUID workflowId, String statusKey, StatusCategory category, int sortOrder) {
+        return statusRepository.save(StatusEntity.builder()
+                        .workflowId(workflowId)
+                        .statusKey(statusKey)
+                        .name(statusKey)
+                        .category(category)
+                        .sortOrder(sortOrder)
+                        .build())
+                .block();
+    }
+
+    private TransitionEntity saveTransition(UUID workflowId, UUID fromStatusId, UUID toStatusId, String name,
+                                boolean hidden, int sortOrder) {
+        return transitionRepository.save(TransitionEntity.builder()
+                        .workflowId(workflowId)
+                        .fromStatusId(fromStatusId)
+                        .toStatusId(toStatusId)
+                        .name(name)
+                        .hidden(hidden)
+                        .sortOrder(sortOrder)
+                        .build())
+                .block();
+    }
+
+    private static List<String> statusKeys(WorkflowAggregate aggregate) {
+        return aggregate.statuses().stream()
+                .map(StatusEntity::getStatusKey)
+                .toList();
+    }
+
+    private static void assertResolved(WorkflowEntity expected, WorkflowAggregate actual) {
+        Assertions.assertAll(
+                () -> Assertions.assertEquals(expected.getId(), actual.workflow().getId()),
+                () -> Assertions.assertEquals(expected.getName(), actual.workflow().getName()));
     }
 
      private void cleanAll() {

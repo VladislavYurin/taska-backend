@@ -1315,7 +1315,12 @@ paths:
     get:
       x-pat-scope: read
       summary: Контекст проекта — проект, участники, метки, все workflows
-      description: При публикации нового набора типов или workflow возвращает 409 ABORTED с details.reason ISSUE_TYPE_OPERATION_PENDING; повторите чтение после завершения операции.
+      description: >
+        При публикации нового набора типов или workflow возвращает 409 ABORTED с details.reason
+        ISSUE_TYPE_OPERATION_PENDING; повторите чтение после завершения операции.
+        Ошибка чтения workflow отдельного типа не отменяет ответ 200: этот тип отсутствует в workflows,
+        остальные доступные данные сохраняются. Отказ основных источников проекта, участников или меток
+        продолжает возвращать ошибку; проверка членства проекта выполняется до чтения workflow.
       operationId: getProjectContext
       tags:
         - project

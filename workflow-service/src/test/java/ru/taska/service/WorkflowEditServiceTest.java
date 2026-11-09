@@ -34,6 +34,7 @@ import java.util.Set;
 import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anySet;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -109,7 +110,7 @@ class WorkflowEditServiceTest {
         lenient().when(workflowRepository.findByIdForUpdate(WORKFLOW_ID)).thenReturn(Mono.just(workflow));
         lenient().when(workflowRepository.findById(WORKFLOW_ID))
                 .thenReturn(Mono.just(workflow.toBuilder().version(2).build()));
-        lenient().when(workflowRepository.incrementVersion(WORKFLOW_ID)).thenReturn(Mono.just(1));
+        lenient().when(workflowRepository.incrementVersion(WORKFLOW_ID, 1)).thenReturn(Mono.just(1));
         lenient().when(bindingRepository.findByWorkflowId(WORKFLOW_ID))
                 .thenReturn(Flux.just(binding(PROJECT_ID, "TASK")));
         lenient().when(statusRepository.findActiveByWorkflowId(WORKFLOW_ID)).thenReturn(Flux.just(
@@ -148,7 +149,7 @@ class WorkflowEditServiceTest {
                 .assertNext(aggregate -> Assertions.assertEquals(2, aggregate.workflow().getVersion()))
                 .verifyComplete();
 
-        verify(workflowRepository).incrementVersion(WORKFLOW_ID);
+        verify(workflowRepository).incrementVersion(WORKFLOW_ID, 1);
         ArgumentCaptor<StatusEntity> saved = ArgumentCaptor.forClass(StatusEntity.class);
         verify(statusRepository).save(saved.capture());
         Assertions.assertEquals(WORKFLOW_ID, saved.getValue().getWorkflowId());
@@ -167,7 +168,7 @@ class WorkflowEditServiceTest {
                 .verify();
 
         verify(statusRepository, never()).save(any());
-        verify(workflowRepository, never()).incrementVersion(any());
+        verify(workflowRepository, never()).incrementVersion(any(UUID.class), anyInt());
     }
 
     @Test
@@ -266,6 +267,32 @@ class WorkflowEditServiceTest {
                         statusDto("CODE_REVIEW", 25)))
                 .expectErrorSatisfies(error -> assertDomainStatus(error, DomainStatus.ALREADY_EXISTS))
                 .verify();
+    }
+
+    @Test
+    void addStatus_VersionConflict_ShouldReturnAborted() {
+        when(workflowRepository.incrementVersion(WORKFLOW_ID, 1)).thenReturn(Mono.just(0));
+
+        StepVerifier.create(service.addStatus(REQUEST_ID, NODE_ID, ACTOR_USER_ID, PROJECT_ID, WORKFLOW_ID,
+                        statusDto("CODE_REVIEW", 25)))
+                .expectErrorSatisfies(error -> assertDomainStatus(error, DomainStatus.ABORTED))
+                .verify();
+
+        verify(statusRepository).save(any(StatusEntity.class));
+        verify(workflowRepository, never()).findById(WORKFLOW_ID);
+    }
+
+    @Test
+    void addTransition_VersionConflict_ShouldReturnAborted() {
+        when(workflowRepository.incrementVersion(WORKFLOW_ID, 1)).thenReturn(Mono.just(0));
+
+        StepVerifier.create(service.addTransition(REQUEST_ID, NODE_ID, ACTOR_USER_ID, PROJECT_ID, WORKFLOW_ID,
+                        transitionDto("IN_PROGRESS", "TODO", 30)))
+                .expectErrorSatisfies(error -> assertDomainStatus(error, DomainStatus.ABORTED))
+                .verify();
+
+        verify(transitionRepository).save(any(TransitionEntity.class));
+        verify(workflowRepository, never()).findById(WORKFLOW_ID);
     }
 
     @Test

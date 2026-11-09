@@ -99,7 +99,7 @@ public class WorkflowCreatedTypeBindingService {
                                     ON CONFLICT(project_id,issue_type) DO UPDATE SET workflow_id=EXCLUDED.workflow_id,
                                         issue_type_generation=EXCLUDED.issue_type_generation,updated_at=now()
                                     """).bind("project",project).bind("type",code).bind("workflow",target.getId()).bind("generation",generation)
-                                    .fetch().rowsUpdated().then(workflows.incrementVersion(target.getId()).then());
+                                    .fetch().rowsUpdated().then(workflows.incrementVersion(target.getId(), target.getVersion()).then());
                         return binding.then(database.sql("""
                                 INSERT INTO taska.issue_type_creation_workflow_receipts(operation_id,project_id,state,workflow_id,code,generation)
                                 VALUES(:operation,:project,'APPLIED',:workflow,:code,:generation)

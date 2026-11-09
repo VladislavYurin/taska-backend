@@ -174,8 +174,12 @@ public class WorkflowEditService {
 
     // Возвращает workflow так же, как его читает GetWorkflowForProject: все статусы и видимые переходы.
     private Mono<WorkflowAggregate> bumpVersionAndLoad(WorkflowEntity workflow) {
-        return Mono.defer(() -> workflowRepository.incrementVersion(workflow.getId()))
-                .then(Mono.defer(() -> workflowRepository.findById(workflow.getId())))
+        return Mono.defer(() -> workflowRepository.incrementVersion(workflow.getId(), workflow.getVersion()))
+                .flatMap(rows -> rows == 0
+                        ? Mono.error(new DomainException(
+                        DomainStatus.ABORTED,
+                        "Workflow was modified concurrently"))
+                        : Mono.defer(() -> workflowRepository.findById(workflow.getId())))
                 .flatMap(saved -> Mono.zip(
                         statusRepository.findActiveByWorkflowId(saved.getId()).collectList(),
                         transitionRepository.findVisibleByWorkflowId(saved.getId()).collectList()
