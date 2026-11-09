@@ -53,9 +53,9 @@ public final class ProjectIssueTypes {
 
     public static Mono<List<IssueType>> list(ReactorProjectServiceGrpc.ReactorProjectServiceStub stub,
                                             String requestId, String nodeId, UUID project, UUID actor) {
-        return stub.withDeadlineAfter(5, TimeUnit.SECONDS).listProjectIssueTypes(ProjectIssueTypesRequest.newBuilder()
+        return ru.taska.security.tenant.RpcContextBridge.outbound(() -> stub.withDeadlineAfter(5, TimeUnit.SECONDS).listProjectIssueTypes(ProjectIssueTypesRequest.newBuilder()
                         .setHeader(Header.newBuilder().setRequestId(requestId).setNodeId(nodeId))
-                        .setProjectId(project.toString()).setActorUserId(actor.toString()).build())
+                        .setProjectId(project.toString()).setActorUserId(actor.toString()).build()))
                 .map(response -> response.getItemsList().stream().map(t -> IssueType.valueOf(t.getCode())).toList());
     }
 

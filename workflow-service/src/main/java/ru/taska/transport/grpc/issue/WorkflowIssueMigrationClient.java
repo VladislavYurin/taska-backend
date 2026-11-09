@@ -23,12 +23,12 @@ public class WorkflowIssueMigrationClient {
 
     public Mono<Long> migrate(WorkflowMutation c, List<IssueType> types, List<String> validKeys,
                               Map<String, String> mapping, List<String> sourceKeys, int workflowVersion) {
-        return Mono.deferContextual(context -> stub.withDeadlineAfter(30, TimeUnit.SECONDS).migrateWorkflowIssues(MigrateWorkflowIssuesRequest.newBuilder()
+        return Mono.deferContextual(context -> ru.taska.security.tenant.RpcContextBridge.outbound(() -> stub.withDeadlineAfter(30, TimeUnit.SECONDS).migrateWorkflowIssues(MigrateWorkflowIssuesRequest.newBuilder()
                         .setHeader(action.GrpcActionContext.enrich(Header.newBuilder().setRequestId(c.requestId()).setNodeId(c.nodeId()),
                                 ru.taska.domain.ActionMetadata.current(context)))
                         .setProjectId(c.project().toString()).setActorUserId(c.actor().toString())
                         .setWorkflowId(c.workflow().toString()).setExpectedWorkflowVersion(workflowVersion).addAllIssueTypeKeys(types.stream().map(IssueType::name).toList())
-                        .addAllValidStatusKeys(validKeys).putAllStatusMappings(mapping).addAllSourceStatusKeys(sourceKeys).build())
+                        .addAllValidStatusKeys(validKeys).putAllStatusMappings(mapping).addAllSourceStatusKeys(sourceKeys).build()))
                 .map(response -> response.getMovedCount()));
     }
 }

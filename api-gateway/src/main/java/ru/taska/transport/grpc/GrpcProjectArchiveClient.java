@@ -21,10 +21,10 @@ public class GrpcProjectArchiveClient {
     private final ProjectMapper mapper;
 
     public Mono<ProjectResponseDto> archive(UUID project, GatewayContext context) {
-        return projectServiceStub.withDeadlineAfter(properties.projectService().deadlineDuration().toMillis(), TimeUnit.MILLISECONDS)
+        return ru.taska.security.tenant.RpcContextBridge.outbound(() -> projectServiceStub.withDeadlineAfter(properties.projectService().deadlineDuration().toMillis(), TimeUnit.MILLISECONDS)
                 .archiveProject(ArchiveProjectRequest.newBuilder().setProjectId(project.toString())
                         .setActorUserId(context.userContext().userId())
-                        .setHeader(ru.taska.mapper.MappingUtils.buildGrpcHeader(context)).build())
+                        .setHeader(ru.taska.mapper.MappingUtils.buildGrpcHeader(context)).build()))
                 .map(mapper::toRestProjectResponse);
     }
 }

@@ -21,7 +21,7 @@ public final class GrpcExceptionHandler {
     }
 
     public static <T> Function<Mono<T>, Mono<T>> withErrorHandling(String operationName) {
-        return mono -> mono
+        return mono -> ru.taska.security.tenant.RpcContextBridge.inboundIfPresent(ru.taska.security.tenant.LegacyRpcDatabaseBoundary.protect(mono))
                 // 0. DomainException
                 .doOnError(DomainException.class, e ->
                         log.warn("{}: Domain error: status={}, message={}",

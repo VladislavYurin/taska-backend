@@ -35,8 +35,8 @@ public class GrpcPersonalAccessTokenClient {
             .addAllScopes(
                 body.getScopes().stream().map(PersonalAccessTokenScopeDto::getValue).toList());
     if (body.getExpiresInDays() != null) request.setExpiresInDays(body.getExpiresInDays());
-    return dynamicStub()
-        .createPersonalAccessToken(request.build())
+    return ru.taska.security.tenant.RpcContextBridge.outbound(() -> dynamicStub()
+        .createPersonalAccessToken(request.build()))
         .map(
             response ->
                 new CreatePersonalAccessTokenResponseDto()
@@ -45,12 +45,12 @@ public class GrpcPersonalAccessTokenClient {
   }
 
   public Mono<PersonalAccessTokensResponseDto> list(String session, GatewayContext context) {
-    return dynamicStub()
+    return ru.taska.security.tenant.RpcContextBridge.outbound(() -> dynamicStub()
         .listPersonalAccessTokens(
             ListPersonalAccessTokensRequest.newBuilder()
                 .setHeader(MappingUtils.buildGrpcHeader(context))
                 .setSessionAccessToken(session)
-                .build())
+                .build()))
         .map(
             response ->
                 new PersonalAccessTokensResponseDto()
@@ -65,13 +65,13 @@ public class GrpcPersonalAccessTokenClient {
   }
 
   public Mono<Void> revoke(String id, String session, GatewayContext context) {
-    return dynamicStub()
+    return ru.taska.security.tenant.RpcContextBridge.outbound(() -> dynamicStub()
         .revokePersonalAccessToken(
             RevokePersonalAccessTokenRequest.newBuilder()
                 .setHeader(MappingUtils.buildGrpcHeader(context))
                 .setSessionAccessToken(session)
                 .setTokenId(id)
-                .build())
+                .build()))
         .then();
   }
 

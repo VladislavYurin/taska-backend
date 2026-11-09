@@ -27,6 +27,9 @@ public class GatewayErrorHandler {
 
     private static final String REQUEST_ID = "X-Request-Id";
 
+    @org.springframework.beans.factory.annotation.Value("${taska.rpc.context.enabled:false}")
+    private boolean trustedEnabled;
+
     public Mono<Void> handleError(ServerWebExchange exchange, Throwable error, String requestId) {
         HttpStatus httpStatus;
         String code;
@@ -65,7 +68,12 @@ public class GatewayErrorHandler {
             log.error("[{}] Unexpected error: {}", requestId, error.getMessage());
         }
 
+        String reason=details.getOrDefault("code",details.get("reason"));
+        if(reason!=null && !reason.matches("[A-Z][A-Z0-9_]{1,79}"))reason=null;
+        if(trustedEnabled && reason!=null)code=reason;
         RestErrorResponse errorResponse = new RestErrorResponse(code, message);
+        errorResponse.setRequestId(requestId);
+        errorResponse.setReasons(reason==null?java.util.List.of():java.util.List.of(reason));
         errorResponse.setDetails(details.isEmpty() ? null : details);
 
         var response = exchange.getResponse();

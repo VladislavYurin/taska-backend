@@ -129,7 +129,9 @@
           "CapabilityEvaluatorTransportTest",
           "GrpcTaskQuotaSourceTest",
           "PlatformConfigurationSnapshotCacheTest",
-          "VersionedCapabilitySourceIntegrationTest"
+          "VersionedCapabilitySourceIntegrationTest",
+          "LegacyRpcTransportTest",
+          "TenantRpcTransactionManagerIntegrationTest"
         ],
         "noTestsReason": null
       },
@@ -232,7 +234,8 @@
       "reports": {
         "directory": "api-gateway/target/surefire-reports",
         "selectors": [
-          "*"
+          "*",
+          "TrustedGatewayContextTest"
         ],
         "noTestsReason": null
       },
@@ -272,7 +275,8 @@
           "TenantAccessIssuerTest",
           "AuthSessionBoundaryTest",
           "TenantPersonalTokenStoreIntegrationTest",
-          "TenantPersonalTokenBoundaryTest"
+          "TenantPersonalTokenBoundaryTest",
+          "GatewayCredentialResolverIntegrationTest"
         ],
         "noTestsReason": null
       },
@@ -308,7 +312,8 @@
         "directory": "project-service/target/surefire-reports",
         "selectors": [
           "*",
-          "TenantProjectStorageIntegrationTest"
+          "TenantProjectStorageIntegrationTest",
+          "TrustedProjectOutboxIntegrationTest"
         ],
         "noTestsReason": null
       },
@@ -345,7 +350,8 @@
         "selectors": [
           "*",
           "TenantWorkflowStorageIntegrationTest",
-          "WorkflowSortOrderMigrationTest"
+          "WorkflowSortOrderMigrationTest",
+          "LegacyWorkflowScopeIntegrationTest"
         ],
         "noTestsReason": null
       },
@@ -381,7 +387,8 @@
         "directory": "issue-service/target/surefire-reports",
         "selectors": [
           "*",
-          "TenantIssueStorageIntegrationTest"
+          "TenantIssueStorageIntegrationTest",
+          "TrustedIssueOutboxIntegrationTest"
         ],
         "noTestsReason": null
       },
@@ -416,7 +423,8 @@
       "reports": {
         "directory": "notification-service/target/surefire-reports",
         "selectors": [
-          "*"
+          "*",
+          "TrustedNotificationScopeIntegrationTest"
         ],
         "noTestsReason": null
       },

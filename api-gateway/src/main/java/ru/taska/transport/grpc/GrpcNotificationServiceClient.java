@@ -61,7 +61,7 @@ public class GrpcNotificationServiceClient {
                         .build())
                 .build();
 
-        return stubWithDeadline().listNotifications(request)
+        return ru.taska.security.tenant.RpcContextBridge.outbound(() -> stubWithDeadline().listNotifications(request))
                 .map(notificationMapper::toNotificationListResponseDto);
     }
 
@@ -82,7 +82,7 @@ public class GrpcNotificationServiceClient {
                         .build())
                 .build();
 
-        return stubWithDeadline().markAsRead(request)
+        return ru.taska.security.tenant.RpcContextBridge.outbound(() -> stubWithDeadline().markAsRead(request))
                 .map(response -> notificationMapper.toNotificationResponseDto(response.getNotification()));
     }
 
@@ -101,7 +101,7 @@ public class GrpcNotificationServiceClient {
                         .build())
                 .build();
 
-        return stubWithDeadline().markAllAsRead(request)
+        return ru.taska.security.tenant.RpcContextBridge.outbound(() -> stubWithDeadline().markAllAsRead(request))
                 .map(notificationMapper::toReadAllNotificationsResponseDto);
     }
 

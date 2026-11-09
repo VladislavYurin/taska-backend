@@ -14,7 +14,7 @@ done
 
 : "${DEEPSEEK_API_KEY:?DEEPSEEK_API_KEY secret is required}"
 : "${DEEPSEEK_MODEL:=deepseek-chat}"
-: "${DEEPSEEK_MAX_DIFF_LINES:=6000}"
+: "${DEEPSEEK_MAX_DIFF_LINES:=12000}"
 : "${DEEPSEEK_API_URL:=https://api.deepseek.com/chat/completions}"
 : "${AI_REVIEW_CONTEXT_FILE:=.ai-review/context.md}"
 : "${AI_REVIEW_PRIORITY_FILES:=.ai-review/priority-files.txt}"
@@ -110,6 +110,10 @@ total_diff_lines="$(count_lines "$full_diff_file")" || die "failed to count diff
 # A large PR gets less surrounding context rather than losing whole files.
 if (( total_diff_lines > DEEPSEEK_MAX_DIFF_LINES )); then
   build_diff 10 || die "failed to build diff for $diff_range"
+  total_diff_lines="$(count_lines "$full_diff_file")" || die "failed to count diff lines"
+fi
+if (( total_diff_lines > DEEPSEEK_MAX_DIFF_LINES )); then
+  build_diff 3 || die "failed to build diff for $diff_range"
   total_diff_lines="$(count_lines "$full_diff_file")" || die "failed to count diff lines"
 fi
 sed -n "1,${DEEPSEEK_MAX_DIFF_LINES}p" "$full_diff_file" > "$limited_diff_file"

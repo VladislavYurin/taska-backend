@@ -37,6 +37,6 @@ public class GrpcAuthServiceClient {
                 )
                 .build();
 
-        return dynamicStub().getUserDetailsByIds(request);
+        return ru.taska.security.tenant.RpcContextBridge.outbound(() -> dynamicStub().getUserDetailsByIds(request));
     }
 }

@@ -6933,6 +6933,14 @@ components:
           type: string
         message:
           type: string
+        requestId:
+          type: string
+          description: Идентификатор запроса, совпадает с X-Request-Id.
+        reasons:
+          type: array
+          items:
+            type: string
+          description: Безопасные машинные причины отказа; пустой список при отсутствии уточнения.
         details:
           type: object
           nullable: true

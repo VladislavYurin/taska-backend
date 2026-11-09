@@ -150,7 +150,8 @@
                     <changeLogFile>src/main/resources/db/changelog/db.changelog-master.yaml</changeLogFile>
                 </configuration>
             </plugin>
-        </plugins>
+        <plugin><groupId>org.apache.maven.plugins</groupId><artifactId>maven-jar-plugin</artifactId><executions><execution><id>event-contract-fixture</id><phase>process-classes</phase><goals><goal>jar</goal></goals><configuration><classifier>event-contract-fixture</classifier><outputDirectory>${project.build.directory}/event-contract-fixture</outputDirectory><includes><include>ru/taska/transport/kafka/TaskaEventRegistry.class</include></includes></configuration></execution></executions></plugin>
+</plugins>
     </build>
 
 </project>

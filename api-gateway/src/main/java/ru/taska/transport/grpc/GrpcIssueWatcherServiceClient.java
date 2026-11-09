@@ -48,7 +48,7 @@ public class GrpcIssueWatcherServiceClient {
     ) {
         log.debug("[{}] Calling listIssueWatchers", context.requestId());
 
-        return dynamicStub().listIssueWatchers(
+        return ru.taska.security.tenant.RpcContextBridge.outbound(() -> dynamicStub().listIssueWatchers(
                 ListIssueWatchersRequest.newBuilder()
                         .setHeader(buildGrpcHeader(context))
                         .setBody(
@@ -58,7 +58,7 @@ public class GrpcIssueWatcherServiceClient {
                                         .build()
                         )
                         .build()
-        ).map(issueWatcherMapper::toRestListWatchers);
+        )).map(issueWatcherMapper::toRestListWatchers);
     }
 
     /**
@@ -74,7 +74,7 @@ public class GrpcIssueWatcherServiceClient {
     ) {
         log.debug("[{}] Calling watchIssueMe", context.requestId());
 
-        return dynamicStub().watchIssue(
+        return ru.taska.security.tenant.RpcContextBridge.outbound(() -> dynamicStub().watchIssue(
                 WatchIssueRequest.newBuilder()
                         .setHeader(buildGrpcHeader(context))
                         .setBody(
@@ -84,7 +84,7 @@ public class GrpcIssueWatcherServiceClient {
                                         .build()
                         )
                         .build()
-        ).map(issueWatcherMapper::toRestWatchIssueResponse);
+        )).map(issueWatcherMapper::toRestWatchIssueResponse);
     }
 
     /**
@@ -100,7 +100,7 @@ public class GrpcIssueWatcherServiceClient {
     ) {
         log.debug("[{}] Calling unwatchIssueMe", context.requestId());
 
-        return dynamicStub().unwatchIssue(
+        return ru.taska.security.tenant.RpcContextBridge.outbound(() -> dynamicStub().unwatchIssue(
                 UnwatchIssueRequest.newBuilder()
                         .setHeader(buildGrpcHeader(context))
                         .setBody(
@@ -110,7 +110,7 @@ public class GrpcIssueWatcherServiceClient {
                                         .build()
                         )
                         .build()
-        ).map(issueWatcherMapper::toRestUnwatchIssueResponse);
+        )).map(issueWatcherMapper::toRestUnwatchIssueResponse);
     }
 
     /**
@@ -130,7 +130,7 @@ public class GrpcIssueWatcherServiceClient {
         log.debug("[{}] Calling addIssueWatcher", context.requestId());
 
         return request.flatMap(requestDto ->
-                dynamicStub().watchIssue(
+                ru.taska.security.tenant.RpcContextBridge.outbound(() -> dynamicStub().watchIssue(
                         WatchIssueRequest.newBuilder()
                                 .setHeader(buildGrpcHeader(context))
                                 .setBody(
@@ -141,7 +141,7 @@ public class GrpcIssueWatcherServiceClient {
                                                 .build()
                                 )
                                 .build()
-                )
+                ))
         ).map(issueWatcherMapper::toRestWatchIssueResponse);
     }
 
@@ -160,7 +160,7 @@ public class GrpcIssueWatcherServiceClient {
     ) {
         log.debug("[{}] Calling removeIssueWatcher", context.requestId());
 
-        return dynamicStub().unwatchIssue(
+        return ru.taska.security.tenant.RpcContextBridge.outbound(() -> dynamicStub().unwatchIssue(
                 UnwatchIssueRequest.newBuilder()
                         .setHeader(buildGrpcHeader(context))
                         .setBody(
@@ -171,7 +171,7 @@ public class GrpcIssueWatcherServiceClient {
                                         .build()
                         )
                         .build()
-        ).map(issueWatcherMapper::toRestUnwatchIssueResponse);
+        )).map(issueWatcherMapper::toRestUnwatchIssueResponse);
     }
 
     /**

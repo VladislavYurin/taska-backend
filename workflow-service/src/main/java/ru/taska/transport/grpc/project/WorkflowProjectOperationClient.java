@@ -14,13 +14,13 @@ import ru.taska.api.registry.v1.*;
 public class WorkflowProjectOperationClient {
     private final ReactorProjectServiceGrpc.ReactorProjectServiceStub projects;
     public Mono<ProjectTypeOperationGate> gate(UUID project) {
-        return stub().getGate(TypeOperationProjectRequest.newBuilder().setProjectId(project.toString()).setHeader(header()).build());
+        return ru.taska.security.tenant.RpcContextBridge.outbound(() -> stub().getGate(TypeOperationProjectRequest.newBuilder().setProjectId(project.toString()).setHeader(header()).build()));
     }
-    public Mono<Void> reserve(UUID project, UUID operation) { return stub().reserveWorkflowBindings(key(project,operation)).then(); }
-    public Mono<Void> release(UUID project, UUID operation) { return stub().releaseWorkflowBindings(key(project,operation)).then(); }
+    public Mono<Void> reserve(UUID project, UUID operation) { return ru.taska.security.tenant.RpcContextBridge.outbound(() -> stub().reserveWorkflowBindings(key(project,operation))).then(); }
+    public Mono<Void> release(UUID project, UUID operation) { return ru.taska.security.tenant.RpcContextBridge.outbound(() -> stub().releaseWorkflowBindings(key(project,operation))).then(); }
     public Mono<IssueTypeCreationIntent> creation(UUID project, UUID operation) {
-        return ReactorProjectIssueTypeCreationJournalGrpc.newReactorStub(projects.getChannel())
-                .withDeadlineAfter(5,TimeUnit.SECONDS).get(key(project,operation));
+        return ru.taska.security.tenant.RpcContextBridge.outbound(() -> ReactorProjectIssueTypeCreationJournalGrpc.newReactorStub(projects.getChannel())
+                .withDeadlineAfter(5,TimeUnit.SECONDS).get(key(project,operation)));
     }
     private ReactorProjectTypeOperationsGrpc.ReactorProjectTypeOperationsStub stub() {
         return ReactorProjectTypeOperationsGrpc.newReactorStub(projects.getChannel()).withDeadlineAfter(10,TimeUnit.SECONDS);
@@ -28,5 +28,5 @@ public class WorkflowProjectOperationClient {
     public static TypeOperationKey key(UUID project, UUID operation) {
         return TypeOperationKey.newBuilder().setProjectId(project.toString()).setOperationId(operation.toString()).setHeader(header()).build();
     }
-    private static Header header() { return Header.newBuilder().setRequestId(UUID.randomUUID().toString()).setNodeId("workflow-service").build(); }
+    private static Header header() { return ru.taska.security.tenant.RpcContextBridge.outboundHeader("workflow-service"); }
 }

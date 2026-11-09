@@ -58,7 +58,7 @@ public class GrpcCommentServiceClient {
                         .build())
                 .build();
 
-        return dynamicStub().listIssueComments(Mono.just(request))
+        return ru.taska.security.tenant.RpcContextBridge.outbound(() -> dynamicStub().listIssueComments(Mono.just(request)))
                 .map(commentRestMapper::toCommentsListResponseDto);
     }
 
@@ -82,7 +82,7 @@ public class GrpcCommentServiceClient {
                         .build())
                 .build();
 
-        return dynamicStub().addIssueComment(Mono.just(request))
+        return ru.taska.security.tenant.RpcContextBridge.outbound(() -> dynamicStub().addIssueComment(Mono.just(request)))
                 .map(commentRestMapper::toCommentResponseDto);
     }
 
@@ -108,7 +108,7 @@ public class GrpcCommentServiceClient {
                         .build())
                 .build();
 
-        return dynamicStub().updateIssueComment(Mono.just(request))
+        return ru.taska.security.tenant.RpcContextBridge.outbound(() -> dynamicStub().updateIssueComment(Mono.just(request)))
                 .map(commentRestMapper::toCommentResponseDto);
     }
 
@@ -132,7 +132,7 @@ public class GrpcCommentServiceClient {
                         .build())
                 .build();
 
-        return dynamicStub().deleteIssueComment(Mono.just(request))
+        return ru.taska.security.tenant.RpcContextBridge.outbound(() -> dynamicStub().deleteIssueComment(Mono.just(request)))
                 .then();
     }
 

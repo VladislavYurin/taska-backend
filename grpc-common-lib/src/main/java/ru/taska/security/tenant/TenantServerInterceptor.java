@@ -26,7 +26,7 @@ public final class TenantServerInterceptor implements ServerInterceptor {
     this.environment = Objects.requireNonNull(environment);
   }
 
-  private String peer(Attributes attributes) {
+  public static String peerIdentity(Attributes attributes,String environment) {
     try {
       SSLSession session = attributes.get(Grpc.TRANSPORT_ATTR_SSL_SESSION);
       if (session == null) throw RpcContextSecurity.unauthenticated();
@@ -66,7 +66,7 @@ public final class TenantServerInterceptor implements ServerInterceptor {
     }
     final String peer;
     try {
-      peer = peer(call.getAttributes());
+      peer = peerIdentity(call.getAttributes(),environment);
       var assertions = headers.getAll(ASSERTION);
       int count = 0;
       if (assertions != null) for (String ignored : assertions) count++;

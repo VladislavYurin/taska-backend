@@ -22,13 +22,13 @@ public class GrpcConnectedAppsClient {
   }
 
   public Mono<ConnectedAppsResponseDto> list(String session, GatewayContext context) {
-    return dynamicStub()
+    return ru.taska.security.tenant.RpcContextBridge.outbound(() -> dynamicStub()
         .listConnectedApps(
             ListConnectedAppsRequest.newBuilder()
                 .setHeader(MappingUtils.buildGrpcHeader(context))
                 .setUserId(context.userContext().userId().toString())
                 .setSessionAccessToken(session)
-                .build())
+                .build()))
         .map(
             response ->
                 new ConnectedAppsResponseDto()
@@ -40,14 +40,14 @@ public class GrpcConnectedAppsClient {
   }
 
   public Mono<Void> revoke(UUID appId, String session, GatewayContext context) {
-    return dynamicStub()
+    return ru.taska.security.tenant.RpcContextBridge.outbound(() -> dynamicStub()
         .revokeConnectedApp(
             RevokeConnectedAppRequest.newBuilder()
                 .setHeader(MappingUtils.buildGrpcHeader(context))
                 .setUserId(context.userContext().userId().toString())
                 .setSessionAccessToken(session)
                 .setAppId(appId.toString())
-                .build())
+                .build()))
         .then();
   }
 

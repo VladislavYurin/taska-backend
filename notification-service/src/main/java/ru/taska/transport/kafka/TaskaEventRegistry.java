@@ -1,7 +1,6 @@
 package ru.taska.transport.kafka;
 
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Component;
 import ru.taska.event.EventType;
 import ru.taska.event.EventScopeKind;
 import ru.taska.event.TaskaEvent;
@@ -11,7 +10,6 @@ import java.util.EnumSet;
 import java.util.Set;
 
 /** Validates the trusted producer/topic/scope part of an incoming event contract. */
-@Component
 final class TaskaEventRegistry {
 
     private final String issueTopic;

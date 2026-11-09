@@ -49,7 +49,7 @@ public class GrpcIssueAttachmentServiceClient {
     ) {
         log.info("[{}] Calling listAttachments", context.requestId());
 
-        return dynamicStub().listAttachments(
+        return ru.taska.security.tenant.RpcContextBridge.outbound(() -> dynamicStub().listAttachments(
                         ListAttachmentsRequest.newBuilder()
                                 .setHeader(buildGrpcHeader(context))
                                 .setBody(ListAttachmentsRequestBody.newBuilder()
@@ -58,7 +58,7 @@ public class GrpcIssueAttachmentServiceClient {
                                         .build()
                                 )
                                 .build()
-                )
+                ))
                 .map(attachmentMapper::toIssueAttachmentsResponseDto);
     }
 
@@ -73,7 +73,7 @@ public class GrpcIssueAttachmentServiceClient {
         log.info("[{}] Calling createAttachmentUploadUrl", context.requestId());
 
         return request.flatMap(requestDto ->
-                dynamicStub().createAttachmentUploadUrl(
+                ru.taska.security.tenant.RpcContextBridge.outbound(() -> dynamicStub().createAttachmentUploadUrl(
                                 CreateAttachmentUploadUrlRequest.newBuilder()
                                         .setHeader(buildGrpcHeader(context))
                                         .setBody(CreateAttachmentUploadUrlRequestBody.newBuilder()
@@ -84,7 +84,7 @@ public class GrpcIssueAttachmentServiceClient {
                                                 .build()
                                         )
                                         .build()
-                        )
+                        ))
                         .map(attachmentMapper::toCreateAttachmentUploadUrlResponseDto)
         );
     }
@@ -100,7 +100,7 @@ public class GrpcIssueAttachmentServiceClient {
         log.info("[{}] Calling confirmAttachmentUpload", context.requestId());
 
         return request.flatMap(requestDto ->
-                dynamicStub().confirmAttachmentUpload(
+                ru.taska.security.tenant.RpcContextBridge.outbound(() -> dynamicStub().confirmAttachmentUpload(
                                 ConfirmAttachmentUploadRequest.newBuilder()
                                         .setHeader(buildGrpcHeader(context))
                                         .setBody(ConfirmAttachmentUploadRequestBody.newBuilder()
@@ -112,7 +112,7 @@ public class GrpcIssueAttachmentServiceClient {
                                                 .build()
                                         )
                                         .build()
-                        )
+                        ))
                         .map(attachmentMapper::toIssueAttachmentDto)
         );
     }
@@ -126,7 +126,7 @@ public class GrpcIssueAttachmentServiceClient {
     ) {
         log.info("[{}] Calling getAttachmentDownloadUrl", context.requestId());
 
-        return dynamicStub().getAttachmentDownloadUrl(
+        return ru.taska.security.tenant.RpcContextBridge.outbound(() -> dynamicStub().getAttachmentDownloadUrl(
                         GetAttachmentDownloadUrlRequest.newBuilder()
                                 .setHeader(buildGrpcHeader(context))
                                 .setBody(GetAttachmentDownloadUrlRequestBody.newBuilder()
@@ -135,7 +135,7 @@ public class GrpcIssueAttachmentServiceClient {
                                         .build()
                                 )
                                 .build()
-                )
+                ))
                 .map(attachmentMapper::toGetAttachmentDownloadUrlResponseDto);
     }
 
@@ -148,7 +148,7 @@ public class GrpcIssueAttachmentServiceClient {
     ) {
         log.info("[{}] Calling deleteAttachment", context.requestId());
 
-        return dynamicStub().deleteAttachment(
+        return ru.taska.security.tenant.RpcContextBridge.outbound(() -> dynamicStub().deleteAttachment(
                         DeleteAttachmentRequest.newBuilder()
                                 .setHeader(buildGrpcHeader(context))
                                 .setBody(DeleteAttachmentRequestBody.newBuilder()
@@ -157,7 +157,7 @@ public class GrpcIssueAttachmentServiceClient {
                                         .build()
                                 )
                                 .build()
-                )
+                ))
                 .then();
     }
 

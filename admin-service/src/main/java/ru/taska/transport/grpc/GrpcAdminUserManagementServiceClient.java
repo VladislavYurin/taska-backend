@@ -54,10 +54,10 @@ public class GrpcAdminUserManagementServiceClient {
 
     public Mono<ru.taska.dto.UserDisplayNameChangeDto> updateUserDisplayName(String requestId, String nodeId,
             UserStatusRequestDto actor, String displayName) {
-        return dynamicStub().updateUserDisplayName(ru.taska.api.auth.admin.management.v1.UpdateUserDisplayNameRequest.newBuilder()
+        return ru.taska.security.tenant.RpcContextBridge.outbound(() -> dynamicStub().updateUserDisplayName(ru.taska.api.auth.admin.management.v1.UpdateUserDisplayNameRequest.newBuilder()
                         .setHeader(ru.taska.api.common.v1.Header.newBuilder().setRequestId(requestId).setNodeId(nodeId))
                         .setActorUserId(actor.actorUserId().toString()).setTargetUserId(actor.targetUserId().toString())
-                        .setDisplayName(displayName).build())
+                        .setDisplayName(displayName).build()))
                 .map(response -> new ru.taska.dto.UserDisplayNameChangeDto(java.util.UUID.fromString(response.getUserId()),
                         response.getPreviousDisplayName(), response.getDisplayName()));
     }
@@ -85,7 +85,7 @@ public class GrpcAdminUserManagementServiceClient {
 
         BlockUserRequest grpcRequest = managementMapper.toAuthProtoBlockRequest(requestId,nodeId,requestDto);
 
-        return dynamicStub().blockUser(grpcRequest)
+        return ru.taska.security.tenant.RpcContextBridge.outbound(() -> dynamicStub().blockUser(grpcRequest))
                 .map(managementMapper::toUserStatusResponseDto);
     }
 
@@ -112,7 +112,7 @@ public class GrpcAdminUserManagementServiceClient {
 
         UnblockUserRequest grpcRequest = managementMapper.toAuthProtoUnblockRequest(requestId,nodeId,requestDto);
 
-        return dynamicStub().unblockUser(grpcRequest)
+        return ru.taska.security.tenant.RpcContextBridge.outbound(() -> dynamicStub().unblockUser(grpcRequest))
                 .map(managementMapper::toUserStatusResponseDto);
     }
 
@@ -137,7 +137,7 @@ public class GrpcAdminUserManagementServiceClient {
 
         ResetCredentialLockoutAuthRequest grpcRequest = managementMapper.toAuthProtoResetRequest(requestId,nodeId,requestDto);
 
-        return dynamicStub().resetCredentialLockout(grpcRequest)
+        return ru.taska.security.tenant.RpcContextBridge.outbound(() -> dynamicStub().resetCredentialLockout(grpcRequest))
                 .map(managementMapper::toUserCredentialStateResponseDto);
     }
 

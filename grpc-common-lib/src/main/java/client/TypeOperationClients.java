@@ -7,7 +7,7 @@ import ru.taska.api.registry.v1.TypeOperationProjectRequest;
 
 public final class TypeOperationClients {
     private TypeOperationClients() { }
-    private static Header header() { return Header.newBuilder().setRequestId(UUID.randomUUID().toString()).setNodeId("type-operation").build(); }
+    private static Header header() { return ru.taska.security.tenant.RpcContextBridge.outboundHeader("type-operation"); }
     public static TypeOperationKey key(UUID project, UUID operation) {
         return TypeOperationKey.newBuilder().setHeader(header()).setProjectId(project.toString()).setOperationId(operation.toString()).build();
     }

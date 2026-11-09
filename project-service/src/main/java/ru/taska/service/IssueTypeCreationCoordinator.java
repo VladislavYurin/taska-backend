@@ -37,9 +37,9 @@ public class IssueTypeCreationCoordinator {
         return switch(item.state()) {
             case "COMPLETED"->Mono.just(new IssueTypeCreationTransactions.Created(item.type(),item.resolvedWorkflowId()));
             case "CANCELLED"->Mono.error(rejection(item));
-            case "CANCELLING"->stub().cancel(client.TypeOperationClients.key(item.projectId(),item.id()))
+            case "CANCELLING"->ru.taska.security.tenant.RpcContextBridge.outbound(() -> stub().cancel(client.TypeOperationClients.key(item.projectId(),item.id())))
                     .onErrorMap(error->pending(item)).flatMap(result->finish(item,result));
-            case "PENDING"->stub().apply(client.TypeOperationClients.key(item.projectId(),item.id()))
+            case "PENDING"->ru.taska.security.tenant.RpcContextBridge.outbound(() -> stub().apply(client.TypeOperationClients.key(item.projectId(),item.id())))
                     .onErrorResume(failure->{
                         var error=domain(failure);
                         return REJECTED.contains(error.getStatus())?Mono.just(CreatedTypeBindingOutcome.newBuilder()

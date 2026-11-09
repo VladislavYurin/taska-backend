@@ -223,3 +223,7 @@ TAS-353: billing verify обязательно включает `PaymentReconcil
 private RPC по mTLS/JWS. Контракт и эксплуатационные границы —
 [billing recovery](../../billing-service/PAYMENT-RECONCILIATION.md). Это локальные PG/RPC
 фикстуры, не подтверждение реального Stripe или включённого worker на стенде.
+
+TAS-316: `grpc-common-lib.verify`, `auth-service.verify`, `api-gateway.verify` и `project-service.verify` требуют новые trusted transport/credential/gateway/outbox tests из [контракта RPC](../security/trusted-rpc-context.md). Для native mTLS нужен openssl/loopback, для credentials/domain/Kafka — собственные Testcontainers. Успех не подтверждает включение общего стенда; deployment trust wiring относится к TAS-317.
+
+Большой security PR должен получить полный AI review: default `DEEPSEEK_MAX_DIFF_LINES=12000` в workflow и shell runner. При превышении предела runner сокращает окружающий контекст 40 → 10 → 3 строки, сохраняя изменённые строки. Если diff всё же обрезан, зелёный job не закрывает непроверенные файлы; `publish-review` перечисляет пропуски. Настройка repository variable может переопределить предел.

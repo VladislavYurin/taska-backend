@@ -1,4 +1,5 @@
 syntax = "proto3";
+import "v1/tenant-context.proto";
 
 package ru.taska.project.v1;
 
@@ -96,6 +97,9 @@ service ProjectService {
 }
 
 message CreateProjectRequest {
+  // TAS-316: untrusted until verified by the message-bound mTLS/JWS interceptor.
+  ru.taska.b2b.v1.RequestContext context = 100;
+
   ru.taska.common.v1.Header header = 1;
   CreateProjectRequestBody body = 2;
 }
@@ -109,6 +113,9 @@ message CreateProjectRequestBody {
 }
 
 message GetProjectRequest {
+  // TAS-316: untrusted until verified by the message-bound mTLS/JWS interceptor.
+  ru.taska.b2b.v1.RequestContext context = 100;
+
   ru.taska.common.v1.Header header = 1;
   GetProjectRequestBody body = 2;
 }
@@ -119,6 +126,9 @@ message GetProjectRequestBody {
 }
 
 message GetProjectContextRequest {
+  // TAS-316: untrusted until verified by the message-bound mTLS/JWS interceptor.
+  ru.taska.b2b.v1.RequestContext context = 100;
+
   ru.taska.common.v1.Header header = 1;
   GetProjectContextRequestBody body = 2;
 }
@@ -130,6 +140,9 @@ message GetProjectContextRequestBody {
 }
 
 message ListMyProjectsRequest {
+  // TAS-316: untrusted until verified by the message-bound mTLS/JWS interceptor.
+  ru.taska.b2b.v1.RequestContext context = 100;
+
   ru.taska.common.v1.Header header = 1;
   ListMyProjectsRequestBody body = 2;
 }
@@ -142,6 +155,9 @@ message ListMyProjectsRequestBody {
  * Запрос на проверку роли пользователя в проекте.
  */
 message CheckProjectMemberRoleRequest {
+  // TAS-316: untrusted until verified by the message-bound mTLS/JWS interceptor.
+  ru.taska.b2b.v1.RequestContext context = 100;
+
   /**
    * Заголовок запроса.
    */
@@ -190,12 +206,18 @@ message ProjectContextResponse {
 }
 
 message ProjectIssueTypesRequest {
+  // TAS-316: untrusted until verified by the message-bound mTLS/JWS interceptor.
+  ru.taska.b2b.v1.RequestContext context = 100;
+
   ru.taska.common.v1.Header header = 1;
   string project_id = 2;
   string actor_user_id = 3;
 }
 
 message ChangeProjectIssueTypeRequest {
+  // TAS-316: untrusted until verified by the message-bound mTLS/JWS interceptor.
+  ru.taska.b2b.v1.RequestContext context = 100;
+
   ru.taska.common.v1.Header header = 1;
   string project_id = 2;
   string actor_user_id = 3;
@@ -215,6 +237,9 @@ message ChangeProjectIssueTypeRequest {
 }
 
 message ReorderProjectIssueTypesRequest {
+  // TAS-316: untrusted until verified by the message-bound mTLS/JWS interceptor.
+  ru.taska.b2b.v1.RequestContext context = 100;
+
   ru.taska.common.v1.Header header = 1;
   string project_id = 2;
   string actor_user_id = 3;
@@ -263,6 +288,9 @@ message ListMyProjectsResponse {
 }
 
 message AddProjectMemberRequest {
+  // TAS-316: untrusted until verified by the message-bound mTLS/JWS interceptor.
+  ru.taska.b2b.v1.RequestContext context = 100;
+
   ru.taska.common.v1.Header header = 1;
   AddProjectMemberRequestBody body = 2;
 }
@@ -281,6 +309,9 @@ message AddProjectMemberResponse {
 }
 
 message RmProjectMemberRequest {
+  // TAS-316: untrusted until verified by the message-bound mTLS/JWS interceptor.
+  ru.taska.b2b.v1.RequestContext context = 100;
+
   ru.taska.common.v1.Header header = 1;
   RmProjectMemberRequestBody body = 2;
 }
@@ -297,6 +328,9 @@ message RmProjectMemberResponse {
 }
 
 message ChangeProjectMemberRoleRequest {
+  // TAS-316: untrusted until verified by the message-bound mTLS/JWS interceptor.
+  ru.taska.b2b.v1.RequestContext context = 100;
+
   ru.taska.common.v1.Header header = 1;
   ChangeProjectMemberRoleRequestBody body = 2;
 }
@@ -341,6 +375,9 @@ message CheckProjectMemberRoleResponse {
  * Запрос получения projectKey.
  */
 message GetProjectKeyInternalRequest {
+  // TAS-316: untrusted until verified by the message-bound mTLS/JWS interceptor.
+  ru.taska.b2b.v1.RequestContext context = 100;
+
   ru.taska.common.v1.Header header = 1;
   GetProjectKeyInternalRequestBody body = 2;
 }
@@ -360,6 +397,9 @@ message ProjectKeyResponse {
 }
 
 message GetProjectInfoBatchInternalRequest {
+  // TAS-316: untrusted until verified by the message-bound mTLS/JWS interceptor.
+  ru.taska.b2b.v1.RequestContext context = 100;
+
   ru.taska.common.v1.Header header = 1;
   GetProjectInfoBatchInternalRequestBody body = 2;
 }
@@ -398,6 +438,9 @@ message ProjectShortInfo {
 }
 
 message GetListProjectMemberRequest {
+  // TAS-316: untrusted until verified by the message-bound mTLS/JWS interceptor.
+  ru.taska.b2b.v1.RequestContext context = 100;
+
   ru.taska.common.v1.Header header = 1;
   GetListProjectMemberRequestBody body = 2;
 }
@@ -455,6 +498,9 @@ message WorkflowTransitionResponse {
  * Запрос обновления проекта.
  */
 message UpdateProjectRequest {
+  // TAS-316: untrusted until verified by the message-bound mTLS/JWS interceptor.
+  ru.taska.b2b.v1.RequestContext context = 100;
+
   ru.taska.common.v1.Header header = 1;
   UpdateProjectRequestBody body = 2;
 }
@@ -470,6 +516,9 @@ message UpdateProjectRequestBody {
 }
 
 message GetProjectMemberStatsBatchRequest {
+  // TAS-316: untrusted until verified by the message-bound mTLS/JWS interceptor.
+  ru.taska.b2b.v1.RequestContext context = 100;
+
   ru.taska.common.v1.Header header = 1;
   string actor_user_id = 2;
   repeated string project_ids = 3;
@@ -484,12 +533,18 @@ message GetProjectMemberStatsBatchResponse {
 }
 
 message ArchiveProjectRequest {
+  // TAS-316: untrusted until verified by the message-bound mTLS/JWS interceptor.
+  ru.taska.b2b.v1.RequestContext context = 100;
+
   ru.taska.common.v1.Header header = 1;
   string project_id = 2;
   string actor_user_id = 3;
 }
 
-message HasProjectMembershipInternalRequest { string user_id = 1; }
+message HasProjectMembershipInternalRequest {
+  // TAS-316: untrusted until verified by the message-bound mTLS/JWS interceptor.
+  ru.taska.b2b.v1.RequestContext context = 100;
+ string user_id = 1; }
 message HasProjectMembershipInternalResponse { bool member = 1; }
 
 message DeleteProjectIssueTypeResult {

@@ -14,6 +14,9 @@
     <packaging>jar</packaging>
 
     <dependencies>
+<dependency><groupId>org.springframework.grpc</groupId><artifactId>spring-grpc-test</artifactId><scope>test</scope></dependency>
+        <dependency><groupId>org.testcontainers</groupId><artifactId>kafka</artifactId><scope>test</scope></dependency>
+        <dependency><groupId>ru.taska</groupId><artifactId>notification-service</artifactId><version>${project.version}</version><classifier>event-contract-fixture</classifier><scope>test</scope></dependency>
         <!-- WebFlux (reactor) -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

@@ -29,8 +29,8 @@ public class GrpcUserDirectoryClient {
                 .setBody(InviteUserRequestBody.newBuilder().setActorUserId(context.userContext().userId())
                         .setEmail(body.getEmail()).setDisplayName(body.getDisplayName() == null ? "" : ru.taska.util.DisplayNames.normalize(body.getDisplayName()))
                         .setResend(Boolean.TRUE.equals(body.getResend()))).build();
-        return invitations.withDeadlineAfter(properties.authService().deadlineDuration().toMillis(), TimeUnit.MILLISECONDS)
-                .inviteUser(request).map(result -> {
+        return ru.taska.security.tenant.RpcContextBridge.outbound(() -> invitations.withDeadlineAfter(properties.authService().deadlineDuration().toMillis(), TimeUnit.MILLISECONDS)
+                .inviteUser(request)).map(result -> {
                     var dto = new InvitationResponseDto();
                     dto.setUserId(UUID.fromString(result.getUserId()));
                     dto.setStatus(UserStatusDto.INVITED);
@@ -43,8 +43,8 @@ public class GrpcUserDirectoryClient {
     public Mono<UserDirectoryResponseDto> search(String query, int page, int pageSize, GatewayContext context) {
         var request = SearchUsersRequest.newBuilder().setHeader(header(context))
                 .setActorUserId(context.userContext().userId()).setQuery(query).setPage(page).setPageSize(pageSize).build();
-        return directory.withDeadlineAfter(properties.authService().deadlineDuration().toMillis(), TimeUnit.MILLISECONDS)
-                .searchUsers(request).map(result -> {
+        return ru.taska.security.tenant.RpcContextBridge.outbound(() -> directory.withDeadlineAfter(properties.authService().deadlineDuration().toMillis(), TimeUnit.MILLISECONDS)
+                .searchUsers(request)).map(result -> {
                     var dto = new UserDirectoryResponseDto();
                     dto.setHasMore(result.getHasMore());
                     dto.setItems(result.getItemsList().stream().map(row -> {

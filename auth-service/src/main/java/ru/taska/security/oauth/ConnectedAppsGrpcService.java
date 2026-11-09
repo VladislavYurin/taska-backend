@@ -72,6 +72,10 @@ public class ConnectedAppsGrpcService
   }
 
   private Mono<UUID> owner(Header header, String session, String requestedOwner) {
+    return ru.taska.security.gateway.VerifiedWebSessionActor.owner(()->legacyOwner(header,session,requestedOwner)).flatMap(owner->
+      owner.toString().equals(requestedOwner)?Mono.just(owner):Mono.error(new DomainException(DomainStatus.PERMISSION_DENIED,"App owner does not match session")));
+  }
+  private Mono<UUID> legacyOwner(Header header, String session, String requestedOwner) {
     return Mono.when(
             GrpcRequestValidators.requireNonBlankOrInvalidArgument(
                 header.getRequestId(), "header.requestId"),

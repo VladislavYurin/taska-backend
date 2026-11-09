@@ -19,14 +19,17 @@ public class DirectoryMembershipAccess {
     private final SignupProperties signup;
     private final ManagedChannel channel;
     private final ReactorProjectServiceGrpc.ReactorProjectServiceStub client;
+    public DirectoryMembershipAccess(SignupProperties signup,String host,int port){this(signup,host,port,false);}
+    @org.springframework.beans.factory.annotation.Autowired
     public DirectoryMembershipAccess(SignupProperties signup,
             @Value("${grpc.client.project-service.host:localhost}") String host,
-            @Value("${grpc.client.project-service.port:9096}") int port) {
+            @Value("${grpc.client.project-service.port:9096}") int port,@Value("${taska.rpc.context.enabled:false}") boolean trusted) {
         this.signup = signup;
-        this.channel = ManagedChannelBuilder.forAddress(host, port).usePlaintext().build();
-        this.client = ReactorProjectServiceGrpc.newReactorStub(channel);
+        this.channel = trusted?null:ManagedChannelBuilder.forAddress(host, port).usePlaintext().build();
+        this.client = channel==null?null:ReactorProjectServiceGrpc.newReactorStub(channel);
     }
     public Mono<Void> check(User user) {
+        if(client==null)return Mono.error(new DomainException(DomainStatus.UNAVAILABLE,"Tenant directory requires its scoped adapter"));
         if (!signup.isEnabled() || user.getGlobalRole() == GlobalRole.GLOBAL_ADMIN) return Mono.empty();
         return client.withDeadlineAfter(3, TimeUnit.SECONDS).hasProjectMembershipInternal(
                         HasProjectMembershipInternalRequest.newBuilder().setUserId(user.getId().toString()).build())
@@ -35,5 +38,5 @@ public class DirectoryMembershipAccess {
                 .switchIfEmpty(Mono.error(new DomainException(DomainStatus.PERMISSION_DENIED, "Project membership is required", java.util.Map.of("reason", "PROJECT_MEMBERSHIP_REQUIRED"))))
                 .then();
     }
-    @PreDestroy public void close() { channel.shutdown(); }
+    @PreDestroy public void close() { if(channel!=null)channel.shutdown(); }
 }

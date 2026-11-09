@@ -17,8 +17,12 @@ public record GatewayContext(
         String requestId,
         String nodeId,
         GatewayUserContext userContext,
-        ru.taska.domain.ActionChannel channel
+        ru.taska.domain.ActionChannel channel,
+        ru.taska.security.tenant.VerifiedTenantContext verified
 ) {
+    public GatewayContext(String requestId,String nodeId,GatewayUserContext userContext,ru.taska.domain.ActionChannel channel) {
+        this(requestId,nodeId,userContext,channel,null);
+    }
     public GatewayContext(String requestId, String nodeId, GatewayUserContext userContext) {
         this(requestId, nodeId, userContext, userContext == null ? null
                 : userContext.tokenKind() == GatewayTokenKind.DELEGATION ? ru.taska.domain.ActionChannel.MCP

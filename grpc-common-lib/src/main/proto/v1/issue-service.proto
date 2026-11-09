@@ -1,4 +1,5 @@
 syntax = "proto3";
+import "v1/tenant-context.proto";
 
 package ru.taska.issue.v1;
 
@@ -257,6 +258,9 @@ service IssueService {
 }
 
 message AddIssueWorklogRequest {
+  // TAS-316: untrusted until verified by the message-bound mTLS/JWS interceptor.
+  ru.taska.b2b.v1.RequestContext context = 100;
+
   /**
    * Заголовок запроса.
    */
@@ -291,6 +295,9 @@ message AddIssueWorklogBody {
 }
 
 message UpdateIssueWorklogRequest {
+  // TAS-316: untrusted until verified by the message-bound mTLS/JWS interceptor.
+  ru.taska.b2b.v1.RequestContext context = 100;
+
   /**
   * Заголовок запроса.1
   */
@@ -312,6 +319,9 @@ message UpdateIssueWorklogBody {
 }
 
 message DeleteIssueWorklogRequest {
+  // TAS-316: untrusted until verified by the message-bound mTLS/JWS interceptor.
+  ru.taska.b2b.v1.RequestContext context = 100;
+
   /**
   * Заголовок запроса.
   */
@@ -330,6 +340,9 @@ message DeleteIssueWorklogBody {
 }
 
 message ListIssueWorklogsRequest {
+  // TAS-316: untrusted until verified by the message-bound mTLS/JWS interceptor.
+  ru.taska.b2b.v1.RequestContext context = 100;
+
   /**
   * Заголовок запроса.
   */
@@ -369,6 +382,9 @@ message ListIssueWorklogsResponse {
 }
 
 message AssignIssueRequest {
+  // TAS-316: untrusted until verified by the message-bound mTLS/JWS interceptor.
+  ru.taska.b2b.v1.RequestContext context = 100;
+
   /**
    * Заголовок запроса.
    */
@@ -381,6 +397,9 @@ message AssignIssueRequest {
 }
 
 message CreateIssueRequest {
+  // TAS-316: untrusted until verified by the message-bound mTLS/JWS interceptor.
+  ru.taska.b2b.v1.RequestContext context = 100;
+
   /**
    * Заголовок запроса.
    */
@@ -478,6 +497,9 @@ message CreateIssueRequestBody {
 }
 
 message GetIssueRequest {
+  // TAS-316: untrusted until verified by the message-bound mTLS/JWS interceptor.
+  ru.taska.b2b.v1.RequestContext context = 100;
+
   /**
    * Заголовок запроса.
    */
@@ -502,6 +524,9 @@ message GetIssueRequestBody {
 }
 
 message DeleteIssueRequest {
+  // TAS-316: untrusted until verified by the message-bound mTLS/JWS interceptor.
+  ru.taska.b2b.v1.RequestContext context = 100;
+
   /**
    * Заголовок запроса.
    */
@@ -526,6 +551,9 @@ message DeleteIssueRequestBody {
 }
 
 message UpdateIssueRequest {
+  // TAS-316: untrusted until verified by the message-bound mTLS/JWS interceptor.
+  ru.taska.b2b.v1.RequestContext context = 100;
+
   /**
    * Заголовок запроса.
    */
@@ -590,6 +618,9 @@ message UpdateIssueRequestBody {
 }
 
 message PatchIssueRequest {
+  // TAS-316: untrusted until verified by the message-bound mTLS/JWS interceptor.
+  ru.taska.b2b.v1.RequestContext context = 100;
+
   /**
    * Заголовок запроса.
    */
@@ -681,6 +712,9 @@ message PatchIssueResponse {
 }
 
 message ListIssuesRequest {
+  // TAS-316: untrusted until verified by the message-bound mTLS/JWS interceptor.
+  ru.taska.b2b.v1.RequestContext context = 100;
+
   /**
    * Заголовок запроса.
    */
@@ -730,6 +764,9 @@ message ListIssuesRequestBody {
 }
 
 message TransitionIssueRequest {
+  // TAS-316: untrusted until verified by the message-bound mTLS/JWS interceptor.
+  ru.taska.b2b.v1.RequestContext context = 100;
+
 
   /**
    * Заголовок запроса.
@@ -772,6 +809,9 @@ message TransitionIssueRequestBody {
 }
 
 message ListIssueLinksRequest {
+  // TAS-316: untrusted until verified by the message-bound mTLS/JWS interceptor.
+  ru.taska.b2b.v1.RequestContext context = 100;
+
   /**
    * Заголовок запроса.
    */
@@ -796,6 +836,9 @@ message ListIssueLinksRequestBody {
 }
 
 message CreateIssueLinkRequest {
+  // TAS-316: untrusted until verified by the message-bound mTLS/JWS interceptor.
+  ru.taska.b2b.v1.RequestContext context = 100;
+
   /**
    * Заголовок запроса.
    */
@@ -830,6 +873,9 @@ message CreateIssueLinkRequestBody {
 }
 
 message DeleteIssueLinkRequest {
+  // TAS-316: untrusted until verified by the message-bound mTLS/JWS interceptor.
+  ru.taska.b2b.v1.RequestContext context = 100;
+
   /**
    * Заголовок запроса.
    */
@@ -1158,6 +1204,9 @@ message ProjectLabelResponse {
  *  Запрос на создание метки проекта
  */
 message CreateProjectLabelRequest {
+  // TAS-316: untrusted until verified by the message-bound mTLS/JWS interceptor.
+  ru.taska.b2b.v1.RequestContext context = 100;
+
   /**
    * Заголовок запроса.
    */
@@ -1195,6 +1244,9 @@ message CreateProjectLabelRequestBody {
  *  Запрос на обновление метки проекта
  */
 message UpdateProjectLabelRequest {
+  // TAS-316: untrusted until verified by the message-bound mTLS/JWS interceptor.
+  ru.taska.b2b.v1.RequestContext context = 100;
+
   /**
    * Заголовок запроса.
    */
@@ -1237,6 +1289,9 @@ message UpdateProjectLabelRequestBody {
  *  Запрос на удаление метки проекта
  */
 message DeleteProjectLabelRequest {
+  // TAS-316: untrusted until verified by the message-bound mTLS/JWS interceptor.
+  ru.taska.b2b.v1.RequestContext context = 100;
+
   /**
    * Заголовок запроса.
    */
@@ -1286,6 +1341,9 @@ message DeleteProjectLabelResponse {
  *  Запрос на получение списка меток проекта
  */
 message ListProjectLabelsRequest {
+  // TAS-316: untrusted until verified by the message-bound mTLS/JWS interceptor.
+  ru.taska.b2b.v1.RequestContext context = 100;
+
   /**
    * Заголовок запроса.
    */
@@ -1327,6 +1385,9 @@ message ListProjectLabelsResponse {
  *  Запрос на добавление метки к задаче
  */
 message AddIssueLabelRequest {
+  // TAS-316: untrusted until verified by the message-bound mTLS/JWS interceptor.
+  ru.taska.b2b.v1.RequestContext context = 100;
+
   /**
    * Заголовок запроса.
    */
@@ -1381,6 +1442,9 @@ message AddIssueLabelResponse {
  *  Запрос на удаление метки с задачи
  */
 message RemoveIssueLabelRequest {
+  // TAS-316: untrusted until verified by the message-bound mTLS/JWS interceptor.
+  ru.taska.b2b.v1.RequestContext context = 100;
+
   /**
    * Заголовок запроса.
    */
@@ -1425,6 +1489,9 @@ message RemoveIssueLabelResponse {
  *  Запрос на получение меток задачи
  */
 message ListIssueLabelsRequest {
+  // TAS-316: untrusted until verified by the message-bound mTLS/JWS interceptor.
+  ru.taska.b2b.v1.RequestContext context = 100;
+
   /**
    * Заголовок запроса.
    */
@@ -1578,6 +1645,9 @@ message DeleteIssueLinkResponse {
 
 // ===== Search issue messages =====
 message SearchIssuesRequest {
+  // TAS-316: untrusted until verified by the message-bound mTLS/JWS interceptor.
+  ru.taska.b2b.v1.RequestContext context = 100;
+
   /**
    * Заголовок запроса.
    */
@@ -1714,6 +1784,9 @@ message IssueCommentResponse {
  * Запрос на добавление комментария.
  */
 message AddIssueCommentRequest {
+  // TAS-316: untrusted until verified by the message-bound mTLS/JWS interceptor.
+  ru.taska.b2b.v1.RequestContext context = 100;
+
   /**
    * Заголовок запроса.
    */
@@ -1759,6 +1832,9 @@ message AddIssueCommentResponse {
  * Запрос на обновление комментария.
  */
 message UpdateIssueCommentRequest {
+  // TAS-316: untrusted until verified by the message-bound mTLS/JWS interceptor.
+  ru.taska.b2b.v1.RequestContext context = 100;
+
   /**
    * Заголовок запроса.
    */
@@ -1809,6 +1885,9 @@ message UpdateIssueCommentResponse {
  * Запрос на удаление комментария.
  */
 message DeleteIssueCommentRequest {
+  // TAS-316: untrusted until verified by the message-bound mTLS/JWS interceptor.
+  ru.taska.b2b.v1.RequestContext context = 100;
+
   /**
    * Заголовок запроса.
    */
@@ -1854,6 +1933,9 @@ message DeleteIssueCommentResponse {
  * Запрос на получение списка комментариев.
  */
 message ListIssueCommentsRequest {
+  // TAS-316: untrusted until verified by the message-bound mTLS/JWS interceptor.
+  ru.taska.b2b.v1.RequestContext context = 100;
+
   /**
    * Заголовок запроса.
    */
@@ -1951,6 +2033,9 @@ message IssueWatcherResponse {
  * Запрос на подписку на задачу.
  */
 message WatchIssueRequest {
+  // TAS-316: untrusted until verified by the message-bound mTLS/JWS interceptor.
+  ru.taska.b2b.v1.RequestContext context = 100;
+
   /**
    * Заголовок запроса.
    */
@@ -2001,6 +2086,9 @@ message WatchIssueResponse {
  * Запрос на отписку от задачи.
  */
 message UnwatchIssueRequest {
+  // TAS-316: untrusted until verified by the message-bound mTLS/JWS interceptor.
+  ru.taska.b2b.v1.RequestContext context = 100;
+
   /**
    * Заголовок запроса.
    */
@@ -2056,6 +2144,9 @@ message UnwatchIssueResponse {
  * Запрос на получение списка подписчиков задачи.
  */
 message ListIssueWatchersRequest {
+  // TAS-316: untrusted until verified by the message-bound mTLS/JWS interceptor.
+  ru.taska.b2b.v1.RequestContext context = 100;
+
   /**
    * Заголовок запроса.
    */
@@ -2111,6 +2202,9 @@ message ListIssueWatchersResponse {
  * Запрос на получение состояния подписки.
  */
 message GetIssueWatchStateRequest {
+  // TAS-316: untrusted until verified by the message-bound mTLS/JWS interceptor.
+  ru.taska.b2b.v1.RequestContext context = 100;
+
   /**
    * Заголовок запроса.
    */
@@ -2156,6 +2250,9 @@ message GetIssueWatchStateResponse {
  * Запрос на получение списка задач для доски.
  */
 message ListIssuesForBoardRequest{
+  // TAS-316: untrusted until verified by the message-bound mTLS/JWS interceptor.
+  ru.taska.b2b.v1.RequestContext context = 100;
+
   /**
    * Заголовок запроса.
    */
@@ -2567,6 +2664,9 @@ message TargetIssueResponse {
 }
 
 message GetIssueByKeyRequest {
+  // TAS-316: untrusted until verified by the message-bound mTLS/JWS interceptor.
+  ru.taska.b2b.v1.RequestContext context = 100;
+
   ru.taska.common.v1.Header header = 1;
   GetIssueByKeyRequestBody body = 2;
 }
@@ -2577,6 +2677,9 @@ message GetIssueByKeyRequestBody {
 }
 
 message CountProjectIssuesBatchInternalRequest {
+  // TAS-316: untrusted until verified by the message-bound mTLS/JWS interceptor.
+  ru.taska.b2b.v1.RequestContext context = 100;
+
   ru.taska.common.v1.Header header = 1;
   repeated string project_ids = 2;
   optional string issue_type_key = 3;
@@ -2593,6 +2696,9 @@ message CountProjectIssuesBatchInternalResponse {
 }
 
 message MigrateWorkflowIssuesRequest {
+  // TAS-316: untrusted until verified by the message-bound mTLS/JWS interceptor.
+  ru.taska.b2b.v1.RequestContext context = 100;
+
   ru.taska.common.v1.Header header = 1;
   string project_id = 2;
   string actor_user_id = 3;

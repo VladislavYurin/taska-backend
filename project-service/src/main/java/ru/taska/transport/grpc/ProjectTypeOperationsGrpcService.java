@@ -28,8 +28,8 @@ public class ProjectTypeOperationsGrpcService extends ReactorProjectTypeOperatio
     private Mono<Empty> run(Mono<TypeOperationKey> request,boolean reserve) {
         return request.flatMap(req->Mono.zip(GrpcRequestValidators.parseUuidOrInvalidArgument(req.getProjectId(),"projectId"),
                         GrpcRequestValidators.parseUuidOrInvalidArgument(req.getOperationId(),"operationId"))
-                .flatMap(ids->ReactorWorkflowBindingJournalGrpc.newReactorStub(workflowStub.getChannel()).withDeadlineAfter(5,TimeUnit.SECONDS)
-                        .get(client.TypeOperationClients.key(ids.getT1(),ids.getT2())).flatMap(intent->{
+                .flatMap(ids->ru.taska.security.tenant.RpcContextBridge.outbound(() -> ReactorWorkflowBindingJournalGrpc.newReactorStub(workflowStub.getChannel()).withDeadlineAfter(5,TimeUnit.SECONDS)
+                        .get(client.TypeOperationClients.key(ids.getT1(),ids.getT2()))).flatMap(intent->{
                             if(!intent.getProjectId().equals(ids.getT1().toString())||!intent.getOperationId().equals(ids.getT2().toString()))
                                 return Mono.error(new ru.taska.exception.DomainException(ru.taska.exception.DomainStatus.UNAVAILABLE,"Workflow journal identity mismatch"));
                             return reserve?transactions.reserve(intent):transactions.release(intent);

@@ -77,12 +77,12 @@ public class GrpcProjectServiceClient {
                         body.setColor(requestDto.getColor());
                     }
 
-                    return dynamicStub().createProject(
+                    return ru.taska.security.tenant.RpcContextBridge.outbound(() -> dynamicStub().createProject(
                             CreateProjectRequest.newBuilder()
                                     .setHeader(buildGrpcHeader(context))
                                     .setBody(body)
                                     .build()
-                    );
+                    ));
                 }
         ).map(projectMapper::toRestProjectResponse);
     }
@@ -109,12 +109,12 @@ public class GrpcProjectServiceClient {
                     UpdateProjectRequestBody.Builder body = projectMapper.toGrpcUpdateProjectRequestBody(
                             projectId, requestDto, clearColor, clearDescription, context.userContext().userId());
 
-                    return dynamicStub().updateProject(
+                    return ru.taska.security.tenant.RpcContextBridge.outbound(() -> dynamicStub().updateProject(
                             UpdateProjectRequest.newBuilder()
                                     .setHeader(buildGrpcHeader(context))
                                     .setBody(body)
                                     .build()
-                    );
+                    ));
                 }
         ).map(projectMapper::toRestProjectResponse);
     }
@@ -132,7 +132,7 @@ public class GrpcProjectServiceClient {
     ){
         log.info("[{}] Calling getProject",context.requestId());
 
-        return dynamicStub().getProject(
+        return ru.taska.security.tenant.RpcContextBridge.outbound(() -> dynamicStub().getProject(
                 GetProjectRequest.newBuilder()
                         .setHeader(buildGrpcHeader(context))
                         .setBody(
@@ -142,7 +142,7 @@ public class GrpcProjectServiceClient {
                                         .build()
                         )
                         .build()
-        ).map(projectMapper::toRestProjectResponse);
+        )).map(projectMapper::toRestProjectResponse);
     }
 
     /**
@@ -156,7 +156,7 @@ public class GrpcProjectServiceClient {
             String projectId,
             GatewayContext context
     ) {
-        return dynamicStub().getProjectContext(
+        return ru.taska.security.tenant.RpcContextBridge.outbound(() -> dynamicStub().getProjectContext(
                 GetProjectContextRequest.newBuilder()
                         .setHeader(buildGrpcHeader(context))
                         .setBody(GetProjectContextRequestBody.newBuilder()
@@ -165,7 +165,7 @@ public class GrpcProjectServiceClient {
                                 .setGlobalRole(projectMapper.toGlobalRoleProto(context.userContext().globalRole()))
                                 .build())
                         .build()
-        ).map(projectMapper::toRestProjectContextResponse);
+        )).map(projectMapper::toRestProjectContextResponse);
     }
 
     /**
@@ -179,7 +179,7 @@ public class GrpcProjectServiceClient {
     ){
         log.info("[{}] Calling listUserProject",context.requestId());
 
-        return dynamicStub().listMyProjects(
+        return ru.taska.security.tenant.RpcContextBridge.outbound(() -> dynamicStub().listMyProjects(
                 ListMyProjectsRequest.newBuilder()
                         .setHeader(buildGrpcHeader(context))
                         .setBody(
@@ -188,7 +188,7 @@ public class GrpcProjectServiceClient {
                                         .build()
                         )
                         .build()
-        ).map(projectMapper::toRestListMyProjectsResponse);
+        )).map(projectMapper::toRestListMyProjectsResponse);
     }
 
 
@@ -206,7 +206,7 @@ public class GrpcProjectServiceClient {
     ){
         log.info("[{}] Calling addProjectMember",context.requestId());
 
-        return request.flatMap(requestDto -> dynamicStub().addProjectMember(
+        return request.flatMap(requestDto -> ru.taska.security.tenant.RpcContextBridge.outbound(() -> dynamicStub().addProjectMember(
                 AddProjectMemberRequest.newBuilder()
                         .setHeader(buildGrpcHeader(context))
                         .setBody(
@@ -217,7 +217,7 @@ public class GrpcProjectServiceClient {
                                         .setActorUserId(context.userContext().userId())
                                         .build())
                         .build()
-                )
+                ))
         ).map(projectMapper::toRestAddProjectMemberResponse);
     }
 
@@ -237,7 +237,7 @@ public class GrpcProjectServiceClient {
     ) {
         log.info("[{}] Calling changeProjectMemberRole", context.requestId());
 
-        return request.flatMap(requestDto-> dynamicStub().changeProjectMemberRole(
+        return request.flatMap(requestDto-> ru.taska.security.tenant.RpcContextBridge.outbound(() -> dynamicStub().changeProjectMemberRole(
                 ChangeProjectMemberRoleRequest.newBuilder()
                         .setHeader(buildGrpcHeader(context))
                         .setBody(
@@ -250,7 +250,7 @@ public class GrpcProjectServiceClient {
                                         .build()
                         )
                         .build()
-                )
+                ))
         ).map(projectMapper::toRestChangeProjectMemberRoleResponse);
     }
 
@@ -266,7 +266,7 @@ public class GrpcProjectServiceClient {
             String userId,
             GatewayContext context
     ){
-        return dynamicStub().rmProjectMember(
+        return ru.taska.security.tenant.RpcContextBridge.outbound(() -> dynamicStub().rmProjectMember(
                 RmProjectMemberRequest.newBuilder()
                         .setHeader(buildGrpcHeader(context))
                         .setBody(RmProjectMemberRequestBody.newBuilder()
@@ -275,7 +275,7 @@ public class GrpcProjectServiceClient {
                                 .setActorUserId(context.userContext().userId())
                                 .build())
                         .build()
-        ).then();
+        )).then();
     }
 
 
@@ -291,14 +291,14 @@ public class GrpcProjectServiceClient {
             GatewayContext context
     ) {
         log.info("[{}] Calling getProjectMembers",context.requestId());
-        return dynamicStub().getProjectMembers(
+        return ru.taska.security.tenant.RpcContextBridge.outbound(() -> dynamicStub().getProjectMembers(
                     GetListProjectMemberRequest.newBuilder()
                         .setHeader(buildGrpcHeader(context))
                         .setBody(GetListProjectMemberRequestBody.newBuilder()
                                 .setProjectId(projectId)
                                 .setActorUserId(context.userContext().userId())
                                 .build())
-                        .build())
+                        .build()))
                 .map(projectMapper::toListProjectMemberDetailsDto);
     }
 

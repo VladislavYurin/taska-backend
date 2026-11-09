@@ -10,20 +10,29 @@ import ru.taska.api.issue.v1.ReactorIssueServiceGrpc;
 import ru.taska.api.workflow.v1.ReactorWorkflowServiceGrpc;
 import ru.taska.config.props.GrpcClientProperties;
 
+@org.springframework.context.annotation.Import(ru.taska.security.tenant.TrustedRpcTlsConfiguration.class)
 @Configuration
 @RequiredArgsConstructor
 public class GrpcClientConfig {
+    @org.springframework.beans.factory.annotation.Autowired
+    private org.springframework.beans.factory.ObjectProvider<ru.taska.security.tenant.TrustedRpcChannels> trustedChannels;
+    @org.springframework.beans.factory.annotation.Autowired
+    private org.springframework.beans.factory.ObjectProvider<ru.taska.security.tenant.RpcContextSecurity> rpcSecurity;
+    @org.springframework.beans.factory.annotation.Value("${taska.rpc.context.enabled:false}")
+    private boolean trustedEnabled;
+    private io.grpc.ManagedChannel trustedChannel(String host,int port,String audience) {
+      if(!trustedEnabled)return io.grpc.ManagedChannelBuilder.forAddress(host,port).usePlaintext().build();
+      var factory=trustedChannels.getIfAvailable();var security=rpcSecurity.getIfAvailable();
+      if(factory==null || security==null)throw new IllegalStateException("Trusted RPC channel/security must be provisioned");
+      var raw=factory.create(host,port,audience);
+      return new ru.taska.security.tenant.InterceptedManagedChannel(raw,new ru.taska.security.tenant.LegacyRpcClientInterceptor(security));
+    }
+
     private final GrpcClientProperties properties;
 
     @Bean
     public ManagedChannel authManagedChannel() {
-        return ManagedChannelBuilder
-                .forAddress(
-                        properties.authService().host(),
-                        properties.authService().port()
-                )
-                .usePlaintext()
-                .build();
+        return trustedChannel(properties.authService().host(),properties.authService().port(),"auth-service");
     }
 
     @Bean
@@ -33,13 +42,7 @@ public class GrpcClientConfig {
 
     @Bean
     public ManagedChannel issueManagedChannel() {
-        return ManagedChannelBuilder
-                .forAddress(
-                        properties.issueService().host(),
-                        properties.issueService().port()
-                )
-                .usePlaintext()
-                .build();
+        return trustedChannel(properties.issueService().host(),properties.issueService().port(),"issue-service");
     }
 
     @Bean
@@ -49,13 +52,7 @@ public class GrpcClientConfig {
 
     @Bean
     public ManagedChannel workFlowManagedChannel() {
-        return ManagedChannelBuilder
-                .forAddress(
-                        properties.workFlowService().host(),
-                        properties.workFlowService().port()
-                )
-                .usePlaintext()
-                .build();
+        return trustedChannel(properties.workFlowService().host(),properties.workFlowService().port(),"workflow-service");
     }
 
     @Bean

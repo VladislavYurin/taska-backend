@@ -34,6 +34,9 @@ public class Notification {
     /**
      * Идентификатор пользователя, которому адресовано уведомление.
      */
+    @Column("tenant_id")
+    private UUID tenantId;
+
     @Column("user_id")
     private UUID userId;
 

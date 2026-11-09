@@ -43,7 +43,7 @@ public class GrpcWorkflowMutationClient {
         var rpc = stub.withDeadlineAfter(properties.workflowService().deadlineDuration().toMillis(), TimeUnit.MILLISECONDS);
         var built = request.build();
         if (op == Operation.UPDATE_WORKFLOW && built.getReplaceIssueTypes()) {
-            return stub.withDeadlineAfter(120, TimeUnit.SECONDS).updateProjectWorkflowWithBindings(built)
+            return ru.taska.security.tenant.RpcContextBridge.outbound(() -> stub.withDeadlineAfter(120, TimeUnit.SECONDS).updateProjectWorkflowWithBindings(built))
                     .flatMap(result -> result.hasResult() ? Mono.just(mapper.toProjectWorkflowDto(result.getResult()))
                             : Mono.error(GrpcBindingRejection.from(result.getRejectionStatus(),
                                     result.getRejectionMessage(), result.getRejectionDetailsMap())));

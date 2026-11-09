@@ -1,4 +1,5 @@
 syntax = "proto3";
+import "v1/tenant-context.proto";
 
 package ru.taska.issue.attachment.v1;
 
@@ -82,6 +83,9 @@ message AttachmentResponse {
  * Запрос на генерацию presigned URL для загрузки вложения.
  */
 message CreateAttachmentUploadUrlRequest {
+  // TAS-316: untrusted until verified by the message-bound mTLS/JWS interceptor.
+  ru.taska.b2b.v1.RequestContext context = 100;
+
   /**
    * Заголовок запроса.
    */
@@ -123,6 +127,9 @@ message CreateAttachmentUploadUrlRequestBody {
  * После успешного вызова метаданные файла сохраняются в БД.
  */
 message ConfirmAttachmentUploadRequest {
+  // TAS-316: untrusted until verified by the message-bound mTLS/JWS interceptor.
+  ru.taska.b2b.v1.RequestContext context = 100;
+
   /**
    * Заголовок запроса.
    */
@@ -168,6 +175,9 @@ message ConfirmAttachmentUploadRequestBody {
  * Запрос на получение списка вложений задачи.
  */
 message ListAttachmentsRequest {
+  // TAS-316: untrusted until verified by the message-bound mTLS/JWS interceptor.
+  ru.taska.b2b.v1.RequestContext context = 100;
+
   /**
    * Заголовок запроса.
    */
@@ -208,6 +218,9 @@ message ListAttachmentsResponse {
  * Запрос на получение presigned URL для скачивания вложения.
  */
 message GetAttachmentDownloadUrlRequest {
+  // TAS-316: untrusted until verified by the message-bound mTLS/JWS interceptor.
+  ru.taska.b2b.v1.RequestContext context = 100;
+
   /**
    * Заголовок запроса.
    */
@@ -273,6 +286,9 @@ message CreateAttachmentUploadUrlResponse {
  * Запрос на удаление вложения (мягкое удаление).
  */
 message DeleteAttachmentRequest {
+  // TAS-316: untrusted until verified by the message-bound mTLS/JWS interceptor.
+  ru.taska.b2b.v1.RequestContext context = 100;
+
   /**
    * Заголовок запроса.
    */

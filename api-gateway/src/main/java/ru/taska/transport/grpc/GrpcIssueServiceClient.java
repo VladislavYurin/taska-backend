@@ -89,7 +89,7 @@ public class GrpcIssueServiceClient {
     ) {
         log.info("[{}] Calling getIssueDetails", context.requestId());
 
-        return dynamicStub().getIssueDetails(
+        return ru.taska.security.tenant.RpcContextBridge.outbound(() -> dynamicStub().getIssueDetails(
                         GetIssueRequest.newBuilder()
                                 .setHeader(buildGrpcHeader(context))
                                 .setBody(
@@ -99,7 +99,7 @@ public class GrpcIssueServiceClient {
                                                 .build()
                                 )
                                 .build()
-                )
+                ))
                 .map(issueMapper::toRestIssueDetailsWithHistoryResponseDto);
     }
 
@@ -113,7 +113,7 @@ public class GrpcIssueServiceClient {
     public Mono<IssueResponseDto> getIssueByKey(String issueKey, GatewayContext context) {
         log.info("[{}] Calling getIssueByKey", context.requestId());
 
-        return dynamicStub().getIssueByKey(
+        return ru.taska.security.tenant.RpcContextBridge.outbound(() -> dynamicStub().getIssueByKey(
                         GetIssueByKeyRequest.newBuilder()
                                 .setHeader(buildGrpcHeader(context))
                                 .setBody(
@@ -123,7 +123,7 @@ public class GrpcIssueServiceClient {
                                                 .build()
                                 )
                                 .build()
-                )
+                ))
                 .map(issueMapper::toRestIssueResponse);
     }
 
@@ -172,12 +172,12 @@ public class GrpcIssueServiceClient {
             requestBodyBuilder.setLabelId(labelId);
         }
 
-        return dynamicStub().listIssues(
+        return ru.taska.security.tenant.RpcContextBridge.outbound(() -> dynamicStub().listIssues(
                         ListIssuesRequest.newBuilder()
                                 .setHeader(buildGrpcHeader(context))
                                 .setBody(requestBodyBuilder.build())
                                 .build()
-                )
+                ))
                 .map(issueMapper::toRestListIssuesResponseDto);
     }
 
@@ -199,7 +199,7 @@ public class GrpcIssueServiceClient {
         log.info("[{}] Calling createIssue", context.requestId());
 
         return request.flatMap(requestDto ->
-                           dynamicStub().createIssue(issueMapper.toCreateIssueGrpcRequest(projectId, idempotencyKey, requestDto, context))
+                           ru.taska.security.tenant.RpcContextBridge.outbound(() -> dynamicStub().createIssue(issueMapper.toCreateIssueGrpcRequest(projectId, idempotencyKey, requestDto, context)))
                       )
                       .map(issueMapper::toRestIssueResponse);
     }
@@ -220,7 +220,7 @@ public class GrpcIssueServiceClient {
         log.info("[{}] Calling assignIssue", context.requestId());
 
         return request.flatMap(requestDto ->
-                        dynamicStub().assignIssue(
+                        ru.taska.security.tenant.RpcContextBridge.outbound(() -> dynamicStub().assignIssue(
                                 AssignIssueRequest.newBuilder()
                                         .setHeader(buildGrpcHeader(context))
                                         .setBody(
@@ -231,7 +231,7 @@ public class GrpcIssueServiceClient {
                                                         .build()
                                         )
                                         .build()
-                        )
+                        ))
                 )
                 .map(issueMapper::toRestIssueResponse);
     }
@@ -252,7 +252,7 @@ public class GrpcIssueServiceClient {
         log.info("[{}] Calling updateIssue", context.requestId());
 
         return request.flatMap(requestDto ->
-                                       dynamicStub().updateIssue(issueMapper.toUpdateIssueRequest(issueId, requestDto, context))
+                                       ru.taska.security.tenant.RpcContextBridge.outbound(() -> dynamicStub().updateIssue(issueMapper.toUpdateIssueRequest(issueId, requestDto, context)))
                       )
                       .map(issueMapper::toRestUpdateResponse);
     }
@@ -276,9 +276,9 @@ public class GrpcIssueServiceClient {
 
         return request
                 .defaultIfEmpty(new PatchIssueRequestDto())
-                .flatMap(body -> dynamicStub().patchIssue(
+                .flatMap(body -> ru.taska.security.tenant.RpcContextBridge.outbound(() -> dynamicStub().patchIssue(
                         issueMapper.toPatchIssueRequest(issueId, ifMatchVersion, body, context)
-                ))
+                )))
                 .map(response -> ResponseEntity
                         .status(response.getVersionConflict() ? HttpStatus.CONFLICT : HttpStatus.OK)
                         .body(issueMapper.toRestIssueResponse(response.getIssue())));
@@ -318,12 +318,12 @@ public class GrpcIssueServiceClient {
                         requestBodyBuilder.setPayload(issueMapper.convertPayloadToJsonString(requestDto.getPayload()));
                     }
 
-                    return dynamicStub().transitionIssue(
+                    return ru.taska.security.tenant.RpcContextBridge.outbound(() -> dynamicStub().transitionIssue(
                             TransitionIssueRequest.newBuilder()
                                     .setHeader(buildGrpcHeader(context))
                                     .setBody(requestBodyBuilder.build())
                                     .build()
-                    );
+                    ));
 
                 })
                 .map(issueMapper::toRestIssueWithHistoryResponse);
@@ -342,7 +342,7 @@ public class GrpcIssueServiceClient {
     ) {
         log.info("[{}] Calling deleteIssue", context.requestId());
 
-        return dynamicStub().deleteIssue(
+        return ru.taska.security.tenant.RpcContextBridge.outbound(() -> dynamicStub().deleteIssue(
                         DeleteIssueRequest.newBuilder()
                                 .setHeader(buildGrpcHeader(context))
                                 .setBody(
@@ -352,7 +352,7 @@ public class GrpcIssueServiceClient {
                                                 .build()
                                 )
                                 .build()
-                )
+                ))
                 .then();
     }
 
@@ -369,7 +369,7 @@ public class GrpcIssueServiceClient {
     ) {
         log.info("[{}] Calling listIssueLinks", context.requestId());
 
-        return dynamicStub().listIssueLinks(
+        return ru.taska.security.tenant.RpcContextBridge.outbound(() -> dynamicStub().listIssueLinks(
                         ListIssueLinksRequest.newBuilder()
                                 .setHeader(buildGrpcHeader(context))
                                 .setBody(
@@ -379,7 +379,7 @@ public class GrpcIssueServiceClient {
                                                 .build()
                                 )
                                 .build()
-                )
+                ))
                 .map(issueMapper::toRestListIssueLinkResponse);
     }
 
@@ -400,7 +400,7 @@ public class GrpcIssueServiceClient {
 
         return request
                 .flatMap(requestDto ->
-                        dynamicStub().createIssueLink(
+                        ru.taska.security.tenant.RpcContextBridge.outbound(() -> dynamicStub().createIssueLink(
                                 CreateIssueLinkRequest.newBuilder()
                                         .setHeader(buildGrpcHeader(context))
                                         .setBody(
@@ -411,7 +411,7 @@ public class GrpcIssueServiceClient {
                                                         .setActorUserId(context.userContext().userId())
                                                         .build()
                                         )
-                                        .build())
+                                        .build()))
                 )
                 .map(issueMapper::toRestIssueLinkResponse);
     }
@@ -431,7 +431,7 @@ public class GrpcIssueServiceClient {
     ) {
         log.info("[{}] Calling deleteIssueLink", context.requestId());
 
-        return dynamicStub().deleteIssueLink(
+        return ru.taska.security.tenant.RpcContextBridge.outbound(() -> dynamicStub().deleteIssueLink(
                         DeleteIssueLinkRequest.newBuilder()
                                 .setHeader(buildGrpcHeader(context))
                                 .setBody(
@@ -442,7 +442,7 @@ public class GrpcIssueServiceClient {
                                                 .build()
                                 )
                                 .build()
-                )
+                ))
                 .then();
     }
 
@@ -473,8 +473,8 @@ public class GrpcIssueServiceClient {
         SearchIssuesRequest grpcRequest =
                 issueMapper.toSearchIssuesGrpcRequest(request, context);
 
-        return dynamicStub()
-                .searchIssues(grpcRequest)
+        return ru.taska.security.tenant.RpcContextBridge.outbound(() -> dynamicStub()
+                .searchIssues(grpcRequest))
                 .map(issueMapper::toRestSearchIssuesResponse);
     }
 
@@ -550,12 +550,12 @@ public class GrpcIssueServiceClient {
                         context);
 
         applyBoardOptions(requestBodyBuilder, options);
-        return dynamicStub()
+        return ru.taska.security.tenant.RpcContextBridge.outbound(() -> dynamicStub()
                 .listIssuesForBoard(
                         ListIssuesForBoardRequest.newBuilder()
                                 .setHeader(buildGrpcHeader(context))
                                 .setBody(requestBodyBuilder.build())
-                                .build())
+                                .build()))
                 .map(
                         response -> {
                             requireBoardVersion(response, options, false);
@@ -645,12 +645,12 @@ public class GrpcIssueServiceClient {
         if (afterUpdatedAt != null)
             body.setAfterUpdatedAt(boardTimestamp(afterUpdatedAt.toInstant()))
                     .setAfterId(afterId.toString());
-        return dynamicStub()
+        return ru.taska.security.tenant.RpcContextBridge.outbound(() -> dynamicStub()
                 .listIssuesForBoard(
                         ListIssuesForBoardRequest.newBuilder()
                                 .setHeader(buildGrpcHeader(context))
                                 .setBody(body)
-                                .build())
+                                .build()))
                 .map(
                         response -> {
                             requireBoardVersion(response, options, afterUpdatedAt != null);

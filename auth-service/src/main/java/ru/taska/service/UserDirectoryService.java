@@ -25,7 +25,10 @@ public class UserDirectoryService {
     private java.time.Duration avatarTimeout = java.time.Duration.ofMillis(250);
 
     public Mono<SearchUsersResponse> search(UUID actor, String query, int page, int pageSize) {
-        return access.requireActor(actor, false).flatMap(user -> membership.check(user).then(Mono.defer(() -> {
+        return Mono.deferContextual(context->{
+            if(context.hasKey(ru.taska.security.tenant.VerifiedTenantContext.class))
+                return Mono.error(new DomainException(DomainStatus.UNAVAILABLE,"Tenant directory requires its scoped adapter",java.util.Map.of("reason","TENANT_DIRECTORY_NOT_READY")));
+            return access.requireActor(actor, false).flatMap(user -> membership.check(user).then(Mono.defer(() -> {
             String normalized = query == null ? "" : query.strip().toLowerCase(Locale.ROOT);
             int length = normalized.codePointCount(0, normalized.length());
             if (length < 3 || length > 100 || normalized.codePoints().anyMatch(Character::isISOControl) || page < 0 || page > 1000 || pageSize < 1 || pageSize > 50) {
@@ -39,6 +42,7 @@ public class UserDirectoryService {
                             .map(items -> SearchUsersResponse.newBuilder().addAllItems(items)
                                     .setHasMore(rows.size() > pageSize).build()));
         })));
+        });
     }
 
     private Mono<DirectoryUser> toDirectoryUser(UserDetailsDto row) {

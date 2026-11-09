@@ -9,7 +9,6 @@ public final class IssueTypeDeletionClients {
   private IssueTypeDeletionClients() {}
   public static IssueTypeDeletionKey key(UUID project, UUID operation) {
     return IssueTypeDeletionKey.newBuilder().setProjectId(project.toString())
-        .setOperationId(operation.toString()).setHeader(Header.newBuilder()
-            .setRequestId(UUID.randomUUID().toString()).setNodeId("issue-type-deletion")).build();
+        .setOperationId(operation.toString()).setHeader(ru.taska.security.tenant.RpcContextBridge.outboundHeader("issue-type-deletion")).build();
   }
 }
