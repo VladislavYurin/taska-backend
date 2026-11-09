@@ -99,7 +99,16 @@ public final class PaymentAttemptCoordinator {
                                               toState(checkout.state()),
                                               checkout.providerPaymentId());
                                         })
-                                    .onErrorResume(error -> attempts.unknown(claim)))
+                                    .onErrorResume(
+                                        ProviderException.class,
+                                        error ->
+                                            error.reason()
+                                                    == ProviderException.Reason.UNKNOWN_OUTCOME
+                                                ? attempts.unknown(claim)
+                                                : Mono.error(error))
+                                    .onErrorResume(
+                                        java.util.concurrent.TimeoutException.class,
+                                        error -> attempts.unknown(claim)))
                         .switchIfEmpty(attempts.find(attempt.tenantId(), attempt.id()));
                   })
               .flatMap(this::finish);

@@ -315,6 +315,35 @@ class PaymentAttemptIntegrationTest {
     verifyNoInteractions(current);
   }
 
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.EnumSource(
+      value = ProviderException.Reason.class,
+      names = {"IDEMPOTENCY_CONFLICT", "INVALID_STATE", "UNSUPPORTED_CAPABILITY"})
+  void deterministicProviderErrorsPropagateAndNeverResubmit(ProviderException.Reason reason) {
+    var provider = mock(PaymentProvider.class);
+    when(provider.createCheckout(any(), any(), any(), any()))
+        .thenReturn(Mono.error(new ProviderException(reason)));
+    var coordinator = coordinator(provider, a -> Mono.empty());
+    reason(reason, () -> as(coordinator.create(request("deterministic", "{}"), merchant, invoice)));
+    var retry = as(coordinator.create(request("deterministic", "{}"), merchant, invoice));
+    assertEquals(PaymentAttemptStore.State.SUBMITTED, retry.state());
+    verify(provider, times(1)).createCheckout(any(), any(), any(), any());
+  }
+
+  @Test
+  void transportTimeoutBecomesUnknownWithoutMappingOrResubmission() {
+    var provider = mock(PaymentProvider.class);
+    when(provider.createCheckout(any(), any(), any(), any()))
+        .thenReturn(Mono.error(new java.util.concurrent.TimeoutException()));
+    var coordinator = coordinator(provider, a -> Mono.fromRunnable(mapped::incrementAndGet));
+    var result = as(coordinator.create(request("transport-timeout", "{}"), merchant, invoice));
+    assertEquals(PaymentAttemptStore.State.UNKNOWN, result.state());
+    assertNull(result.providerPaymentId());
+    assertEquals(0, mapped.get());
+    as(coordinator.create(request("transport-timeout", "{}"), merchant, invoice));
+    verify(provider, times(1)).createCheckout(any(), any(), any(), any());
+  }
+
   @Test
   void lostMappingAckReplaysOriginalIdentityWithoutAnotherCharge() {
     var first = new AtomicBoolean(true);
@@ -414,6 +443,53 @@ class PaymentAttemptIntegrationTest {
                     + paid.id()
                     + "'"));
     assertEquals(paid, as(store.find(A, paid.id())));
+  }
+
+  @Test
+  void runtimeCannotEraseIdentityOrReopenClaim() {
+    var claim = as(store.claim(accepted("db-fence")));
+    assertThrows(
+        Exception.class,
+        () ->
+            SubscriptionIntegrationTest.sql(
+                "UPDATE taska.payment_attempts SET state='ACCEPTED',version=version+1 WHERE id='"
+                    + claim.id()
+                    + "'"));
+    assertThrows(
+        Exception.class,
+        () ->
+            SubscriptionIntegrationTest.sql(
+                "UPDATE taska.billing_operations SET"
+                    + " request_hash=decode(repeat('aa',32),'hex'),fence=fence+1 WHERE id='"
+                    + claim.operationId()
+                    + "'"));
+    for (String table : List.of("payment_attempts", "billing_operations")) {
+      boolean canDelete =
+          as(
+              f.f.transactions.execute(
+                  db ->
+                      db.sql(
+                              "SELECT has_table_privilege(current_user,'taska."
+                                  + table
+                                  + "','DELETE')")
+                          .map((r, m) -> r.get(0, Boolean.class))
+                          .one()));
+      assertFalse(canDelete);
+    }
+    assertThrows(
+        Exception.class,
+        () ->
+            as(
+                f.f.transactions.execute(
+                    db ->
+                        db.sql(
+                                "DELETE FROM taska.payment_attempts WHERE tenant_id=:tenant AND"
+                                    + " id=:id")
+                            .bind("tenant", A)
+                            .bind("id", claim.id())
+                            .fetch()
+                            .rowsUpdated())));
+    assertEquals(claim, as(store.find(A, claim.id())));
   }
 
   @Test

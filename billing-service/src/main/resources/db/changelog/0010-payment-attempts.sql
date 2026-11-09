@@ -76,10 +76,26 @@ BEGIN
      IS DISTINCT FROM ROW(OLD.id,OLD.tenant_id,OLD.invoice_id,OLD.operation_id,OLD.provider,OLD.provider_idempotency_key,
       OLD.merchant_account,OLD.provider_environment,OLD.merchant_profile_version,OLD.request_snapshot,OLD.invoice_snapshot,OLD.amount_minor,OLD.currency,OLD.accepted_at)
      OR (OLD.provider_payment_id IS NOT NULL AND NEW.provider_payment_id IS DISTINCT FROM OLD.provider_payment_id)
-     OR OLD.state IN ('SUCCEEDED','FAILED','CANCELLED') OR NEW.version<>OLD.version+1 THEN
+     OR OLD.state IN ('SUCCEEDED','FAILED','CANCELLED')
+     OR (OLD.state<>'ACCEPTED' AND NEW.state IN ('ACCEPTED','SUBMITTED'))
+     OR (OLD.state='ACCEPTED' AND NEW.state<>'SUBMITTED')
+     OR NEW.version<>OLD.version+1 THEN
     RAISE EXCEPTION 'Immutable payment attempt identity or terminal state' USING ERRCODE='23514';
   END IF;
   RETURN NEW;
 END $$;
 CREATE TRIGGER immutable_payment_attempt BEFORE UPDATE ON taska.payment_attempts
   FOR EACH ROW EXECUTE FUNCTION taska.protect_payment_attempt();
+
+CREATE FUNCTION taska.protect_payment_operation() RETURNS trigger LANGUAGE plpgsql SET search_path=pg_catalog AS $$
+BEGIN
+  IF NEW IS NOT DISTINCT FROM OLD THEN RETURN NEW; END IF;
+  IF ROW(NEW.id,NEW.tenant_id,NEW.kind,NEW.actor_id,NEW.channel,NEW.grant_id,NEW.request_key,NEW.request_hash,NEW.created_at)
+     IS DISTINCT FROM ROW(OLD.id,OLD.tenant_id,OLD.kind,OLD.actor_id,OLD.channel,OLD.grant_id,OLD.request_key,OLD.request_hash,OLD.created_at)
+     OR OLD.state IN ('SUCCEEDED','FAILED') OR NEW.fence<>OLD.fence+1 THEN
+    RAISE EXCEPTION 'Immutable payment operation identity or terminal result' USING ERRCODE='23514';
+  END IF;
+  RETURN NEW;
+END $$;
+CREATE TRIGGER immutable_payment_operation BEFORE UPDATE ON taska.billing_operations
+  FOR EACH ROW EXECUTE FUNCTION taska.protect_payment_operation();

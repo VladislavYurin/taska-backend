@@ -382,6 +382,11 @@
               "path": "db/tenant/protect-table.sql",
               "splitStatements": false
             }
+          },
+          {
+            "sql": {
+              "sql": "SET LOCAL ROLE taska_billing_migrator; REVOKE DELETE,TRUNCATE ON taska.billing_operations,taska.payment_attempts FROM taska_billing_app;"
+            }
           }
         ]
       }

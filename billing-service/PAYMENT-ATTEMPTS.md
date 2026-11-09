@@ -19,6 +19,8 @@ createCheckout again, even using the same key: the provider may have expired it.
 original operation/key/provider/account/environment and resolve the original object through
 verified provider/operator reconciliation (TAS-353); absence of an ID never authorizes a charge.
 A failure after claim but before submission may therefore need reconciliation proving no effect.
+Only UNKNOWN_OUTCOME/transport timeout is converted to UNKNOWN; deterministic adapter failures
+propagate to the caller while the durable SUBMITTED claim still prevents resubmission.
 
 Known objects are fetched exclusively through their original provisioned provider/account/env.
 Responses must match stored invoice, amount, currency and object ID. Version checks and SQL
@@ -26,6 +28,8 @@ immutability prevent a stale timeout from replacing SUCCEEDED or erasing/changin
 After the identity commits, the self-mTLS worker registers its route with TAS-351. Lost mapping
 ACK retries that same identity; it does not resubmit a charge. The native inbox independently
 checks the sealed invoice, operation and frozen profile before establishing its immutable route.
+Runtime DELETE is revoked for attempts/operations; SQL guards preserve identity, submission
+fences and terminal results even when accessed outside the stores.
 Payment attempt success is a provider observation; the existing settlement/inbox still owns
 ledger, coverage and Root decisions. Pending/unknown business operations remain unfinished.
 

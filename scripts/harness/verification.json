@@ -1103,7 +1103,8 @@
           "ProviderInboxRpcIntegrationTest",
           "InboxCipherTest",
           "PaymentAttemptIntegrationTest",
-          "PaymentAttemptConfigurationTest"
+          "PaymentAttemptConfigurationTest",
+          "ProviderInboxWorkerValidationTest"
         ],
         "noTestsReason": null
       },
