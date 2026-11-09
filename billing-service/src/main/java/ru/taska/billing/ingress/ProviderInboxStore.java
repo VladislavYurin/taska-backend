@@ -17,6 +17,7 @@ import java.util.UUID;
 import org.springframework.r2dbc.core.DatabaseClient;
 import org.springframework.transaction.reactive.TransactionalOperator;
 import reactor.core.publisher.Mono;
+import ru.taska.billing.payment.PaymentAttemptStore;
 import ru.taska.billing.payment.PaymentProvider;
 import ru.taska.exception.DomainStatus;
 import ru.taska.r2dbc.TenantTransactionExecutor;
@@ -290,28 +291,10 @@ public final class ProviderInboxStore {
                                       "QUARANTINED",
                                       "PAYMENT_CURRENCY_MISMATCH",
                                       null);
-                                String canonical =
-                                    framed(
-                                        i.provider(),
-                                        i.account(),
-                                        i.environment().name(),
-                                        payment,
-                                        tenant.toString(),
-                                        binding.get("invoice_id").toString(),
-                                        binding.get("operation_id").toString(),
-                                        binding.get("merchant_profile_version").toString(),
-                                        Long.toString(amount),
-                                        currency,
-                                        occurred.toString());
-                                UUID evidence =
-                                    UUID.nameUUIDFromBytes(
-                                        framed(
-                                                i.provider(),
-                                                i.account(),
-                                                i.environment().name(),
-                                                payment)
-                                            .getBytes(StandardCharsets.UTF_8));
-                                String digest = sha(canonical.getBytes(StandardCharsets.UTF_8));
+                                UUID evidence = proofId(i, payment);
+                                String digest =
+                                    proofDigest(
+                                        i, payment, tenant, binding, amount, currency, occurred);
                                 return identity(
                                         tx.sql(
                                             "INSERT INTO"
@@ -360,6 +343,141 @@ public final class ProviderInboxStore {
                                                     null));
                               });
                     }));
+  }
+
+  /** Same canonical proof as signed callbacks; lookup does not manufacture an event timestamp. */
+  public Mono<UUID> existingEvidence(PaymentAttemptStore.Attempt attempt) {
+    return tenants.execute(
+        tx ->
+            identity(
+                    tx.sql(
+                        "SELECT id FROM taska.provider_payment_proofs WHERE tenant_id=:tenant AND"
+                            + " invoice_id=:invoice AND provider=:provider AND"
+                            + " provider_account_id=:account AND environment=:environment AND"
+                            + " provider_payment_id=:payment"),
+                    source(attempt))
+                .bind("tenant", attempt.tenantId())
+                .bind("invoice", attempt.invoiceId())
+                .bind("payment", attempt.providerPaymentId())
+                .map((r, m) -> r.get("id", UUID.class))
+                .one());
+  }
+
+  public Mono<UUID> recordReconciliation(
+      PaymentAttemptStore.Attempt attempt, PaymentProvider.Payment payment) {
+    return Mono.defer(
+        () -> {
+          if (payment.state() != PaymentProvider.State.SUCCEEDED
+              || payment.occurredAt() == null
+              || !java.util.Objects.equals(attempt.providerPaymentId(), payment.providerPaymentId())
+              || !attempt.invoiceId().equals(payment.invoiceId())
+              || !new PaymentProvider.Money(attempt.amountMinor(), attempt.currency())
+                  .equals(payment.amount()))
+            return Mono.error(
+                failure(DomainStatus.FAILED_PRECONDITION, "PAYMENT_BINDING_MISMATCH"));
+          Instant occurred = payment.occurredAt().truncatedTo(ChronoUnit.MICROS);
+          if (occurred.isBefore(Instant.EPOCH) || occurred.isAfter(now().plusSeconds(300)))
+            return Mono.error(failure(DomainStatus.FAILED_PRECONDITION, "INVALID_OCCURRENCE"));
+          var i = source(attempt);
+          return tenants.execute(
+              tx ->
+                  route(tx, i, payment.providerPaymentId())
+                      .switchIfEmpty(
+                          Mono.error(
+                              failure(DomainStatus.UNAVAILABLE, "PAYMENT_MAPPING_UNAVAILABLE")))
+                      .flatMap(
+                          binding -> {
+                            if (!attempt.tenantId().equals(binding.get("tenant_id"))
+                                || !attempt.invoiceId().equals(binding.get("invoice_id"))
+                                || !attempt
+                                    .profileVersion()
+                                    .equals(binding.get("merchant_profile_version")))
+                              return Mono.error(
+                                  failure(
+                                      DomainStatus.FAILED_PRECONDITION,
+                                      "PAYMENT_BINDING_MISMATCH"));
+                            UUID evidence = proofId(i, payment.providerPaymentId());
+                            String digest =
+                                proofDigest(
+                                    i,
+                                    payment.providerPaymentId(),
+                                    attempt.tenantId(),
+                                    binding,
+                                    payment.amount().amountMinor(),
+                                    payment.amount().currency(),
+                                    occurred);
+                            return identity(
+                                    tx.sql(
+                                        "INSERT INTO"
+                                            + " taska.provider_payment_proofs(id,provider,provider_account_id,environment,provider_payment_id,tenant_id,invoice_id,operation_id,merchant_profile_version,amount_minor,currency,occurred_at,observed_at,evidence_digest)"
+                                            + " VALUES(:id,:provider,:account,:environment,:payment,:tenant,:invoice,:operation,:profile,:amount,:currency,:occurred,:observed,:digest)"
+                                            + " ON CONFLICT DO NOTHING"),
+                                    i)
+                                .bind("id", evidence)
+                                .bind("payment", payment.providerPaymentId())
+                                .bind("tenant", attempt.tenantId())
+                                .bind("invoice", attempt.invoiceId())
+                                .bind("operation", binding.get("operation_id"))
+                                .bind("profile", attempt.profileVersion())
+                                .bind("amount", payment.amount().amountMinor())
+                                .bind("currency", payment.amount().currency())
+                                .bind("occurred", offset(occurred))
+                                .bind("observed", offset(now()))
+                                .bind("digest", digest)
+                                .fetch()
+                                .rowsUpdated()
+                                .then(
+                                    tx.sql(
+                                            "SELECT evidence_digest FROM"
+                                                + " taska.provider_payment_proofs WHERE id=:id AND"
+                                                + " tenant_id=:tenant")
+                                        .bind("id", evidence)
+                                        .bind("tenant", attempt.tenantId())
+                                        .map((r, m) -> r.get("evidence_digest", String.class))
+                                        .one())
+                                .filter(digest::equals)
+                                .switchIfEmpty(
+                                    Mono.error(
+                                        failure(
+                                            DomainStatus.FAILED_PRECONDITION,
+                                            "PAYMENT_FACT_CONFLICT")))
+                                .thenReturn(evidence);
+                          }));
+        });
+  }
+
+  private static ProviderWebhookRegistry.Identity source(PaymentAttemptStore.Attempt a) {
+    return new ProviderWebhookRegistry.Identity(a.provider(), a.merchantAccount(), a.environment());
+  }
+
+  private static UUID proofId(ProviderWebhookRegistry.Identity i, String payment) {
+    return UUID.nameUUIDFromBytes(
+        framed(i.provider(), i.account(), i.environment().name(), payment)
+            .getBytes(StandardCharsets.UTF_8));
+  }
+
+  private static String proofDigest(
+      ProviderWebhookRegistry.Identity i,
+      String payment,
+      UUID tenant,
+      Map<String, Object> binding,
+      long amount,
+      String currency,
+      Instant occurred) {
+    return sha(
+        framed(
+                i.provider(),
+                i.account(),
+                i.environment().name(),
+                payment,
+                tenant.toString(),
+                binding.get("invoice_id").toString(),
+                binding.get("operation_id").toString(),
+                binding.get("merchant_profile_version").toString(),
+                Long.toString(amount),
+                currency,
+                occurred.toString())
+            .getBytes(StandardCharsets.UTF_8));
   }
 
   public Mono<Receipt> applied(UUID tenant, UUID id) {

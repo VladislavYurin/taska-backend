@@ -114,6 +114,28 @@ public final class GrpcProviderInboxWorker implements ProviderInbox.SettlementDe
         .then();
   }
 
+  public Mono<PaymentReconciliationResult> reconcile(
+      ReactorPaymentReconciliationServiceGrpc.ReactorPaymentReconciliationServiceStub stub,
+      ru.taska.billing.reconciliation.PaymentReconciliationStore.Job job) {
+    return call(
+        job.tenantId(),
+        PaymentReconciliationServiceGrpc.getReconcilePaymentAttemptMethod().getFullMethodName(),
+        "reconcilePaymentAttempt",
+        "payment:reconcile",
+        c ->
+            ReconcilePaymentAttemptRequest.newBuilder()
+                .setContext(c)
+                .setTenantId(job.tenantId().toString())
+                .setAttemptId(job.attemptId().toString())
+                .setLeaseToken(job.token().toString())
+                .build(),
+        (r, h) ->
+            stub.withInterceptors(h)
+                .withDeadlineAfter(60, TimeUnit.SECONDS)
+                .reconcilePaymentAttempt(r),
+        job.correlationId());
+  }
+
   private <Q extends Message, R> Mono<R> call(
       UUID tenant,
       String rpc,
@@ -121,12 +143,23 @@ public final class GrpcProviderInboxWorker implements ProviderInbox.SettlementDe
       String scope,
       Function<RequestContext, Q> request,
       BiFunction<Q, ClientInterceptor, Mono<R>> send) {
+    return call(tenant, rpc, action, scope, request, send, UUID.randomUUID());
+  }
+
+  private <Q extends Message, R> Mono<R> call(
+      UUID tenant,
+      String rpc,
+      String action,
+      String scope,
+      Function<RequestContext, Q> request,
+      BiFunction<Q, ClientInterceptor, Mono<R>> send,
+      UUID correlation) {
     return Mono.defer(
         () -> {
           var now = clock.instant();
           var context =
               RequestContext.newBuilder()
-                  .setHeader(Header.newBuilder().setRequestId(UUID.randomUUID().toString()))
+                  .setHeader(Header.newBuilder().setRequestId(correlation.toString()))
                   .setContext(
                       TrustedTenantContext.newBuilder()
                           .setContextVersion(1)

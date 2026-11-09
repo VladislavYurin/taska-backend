@@ -107,3 +107,8 @@ scrape_configs:
         replacement: 'mcp-server'
       - source_labels: [job]
         target_label: application
+
+  - job_name: 'billing-service'
+    metrics_path: '/actuator/prometheus'
+    static_configs:
+      - targets: ['billing-service:8090']

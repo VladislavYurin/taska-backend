@@ -154,7 +154,7 @@ public final class FakePaymentProvider implements PaymentProvider {
                 () -> {
                     PaymentAttempt a = payment(merchant, providerPaymentId);
                     return new Payment(
-                            a.id(), a.invoice().invoiceId(), a.invoice().total(), a.state().get());
+                            a.id(), a.invoice().invoiceId(), a.invoice().total(), a.state().get(), a.occurredAt().get());
                 });
     }
 
