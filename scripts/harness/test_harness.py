@@ -256,7 +256,8 @@ class HarnessTest(unittest.TestCase):
         expected = {'McpClientSecurityIT', 'OutboxRetryServiceIT', 'OutboxRetryRepositoryIT', 'ListIssuesForBoardIT',
                     'IssueTypeMoveIT', 'IssueTypeDeletionIT', 'IssueTypeWorkflowReservationIT', 'InvitedUnblockIT',
                     'WorkflowBindingMigrationIT', 'IssueTypeCreationIT', 'WorkflowBindingChangeIT',
-                    'WorkflowCreatedTypeBindingIT', 'WorkflowScopeCheckIT'}
+                    'WorkflowCreatedTypeBindingIT', 'WorkflowScopeCheckIT',
+                    'WorkflowCreationIT', 'WorkflowEditIT', 'WorkflowServiceIT'}
         actual = {s for c in self.manifest['checks'] if c['id'].endswith('.it') for s in c['reports']['selectors']}
         self.assertEqual(expected, actual)
         self.assertEqual(len(self.manifest['modules']), 16)
