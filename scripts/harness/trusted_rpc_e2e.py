@@ -300,7 +300,6 @@ class TrustedLocal(e.Local):
         for tenant, client in clients:
             project = client.expect('POST', '/api/v1/projects', 201, {'projectKey': 'OWNED', 'name': 'Owned'}).json()
             projects.append(project['id'])
-            readiness.append(wait_protected_read(client, '/api/v1/projects/' + project['id'] + '/context', 200))
             issue = client.expect('POST', '/api/v1/projects/' + project['id'] + '/issues', 201,
                 {'issueType': 'TASK', 'summary': 'Owned', 'description': '', 'priority': 'MEDIUM'},
                 {'Idempotency-Key': 'owned-same-business-key'}).json()

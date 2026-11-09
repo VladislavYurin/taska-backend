@@ -143,6 +143,9 @@ runtime RLS roles, CA/key каждой службы, signed run-state и ownersh
 останавливают приёмку. Число попыток сохраняется в отчёте; записи не повторяются, штатные
 RPC deadlines и credential TTL не увеличиваются. Это функциональная приёмка после
 готовности зависимостей, а не гарантия latency первого холодного write.
+Tenant directory и обогащение агрегатов пользовательскими профилями требуют отдельного
+контракта TAS-321. Не открывайте domain → global profile RPC широкой edge ради готовности
+агрегата: сначала нужен tenant-bound directory adapter с текущей membership/ACL проверкой.
 
 Сценарий: REST → real auth/session → online tenant membership → signed nested
 project/issue/workflow RPC → domain + outbox transaction → Kafka, два tenant с одним
