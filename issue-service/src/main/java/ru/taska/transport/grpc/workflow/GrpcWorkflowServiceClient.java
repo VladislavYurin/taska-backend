@@ -26,13 +26,13 @@ public class GrpcWorkflowServiceClient {
     private final IssueMapper issueMapper;
 
     public Mono<Void> requireStatusForType(String requestId, String nodeId, Issue issue, UUID actorUserId) {
-        return reactorWorkflowServiceStub.withDeadlineAfter(5, java.util.concurrent.TimeUnit.SECONDS)
+        return ru.taska.security.tenant.RpcContextBridge.outbound(() -> reactorWorkflowServiceStub.withDeadlineAfter(5, java.util.concurrent.TimeUnit.SECONDS)
                 .getWorkflowForProject(ru.taska.api.workflow.v1.GetWorkflowForProjectRequest.newBuilder()
                         .setHeader(Header.newBuilder().setRequestId(requestId).setNodeId(nodeId))
                         .setBody(ru.taska.api.workflow.v1.GetWorkflowForProjectRequestBody.newBuilder()
                                 .setProjectId(issue.getProjectId().toString()).setActorUserId(actorUserId.toString())
                                 .setIssueType(issueMapper.toIssueValidateSnapshotProto(issue).getIssueType())
-                                .setIssueTypeKey(issue.getIssueType().name())).build())
+                                .setIssueTypeKey(issue.getIssueType().name())).build()))
                 .flatMap(workflow -> workflow.getStatusesList().stream().anyMatch(s -> s.getStatusKey().equals(issue.getStatusKey()))
                         ? Mono.empty() : Mono.error(new ru.taska.exception.DomainException(
                                 ru.taska.exception.DomainStatus.FAILED_PRECONDITION,
@@ -42,22 +42,22 @@ public class GrpcWorkflowServiceClient {
 
     public Mono<Void> requireInitialStatus(String requestId, String nodeId, UUID projectId,
             ru.taska.domain.IssueType issueType, UUID actorUserId, String statusKey) {
-        return reactorWorkflowServiceStub.withDeadlineAfter(5, java.util.concurrent.TimeUnit.SECONDS)
+        return ru.taska.security.tenant.RpcContextBridge.outbound(() -> reactorWorkflowServiceStub.withDeadlineAfter(5, java.util.concurrent.TimeUnit.SECONDS)
                 .checkProjectWorkflowScope(ru.taska.api.workflow.v1.CheckProjectWorkflowScopeRequest.newBuilder()
                         .setHeader(Header.newBuilder().setRequestId(requestId).setNodeId(nodeId))
                         .setProjectId(projectId.toString()).setActorUserId(actorUserId.toString())
-                        .addIssueTypeKeys(issueType.name()).setStatusKey(statusKey).build())
+                        .addIssueTypeKeys(issueType.name()).setStatusKey(statusKey).build()))
                 .then();
     }
 
     public Mono<Void> requireWorkflowVersion(String requestId, String nodeId, UUID project, UUID actor,
             java.util.List<ru.taska.domain.IssueType> types, UUID expectedWorkflow, int expectedVersion) {
-        return reactorWorkflowServiceStub.withDeadlineAfter(5, java.util.concurrent.TimeUnit.SECONDS)
+        return ru.taska.security.tenant.RpcContextBridge.outbound(() -> reactorWorkflowServiceStub.withDeadlineAfter(5, java.util.concurrent.TimeUnit.SECONDS)
                 .checkProjectWorkflowScope(ru.taska.api.workflow.v1.CheckProjectWorkflowScopeRequest.newBuilder()
                         .setHeader(Header.newBuilder().setRequestId(requestId).setNodeId(nodeId))
                         .setProjectId(project.toString()).setActorUserId(actor.toString())
                         .addAllIssueTypeKeys(types.stream().map(ru.taska.domain.IssueType::name).toList())
-                        .setExpectedWorkflowId(expectedWorkflow.toString()).setExpectedWorkflowVersion(expectedVersion).build())
+                        .setExpectedWorkflowId(expectedWorkflow.toString()).setExpectedWorkflowVersion(expectedVersion).build()))
                 .then();
     }
 
@@ -93,6 +93,6 @@ public class GrpcWorkflowServiceClient {
                 )
                 .build();
 
-        return reactorWorkflowServiceStub.validateTransition(request);
+        return ru.taska.security.tenant.RpcContextBridge.outbound(() -> reactorWorkflowServiceStub.validateTransition(request));
     }
 }

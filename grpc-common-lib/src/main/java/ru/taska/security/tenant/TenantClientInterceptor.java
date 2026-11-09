@@ -54,7 +54,9 @@ public final class TenantClientInterceptor implements ClientInterceptor {
       @Override
       public synchronized void sendMessage(Req message) {
         var policy = policies.get(method.getFullMethodName());
-        var parent = options.getOption(RpcContextBridge.OUTBOUND);
+        var supplied = options.getOption(RpcContextBridge.OUTBOUND);
+        var parent =
+            supplied != null ? supplied : RpcContextBridge.OUTBOUND_INHERITED.get(inherited);
         if (sent
             || policy == null
             || parent == null
@@ -66,9 +68,39 @@ public final class TenantClientInterceptor implements ClientInterceptor {
         sent = true;
         final Message outbound;
         try {
-          outbound = security.prepare(parent, proto);
-        } catch (RuntimeException e) {
-          fail(Status.fromThrowable(e));
+          var route = RpcRoutePolicies.all().get(method.getFullMethodName());
+          var field = proto.getDescriptorForType().findFieldByName("context");
+          Message prepared = proto;
+          if (route != null && field != null && !proto.hasField(field)) {
+            var delegated =
+                security.delegate(parent, route.audience(), route.action(), parent.scopes());
+            prepared = proto.toBuilder().setField(field, delegated).build();
+          }
+          var header = prepared.getDescriptorForType().findFieldByName("header");
+          if (route != null
+              && header != null
+              && header.getMessageType().getFullName().equals("ru.taska.common.v1.Header")) {
+            var original = RpcContextBridge.details(parent).getHeader();
+            var current =
+                ru.taska.api.common.v1.Header.parseFrom(
+                    ((Message) prepared.getField(header)).toByteArray());
+            if (!current.getRequestId().equals(original.getRequestId()))
+              throw Status.PERMISSION_DENIED.asRuntimeException();
+            var stamped = current.toBuilder().clearActionChannel().clearTokenId();
+            if (original.hasActionChannel()) stamped.setActionChannel(original.getActionChannel());
+            if (original.hasTokenId()) stamped.setTokenId(original.getTokenId());
+            prepared = prepared.toBuilder().setField(header, stamped.build()).build();
+          }
+          if (route != null)
+            prepared =
+                RpcMessageClaims.stampRoles(
+                    prepared, RpcContextBridge.details(parent).getContext());
+          outbound = security.prepare(parent, prepared);
+        } catch (Exception e) {
+          fail(
+              e instanceof io.grpc.StatusRuntimeException
+                  ? Status.fromThrowable(e)
+                  : Status.UNAUTHENTICATED);
           return;
         }
         var pending = security.sign(parent, outbound, method.getFullMethodName(), policy);

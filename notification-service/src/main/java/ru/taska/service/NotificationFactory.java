@@ -96,6 +96,7 @@ public class NotificationFactory {
         log.debug("NotificationFactory.create: created {} notifications for eventType={}, eventId={}",
                 notifications.size(), type, eventId);
 
+        notifications.forEach(n -> n.setTenantId(event.tenantId()));
         return notifications;
     }
 

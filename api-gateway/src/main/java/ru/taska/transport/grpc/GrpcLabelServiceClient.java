@@ -63,7 +63,7 @@ public class GrpcLabelServiceClient {
 
         return request
                 .flatMap(requestDto ->
-                        dynamicStub().createProjectLabel(
+                        ru.taska.security.tenant.RpcContextBridge.outbound(() -> dynamicStub().createProjectLabel(
                                 CreateProjectLabelRequest.newBuilder()
                                         .setHeader(buildGrpcHeader(context))
                                         .setBody(
@@ -75,7 +75,7 @@ public class GrpcLabelServiceClient {
                                                         .build()
                                         )
                                         .build()
-                        )
+                        ))
 
                 )
                 .map(labelMapper::toRestProjectLabelResponse);
@@ -99,7 +99,7 @@ public class GrpcLabelServiceClient {
 
         return request
                 .flatMap(requestDto ->
-                        dynamicStub().updateProjectLabel(
+                        ru.taska.security.tenant.RpcContextBridge.outbound(() -> dynamicStub().updateProjectLabel(
                                 UpdateProjectLabelRequest.newBuilder()
                                         .setHeader(buildGrpcHeader(context))
                                         .setBody(
@@ -112,7 +112,7 @@ public class GrpcLabelServiceClient {
                                                         .build()
                                         )
                                         .build()
-                        )
+                        ))
 
                 )
                 .map(labelMapper::toRestProjectLabelResponse);
@@ -132,7 +132,7 @@ public class GrpcLabelServiceClient {
     ) {
         log.info("[{}] Calling deleteProjectLabel", context.requestId());
 
-        return dynamicStub().deleteProjectLabel(
+        return ru.taska.security.tenant.RpcContextBridge.outbound(() -> dynamicStub().deleteProjectLabel(
                 DeleteProjectLabelRequest.newBuilder()
                         .setHeader(buildGrpcHeader(context))
                         .setBody(
@@ -143,7 +143,7 @@ public class GrpcLabelServiceClient {
                                         .build()
                         )
                         .build()
-        )
+        ))
         .then();
     }
 
@@ -159,7 +159,7 @@ public class GrpcLabelServiceClient {
     ) {
         log.debug("[{}] Calling listProjectLabels", context.requestId());
 
-        return dynamicStub().listProjectLabels(
+        return ru.taska.security.tenant.RpcContextBridge.outbound(() -> dynamicStub().listProjectLabels(
                 ListProjectLabelsRequest.newBuilder()
                         .setHeader(buildGrpcHeader(context))
                         .setBody(
@@ -169,7 +169,7 @@ public class GrpcLabelServiceClient {
                                         .build()
                         )
                         .build()
-        )
+        ))
         .map(labelMapper::toRestListProjectLabelsResponse);
     }
 
@@ -189,7 +189,7 @@ public class GrpcLabelServiceClient {
 
         return request
                 .flatMap(requestDto ->
-                        dynamicStub().addIssueLabel(
+                        ru.taska.security.tenant.RpcContextBridge.outbound(() -> dynamicStub().addIssueLabel(
                                 AddIssueLabelRequest.newBuilder()
                                         .setHeader(buildGrpcHeader(context))
                                         .setBody(
@@ -200,7 +200,7 @@ public class GrpcLabelServiceClient {
                                                         .build()
                                         )
                                         .build()
-                        )
+                        ))
                 )
                 .map(labelMapper::toRestAddIssueLabelResponse);
     }
@@ -219,7 +219,7 @@ public class GrpcLabelServiceClient {
     ) {
         log.info("[{}] Calling removeIssueLabel", context.requestId());
 
-        return dynamicStub().removeIssueLabel(
+        return ru.taska.security.tenant.RpcContextBridge.outbound(() -> dynamicStub().removeIssueLabel(
                 RemoveIssueLabelRequest.newBuilder()
                         .setHeader(buildGrpcHeader(context))
                         .setBody(
@@ -230,7 +230,7 @@ public class GrpcLabelServiceClient {
                                         .build()
                         )
                         .build()
-        ).then();
+        )).then();
     }
 
     /**
@@ -245,7 +245,7 @@ public class GrpcLabelServiceClient {
     ) {
         log.debug("[{}] Calling listIssueLabels", context.requestId());
 
-        return dynamicStub().listIssueLabels(
+        return ru.taska.security.tenant.RpcContextBridge.outbound(() -> dynamicStub().listIssueLabels(
                 ListIssueLabelsRequest.newBuilder()
                         .setHeader(buildGrpcHeader(context))
                         .setBody(
@@ -255,7 +255,7 @@ public class GrpcLabelServiceClient {
                                         .build()
                         )
                         .build()
-                )
+                ))
                 .map(labelMapper::toRestListIssueLabelsResponse);
     }
 

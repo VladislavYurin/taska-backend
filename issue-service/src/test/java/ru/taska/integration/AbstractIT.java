@@ -60,6 +60,7 @@ public abstract class AbstractIT {
     private static VerifiedTenantContext verifiedTenant() {
         var verified = Mockito.mock(VerifiedTenantContext.class);
         Mockito.when(verified.tenantId()).thenReturn(UUID.randomUUID().toString());
+        Mockito.when(verified.requestId()).thenReturn(UUID.randomUUID().toString());
         return verified;
     }
 }

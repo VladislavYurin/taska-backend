@@ -1,4 +1,5 @@
 syntax = "proto3";
+import "v1/tenant-context.proto";
 
 package ru.taska.admin.v1;
 
@@ -66,6 +67,9 @@ service AdminService {
 }
 
 message GetCatalogRequest {
+  // TAS-316: untrusted until verified by the message-bound mTLS/JWS interceptor.
+  ru.taska.b2b.v1.RequestContext context = 100;
+
   /** Заголовок запроса (requestId, nodeId). */
   ru.taska.common.v1.Header header = 1;
   GetCatalogRequestBody body = 2;
@@ -138,6 +142,9 @@ message ColumnMetadata {
 }
 
 message ListTableRowsRequest {
+  // TAS-316: untrusted until verified by the message-bound mTLS/JWS interceptor.
+  ru.taska.b2b.v1.RequestContext context = 100;
+
   /** Заголовок запроса (requestId, nodeId). */
   ru.taska.common.v1.Header header = 1;
   ListTableRowsRequestBody body = 2;
@@ -173,6 +180,9 @@ message ListTableRowsResponse {
  * Запрос на блокировку пользователя.
  */
 message BlockUserRequest {
+  // TAS-316: untrusted until verified by the message-bound mTLS/JWS interceptor.
+  ru.taska.b2b.v1.RequestContext context = 100;
+
   ru.taska.common.v1.Header header = 1;
   BlockUserRequestBody body = 2;
 }
@@ -199,6 +209,9 @@ message BlockUserRequestBody {
  * Запрос на разблокировку пользователя.
  */
 message UnblockUserRequest {
+  // TAS-316: untrusted until verified by the message-bound mTLS/JWS interceptor.
+  ru.taska.b2b.v1.RequestContext context = 100;
+
   ru.taska.common.v1.Header header = 1;
   UnblockUserRequestBody body = 2;
 }
@@ -225,6 +238,9 @@ message UnblockUserRequestBody {
  * Запрос на сброс блокировки пользователя после неудачных попыток входа.
  */
 message ResetCredentialLockoutRequest {
+  // TAS-316: untrusted until verified by the message-bound mTLS/JWS interceptor.
+  ru.taska.b2b.v1.RequestContext context = 100;
+
   ru.taska.common.v1.Header header = 1;
   ResetCredentialLockoutRequestBody body = 2;
 }
@@ -300,6 +316,9 @@ message PaginationInfo {
 }
 
 message GetTableRowByIdRequest {
+  // TAS-316: untrusted until verified by the message-bound mTLS/JWS interceptor.
+  ru.taska.b2b.v1.RequestContext context = 100;
+
   /** Заголовок запроса (requestId, nodeId). */
   ru.taska.common.v1.Header header = 1;
   GetTableRowByIdRequestBody body = 2;
@@ -350,6 +369,9 @@ message ListAuditEntry {
 }
 
 message ListAuditEntriesRequest{
+  // TAS-316: untrusted until verified by the message-bound mTLS/JWS interceptor.
+  ru.taska.b2b.v1.RequestContext context = 100;
+
   ru.taska.common.v1.Header header = 1;
   ListAuditEntriesRequestBody body = 2;
 }
@@ -368,6 +390,9 @@ message ListAuditEntriesRequestBody{
 }
 
 message GetProblematicOutboxEventsSummaryRequest {
+  // TAS-316: untrusted until verified by the message-bound mTLS/JWS interceptor.
+  ru.taska.b2b.v1.RequestContext context = 100;
+
   /** Заголовок запроса (requestId, nodeId). */
   ru.taska.common.v1.Header header = 1;
   GetProblematicOutboxEventsSummaryRequestBody body = 2;
@@ -457,6 +482,9 @@ message MetaInfo {
  * Запрос на ручной retry outbox-события.
  */
 message RetryOutboxEventRequest {
+  // TAS-316: untrusted until verified by the message-bound mTLS/JWS interceptor.
+  ru.taska.b2b.v1.RequestContext context = 100;
+
   /**
    * Технический заголовок запроса с request_id и node_id.
    */
@@ -528,6 +556,9 @@ message RetryOutboxEventResponse {
 
 
 message UpdateUserDisplayNameRequest {
+  // TAS-316: untrusted until verified by the message-bound mTLS/JWS interceptor.
+  ru.taska.b2b.v1.RequestContext context = 100;
+
   ru.taska.common.v1.Header header = 1;
   string target_user_id = 2;
   string actor_user_id = 3;

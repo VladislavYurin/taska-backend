@@ -52,6 +52,16 @@ public interface NotificationRepository extends ReactiveCrudRepository<Notificat
             """)
     Mono<Long> markAllAsRead(UUID userId, Instant readAt);
 
+    @Query("SELECT * FROM taska.notifications WHERE tenant_id=:tenant AND user_id=:userId AND (:unread=false OR read_at IS NULL) ORDER BY created_at DESC LIMIT :limit OFFSET :offset")
+    Flux<Notification> findScoped(UUID tenant, UUID userId, boolean unread, int limit, long offset);
+    Mono<Long> countByTenantIdAndUserIdAndReadAtIsNull(UUID tenant,UUID userId);
+    Mono<Notification> findByIdAndTenantIdAndUserId(UUID id,UUID tenant,UUID userId);
+    @Query("UPDATE taska.notifications SET read_at=:readAt WHERE tenant_id=:tenant AND id=:id AND user_id=:userId AND read_at IS NULL RETURNING *")
+    Mono<Notification> markScoped(UUID tenant,UUID id,UUID userId,Instant readAt);
+    @Modifying
+    @Query("UPDATE taska.notifications SET read_at=:readAt WHERE tenant_id=:tenant AND user_id=:userId AND read_at IS NULL")
+    Mono<Long> markAllScoped(UUID tenant,UUID userId,Instant readAt);
+
     /**
      * Находит все уведомления, созданные из указанного события.
      * Используется в тестах и при отладке.

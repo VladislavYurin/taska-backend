@@ -37,7 +37,7 @@ public class GrpcAuthServiceClient {
                 )
                 .build();
 
-        return profileServiceStub.getUserDetailsByIds(request);
+        return ru.taska.security.tenant.RpcContextBridge.outbound(() -> profileServiceStub.getUserDetailsByIds(request));
     }
 
     public Mono<Map<UUID, UserSummary>> getUserProfiles(

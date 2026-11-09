@@ -77,7 +77,6 @@
             <groupId>io.grpc</groupId>
             <artifactId>grpc-netty-shaded</artifactId>
             <version>${grpc.version}</version>
-            <scope>test</scope>
         </dependency>
         <dependency><groupId>ru.taska</groupId><artifactId>common-lib</artifactId><version>${project.version}</version><type>test-jar</type><scope>test</scope></dependency>
         <dependency><groupId>io.r2dbc</groupId><artifactId>r2dbc-pool</artifactId><scope>test</scope></dependency>

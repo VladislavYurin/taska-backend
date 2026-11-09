@@ -56,7 +56,7 @@ public class GrpcAdminServiceClient {
                 .setHeader(buildGrpcHeader(context))
                 .build();
 
-        return dynamicStub().getCatalog(getCatalogRequest)
+        return ru.taska.security.tenant.RpcContextBridge.outbound(() -> dynamicStub().getCatalog(getCatalogRequest))
                 .map(adminDataMapper::toRestGetCatalogResponse);
     }
 
@@ -89,7 +89,7 @@ public class GrpcAdminServiceClient {
                 .setBody(listTableRowsRequestBody)
                 .build();
 
-        return dynamicStub().listTableRows(listTableRowsRequest)
+        return ru.taska.security.tenant.RpcContextBridge.outbound(() -> dynamicStub().listTableRows(listTableRowsRequest))
                 .map(adminDataMapper::toRestListTableRowsResponse);
     }
 
@@ -133,7 +133,7 @@ public class GrpcAdminServiceClient {
                 .setBody(requestBody)
                 .build();
 
-        return dynamicStub().listAuditEntries(request)
+        return ru.taska.security.tenant.RpcContextBridge.outbound(() -> dynamicStub().listAuditEntries(request))
                 .map(adminDataMapper::toRestListAuditEntriesResponse);
     }
 
@@ -156,7 +156,7 @@ public class GrpcAdminServiceClient {
                 .setBody(body)
                 .build();
 
-        return dynamicStub().getTableRowById(request)
+        return ru.taska.security.tenant.RpcContextBridge.outbound(() -> dynamicStub().getTableRowById(request))
                 .map(adminDataMapper::toRestGetTableRowByIdResponse);
     }
 
@@ -179,18 +179,18 @@ public class GrpcAdminServiceClient {
                         .setBody(bodyBuilder.build())
                         .build();
 
-        return dynamicStub().getProblematicOutboxEventsSummary(request)
+        return ru.taska.security.tenant.RpcContextBridge.outbound(() -> dynamicStub().getProblematicOutboxEventsSummary(request))
                 .map(adminDataMapper::toRestProblematicOutboxEventsSummaryResponse);
     }
 
     public Mono<ru.taska.domain.dto.UserDisplayNameResponseDto> updateUserDisplayName(java.util.UUID userId,
             Mono<ru.taska.domain.dto.UpdateDisplayNameRequestDto> request, GatewayContext context) {
-        return request.flatMap(body -> dynamicStub().updateUserDisplayName(ru.taska.api.admin.v1.UpdateUserDisplayNameRequest.newBuilder()
+        return request.flatMap(body -> ru.taska.security.tenant.RpcContextBridge.outbound(() -> dynamicStub().updateUserDisplayName(ru.taska.api.admin.v1.UpdateUserDisplayNameRequest.newBuilder()
                         .setHeader(ru.taska.mapper.MappingUtils.buildGrpcHeader(context)).setTargetUserId(userId.toString())
                         .setActorUserId(context.userContext().userId()).setActorDisplayName(context.userContext().displayName())
                         .setActorEmail(context.userContext().email()).setActorRole(context.userContext().globalRole() == ru.taska.domain.GlobalRole.GLOBAL_ADMIN
                                 ? ru.taska.api.common.v1.GlobalRoleProto.GLOBAL_ROLE_GLOBAL_ADMIN : ru.taska.api.common.v1.GlobalRoleProto.GLOBAL_ROLE_USER)
-                        .setDisplayName(ru.taska.util.DisplayNames.normalize(body.getDisplayName())).build()))
+                        .setDisplayName(ru.taska.util.DisplayNames.normalize(body.getDisplayName())).build())))
                 .map(response -> new ru.taska.domain.dto.UserDisplayNameResponseDto().userId(java.util.UUID.fromString(response.getUserId()))
                         .displayName(response.getDisplayName()));
     }
@@ -204,9 +204,9 @@ public class GrpcAdminServiceClient {
 
         return request
                 .flatMap(requestDto ->
-                        dynamicStub().blockUser(
+                        ru.taska.security.tenant.RpcContextBridge.outbound(() -> dynamicStub().blockUser(
                                 adminUserManagementMapper.toBlockUserGrpcRequest(userId, requestDto, context)
-                        )
+                        ))
                 )
                 .map(adminUserManagementMapper::toRestUserStatusResponse);
     }
@@ -221,9 +221,9 @@ public class GrpcAdminServiceClient {
 
         return request
                 .flatMap(requestDto ->
-                        dynamicStub().unblockUser(
+                        ru.taska.security.tenant.RpcContextBridge.outbound(() -> dynamicStub().unblockUser(
                                 adminUserManagementMapper.toUnblockUserGrpcRequest(userId, requestDto, context)
-                        )
+                        ))
                 )
                 .map(adminUserManagementMapper::toRestUserStatusResponse);
     }
@@ -237,9 +237,9 @@ public class GrpcAdminServiceClient {
 
         return request
                 .flatMap(requestDto ->
-                        dynamicStub().resetCredentialLockout(
+                        ru.taska.security.tenant.RpcContextBridge.outbound(() -> dynamicStub().resetCredentialLockout(
                                 adminUserManagementMapper.toResetCredentialLockoutRequest(userId, requestDto, context)
-                        )
+                        ))
                 )
                 .map(adminUserManagementMapper::toRestUserStatusResponse);
     }
@@ -288,8 +288,8 @@ public class GrpcAdminServiceClient {
                         .setBody(body)
                         .build();
 
-        return dynamicStub()
-                .retryOutboxEvent(request)
+        return ru.taska.security.tenant.RpcContextBridge.outbound(() -> dynamicStub()
+                .retryOutboxEvent(request))
                 .map(adminDataMapper::toRestRetryOutboxEventResponse);
     }
 

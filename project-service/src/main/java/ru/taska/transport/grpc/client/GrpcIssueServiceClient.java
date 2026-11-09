@@ -27,7 +27,7 @@ public class GrpcIssueServiceClient {
         var request = ru.taska.api.issue.v1.CountProjectIssuesBatchInternalRequest.newBuilder()
                 .setHeader(Header.newBuilder().setRequestId(requestId).setNodeId(nodeId))
                 .addProjectIds(projectId.toString()).setIssueTypeKey(code).setIncludeDeleted(false).build();
-        return dynamicStub().countProjectIssuesBatchInternal(request).flatMap(response -> {
+        return ru.taska.security.tenant.RpcContextBridge.outbound(() -> dynamicStub().countProjectIssuesBatchInternal(request)).flatMap(response -> {
             if (!response.getFiltersApplied()) {
                 return Mono.error(new ru.taska.exception.DomainException(ru.taska.exception.DomainStatus.UNAVAILABLE,
                         "Issue service must be upgraded before deleting issue types"));
@@ -47,7 +47,7 @@ public class GrpcIssueServiceClient {
             String requestId,
             String nodeId
     ) {
-        return dynamicStub().listProjectLabels(
+        return ru.taska.security.tenant.RpcContextBridge.outbound(() -> dynamicStub().listProjectLabels(
                 ListProjectLabelsRequest.newBuilder()
                         .setHeader(Header.newBuilder()
                                 .setRequestId(requestId)
@@ -58,7 +58,7 @@ public class GrpcIssueServiceClient {
                                 .setActorUserId(actorUserId.toString())
                                 .build())
                         .build()
-        ).map(this::toProjectLabelDtoList);
+        )).map(this::toProjectLabelDtoList);
     }
 
     private List<ProjectLabelDto> toProjectLabelDtoList(ListProjectLabelsResponse response) {

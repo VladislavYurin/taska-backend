@@ -34,7 +34,7 @@ public class GrpcWorkFlowServiceClient {
             String requestId,
             String nodeId
     ) {
-        return dynamicStub().getWorkflowForProject(
+        return ru.taska.security.tenant.RpcContextBridge.outbound(() -> dynamicStub().getWorkflowForProject(
                 GetWorkflowForProjectRequest.newBuilder()
                         .setHeader(Header.newBuilder()
                                 .setRequestId(requestId)
@@ -47,7 +47,7 @@ public class GrpcWorkFlowServiceClient {
                                 .setActorUserId(actorUserId.toString())
                                 .build())
                         .build()
-        ).map(proto -> workflowProtoMapper.toProjectWorkflowDto(issueType, proto));
+        )).map(proto -> workflowProtoMapper.toProjectWorkflowDto(issueType, proto));
     }
 
     private IssueType toGrpcIssueType(String issueType) {

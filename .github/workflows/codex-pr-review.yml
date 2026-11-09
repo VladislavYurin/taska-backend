@@ -93,7 +93,7 @@ jobs:
         env:
           DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
           DEEPSEEK_MODEL: ${{ vars.DEEPSEEK_MODEL || 'deepseek-chat' }}
-          DEEPSEEK_MAX_DIFF_LINES: ${{ vars.DEEPSEEK_MAX_DIFF_LINES || '6000' }}
+          DEEPSEEK_MAX_DIFF_LINES: ${{ vars.DEEPSEEK_MAX_DIFF_LINES || '12000' }}
           PR_BASE_REF: ${{ github.event.pull_request.base.ref }}
           PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}

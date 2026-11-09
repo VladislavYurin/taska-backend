@@ -62,8 +62,8 @@ public class IssueTypeMoveService {
             :receipts.insert(intent,"CANCELLED",0))));
   }
   private Mono<IssueTypeDeletionIntent> intent(UUID project,UUID operation) {
-    return ReactorIssueTypeDeletionJournalGrpc.newReactorStub(projectStub.getChannel()).withDeadlineAfter(5,TimeUnit.SECONDS)
-        .getIntent(client.IssueTypeDeletionClients.key(project,operation)).flatMap(intent->{
+    return ru.taska.security.tenant.RpcContextBridge.outbound(() -> ReactorIssueTypeDeletionJournalGrpc.newReactorStub(projectStub.getChannel()).withDeadlineAfter(5,TimeUnit.SECONDS)
+        .getIntent(client.IssueTypeDeletionClients.key(project,operation))).flatMap(intent->{
           if(!intent.getProjectId().equals(project.toString())||!intent.getOperationId().equals(operation.toString()))
             return Mono.error(new DomainException(DomainStatus.UNAVAILABLE,"Deletion journal identity mismatch"));
           return Mono.just(intent);
@@ -97,8 +97,8 @@ public class IssueTypeMoveService {
         :receipts.insert(intent,"APPLIED",0));
   }
   private Mono<IssueTypeMoveOutcome> move(IssueTypeDeletionIntent intent,UUID project,UUID actor) {
-    return ReactorIssueTypeWorkflowReservationGrpc.newReactorStub(workflowStub.getChannel()).withDeadlineAfter(5,TimeUnit.SECONDS)
-        .get(client.IssueTypeDeletionClients.key(project,UUID.fromString(intent.getOperationId())))
+    return ru.taska.security.tenant.RpcContextBridge.outbound(() -> ReactorIssueTypeWorkflowReservationGrpc.newReactorStub(workflowStub.getChannel()).withDeadlineAfter(5,TimeUnit.SECONDS)
+        .get(client.IssueTypeDeletionClients.key(project,UUID.fromString(intent.getOperationId()))))
         .flatMap(snapshot->{
           if(!snapshot.getProjectId().equals(intent.getProjectId())||!snapshot.getOperationId().equals(intent.getOperationId())
               ||snapshot.getValidStatusKeysList().isEmpty())return Mono.error(new DomainException(DomainStatus.UNAVAILABLE,"Workflow reservation mismatch"));

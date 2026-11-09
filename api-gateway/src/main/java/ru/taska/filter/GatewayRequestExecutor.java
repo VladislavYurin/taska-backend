@@ -45,7 +45,10 @@ public class GatewayRequestExecutor {
 
             log.info("[{}] Executing request, secured={}", requestId, secured);
 
-            return contextFactory.buildContext(requestId, exchange, secured).flatMap(action);
+            return contextFactory.buildContext(requestId, exchange, secured).flatMap(context -> {
+                Mono<RES> work=Mono.defer(()->action.apply(context));
+                return context.verified()==null?work:ru.taska.security.tenant.RpcContextBridge.install(work,context.verified());
+            });
         });
     }
 }

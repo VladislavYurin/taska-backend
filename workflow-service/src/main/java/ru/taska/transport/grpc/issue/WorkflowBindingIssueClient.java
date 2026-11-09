@@ -14,10 +14,10 @@ import ru.taska.transport.grpc.project.WorkflowProjectOperationClient;
 @RequiredArgsConstructor
 public class WorkflowBindingIssueClient {
     private final ReactorIssueServiceGrpc.ReactorIssueServiceStub issues;
-    public Mono<TypeOperationOutcome> apply(UUID project, UUID operation) { return stub().apply(WorkflowProjectOperationClient.key(project,operation)); }
-    public Mono<TypeOperationOutcome> cancel(UUID project, UUID operation) { return stub().cancel(WorkflowProjectOperationClient.key(project,operation)); }
+    public Mono<TypeOperationOutcome> apply(UUID project, UUID operation) { return ru.taska.security.tenant.RpcContextBridge.outbound(() -> stub().apply(WorkflowProjectOperationClient.key(project,operation))); }
+    public Mono<TypeOperationOutcome> cancel(UUID project, UUID operation) { return ru.taska.security.tenant.RpcContextBridge.outbound(() -> stub().cancel(WorkflowProjectOperationClient.key(project,operation))); }
     public Mono<Void> release(UUID project, UUID operation) {
-        return stub().release(WorkflowProjectOperationClient.key(project,operation)).flatMap(result -> {
+        return ru.taska.security.tenant.RpcContextBridge.outbound(() -> stub().release(WorkflowProjectOperationClient.key(project,operation))).flatMap(result -> {
             if (result.getState()==ru.taska.api.registry.v1.TypeOperationState.TYPE_OPERATION_STATE_APPLIED
                     || result.getState()==ru.taska.api.registry.v1.TypeOperationState.TYPE_OPERATION_STATE_CANCELLED)
                 return Mono.<Void>empty();

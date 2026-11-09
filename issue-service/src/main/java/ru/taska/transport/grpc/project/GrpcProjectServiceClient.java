@@ -45,10 +45,10 @@ public class GrpcProjectServiceClient {
 
     public Mono<List<ru.taska.api.project.v1.ProjectIssueTypeResponse>> listIssueTypeDetails(
             String requestId,String nodeId,UUID projectId,UUID actor) {
-        return projectServiceStub.withDeadlineAfter(5,java.util.concurrent.TimeUnit.SECONDS)
+        return ru.taska.security.tenant.RpcContextBridge.outbound(() -> projectServiceStub.withDeadlineAfter(5,java.util.concurrent.TimeUnit.SECONDS)
                 .listProjectIssueTypes(ru.taska.api.project.v1.ProjectIssueTypesRequest.newBuilder()
                         .setHeader(Header.newBuilder().setRequestId(requestId).setNodeId(nodeId))
-                        .setProjectId(projectId.toString()).setActorUserId(actor.toString()).build())
+                        .setProjectId(projectId.toString()).setActorUserId(actor.toString()).build()))
                 .map(ru.taska.api.project.v1.ListProjectIssueTypesResponse::getItemsList);
     }
 
@@ -82,7 +82,7 @@ public class GrpcProjectServiceClient {
                 )
                 .build();
 
-        return projectServiceStub.checkProjectMemberRole(request);
+        return ru.taska.security.tenant.RpcContextBridge.outbound(() -> projectServiceStub.checkProjectMemberRole(request));
     }
 
     public Mono<String> getProjectKeyInternal(String requestId, String nodeId, UUID projectId) {
@@ -103,7 +103,7 @@ public class GrpcProjectServiceClient {
         log.info("[{}][{}] Calling getProjectKeyInternal for projectId: {}",
                 requestId, nodeId, projectId);
 
-        return projectServiceStub.getProjectKeyInternal(request)
+        return ru.taska.security.tenant.RpcContextBridge.outbound(() -> projectServiceStub.getProjectKeyInternal(request))
                 .map(ProjectKeyResponse::getProjectKey);
     }
 
@@ -124,7 +124,7 @@ public class GrpcProjectServiceClient {
                 )
                 .build();
 
-        return projectServiceStub.listMyProjects(request)
+        return ru.taska.security.tenant.RpcContextBridge.outbound(() -> projectServiceStub.listMyProjects(request))
                 .map(ListMyProjectsResponse::getProjectResponseList)
                 .doOnSuccess(projects -> log.info("[{}][{}] listMyProjects: found {} projects",
                         requestId, nodeId, projects.size()))
@@ -158,7 +158,7 @@ public class GrpcProjectServiceClient {
                 )
                 .build();
 
-        return projectServiceStub.getProjectInfoBatchInternal(request)
+        return ru.taska.security.tenant.RpcContextBridge.outbound(() -> projectServiceStub.getProjectInfoBatchInternal(request))
                 .map(GetProjectInfoBatchInternalResponse::getProjectsMap)
                 .map(projectClientMapper::toDomainMap)
                 .doOnSuccess(projectsMap -> log.info("[{}][{}] getProjectInfoBatchInternal: found {} projects for {} requested ids",

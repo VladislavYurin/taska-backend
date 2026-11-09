@@ -15,9 +15,29 @@ import ru.taska.api.issue.v1.ReactorIssueServiceGrpc;
 import ru.taska.api.project.v1.ReactorProjectServiceGrpc;
 import ru.taska.config.props.GrpcClientProperties;
 
+@org.springframework.context.annotation.Import(ru.taska.security.tenant.TrustedRpcTlsConfiguration.class)
 @Configuration
 @RequiredArgsConstructor
 public class GrpcClientConfig {
+    @org.springframework.beans.factory.annotation.Autowired
+    private org.springframework.beans.factory.ObjectProvider<ru.taska.security.tenant.TrustedRpcChannels> trustedChannels;
+    @org.springframework.beans.factory.annotation.Autowired
+    private org.springframework.beans.factory.ObjectProvider<ru.taska.security.tenant.RpcContextSecurity> rpcSecurity;
+    @org.springframework.beans.factory.annotation.Value("${taska.rpc.context.enabled:false}")
+    private boolean trustedEnabled;
+    private io.grpc.ManagedChannel trustedChannel(String host,int port,String audience) {
+      if(!trustedEnabled)return io.grpc.ManagedChannelBuilder.forAddress(host,port).usePlaintext().build();
+      var factory=trustedChannels.getIfAvailable();var security=rpcSecurity.getIfAvailable();
+      if(factory==null || security==null)throw new IllegalStateException("Trusted RPC channel/security must be provisioned");
+      var raw=factory.create(host,port,audience);
+      return new ru.taska.security.tenant.InterceptedManagedChannel(raw,new ru.taska.security.tenant.LegacyRpcClientInterceptor(security));
+    }
+
+
+
+    @Bean
+    @org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(name="taska.rpc.context.enabled",havingValue="true")
+    public ru.taska.api.b2b.v1.ReactorGatewayCredentialServiceGrpc.ReactorGatewayCredentialServiceStub gatewayCredentialStub(@org.springframework.beans.factory.annotation.Qualifier("authManagedChannel") ManagedChannel channel){return ru.taska.api.b2b.v1.ReactorGatewayCredentialServiceGrpc.newReactorStub(channel);}
 
     @Bean
     public ru.taska.api.oauth.v1.ReactorOAuthServiceGrpc.ReactorOAuthServiceStub oauthServiceStub() {
@@ -29,68 +49,32 @@ public class GrpcClientConfig {
 
     @Bean
     public ManagedChannel authManagedChannel() {
-        return ManagedChannelBuilder
-                .forAddress(
-                        properties.authService().host(),
-                        properties.authService().port()
-                )
-                .usePlaintext()
-                .build();
+        return trustedChannel(properties.authService().host(),properties.authService().port(),"auth-service");
     }
 
     @Bean
     public ManagedChannel notificationManagedChannel() {
-        return ManagedChannelBuilder
-                .forAddress(
-                        properties.notificationService().host(),
-                        properties.notificationService().port()
-                )
-                .usePlaintext()
-                .build();
+        return trustedChannel(properties.notificationService().host(),properties.notificationService().port(),"notification-service");
     }
 
     @Bean
     public ManagedChannel workflowManagedChannel() {
-        return ManagedChannelBuilder
-                .forAddress(
-                        properties.workflowService().host(),
-                        properties.workflowService().port()
-                )
-                .usePlaintext()
-                .build();
+        return trustedChannel(properties.workflowService().host(),properties.workflowService().port(),"workflow-service");
     }
 
     @Bean
     public ManagedChannel issueManagedChannel() {
-        return ManagedChannelBuilder
-                .forAddress(
-                        properties.issueService().host(),
-                        properties.issueService().port()
-                )
-                .usePlaintext()
-                .build();
+        return trustedChannel(properties.issueService().host(),properties.issueService().port(),"issue-service");
     }
 
     @Bean
     public ManagedChannel projectManagedChannel() {
-        return ManagedChannelBuilder
-                .forAddress(
-                        properties.projectService().host(),
-                        properties.projectService().port()
-                )
-                .usePlaintext()
-                .build();
+        return trustedChannel(properties.projectService().host(),properties.projectService().port(),"project-service");
     }
 
     @Bean
     public ManagedChannel adminManagedChannel() {
-        return ManagedChannelBuilder
-                .forAddress(
-                        properties.adminService().host(),
-                        properties.adminService().port()
-                )
-                .usePlaintext()
-                .build();
+        return trustedChannel(properties.adminService().host(),properties.adminService().port(),"admin-service");
     }
 
     @Bean

@@ -52,6 +52,9 @@ public class PersonalAccessTokenGrpcService extends ReactorPersonalAccessTokenSe
     }
 
     private Mono<UUID> owner(Header header, String session) {
+        return ru.taska.security.gateway.VerifiedWebSessionActor.owner(()->legacyOwner(header,session));
+    }
+    private Mono<UUID> legacyOwner(Header header, String session) {
         return Mono.zip(GrpcRequestValidators.requireNonBlankOrInvalidArgument(header.getRequestId(), "header.requestId"),
                         GrpcRequestValidators.requireNonBlankOrInvalidArgument(header.getNodeId(), "header.nodeId"))
                 .then(Mono.defer(() -> auth.validateAccessToken(session)))

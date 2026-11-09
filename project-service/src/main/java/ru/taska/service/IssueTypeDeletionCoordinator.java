@@ -25,6 +25,7 @@ import ru.taska.repository.IssueTypeDeletionRepository;
 
 /** Recoverable forward saga: after the issue receipt commits there is no compensating data loss. */
 @Service
+@org.springframework.transaction.annotation.Transactional(propagation=org.springframework.transaction.annotation.Propagation.NOT_SUPPORTED)
 @RequiredArgsConstructor
 @Slf4j
 public class IssueTypeDeletionCoordinator {
@@ -46,9 +47,9 @@ public class IssueTypeDeletionCoordinator {
     return switch(item.state()) {
       case "COMPLETED" -> release(item).onErrorMap(error->IssueTypeDeletionTransactions.pendingError(item.id()));
       case "CANCELLED" -> release(item).then(Mono.error(rejection(item)));
-      case "CANCELLING" -> migration().cancel(client.IssueTypeDeletionClients.key(item.projectId(),item.id()))
+      case "CANCELLING" -> ru.taska.security.tenant.RpcContextBridge.outbound(() -> migration().cancel(client.IssueTypeDeletionClients.key(item.projectId(),item.id())))
           .onErrorMap(error->IssueTypeDeletionTransactions.pendingError(item.id())).flatMap(result->finish(item,result));
-      case "PENDING" -> reserve(item).then(migration().apply(client.IssueTypeDeletionClients.key(item.projectId(),item.id())))
+      case "PENDING" -> reserve(item).then(ru.taska.security.tenant.RpcContextBridge.outbound(() -> migration().apply(client.IssueTypeDeletionClients.key(item.projectId(),item.id()))))
           .onErrorResume(error->{
             DomainException rejection=domain(error);
             if(REJECTED.contains(rejection.getStatus()))return transactions.requestCancellation(item,rejection)
@@ -72,11 +73,11 @@ public class IssueTypeDeletionCoordinator {
     return Mono.error(IssueTypeDeletionTransactions.pendingError(item.id()));
   }
   private Mono<Void> reserve(IssueTypeDeletion item) {
-    return item.target()==null?Mono.empty():reservation().reserve(client.IssueTypeDeletionClients.key(item.projectId(),item.id())).then();
+    return item.target()==null?Mono.empty():ru.taska.security.tenant.RpcContextBridge.outbound(() -> reservation().reserve(client.IssueTypeDeletionClients.key(item.projectId(),item.id()))).then();
   }
   private Mono<Void> release(IssueTypeDeletion item) {
     if(item.reservationReleased())return Mono.empty();
-    Mono<Void> release=item.target()==null?Mono.empty():reservation().release(client.IssueTypeDeletionClients.key(item.projectId(),item.id())).then();
+    Mono<Void> release=item.target()==null?Mono.empty():ru.taska.security.tenant.RpcContextBridge.outbound(() -> reservation().release(client.IssueTypeDeletionClients.key(item.projectId(),item.id()))).then();
     return release.then(journal.released(item));
   }
   private ReactorIssueTypeIssueMigrationGrpc.ReactorIssueTypeIssueMigrationStub migration() {

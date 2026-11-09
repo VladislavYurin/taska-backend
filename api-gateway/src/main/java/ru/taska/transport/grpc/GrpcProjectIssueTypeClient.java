@@ -22,9 +22,9 @@ public class GrpcProjectIssueTypeClient {
     private final GrpcClientProperties properties;
 
     public Mono<ListProjectIssueTypesDto> list(UUID project, GatewayContext context) {
-        return dynamicStub().listProjectIssueTypes(ProjectIssueTypesRequest.newBuilder()
+        return ru.taska.security.tenant.RpcContextBridge.outbound(() -> dynamicStub().listProjectIssueTypes(ProjectIssueTypesRequest.newBuilder()
                         .setHeader(header(context)).setProjectId(project.toString())
-                        .setActorUserId(context.userContext().userId()).build())
+                        .setActorUserId(context.userContext().userId()).build()))
                 .map(response -> new ListProjectIssueTypesDto(response.getItemsList().stream().map(GrpcProjectIssueTypeClient::toRest).toList()));
     }
 
@@ -36,7 +36,7 @@ public class GrpcProjectIssueTypeClient {
         if (body.getIcon() != null) request.setIcon(body.getIcon().getValue());
         if (body.getSortOrder() != null) request.setSortOrder(body.getSortOrder());
         if (body.getWorkflowId() != null) request.setWorkflowId(body.getWorkflowId().toString());
-        return stub.withDeadlineAfter(120, TimeUnit.SECONDS).createProjectIssueTypeWithWorkflow(request.build())
+        return ru.taska.security.tenant.RpcContextBridge.outbound(() -> stub.withDeadlineAfter(120, TimeUnit.SECONDS).createProjectIssueTypeWithWorkflow(request.build()))
                 .flatMap(result -> {
                     if (!result.hasIssueType()) return Mono.error(GrpcBindingRejection.from(
                             result.getRejectionStatus(), result.getRejectionMessage(), result.getRejectionDetailsMap()));
@@ -61,13 +61,13 @@ public class GrpcProjectIssueTypeClient {
             else request.setIcon(body.getIcon().value());
         }
         if (body.getSortOrder() != null) request.setSortOrder(body.getSortOrder());
-        return dynamicStub().updateProjectIssueType(request.build()).map(GrpcProjectIssueTypeClient::toRest);
+        return ru.taska.security.tenant.RpcContextBridge.outbound(() -> dynamicStub().updateProjectIssueType(request.build())).map(GrpcProjectIssueTypeClient::toRest);
     }
 
     public Mono<ListProjectIssueTypesDto> reorder(UUID project, ReorderProjectIssueTypesRequestDto body, GatewayContext context) {
-        return dynamicStub().reorderProjectIssueTypes(ru.taska.api.project.v1.ReorderProjectIssueTypesRequest.newBuilder()
+        return ru.taska.security.tenant.RpcContextBridge.outbound(() -> dynamicStub().reorderProjectIssueTypes(ru.taska.api.project.v1.ReorderProjectIssueTypesRequest.newBuilder()
                         .setHeader(header(context)).setProjectId(project.toString()).setActorUserId(context.userContext().userId())
-                        .addAllCodes(body.getCodes()).build())
+                        .addAllCodes(body.getCodes()).build()))
                 .map(response -> new ListProjectIssueTypesDto(response.getItemsList().stream().map(GrpcProjectIssueTypeClient::toRest).toList()));
     }
 
@@ -88,9 +88,9 @@ public class GrpcProjectIssueTypeClient {
         }
         if (body != null && body.getExpectedGeneration() != null)
             request.setExpectedGeneration(body.getExpectedGeneration().toString());
-        if (!moving) return stub.withDeadlineAfter(120, TimeUnit.SECONDS).deleteProjectIssueType(request.build()).then();
-        return stub.withDeadlineAfter(120, TimeUnit.SECONDS)
-                .deleteProjectIssueTypeWithMigration(request.build())
+        if (!moving) return ru.taska.security.tenant.RpcContextBridge.outbound(() -> stub.withDeadlineAfter(120, TimeUnit.SECONDS).deleteProjectIssueType(request.build())).then();
+        return ru.taska.security.tenant.RpcContextBridge.outbound(() -> stub.withDeadlineAfter(120, TimeUnit.SECONDS)
+                .deleteProjectIssueTypeWithMigration(request.build()))
                 .flatMap(result -> {
                     if (result.getCompleted()) return Mono.empty();
                     ru.taska.exception.DomainStatus status;

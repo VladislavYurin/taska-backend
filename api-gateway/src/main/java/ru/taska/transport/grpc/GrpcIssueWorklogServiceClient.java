@@ -43,7 +43,7 @@ public class GrpcIssueWorklogServiceClient {
 
         return request
                 .map(requestDto -> issueWorklogMapper.toAddIssueWorklogGrpcRequest(issueId, requestDto, context))
-                .flatMap(grpcRequest -> dynamicStub().addIssueWorklog(grpcRequest))
+                .flatMap(grpcRequest -> ru.taska.security.tenant.RpcContextBridge.outbound(() -> dynamicStub().addIssueWorklog(grpcRequest)))
                 .map(AddIssueWorklogResponse::getWorklog)
                 .map(issueWorklogMapper::toRestIssueWorklog);
     }
@@ -61,7 +61,7 @@ public class GrpcIssueWorklogServiceClient {
         DeleteIssueWorklogRequest grpcRequest = issueWorklogMapper
                 .toDeleteIssueWorklogGrpcRequest(issueId, worklogId, context);
 
-        return dynamicStub().deleteIssueWorklog(grpcRequest)
+        return ru.taska.security.tenant.RpcContextBridge.outbound(() -> dynamicStub().deleteIssueWorklog(grpcRequest))
                 .then();
     }
 
@@ -79,7 +79,7 @@ public class GrpcIssueWorklogServiceClient {
         ListIssueWorklogsRequest grpcRequest = issueWorklogMapper
                 .toListIssueWorklogsGrpcRequest(issueId, page, pageSize, context);
 
-        return dynamicStub().listIssueWorklogs(grpcRequest)
+        return ru.taska.security.tenant.RpcContextBridge.outbound(() -> dynamicStub().listIssueWorklogs(grpcRequest))
                 .map(issueWorklogMapper::toRestListIssueWorklogs);
     }
 
@@ -96,7 +96,7 @@ public class GrpcIssueWorklogServiceClient {
 
         return request
                 .map(requestDto -> issueWorklogMapper.toUpdateIssueWorklogGrpcRequest(issueId, worklogId, requestDto, context))
-                .flatMap(grpcRequest -> dynamicStub().updateIssueWorklog(grpcRequest))
+                .flatMap(grpcRequest -> ru.taska.security.tenant.RpcContextBridge.outbound(() -> dynamicStub().updateIssueWorklog(grpcRequest)))
                 .map(UpdateIssueWorklogResponse::getWorklog)
                 .map(issueWorklogMapper::toRestIssueWorklog);
     }

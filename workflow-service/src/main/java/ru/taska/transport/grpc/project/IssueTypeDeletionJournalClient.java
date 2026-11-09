@@ -17,7 +17,7 @@ public class IssueTypeDeletionJournalClient {
     }
 
     public Mono<IssueTypeDeletionIntent> get(UUID project, UUID operation) {
-        return stub.withDeadlineAfter(5, TimeUnit.SECONDS)
-                .getIntent(client.IssueTypeDeletionClients.key(project, operation));
+        return ru.taska.security.tenant.RpcContextBridge.outbound(() -> stub.withDeadlineAfter(5, TimeUnit.SECONDS)
+                .getIntent(client.IssueTypeDeletionClients.key(project, operation)));
     }
 }

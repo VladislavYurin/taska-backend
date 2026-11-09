@@ -70,7 +70,7 @@ public class GrpcWorkflowServiceClient {
         GetWorkflowForProjectRequest grpcRequest = workflowMapper
                 .toGetWorkflowGrpcRequest(projectId, issueTypeDto, context);
 
-        return dynamicStub().getWorkflowForProject(grpcRequest)
+        return ru.taska.security.tenant.RpcContextBridge.outbound(() -> dynamicStub().getWorkflowForProject(grpcRequest))
                 .map(workflowMapper::toWorkflowResponseRestDto);
     }
 
@@ -84,7 +84,7 @@ public class GrpcWorkflowServiceClient {
     public Mono<ProjectWorkflowsResponseDto> listProjectWorkflows(UUID projectId, GatewayContext context) {
         log.info("[{}] Calling listProjectWorkflows for project: {}", context.requestId(), projectId);
 
-        return dynamicStub().listProjectWorkflows(workflowMapper.toListProjectWorkflowsGrpcRequest(projectId, context))
+        return ru.taska.security.tenant.RpcContextBridge.outbound(() -> dynamicStub().listProjectWorkflows(workflowMapper.toListProjectWorkflowsGrpcRequest(projectId, context)))
                 .map(workflowMapper::toProjectWorkflowsResponseRestDto);
     }
 
@@ -104,8 +104,8 @@ public class GrpcWorkflowServiceClient {
         log.info("[{}] Calling createWorkflow for project: {}", context.requestId(), projectId);
 
         return request
-                .flatMap(dto -> workflowServiceStub.withDeadlineAfter(120, TimeUnit.SECONDS)
-                        .createProjectWorkflowWithBindings(workflowMapper.toCreateWorkflowGrpcRequest(projectId, dto, context)))
+                .flatMap(dto -> ru.taska.security.tenant.RpcContextBridge.outbound(() -> workflowServiceStub.withDeadlineAfter(120, TimeUnit.SECONDS)
+                        .createProjectWorkflowWithBindings(workflowMapper.toCreateWorkflowGrpcRequest(projectId, dto, context))))
                 .flatMap(result -> result.hasResult() ? Mono.just(workflowMapper.toProjectWorkflowDto(result.getResult()))
                         : Mono.error(GrpcBindingRejection.from(result.getRejectionStatus(),
                                 result.getRejectionMessage(), result.getRejectionDetailsMap())));
@@ -129,8 +129,8 @@ public class GrpcWorkflowServiceClient {
         log.info("[{}] Calling addWorkflowStatus for project: {}, workflow: {}", context.requestId(), projectId, workflowId);
 
         return request
-                .flatMap(dto -> dynamicStub().addWorkflowStatus(
-                        workflowMapper.toAddWorkflowStatusGrpcRequest(projectId, workflowId, dto, context)))
+                .flatMap(dto -> ru.taska.security.tenant.RpcContextBridge.outbound(() -> dynamicStub().addWorkflowStatus(
+                        workflowMapper.toAddWorkflowStatusGrpcRequest(projectId, workflowId, dto, context))))
                 .map(workflowMapper::toMutationResponseRestDto);
     }
 
@@ -152,8 +152,8 @@ public class GrpcWorkflowServiceClient {
         log.info("[{}] Calling addWorkflowTransition for project: {}, workflow: {}", context.requestId(), projectId, workflowId);
 
         return request
-                .flatMap(dto -> dynamicStub().addWorkflowTransition(
-                        workflowMapper.toAddWorkflowTransitionGrpcRequest(projectId, workflowId, dto, context)))
+                .flatMap(dto -> ru.taska.security.tenant.RpcContextBridge.outbound(() -> dynamicStub().addWorkflowTransition(
+                        workflowMapper.toAddWorkflowTransitionGrpcRequest(projectId, workflowId, dto, context))))
                 .map(workflowMapper::toMutationResponseRestDto);
     }
 }

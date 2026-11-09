@@ -24,10 +24,22 @@ public class NotificationInboxServiceImpl implements NotificationInboxService {
     private static final int MAX_PAGE_SIZE = 100;
 
     private final NotificationRepository notificationRepository;
+    @org.springframework.beans.factory.annotation.Value("${taska.rpc.context.enabled:false}")
+    private boolean trustedEnabled;
+    private <T> Mono<T> scoped(UUID user,java.util.function.Function<UUID,Mono<T>> work){
+      return ru.taska.security.tenant.VerifiedTenantContext.current().flatMap(context->{
+        if(context.tenantId()==null || !user.toString().equals(context.actorId()))return Mono.error(new DomainException(DomainStatus.PERMISSION_DENIED,"Access denied"));
+        return work.apply(UUID.fromString(context.tenantId()));
+      });
+    }
 
     @Override
     @Transactional(readOnly = true)
     public Mono<NotificationListResult> listNotifications(UUID userId, boolean unreadOnly, int pageSize, long offset) {
+        if(trustedEnabled)return scoped(userId,tenant->Mono.zip(
+            notificationRepository.findScoped(tenant,userId,unreadOnly,normalizePageSize(pageSize),Math.max(offset,0)).collectList(),
+            notificationRepository.countByTenantIdAndUserIdAndReadAtIsNull(tenant,userId))
+              .map(t->new NotificationListResult(t.getT1(),t.getT2())));
         int normalizedPageSize = normalizePageSize(pageSize);
         long normalizedOffset = Math.max(offset, 0);
 
@@ -44,6 +56,9 @@ public class NotificationInboxServiceImpl implements NotificationInboxService {
     @Override
     @Transactional
     public Mono<Notification> markAsRead(UUID notificationId, UUID userId) {
+        if(trustedEnabled)return scoped(userId,tenant->notificationRepository.markScoped(tenant,notificationId,userId,Instant.now())
+          .switchIfEmpty(notificationRepository.findByIdAndTenantIdAndUserId(notificationId,tenant,userId))
+          .switchIfEmpty(Mono.error(new DomainException(DomainStatus.NOT_FOUND,"Notification not found"))));
         return notificationRepository.markAsRead(notificationId, userId, Instant.now())
                 .doOnNext(ignore ->
                         log.info("Notification markAsRead successfully: id={}", notificationId)
@@ -65,6 +80,7 @@ public class NotificationInboxServiceImpl implements NotificationInboxService {
 
     @Override
     public Mono<Long> markAllAsRead(UUID userId) {
+        if(trustedEnabled)return scoped(userId,tenant->notificationRepository.markAllScoped(tenant,userId,Instant.now()));
         return notificationRepository.markAllAsRead(userId, Instant.now())
                 .doOnSuccess(markedCount ->
                         log.debug("Notifications markAllAsRead successfully: userId={}, markedCount={}", userId, markedCount)

@@ -15,18 +15,18 @@ public class GrpcNotificationSettingsClient {
     private final ReactorNotificationSettingsServiceGrpc.ReactorNotificationSettingsServiceStub stub;
     private final GrpcClientProperties properties;
 
-    public Mono<NotificationPreferencesResponse> get(GatewayContext c) { return client().getPreferences(user(c)); }
+    public Mono<NotificationPreferencesResponse> get(GatewayContext c) { return ru.taska.security.tenant.RpcContextBridge.outbound(() -> client().getPreferences(user(c))); }
     public Mono<NotificationPreferencesResponse> update(GatewayContext c, Boolean email, Boolean telegram) {
         var b=UpdateNotificationPreferencesRequest.newBuilder().setUser(user(c));
         if(email!=null) b.setEmailEnabled(email);
         if(telegram!=null) b.setTelegramEnabled(telegram);
-        return client().updatePreferences(b.build());
+        return ru.taska.security.tenant.RpcContextBridge.outbound(() -> client().updatePreferences(b.build()));
     }
-    public Mono<TelegramLinkResponse> link(GatewayContext c) { return client().createTelegramLink(user(c)); }
+    public Mono<TelegramLinkResponse> link(GatewayContext c) { return ru.taska.security.tenant.RpcContextBridge.outbound(() -> client().createTelegramLink(user(c))); }
     public Mono<NotificationPreferencesResponse> confirm(GatewayContext c, String id) {
-        return client().confirmTelegramLink(ConfirmTelegramLinkRequest.newBuilder().setUser(user(c)).setLinkId(id).build());
+        return ru.taska.security.tenant.RpcContextBridge.outbound(() -> client().confirmTelegramLink(ConfirmTelegramLinkRequest.newBuilder().setUser(user(c)).setLinkId(id).build()));
     }
-    public Mono<NotificationPreferencesResponse> disconnect(GatewayContext c) { return client().disconnectTelegram(user(c)); }
+    public Mono<NotificationPreferencesResponse> disconnect(GatewayContext c) { return ru.taska.security.tenant.RpcContextBridge.outbound(() -> client().disconnectTelegram(user(c))); }
     public Mono<Void> webhook(String secret,String json) {
         return client().processTelegramUpdate(TelegramUpdateRequest.newBuilder().setWebhookSecret(secret).setUpdateJson(json).build()).then();
     }

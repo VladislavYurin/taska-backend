@@ -29,8 +29,8 @@ public class WorkflowBindingPendingGuard {
                 """).bind("p",project).bind("codes",types.stream().map(IssueType::name).distinct().toList())
                 .map(row->Boolean.TRUE.equals(row.get("busy",Boolean.class))).one()
                 .flatMap(busy->busy?Mono.error(pending()):Mono.empty())
-                .then(Mono.defer(()->ReactorWorkflowBindingJournalGrpc.newReactorStub(workflowStub.getChannel())
-                        .withDeadlineAfter(5,TimeUnit.SECONDS).getPending(client.TypeOperationClients.project(project))))
+                .then(Mono.defer(()->ru.taska.security.tenant.RpcContextBridge.outbound(() -> ReactorWorkflowBindingJournalGrpc.newReactorStub(workflowStub.getChannel())
+                        .withDeadlineAfter(5,TimeUnit.SECONDS).getPending(client.TypeOperationClients.project(project)))))
                 .flatMap(intent->{
                     if(intent.getOperationId().isBlank())return Mono.empty();
                     if(!intent.getProjectId().equals(project.toString()))return Mono.error(new DomainException(DomainStatus.UNAVAILABLE,"Workflow journal identity mismatch"));

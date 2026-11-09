@@ -258,6 +258,7 @@ public final class RpcContextSecurity {
               || !original.getHeader().getRequestId().equals(r.getHeader().getRequestId())
               || !service.equals(c.getIssuerService()))
             throw Status.PERMISSION_DENIED.asRuntimeException();
+          RpcMessageClaims.validate(request,rpc,r);
           return authorize(r, rpc, policy)
               .map(
                   ignored -> {
@@ -343,6 +344,7 @@ public final class RpcContextSecurity {
           } catch (Exception e) {
             throw unauthenticated();
           }
+          RpcMessageClaims.validate(request,rpc,r);
           return authorize(r, rpc, policy)
               .flatMap(
                   v -> {

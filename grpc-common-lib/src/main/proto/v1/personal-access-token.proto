@@ -1,4 +1,5 @@
 syntax = "proto3";
+import "v1/tenant-context.proto";
 package ru.taska.auth.v1;
 import "v1/common.proto";
 import "google/protobuf/empty.proto";
@@ -22,6 +23,9 @@ message PersonalAccessTokenMetadata {
   google.protobuf.Timestamp last_used_at = 7;
 }
 message CreatePersonalAccessTokenRequest {
+  // TAS-316: untrusted until verified by the message-bound mTLS/JWS interceptor.
+  ru.taska.b2b.v1.RequestContext context = 100;
+
   ru.taska.common.v1.Header header = 1;
   // Ownership derives from this validated JWT session, never a caller-supplied user id.
   string session_access_token = 2;
@@ -34,6 +38,9 @@ message CreatePersonalAccessTokenResponse {
   string secret = 2;
 }
 message ListPersonalAccessTokensRequest {
+  // TAS-316: untrusted until verified by the message-bound mTLS/JWS interceptor.
+  ru.taska.b2b.v1.RequestContext context = 100;
+
   ru.taska.common.v1.Header header = 1;
   string session_access_token = 2;
 }
@@ -43,6 +50,9 @@ message ListPersonalAccessTokensResponse {
   int32 max_active_tokens = 3;
 }
 message RevokePersonalAccessTokenRequest {
+  // TAS-316: untrusted until verified by the message-bound mTLS/JWS interceptor.
+  ru.taska.b2b.v1.RequestContext context = 100;
+
   ru.taska.common.v1.Header header = 1;
   string session_access_token = 2;
   string token_id = 3;

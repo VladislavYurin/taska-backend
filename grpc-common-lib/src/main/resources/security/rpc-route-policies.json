@@ -1,0 +1,1184 @@
+{
+  "version": 1,
+  "routes": [
+    {
+      "rpc": "ru.taska.admin.v1.AdminService/BlockUser",
+      "audience": "admin-service",
+      "scope": "ADMIN_EXPLICIT_SCOPE",
+      "tenantRequired": false,
+      "mutation": true,
+      "action": "blockUser",
+      "requestClass": "ru.taska.api.admin.v1.BlockUserRequest"
+    },
+    {
+      "rpc": "ru.taska.admin.v1.AdminService/GetCatalog",
+      "audience": "admin-service",
+      "scope": "ADMIN_EXPLICIT_SCOPE",
+      "tenantRequired": false,
+      "mutation": false,
+      "action": "getCatalog",
+      "requestClass": "ru.taska.api.admin.v1.GetCatalogRequest"
+    },
+    {
+      "rpc": "ru.taska.admin.v1.AdminService/GetProblematicOutboxEventsSummary",
+      "audience": "admin-service",
+      "scope": "ADMIN_EXPLICIT_SCOPE",
+      "tenantRequired": false,
+      "mutation": false,
+      "action": "getProblematicOutboxEventsSummary",
+      "requestClass": "ru.taska.api.admin.v1.GetProblematicOutboxEventsSummaryRequest"
+    },
+    {
+      "rpc": "ru.taska.admin.v1.AdminService/GetTableRowById",
+      "audience": "admin-service",
+      "scope": "ADMIN_EXPLICIT_SCOPE",
+      "tenantRequired": false,
+      "mutation": false,
+      "action": "getTableRowById",
+      "requestClass": "ru.taska.api.admin.v1.GetTableRowByIdRequest"
+    },
+    {
+      "rpc": "ru.taska.admin.v1.AdminService/ListAuditEntries",
+      "audience": "admin-service",
+      "scope": "ADMIN_EXPLICIT_SCOPE",
+      "tenantRequired": false,
+      "mutation": false,
+      "action": "listAuditEntries",
+      "requestClass": "ru.taska.api.admin.v1.ListAuditEntriesRequest"
+    },
+    {
+      "rpc": "ru.taska.admin.v1.AdminService/ListTableRows",
+      "audience": "admin-service",
+      "scope": "ADMIN_EXPLICIT_SCOPE",
+      "tenantRequired": false,
+      "mutation": false,
+      "action": "listTableRows",
+      "requestClass": "ru.taska.api.admin.v1.ListTableRowsRequest"
+    },
+    {
+      "rpc": "ru.taska.admin.v1.AdminService/ResetCredentialLockout",
+      "audience": "admin-service",
+      "scope": "ADMIN_EXPLICIT_SCOPE",
+      "tenantRequired": false,
+      "mutation": true,
+      "action": "resetCredentialLockout",
+      "requestClass": "ru.taska.api.admin.v1.ResetCredentialLockoutRequest"
+    },
+    {
+      "rpc": "ru.taska.admin.v1.AdminService/RetryOutboxEvent",
+      "audience": "admin-service",
+      "scope": "ADMIN_EXPLICIT_SCOPE",
+      "tenantRequired": false,
+      "mutation": true,
+      "action": "retryOutboxEvent",
+      "requestClass": "ru.taska.api.admin.v1.RetryOutboxEventRequest"
+    },
+    {
+      "rpc": "ru.taska.admin.v1.AdminService/UnblockUser",
+      "audience": "admin-service",
+      "scope": "ADMIN_EXPLICIT_SCOPE",
+      "tenantRequired": false,
+      "mutation": true,
+      "action": "unblockUser",
+      "requestClass": "ru.taska.api.admin.v1.UnblockUserRequest"
+    },
+    {
+      "rpc": "ru.taska.admin.v1.AdminService/UpdateUserDisplayName",
+      "audience": "admin-service",
+      "scope": "ADMIN_EXPLICIT_SCOPE",
+      "tenantRequired": false,
+      "mutation": true,
+      "action": "updateUserDisplayName",
+      "requestClass": "ru.taska.api.admin.v1.UpdateUserDisplayNameRequest"
+    },
+    {
+      "rpc": "ru.taska.admin_invite_user.v1.AdminInviteUserService/InviteUser",
+      "audience": "auth-service",
+      "scope": "ADMIN_EXPLICIT_SCOPE",
+      "tenantRequired": false,
+      "mutation": true,
+      "action": "inviteUser",
+      "requestClass": "ru.taska.api.auth.admin.inviteuser.v1.InviteUserRequest"
+    },
+    {
+      "rpc": "ru.taska.admin_user_management.v1.AdminUserManagementService/BlockUser",
+      "audience": "auth-service",
+      "scope": "ADMIN_EXPLICIT_SCOPE",
+      "tenantRequired": false,
+      "mutation": true,
+      "action": "blockUser",
+      "requestClass": "ru.taska.api.auth.admin.management.v1.BlockUserRequest"
+    },
+    {
+      "rpc": "ru.taska.admin_user_management.v1.AdminUserManagementService/ResetCredentialLockout",
+      "audience": "auth-service",
+      "scope": "ADMIN_EXPLICIT_SCOPE",
+      "tenantRequired": false,
+      "mutation": true,
+      "action": "resetCredentialLockout",
+      "requestClass": "ru.taska.api.auth.admin.management.v1.ResetCredentialLockoutAuthRequest"
+    },
+    {
+      "rpc": "ru.taska.admin_user_management.v1.AdminUserManagementService/UnblockUser",
+      "audience": "auth-service",
+      "scope": "ADMIN_EXPLICIT_SCOPE",
+      "tenantRequired": false,
+      "mutation": true,
+      "action": "unblockUser",
+      "requestClass": "ru.taska.api.auth.admin.management.v1.UnblockUserRequest"
+    },
+    {
+      "rpc": "ru.taska.admin_user_management.v1.AdminUserManagementService/UpdateUserDisplayName",
+      "audience": "auth-service",
+      "scope": "ADMIN_EXPLICIT_SCOPE",
+      "tenantRequired": false,
+      "mutation": true,
+      "action": "updateUserDisplayName",
+      "requestClass": "ru.taska.api.auth.admin.management.v1.UpdateUserDisplayNameRequest"
+    },
+    {
+      "rpc": "ru.taska.auth.v1.PersonalAccessTokenService/CreatePersonalAccessToken",
+      "audience": "auth-service",
+      "scope": "GLOBAL_SELF_SESSION_FOR_MUTATION",
+      "tenantRequired": false,
+      "mutation": true,
+      "action": "createPersonalAccessToken",
+      "requestClass": "ru.taska.api.auth.v1.CreatePersonalAccessTokenRequest"
+    },
+    {
+      "rpc": "ru.taska.auth.v1.PersonalAccessTokenService/ListPersonalAccessTokens",
+      "audience": "auth-service",
+      "scope": "GLOBAL_SELF_SESSION_FOR_MUTATION",
+      "tenantRequired": false,
+      "mutation": false,
+      "action": "listPersonalAccessTokens",
+      "requestClass": "ru.taska.api.auth.v1.ListPersonalAccessTokensRequest"
+    },
+    {
+      "rpc": "ru.taska.auth.v1.PersonalAccessTokenService/RevokePersonalAccessToken",
+      "audience": "auth-service",
+      "scope": "GLOBAL_SELF_SESSION_FOR_MUTATION",
+      "tenantRequired": false,
+      "mutation": true,
+      "action": "revokePersonalAccessToken",
+      "requestClass": "ru.taska.api.auth.v1.RevokePersonalAccessTokenRequest"
+    },
+    {
+      "rpc": "ru.taska.directory.v1.UserDirectoryService/SearchUsers",
+      "audience": "auth-service",
+      "scope": "TENANT_DIRECTORY",
+      "tenantRequired": true,
+      "mutation": false,
+      "action": "searchUsers",
+      "requestClass": "ru.taska.api.directory.v1.SearchUsersRequest"
+    },
+    {
+      "rpc": "ru.taska.issue.attachment.v1.IssueAttachmentService/ConfirmAttachmentUpload",
+      "audience": "issue-service",
+      "scope": "TENANT_PROJECT_ACL_STORAGE",
+      "tenantRequired": true,
+      "mutation": true,
+      "action": "confirmAttachmentUpload",
+      "requestClass": "ru.taska.api.issue.attachment.v1.ConfirmAttachmentUploadRequest"
+    },
+    {
+      "rpc": "ru.taska.issue.attachment.v1.IssueAttachmentService/CreateAttachmentUploadUrl",
+      "audience": "issue-service",
+      "scope": "TENANT_PROJECT_ACL_STORAGE",
+      "tenantRequired": true,
+      "mutation": true,
+      "action": "createAttachmentUploadUrl",
+      "requestClass": "ru.taska.api.issue.attachment.v1.CreateAttachmentUploadUrlRequest"
+    },
+    {
+      "rpc": "ru.taska.issue.attachment.v1.IssueAttachmentService/DeleteAttachment",
+      "audience": "issue-service",
+      "scope": "TENANT_PROJECT_ACL_STORAGE",
+      "tenantRequired": true,
+      "mutation": true,
+      "action": "deleteAttachment",
+      "requestClass": "ru.taska.api.issue.attachment.v1.DeleteAttachmentRequest"
+    },
+    {
+      "rpc": "ru.taska.issue.attachment.v1.IssueAttachmentService/GetAttachmentDownloadUrl",
+      "audience": "issue-service",
+      "scope": "TENANT_PROJECT_ACL_STORAGE",
+      "tenantRequired": true,
+      "mutation": false,
+      "action": "getAttachmentDownloadUrl",
+      "requestClass": "ru.taska.api.issue.attachment.v1.GetAttachmentDownloadUrlRequest"
+    },
+    {
+      "rpc": "ru.taska.issue.attachment.v1.IssueAttachmentService/ListAttachments",
+      "audience": "issue-service",
+      "scope": "TENANT_PROJECT_ACL_STORAGE",
+      "tenantRequired": true,
+      "mutation": false,
+      "action": "listAttachments",
+      "requestClass": "ru.taska.api.issue.attachment.v1.ListAttachmentsRequest"
+    },
+    {
+      "rpc": "ru.taska.issue.v1.IssueService/AddIssueComment",
+      "audience": "issue-service",
+      "scope": "TENANT_RESOURCE_ACL_CAPABILITY",
+      "tenantRequired": true,
+      "mutation": true,
+      "action": "addIssueComment",
+      "requestClass": "ru.taska.api.issue.v1.AddIssueCommentRequest"
+    },
+    {
+      "rpc": "ru.taska.issue.v1.IssueService/AddIssueLabel",
+      "audience": "issue-service",
+      "scope": "TENANT_RESOURCE_ACL_CAPABILITY",
+      "tenantRequired": true,
+      "mutation": true,
+      "action": "addIssueLabel",
+      "requestClass": "ru.taska.api.issue.v1.AddIssueLabelRequest"
+    },
+    {
+      "rpc": "ru.taska.issue.v1.IssueService/AddIssueWorklog",
+      "audience": "issue-service",
+      "scope": "TENANT_RESOURCE_ACL_CAPABILITY",
+      "tenantRequired": true,
+      "mutation": true,
+      "action": "addIssueWorklog",
+      "requestClass": "ru.taska.api.issue.v1.AddIssueWorklogRequest"
+    },
+    {
+      "rpc": "ru.taska.issue.v1.IssueService/AssignIssue",
+      "audience": "issue-service",
+      "scope": "TENANT_RESOURCE_ACL_CAPABILITY",
+      "tenantRequired": true,
+      "mutation": true,
+      "action": "assignIssue",
+      "requestClass": "ru.taska.api.issue.v1.AssignIssueRequest"
+    },
+    {
+      "rpc": "ru.taska.issue.v1.IssueService/CountProjectIssuesBatchInternal",
+      "audience": "issue-service",
+      "scope": "TENANT_RESOURCE_ACL_CAPABILITY",
+      "tenantRequired": true,
+      "mutation": false,
+      "action": "countProjectIssuesBatchInternal",
+      "requestClass": "ru.taska.api.issue.v1.CountProjectIssuesBatchInternalRequest"
+    },
+    {
+      "rpc": "ru.taska.issue.v1.IssueService/CreateIssue",
+      "audience": "issue-service",
+      "scope": "TENANT_RESOURCE_ACL_CAPABILITY",
+      "tenantRequired": true,
+      "mutation": true,
+      "action": "createIssue",
+      "requestClass": "ru.taska.api.issue.v1.CreateIssueRequest"
+    },
+    {
+      "rpc": "ru.taska.issue.v1.IssueService/CreateIssueLink",
+      "audience": "issue-service",
+      "scope": "TENANT_RESOURCE_ACL_CAPABILITY",
+      "tenantRequired": true,
+      "mutation": true,
+      "action": "createIssueLink",
+      "requestClass": "ru.taska.api.issue.v1.CreateIssueLinkRequest"
+    },
+    {
+      "rpc": "ru.taska.issue.v1.IssueService/CreateProjectLabel",
+      "audience": "issue-service",
+      "scope": "TENANT_RESOURCE_ACL_CAPABILITY",
+      "tenantRequired": true,
+      "mutation": true,
+      "action": "createProjectLabel",
+      "requestClass": "ru.taska.api.issue.v1.CreateProjectLabelRequest"
+    },
+    {
+      "rpc": "ru.taska.issue.v1.IssueService/DeleteIssue",
+      "audience": "issue-service",
+      "scope": "TENANT_RESOURCE_ACL_CAPABILITY",
+      "tenantRequired": true,
+      "mutation": true,
+      "action": "deleteIssue",
+      "requestClass": "ru.taska.api.issue.v1.DeleteIssueRequest"
+    },
+    {
+      "rpc": "ru.taska.issue.v1.IssueService/DeleteIssueComment",
+      "audience": "issue-service",
+      "scope": "TENANT_RESOURCE_ACL_CAPABILITY",
+      "tenantRequired": true,
+      "mutation": true,
+      "action": "deleteIssueComment",
+      "requestClass": "ru.taska.api.issue.v1.DeleteIssueCommentRequest"
+    },
+    {
+      "rpc": "ru.taska.issue.v1.IssueService/DeleteIssueLink",
+      "audience": "issue-service",
+      "scope": "TENANT_RESOURCE_ACL_CAPABILITY",
+      "tenantRequired": true,
+      "mutation": true,
+      "action": "deleteIssueLink",
+      "requestClass": "ru.taska.api.issue.v1.DeleteIssueLinkRequest"
+    },
+    {
+      "rpc": "ru.taska.issue.v1.IssueService/DeleteIssueWorklog",
+      "audience": "issue-service",
+      "scope": "TENANT_RESOURCE_ACL_CAPABILITY",
+      "tenantRequired": true,
+      "mutation": true,
+      "action": "deleteIssueWorklog",
+      "requestClass": "ru.taska.api.issue.v1.DeleteIssueWorklogRequest"
+    },
+    {
+      "rpc": "ru.taska.issue.v1.IssueService/DeleteProjectLabel",
+      "audience": "issue-service",
+      "scope": "TENANT_RESOURCE_ACL_CAPABILITY",
+      "tenantRequired": true,
+      "mutation": true,
+      "action": "deleteProjectLabel",
+      "requestClass": "ru.taska.api.issue.v1.DeleteProjectLabelRequest"
+    },
+    {
+      "rpc": "ru.taska.issue.v1.IssueService/GetIssue",
+      "audience": "issue-service",
+      "scope": "TENANT_RESOURCE_ACL_CAPABILITY",
+      "tenantRequired": true,
+      "mutation": false,
+      "action": "getIssue",
+      "requestClass": "ru.taska.api.issue.v1.GetIssueRequest"
+    },
+    {
+      "rpc": "ru.taska.issue.v1.IssueService/GetIssueByKey",
+      "audience": "issue-service",
+      "scope": "TENANT_RESOURCE_ACL_CAPABILITY",
+      "tenantRequired": true,
+      "mutation": false,
+      "action": "getIssueByKey",
+      "requestClass": "ru.taska.api.issue.v1.GetIssueByKeyRequest"
+    },
+    {
+      "rpc": "ru.taska.issue.v1.IssueService/GetIssueDetails",
+      "audience": "issue-service",
+      "scope": "TENANT_RESOURCE_ACL_CAPABILITY",
+      "tenantRequired": true,
+      "mutation": false,
+      "action": "getIssueDetails",
+      "requestClass": "ru.taska.api.issue.v1.GetIssueRequest"
+    },
+    {
+      "rpc": "ru.taska.issue.v1.IssueService/GetIssueWatchState",
+      "audience": "issue-service",
+      "scope": "TENANT_RESOURCE_ACL_CAPABILITY",
+      "tenantRequired": true,
+      "mutation": false,
+      "action": "getIssueWatchState",
+      "requestClass": "ru.taska.api.issue.v1.GetIssueWatchStateRequest"
+    },
+    {
+      "rpc": "ru.taska.issue.v1.IssueService/ListIssueComments",
+      "audience": "issue-service",
+      "scope": "TENANT_RESOURCE_ACL_CAPABILITY",
+      "tenantRequired": true,
+      "mutation": false,
+      "action": "listIssueComments",
+      "requestClass": "ru.taska.api.issue.v1.ListIssueCommentsRequest"
+    },
+    {
+      "rpc": "ru.taska.issue.v1.IssueService/ListIssueLabels",
+      "audience": "issue-service",
+      "scope": "TENANT_RESOURCE_ACL_CAPABILITY",
+      "tenantRequired": true,
+      "mutation": false,
+      "action": "listIssueLabels",
+      "requestClass": "ru.taska.api.issue.v1.ListIssueLabelsRequest"
+    },
+    {
+      "rpc": "ru.taska.issue.v1.IssueService/ListIssueLinks",
+      "audience": "issue-service",
+      "scope": "TENANT_RESOURCE_ACL_CAPABILITY",
+      "tenantRequired": true,
+      "mutation": false,
+      "action": "listIssueLinks",
+      "requestClass": "ru.taska.api.issue.v1.ListIssueLinksRequest"
+    },
+    {
+      "rpc": "ru.taska.issue.v1.IssueService/ListIssueWatchers",
+      "audience": "issue-service",
+      "scope": "TENANT_RESOURCE_ACL_CAPABILITY",
+      "tenantRequired": true,
+      "mutation": false,
+      "action": "listIssueWatchers",
+      "requestClass": "ru.taska.api.issue.v1.ListIssueWatchersRequest"
+    },
+    {
+      "rpc": "ru.taska.issue.v1.IssueService/ListIssueWorklogs",
+      "audience": "issue-service",
+      "scope": "TENANT_RESOURCE_ACL_CAPABILITY",
+      "tenantRequired": true,
+      "mutation": false,
+      "action": "listIssueWorklogs",
+      "requestClass": "ru.taska.api.issue.v1.ListIssueWorklogsRequest"
+    },
+    {
+      "rpc": "ru.taska.issue.v1.IssueService/ListIssues",
+      "audience": "issue-service",
+      "scope": "TENANT_RESOURCE_ACL_CAPABILITY",
+      "tenantRequired": true,
+      "mutation": false,
+      "action": "listIssues",
+      "requestClass": "ru.taska.api.issue.v1.ListIssuesRequest"
+    },
+    {
+      "rpc": "ru.taska.issue.v1.IssueService/ListIssuesForBoard",
+      "audience": "issue-service",
+      "scope": "TENANT_RESOURCE_ACL_CAPABILITY",
+      "tenantRequired": true,
+      "mutation": false,
+      "action": "listIssuesForBoard",
+      "requestClass": "ru.taska.api.issue.v1.ListIssuesForBoardRequest"
+    },
+    {
+      "rpc": "ru.taska.issue.v1.IssueService/ListProjectLabels",
+      "audience": "issue-service",
+      "scope": "TENANT_RESOURCE_ACL_CAPABILITY",
+      "tenantRequired": true,
+      "mutation": false,
+      "action": "listProjectLabels",
+      "requestClass": "ru.taska.api.issue.v1.ListProjectLabelsRequest"
+    },
+    {
+      "rpc": "ru.taska.issue.v1.IssueService/MigrateWorkflowIssues",
+      "audience": "issue-service",
+      "scope": "TENANT_PROJECT_ACL_CAPABILITY",
+      "tenantRequired": true,
+      "mutation": true,
+      "action": "migrateWorkflowIssues",
+      "requestClass": "ru.taska.api.issue.v1.MigrateWorkflowIssuesRequest"
+    },
+    {
+      "rpc": "ru.taska.issue.v1.IssueService/PatchIssue",
+      "audience": "issue-service",
+      "scope": "TENANT_RESOURCE_ACL_CAPABILITY",
+      "tenantRequired": true,
+      "mutation": true,
+      "action": "patchIssue",
+      "requestClass": "ru.taska.api.issue.v1.PatchIssueRequest"
+    },
+    {
+      "rpc": "ru.taska.issue.v1.IssueService/RemoveIssueLabel",
+      "audience": "issue-service",
+      "scope": "TENANT_RESOURCE_ACL_CAPABILITY",
+      "tenantRequired": true,
+      "mutation": true,
+      "action": "removeIssueLabel",
+      "requestClass": "ru.taska.api.issue.v1.RemoveIssueLabelRequest"
+    },
+    {
+      "rpc": "ru.taska.issue.v1.IssueService/SearchIssues",
+      "audience": "issue-service",
+      "scope": "TENANT_RESOURCE_ACL_CAPABILITY",
+      "tenantRequired": true,
+      "mutation": false,
+      "action": "searchIssues",
+      "requestClass": "ru.taska.api.issue.v1.SearchIssuesRequest"
+    },
+    {
+      "rpc": "ru.taska.issue.v1.IssueService/TransitionIssue",
+      "audience": "issue-service",
+      "scope": "TENANT_RESOURCE_ACL_CAPABILITY",
+      "tenantRequired": true,
+      "mutation": true,
+      "action": "transitionIssue",
+      "requestClass": "ru.taska.api.issue.v1.TransitionIssueRequest"
+    },
+    {
+      "rpc": "ru.taska.issue.v1.IssueService/UnwatchIssue",
+      "audience": "issue-service",
+      "scope": "TENANT_RESOURCE_ACL_CAPABILITY",
+      "tenantRequired": true,
+      "mutation": true,
+      "action": "unwatchIssue",
+      "requestClass": "ru.taska.api.issue.v1.UnwatchIssueRequest"
+    },
+    {
+      "rpc": "ru.taska.issue.v1.IssueService/UpdateIssue",
+      "audience": "issue-service",
+      "scope": "TENANT_RESOURCE_ACL_CAPABILITY",
+      "tenantRequired": true,
+      "mutation": true,
+      "action": "updateIssue",
+      "requestClass": "ru.taska.api.issue.v1.UpdateIssueRequest"
+    },
+    {
+      "rpc": "ru.taska.issue.v1.IssueService/UpdateIssueComment",
+      "audience": "issue-service",
+      "scope": "TENANT_RESOURCE_ACL_CAPABILITY",
+      "tenantRequired": true,
+      "mutation": true,
+      "action": "updateIssueComment",
+      "requestClass": "ru.taska.api.issue.v1.UpdateIssueCommentRequest"
+    },
+    {
+      "rpc": "ru.taska.issue.v1.IssueService/UpdateIssueWorklog",
+      "audience": "issue-service",
+      "scope": "TENANT_RESOURCE_ACL_CAPABILITY",
+      "tenantRequired": true,
+      "mutation": true,
+      "action": "updateIssueWorklog",
+      "requestClass": "ru.taska.api.issue.v1.UpdateIssueWorklogRequest"
+    },
+    {
+      "rpc": "ru.taska.issue.v1.IssueService/UpdateProjectLabel",
+      "audience": "issue-service",
+      "scope": "TENANT_RESOURCE_ACL_CAPABILITY",
+      "tenantRequired": true,
+      "mutation": true,
+      "action": "updateProjectLabel",
+      "requestClass": "ru.taska.api.issue.v1.UpdateProjectLabelRequest"
+    },
+    {
+      "rpc": "ru.taska.issue.v1.IssueService/WatchIssue",
+      "audience": "issue-service",
+      "scope": "TENANT_RESOURCE_ACL_CAPABILITY",
+      "tenantRequired": true,
+      "mutation": true,
+      "action": "watchIssue",
+      "requestClass": "ru.taska.api.issue.v1.WatchIssueRequest"
+    },
+    {
+      "rpc": "ru.taska.notification.v1.NotificationService/ListNotifications",
+      "audience": "notification-service",
+      "scope": "TENANT_SELF",
+      "tenantRequired": true,
+      "mutation": false,
+      "action": "listNotifications",
+      "requestClass": "ru.taska.api.notification.v1.ListNotificationsRequest"
+    },
+    {
+      "rpc": "ru.taska.notification.v1.NotificationService/MarkAllAsRead",
+      "audience": "notification-service",
+      "scope": "TENANT_SELF",
+      "tenantRequired": true,
+      "mutation": true,
+      "action": "markAllAsRead",
+      "requestClass": "ru.taska.api.notification.v1.MarkAllAsReadRequest"
+    },
+    {
+      "rpc": "ru.taska.notification.v1.NotificationService/MarkAsRead",
+      "audience": "notification-service",
+      "scope": "TENANT_SELF",
+      "tenantRequired": true,
+      "mutation": true,
+      "action": "markAsRead",
+      "requestClass": "ru.taska.api.notification.v1.MarkAsReadRequest"
+    },
+    {
+      "rpc": "ru.taska.notification.v1.NotificationSettingsService/ConfirmTelegramLink",
+      "audience": "notification-service",
+      "scope": "GLOBAL_SELF_SESSION_FOR_MUTATION",
+      "tenantRequired": false,
+      "mutation": true,
+      "action": "confirmTelegramLink",
+      "requestClass": "ru.taska.api.notification.v1.ConfirmTelegramLinkRequest"
+    },
+    {
+      "rpc": "ru.taska.notification.v1.NotificationSettingsService/CreateTelegramLink",
+      "audience": "notification-service",
+      "scope": "GLOBAL_SELF_SESSION_FOR_MUTATION",
+      "tenantRequired": false,
+      "mutation": true,
+      "action": "createTelegramLink",
+      "requestClass": "ru.taska.api.notification.v1.NotificationSettingsUserRequest"
+    },
+    {
+      "rpc": "ru.taska.notification.v1.NotificationSettingsService/DisconnectTelegram",
+      "audience": "notification-service",
+      "scope": "GLOBAL_SELF_SESSION_FOR_MUTATION",
+      "tenantRequired": false,
+      "mutation": true,
+      "action": "disconnectTelegram",
+      "requestClass": "ru.taska.api.notification.v1.NotificationSettingsUserRequest"
+    },
+    {
+      "rpc": "ru.taska.notification.v1.NotificationSettingsService/GetPreferences",
+      "audience": "notification-service",
+      "scope": "TENANT_SELF",
+      "tenantRequired": true,
+      "mutation": false,
+      "action": "getPreferences",
+      "requestClass": "ru.taska.api.notification.v1.NotificationSettingsUserRequest"
+    },
+    {
+      "rpc": "ru.taska.notification.v1.NotificationSettingsService/UpdatePreferences",
+      "audience": "notification-service",
+      "scope": "TENANT_SELF",
+      "tenantRequired": true,
+      "mutation": true,
+      "action": "updatePreferences",
+      "requestClass": "ru.taska.api.notification.v1.UpdateNotificationPreferencesRequest"
+    },
+    {
+      "rpc": "ru.taska.oauth.v1.ConnectedAppsService/ListConnectedApps",
+      "audience": "auth-service",
+      "scope": "GLOBAL_SELF_SESSION_FOR_MUTATION",
+      "tenantRequired": false,
+      "mutation": false,
+      "action": "listConnectedApps",
+      "requestClass": "ru.taska.api.oauth.v1.ListConnectedAppsRequest"
+    },
+    {
+      "rpc": "ru.taska.oauth.v1.ConnectedAppsService/RevokeConnectedApp",
+      "audience": "auth-service",
+      "scope": "GLOBAL_SELF_SESSION_FOR_MUTATION",
+      "tenantRequired": false,
+      "mutation": true,
+      "action": "revokeConnectedApp",
+      "requestClass": "ru.taska.api.oauth.v1.RevokeConnectedAppRequest"
+    },
+    {
+      "rpc": "ru.taska.profile.v1.ProfileService/ConfirmAvatarUpload",
+      "audience": "auth-service",
+      "scope": "GLOBAL_SELF_SESSION_FOR_MUTATION",
+      "tenantRequired": false,
+      "mutation": true,
+      "action": "confirmAvatarUpload",
+      "requestClass": "ru.taska.api.auth.profile.v1.ConfirmAvatarUploadRequest"
+    },
+    {
+      "rpc": "ru.taska.profile.v1.ProfileService/CreateAvatarUploadUrl",
+      "audience": "auth-service",
+      "scope": "GLOBAL_SELF_SESSION_FOR_MUTATION",
+      "tenantRequired": false,
+      "mutation": true,
+      "action": "createAvatarUploadUrl",
+      "requestClass": "ru.taska.api.auth.profile.v1.CreateAvatarUploadUrlRequest"
+    },
+    {
+      "rpc": "ru.taska.profile.v1.ProfileService/DeleteMyAvatar",
+      "audience": "auth-service",
+      "scope": "GLOBAL_SELF_SESSION_FOR_MUTATION",
+      "tenantRequired": false,
+      "mutation": true,
+      "action": "deleteMyAvatar",
+      "requestClass": "ru.taska.api.auth.profile.v1.DeleteMyAvatarRequest"
+    },
+    {
+      "rpc": "ru.taska.profile.v1.ProfileService/GetAvatarDownloadUrl",
+      "audience": "auth-service",
+      "scope": "GLOBAL_SELF_SESSION_FOR_MUTATION",
+      "tenantRequired": false,
+      "mutation": false,
+      "action": "getAvatarDownloadUrl",
+      "requestClass": "ru.taska.api.auth.profile.v1.GetAvatarDownloadUrlRequest"
+    },
+    {
+      "rpc": "ru.taska.profile.v1.ProfileService/GetUserDetailsByIds",
+      "audience": "auth-service",
+      "scope": "GLOBAL_SELF_SESSION_FOR_MUTATION",
+      "tenantRequired": false,
+      "mutation": false,
+      "action": "getUserDetailsByIds",
+      "requestClass": "ru.taska.api.auth.profile.v1.GetUserDetailsByIdsRequest"
+    },
+    {
+      "rpc": "ru.taska.profile.v1.ProfileService/GetUserProfile",
+      "audience": "auth-service",
+      "scope": "GLOBAL_SELF_SESSION_FOR_MUTATION",
+      "tenantRequired": false,
+      "mutation": false,
+      "action": "getUserProfile",
+      "requestClass": "ru.taska.api.auth.profile.v1.GetUserProfileRequest"
+    },
+    {
+      "rpc": "ru.taska.profile.v1.ProfileService/UpdateMyProfile",
+      "audience": "auth-service",
+      "scope": "GLOBAL_SELF_SESSION_FOR_MUTATION",
+      "tenantRequired": false,
+      "mutation": true,
+      "action": "updateMyProfile",
+      "requestClass": "ru.taska.api.auth.profile.v1.UpdateMyProfileRequest"
+    },
+    {
+      "rpc": "ru.taska.project.v1.ProjectService/AddProjectMember",
+      "audience": "project-service",
+      "scope": "TENANT_PROJECT_ACL_CAPABILITY",
+      "tenantRequired": true,
+      "mutation": true,
+      "action": "addProjectMember",
+      "requestClass": "ru.taska.api.project.v1.AddProjectMemberRequest"
+    },
+    {
+      "rpc": "ru.taska.project.v1.ProjectService/ArchiveProject",
+      "audience": "project-service",
+      "scope": "TENANT_PROJECT_ACL_CAPABILITY",
+      "tenantRequired": true,
+      "mutation": true,
+      "action": "archiveProject",
+      "requestClass": "ru.taska.api.project.v1.ArchiveProjectRequest"
+    },
+    {
+      "rpc": "ru.taska.project.v1.ProjectService/ChangeProjectMemberRole",
+      "audience": "project-service",
+      "scope": "TENANT_PROJECT_ACL_CAPABILITY",
+      "tenantRequired": true,
+      "mutation": true,
+      "action": "changeProjectMemberRole",
+      "requestClass": "ru.taska.api.project.v1.ChangeProjectMemberRoleRequest"
+    },
+    {
+      "rpc": "ru.taska.project.v1.ProjectService/CheckProjectMemberRole",
+      "audience": "project-service",
+      "scope": "TENANT_PROJECT_ACL_CAPABILITY",
+      "tenantRequired": true,
+      "mutation": false,
+      "action": "checkProjectMemberRole",
+      "requestClass": "ru.taska.api.project.v1.CheckProjectMemberRoleRequest"
+    },
+    {
+      "rpc": "ru.taska.project.v1.ProjectService/CreateProject",
+      "audience": "project-service",
+      "scope": "TENANT_PROJECT_ACL_CAPABILITY",
+      "tenantRequired": true,
+      "mutation": true,
+      "action": "createProject",
+      "requestClass": "ru.taska.api.project.v1.CreateProjectRequest"
+    },
+    {
+      "rpc": "ru.taska.project.v1.ProjectService/CreateProjectIssueType",
+      "audience": "project-service",
+      "scope": "TENANT_PROJECT_ACL_CAPABILITY",
+      "tenantRequired": true,
+      "mutation": true,
+      "action": "createProjectIssueType",
+      "requestClass": "ru.taska.api.project.v1.ChangeProjectIssueTypeRequest"
+    },
+    {
+      "rpc": "ru.taska.project.v1.ProjectService/CreateProjectIssueTypeWithWorkflow",
+      "audience": "project-service",
+      "scope": "TENANT_PROJECT_ACL_CAPABILITY",
+      "tenantRequired": true,
+      "mutation": true,
+      "action": "createProjectIssueTypeWithWorkflow",
+      "requestClass": "ru.taska.api.project.v1.ChangeProjectIssueTypeRequest"
+    },
+    {
+      "rpc": "ru.taska.project.v1.ProjectService/DeleteProjectIssueType",
+      "audience": "project-service",
+      "scope": "TENANT_PROJECT_ACL_CAPABILITY",
+      "tenantRequired": true,
+      "mutation": true,
+      "action": "deleteProjectIssueType",
+      "requestClass": "ru.taska.api.project.v1.ChangeProjectIssueTypeRequest"
+    },
+    {
+      "rpc": "ru.taska.project.v1.ProjectService/DeleteProjectIssueTypeWithMigration",
+      "audience": "project-service",
+      "scope": "TENANT_PROJECT_ACL_CAPABILITY",
+      "tenantRequired": true,
+      "mutation": true,
+      "action": "deleteProjectIssueTypeWithMigration",
+      "requestClass": "ru.taska.api.project.v1.ChangeProjectIssueTypeRequest"
+    },
+    {
+      "rpc": "ru.taska.project.v1.ProjectService/GetProject",
+      "audience": "project-service",
+      "scope": "TENANT_PROJECT_ACL_CAPABILITY",
+      "tenantRequired": true,
+      "mutation": false,
+      "action": "getProject",
+      "requestClass": "ru.taska.api.project.v1.GetProjectRequest"
+    },
+    {
+      "rpc": "ru.taska.project.v1.ProjectService/GetProjectContext",
+      "audience": "project-service",
+      "scope": "TENANT_PROJECT_ACL_CAPABILITY",
+      "tenantRequired": true,
+      "mutation": false,
+      "action": "getProjectContext",
+      "requestClass": "ru.taska.api.project.v1.GetProjectContextRequest"
+    },
+    {
+      "rpc": "ru.taska.project.v1.ProjectService/GetProjectInfoBatchInternal",
+      "audience": "project-service",
+      "scope": "TENANT_PROJECT_ACL_CAPABILITY",
+      "tenantRequired": true,
+      "mutation": false,
+      "action": "getProjectInfoBatchInternal",
+      "requestClass": "ru.taska.api.project.v1.GetProjectInfoBatchInternalRequest"
+    },
+    {
+      "rpc": "ru.taska.project.v1.ProjectService/GetProjectKeyInternal",
+      "audience": "project-service",
+      "scope": "TENANT_PROJECT_ACL_CAPABILITY",
+      "tenantRequired": true,
+      "mutation": false,
+      "action": "getProjectKeyInternal",
+      "requestClass": "ru.taska.api.project.v1.GetProjectKeyInternalRequest"
+    },
+    {
+      "rpc": "ru.taska.project.v1.ProjectService/GetProjectMemberStatsBatch",
+      "audience": "project-service",
+      "scope": "TENANT_PROJECT_ACL_CAPABILITY",
+      "tenantRequired": true,
+      "mutation": false,
+      "action": "getProjectMemberStatsBatch",
+      "requestClass": "ru.taska.api.project.v1.GetProjectMemberStatsBatchRequest"
+    },
+    {
+      "rpc": "ru.taska.project.v1.ProjectService/GetProjectMembers",
+      "audience": "project-service",
+      "scope": "TENANT_PROJECT_ACL_CAPABILITY",
+      "tenantRequired": true,
+      "mutation": false,
+      "action": "getProjectMembers",
+      "requestClass": "ru.taska.api.project.v1.GetListProjectMemberRequest"
+    },
+    {
+      "rpc": "ru.taska.project.v1.ProjectService/HasProjectMembershipInternal",
+      "audience": "project-service",
+      "scope": "TENANT_PROJECT_ACL_CAPABILITY",
+      "tenantRequired": true,
+      "mutation": false,
+      "action": "hasProjectMembershipInternal",
+      "requestClass": "ru.taska.api.project.v1.HasProjectMembershipInternalRequest"
+    },
+    {
+      "rpc": "ru.taska.project.v1.ProjectService/ListMyProjects",
+      "audience": "project-service",
+      "scope": "TENANT_PROJECT_ACL_CAPABILITY",
+      "tenantRequired": true,
+      "mutation": false,
+      "action": "listMyProjects",
+      "requestClass": "ru.taska.api.project.v1.ListMyProjectsRequest"
+    },
+    {
+      "rpc": "ru.taska.project.v1.ProjectService/ListProjectIssueTypes",
+      "audience": "project-service",
+      "scope": "TENANT_PROJECT_ACL_CAPABILITY",
+      "tenantRequired": true,
+      "mutation": false,
+      "action": "listProjectIssueTypes",
+      "requestClass": "ru.taska.api.project.v1.ProjectIssueTypesRequest"
+    },
+    {
+      "rpc": "ru.taska.project.v1.ProjectService/ReorderProjectIssueTypes",
+      "audience": "project-service",
+      "scope": "TENANT_PROJECT_ACL_CAPABILITY",
+      "tenantRequired": true,
+      "mutation": true,
+      "action": "reorderProjectIssueTypes",
+      "requestClass": "ru.taska.api.project.v1.ReorderProjectIssueTypesRequest"
+    },
+    {
+      "rpc": "ru.taska.project.v1.ProjectService/RmProjectMember",
+      "audience": "project-service",
+      "scope": "TENANT_PROJECT_ACL_CAPABILITY",
+      "tenantRequired": true,
+      "mutation": true,
+      "action": "rmProjectMember",
+      "requestClass": "ru.taska.api.project.v1.RmProjectMemberRequest"
+    },
+    {
+      "rpc": "ru.taska.project.v1.ProjectService/UpdateProject",
+      "audience": "project-service",
+      "scope": "TENANT_PROJECT_ACL_CAPABILITY",
+      "tenantRequired": true,
+      "mutation": true,
+      "action": "updateProject",
+      "requestClass": "ru.taska.api.project.v1.UpdateProjectRequest"
+    },
+    {
+      "rpc": "ru.taska.project.v1.ProjectService/UpdateProjectIssueType",
+      "audience": "project-service",
+      "scope": "TENANT_PROJECT_ACL_CAPABILITY",
+      "tenantRequired": true,
+      "mutation": true,
+      "action": "updateProjectIssueType",
+      "requestClass": "ru.taska.api.project.v1.ChangeProjectIssueTypeRequest"
+    },
+    {
+      "rpc": "ru.taska.registry.v1.IssueTypeDeletionJournal/GetIntent",
+      "audience": "project-service",
+      "scope": "TENANT_RESOURCE_ACL_CAPABILITY",
+      "tenantRequired": true,
+      "mutation": false,
+      "action": "getIntent",
+      "requestClass": "ru.taska.api.registry.v1.IssueTypeDeletionKey"
+    },
+    {
+      "rpc": "ru.taska.registry.v1.IssueTypeIssueMigration/Apply",
+      "audience": "issue-service",
+      "scope": "TENANT_RESOURCE_ACL_CAPABILITY",
+      "tenantRequired": true,
+      "mutation": true,
+      "action": "apply",
+      "requestClass": "ru.taska.api.registry.v1.IssueTypeDeletionKey"
+    },
+    {
+      "rpc": "ru.taska.registry.v1.IssueTypeIssueMigration/Cancel",
+      "audience": "issue-service",
+      "scope": "TENANT_RESOURCE_ACL_CAPABILITY",
+      "tenantRequired": true,
+      "mutation": true,
+      "action": "cancel",
+      "requestClass": "ru.taska.api.registry.v1.IssueTypeDeletionKey"
+    },
+    {
+      "rpc": "ru.taska.registry.v1.IssueTypeWorkflowReservation/Get",
+      "audience": "workflow-service",
+      "scope": "TENANT_PROJECT_ACL_CAPABILITY",
+      "tenantRequired": true,
+      "mutation": false,
+      "action": "get",
+      "requestClass": "ru.taska.api.registry.v1.IssueTypeDeletionKey"
+    },
+    {
+      "rpc": "ru.taska.registry.v1.IssueTypeWorkflowReservation/Release",
+      "audience": "workflow-service",
+      "scope": "TENANT_PROJECT_ACL_CAPABILITY",
+      "tenantRequired": true,
+      "mutation": true,
+      "action": "release",
+      "requestClass": "ru.taska.api.registry.v1.IssueTypeDeletionKey"
+    },
+    {
+      "rpc": "ru.taska.registry.v1.IssueTypeWorkflowReservation/Reserve",
+      "audience": "workflow-service",
+      "scope": "TENANT_PROJECT_ACL_CAPABILITY",
+      "tenantRequired": true,
+      "mutation": true,
+      "action": "reserve",
+      "requestClass": "ru.taska.api.registry.v1.IssueTypeDeletionKey"
+    },
+    {
+      "rpc": "ru.taska.registry.v1.ProjectIssueTypeCreationJournal/Get",
+      "audience": "project-service",
+      "scope": "TENANT_PROJECT_ACL_CAPABILITY",
+      "tenantRequired": true,
+      "mutation": false,
+      "action": "get",
+      "requestClass": "ru.taska.api.registry.v1.TypeOperationKey"
+    },
+    {
+      "rpc": "ru.taska.registry.v1.ProjectTypeOperations/GetGate",
+      "audience": "project-service",
+      "scope": "TENANT_PROJECT_ACL_CAPABILITY",
+      "tenantRequired": true,
+      "mutation": false,
+      "action": "getGate",
+      "requestClass": "ru.taska.api.registry.v1.TypeOperationProjectRequest"
+    },
+    {
+      "rpc": "ru.taska.registry.v1.ProjectTypeOperations/ReleaseWorkflowBindings",
+      "audience": "project-service",
+      "scope": "TENANT_PROJECT_ACL_CAPABILITY",
+      "tenantRequired": true,
+      "mutation": true,
+      "action": "releaseWorkflowBindings",
+      "requestClass": "ru.taska.api.registry.v1.TypeOperationKey"
+    },
+    {
+      "rpc": "ru.taska.registry.v1.ProjectTypeOperations/ReserveWorkflowBindings",
+      "audience": "project-service",
+      "scope": "TENANT_PROJECT_ACL_CAPABILITY",
+      "tenantRequired": true,
+      "mutation": true,
+      "action": "reserveWorkflowBindings",
+      "requestClass": "ru.taska.api.registry.v1.TypeOperationKey"
+    },
+    {
+      "rpc": "ru.taska.registry.v1.WorkflowBindingIssueMigration/Apply",
+      "audience": "issue-service",
+      "scope": "TENANT_PROJECT_ACL_CAPABILITY",
+      "tenantRequired": true,
+      "mutation": true,
+      "action": "apply",
+      "requestClass": "ru.taska.api.registry.v1.TypeOperationKey"
+    },
+    {
+      "rpc": "ru.taska.registry.v1.WorkflowBindingIssueMigration/Cancel",
+      "audience": "issue-service",
+      "scope": "TENANT_PROJECT_ACL_CAPABILITY",
+      "tenantRequired": true,
+      "mutation": true,
+      "action": "cancel",
+      "requestClass": "ru.taska.api.registry.v1.TypeOperationKey"
+    },
+    {
+      "rpc": "ru.taska.registry.v1.WorkflowBindingIssueMigration/Release",
+      "audience": "issue-service",
+      "scope": "TENANT_PROJECT_ACL_CAPABILITY",
+      "tenantRequired": true,
+      "mutation": true,
+      "action": "release",
+      "requestClass": "ru.taska.api.registry.v1.TypeOperationKey"
+    },
+    {
+      "rpc": "ru.taska.registry.v1.WorkflowBindingJournal/Get",
+      "audience": "workflow-service",
+      "scope": "TENANT_PROJECT_ACL_CAPABILITY",
+      "tenantRequired": true,
+      "mutation": false,
+      "action": "get",
+      "requestClass": "ru.taska.api.registry.v1.TypeOperationKey"
+    },
+    {
+      "rpc": "ru.taska.registry.v1.WorkflowBindingJournal/GetPending",
+      "audience": "workflow-service",
+      "scope": "TENANT_PROJECT_ACL_CAPABILITY",
+      "tenantRequired": true,
+      "mutation": false,
+      "action": "getPending",
+      "requestClass": "ru.taska.api.registry.v1.TypeOperationProjectRequest"
+    },
+    {
+      "rpc": "ru.taska.registry.v1.WorkflowCreatedTypeBinding/Apply",
+      "audience": "workflow-service",
+      "scope": "TENANT_PROJECT_ACL_CAPABILITY",
+      "tenantRequired": true,
+      "mutation": true,
+      "action": "apply",
+      "requestClass": "ru.taska.api.registry.v1.TypeOperationKey"
+    },
+    {
+      "rpc": "ru.taska.registry.v1.WorkflowCreatedTypeBinding/Cancel",
+      "audience": "workflow-service",
+      "scope": "TENANT_PROJECT_ACL_CAPABILITY",
+      "tenantRequired": true,
+      "mutation": true,
+      "action": "cancel",
+      "requestClass": "ru.taska.api.registry.v1.TypeOperationKey"
+    },
+    {
+      "rpc": "ru.taska.workflow.v1.WorkflowService/AddWorkflowStatus",
+      "audience": "workflow-service",
+      "scope": "TENANT_PROJECT_ACL_CAPABILITY",
+      "tenantRequired": true,
+      "mutation": true,
+      "action": "addWorkflowStatus",
+      "requestClass": "ru.taska.api.workflow.v1.AddWorkflowStatusRequest"
+    },
+    {
+      "rpc": "ru.taska.workflow.v1.WorkflowService/AddWorkflowTransition",
+      "audience": "workflow-service",
+      "scope": "TENANT_PROJECT_ACL_CAPABILITY",
+      "tenantRequired": true,
+      "mutation": true,
+      "action": "addWorkflowTransition",
+      "requestClass": "ru.taska.api.workflow.v1.AddWorkflowTransitionRequest"
+    },
+    {
+      "rpc": "ru.taska.workflow.v1.WorkflowService/CheckProjectWorkflowScope",
+      "audience": "workflow-service",
+      "scope": "TENANT_PROJECT_ACL_CAPABILITY",
+      "tenantRequired": true,
+      "mutation": false,
+      "action": "checkProjectWorkflowScope",
+      "requestClass": "ru.taska.api.workflow.v1.CheckProjectWorkflowScopeRequest"
+    },
+    {
+      "rpc": "ru.taska.workflow.v1.WorkflowService/CreateProjectWorkflowWithBindings",
+      "audience": "workflow-service",
+      "scope": "TENANT_PROJECT_ACL_CAPABILITY",
+      "tenantRequired": true,
+      "mutation": true,
+      "action": "createProjectWorkflowWithBindings",
+      "requestClass": "ru.taska.api.workflow.v1.CreateWorkflowRequest"
+    },
+    {
+      "rpc": "ru.taska.workflow.v1.WorkflowService/CreateWorkflow",
+      "audience": "workflow-service",
+      "scope": "TENANT_PROJECT_ACL_CAPABILITY",
+      "tenantRequired": true,
+      "mutation": true,
+      "action": "createWorkflow",
+      "requestClass": "ru.taska.api.workflow.v1.CreateWorkflowRequest"
+    },
+    {
+      "rpc": "ru.taska.workflow.v1.WorkflowService/DeleteProjectWorkflow",
+      "audience": "workflow-service",
+      "scope": "TENANT_PROJECT_ACL_CAPABILITY",
+      "tenantRequired": true,
+      "mutation": true,
+      "action": "deleteProjectWorkflow",
+      "requestClass": "ru.taska.api.workflow.v1.WorkflowMutationRequest"
+    },
+    {
+      "rpc": "ru.taska.workflow.v1.WorkflowService/DeleteWorkflowStatus",
+      "audience": "workflow-service",
+      "scope": "TENANT_PROJECT_ACL_CAPABILITY",
+      "tenantRequired": true,
+      "mutation": true,
+      "action": "deleteWorkflowStatus",
+      "requestClass": "ru.taska.api.workflow.v1.WorkflowMutationRequest"
+    },
+    {
+      "rpc": "ru.taska.workflow.v1.WorkflowService/DeleteWorkflowTransition",
+      "audience": "workflow-service",
+      "scope": "TENANT_PROJECT_ACL_CAPABILITY",
+      "tenantRequired": true,
+      "mutation": true,
+      "action": "deleteWorkflowTransition",
+      "requestClass": "ru.taska.api.workflow.v1.WorkflowMutationRequest"
+    },
+    {
+      "rpc": "ru.taska.workflow.v1.WorkflowService/GetWorkflowForProject",
+      "audience": "workflow-service",
+      "scope": "TENANT_PROJECT_ACL_CAPABILITY",
+      "tenantRequired": true,
+      "mutation": false,
+      "action": "getWorkflowForProject",
+      "requestClass": "ru.taska.api.workflow.v1.GetWorkflowForProjectRequest"
+    },
+    {
+      "rpc": "ru.taska.workflow.v1.WorkflowService/ListProjectWorkflows",
+      "audience": "workflow-service",
+      "scope": "TENANT_PROJECT_ACL_CAPABILITY",
+      "tenantRequired": true,
+      "mutation": false,
+      "action": "listProjectWorkflows",
+      "requestClass": "ru.taska.api.workflow.v1.ListProjectWorkflowsRequest"
+    },
+    {
+      "rpc": "ru.taska.workflow.v1.WorkflowService/UpdateProjectWorkflowWithBindings",
+      "audience": "workflow-service",
+      "scope": "TENANT_PROJECT_ACL_CAPABILITY",
+      "tenantRequired": true,
+      "mutation": true,
+      "action": "updateProjectWorkflowWithBindings",
+      "requestClass": "ru.taska.api.workflow.v1.WorkflowMutationRequest"
+    },
+    {
+      "rpc": "ru.taska.workflow.v1.WorkflowService/UpdateWorkflow",
+      "audience": "workflow-service",
+      "scope": "TENANT_PROJECT_ACL_CAPABILITY",
+      "tenantRequired": true,
+      "mutation": true,
+      "action": "updateWorkflow",
+      "requestClass": "ru.taska.api.workflow.v1.WorkflowMutationRequest"
+    },
+    {
+      "rpc": "ru.taska.workflow.v1.WorkflowService/UpdateWorkflowStatus",
+      "audience": "workflow-service",
+      "scope": "TENANT_PROJECT_ACL_CAPABILITY",
+      "tenantRequired": true,
+      "mutation": true,
+      "action": "updateWorkflowStatus",
+      "requestClass": "ru.taska.api.workflow.v1.WorkflowMutationRequest"
+    },
+    {
+      "rpc": "ru.taska.workflow.v1.WorkflowService/UpdateWorkflowTransition",
+      "audience": "workflow-service",
+      "scope": "TENANT_PROJECT_ACL_CAPABILITY",
+      "tenantRequired": true,
+      "mutation": true,
+      "action": "updateWorkflowTransition",
+      "requestClass": "ru.taska.api.workflow.v1.WorkflowMutationRequest"
+    },
+    {
+      "rpc": "ru.taska.workflow.v1.WorkflowService/ValidateTransition",
+      "audience": "workflow-service",
+      "scope": "TENANT_PROJECT_ACL_CAPABILITY",
+      "tenantRequired": true,
+      "mutation": false,
+      "action": "validateTransition",
+      "requestClass": "ru.taska.api.workflow.v1.ValidateTransitionRequest"
+    }
+  ]
+}

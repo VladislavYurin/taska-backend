@@ -53,9 +53,9 @@ public class GrpcUserProfileServiceClient {
 
 
     public Mono<String> updateMyProfile(Mono<ru.taska.domain.dto.UpdateDisplayNameRequestDto> request, GatewayContext context) {
-        return request.flatMap(body -> dynamicStub().updateMyProfile(ru.taska.api.auth.profile.v1.UpdateMyProfileRequest.newBuilder()
+        return request.flatMap(body -> ru.taska.security.tenant.RpcContextBridge.outbound(() -> dynamicStub().updateMyProfile(ru.taska.api.auth.profile.v1.UpdateMyProfileRequest.newBuilder()
                         .setHeader(buildGrpcHeader(context)).setActorUserId(context.userContext().userId())
-                        .setDisplayName(ru.taska.util.DisplayNames.normalize(body.getDisplayName())).build()))
+                        .setDisplayName(ru.taska.util.DisplayNames.normalize(body.getDisplayName())).build())))
                 .map(ru.taska.api.auth.profile.v1.UpdateMyProfileResponse::getDisplayName);
     }
 
@@ -66,7 +66,7 @@ public class GrpcUserProfileServiceClient {
         log.debug("[{}] Calling confirmAvatarUpload", context.requestId());
         return request
                 .flatMap(requestDto->
-                        dynamicStub().confirmAvatarUpload(
+                        ru.taska.security.tenant.RpcContextBridge.outbound(() -> dynamicStub().confirmAvatarUpload(
                                 ConfirmAvatarUploadRequest.newBuilder()
                                         .setHeader(buildGrpcHeader(context))
                                         .setBody(
@@ -78,7 +78,7 @@ public class GrpcUserProfileServiceClient {
                                                         .build()
                                         )
                                         .build()
-                        )
+                        ))
                 )
                 .map(profileMapper::toRestAvatarResponse);
     }
@@ -91,7 +91,7 @@ public class GrpcUserProfileServiceClient {
 
         return request
                 .flatMap(requestDto->
-                        dynamicStub().createAvatarUploadUrl(
+                        ru.taska.security.tenant.RpcContextBridge.outbound(() -> dynamicStub().createAvatarUploadUrl(
                                 CreateAvatarUploadUrlRequest.newBuilder()
                                         .setHeader(buildGrpcHeader(context))
                                         .setBody(
@@ -102,7 +102,7 @@ public class GrpcUserProfileServiceClient {
                                                         .build()
                                         )
                                         .build()
-                        )
+                        ))
                 )
                 .map(profileMapper::toRestCreateAvatarUploadUrlResponse);
     }
@@ -112,7 +112,7 @@ public class GrpcUserProfileServiceClient {
     ) {
         log.debug("[{}] Calling deleteMyAvatar", context.requestId());
 
-        return dynamicStub().deleteMyAvatar(
+        return ru.taska.security.tenant.RpcContextBridge.outbound(() -> dynamicStub().deleteMyAvatar(
                 DeleteMyAvatarRequest.newBuilder()
                         .setHeader(buildGrpcHeader(context))
                         .setBody(
@@ -121,7 +121,7 @@ public class GrpcUserProfileServiceClient {
                                         .build()
                         )
                         .build()
-        )
+        ))
         .then();
     }
 
@@ -131,7 +131,7 @@ public class GrpcUserProfileServiceClient {
     ) {
         log.debug("[{}] Calling getAvatarDownloadUrl", context.requestId());
 
-        return dynamicStub().getAvatarDownloadUrl(
+        return ru.taska.security.tenant.RpcContextBridge.outbound(() -> dynamicStub().getAvatarDownloadUrl(
                         GetAvatarDownloadUrlRequest.newBuilder()
                                 .setHeader(buildGrpcHeader(context))
                                 .setBody(
@@ -140,7 +140,7 @@ public class GrpcUserProfileServiceClient {
                                                 .build()
                                 )
                                 .build()
-                )
+                ))
                 .map(profileMapper::toRestGetAvatarDownloadUrlResponse);
     }
 
@@ -154,7 +154,7 @@ public class GrpcUserProfileServiceClient {
     public Mono<GetUserDetailsByIdsResponse> getUserDetailsByIds(List<UUID> userIds, GatewayContext context) {
         log.debug("[{}] Calling getUserDetailsByIds", context.requestId());
 
-        return dynamicStub().getUserDetailsByIds(
+        return ru.taska.security.tenant.RpcContextBridge.outbound(() -> dynamicStub().getUserDetailsByIds(
                 GetUserDetailsByIdsRequest.newBuilder()
                         .setHeader(buildGrpcHeader(context))
                         .setBody(
@@ -163,15 +163,15 @@ public class GrpcUserProfileServiceClient {
                                         .build()
                         )
                         .build()
-        );
+        ));
     }
 
     public Mono<AvatarDto> getUserProfileAvatar(GatewayContext context) {
-        return dynamicStub().getUserProfile(GetUserProfileRequest.newBuilder()
+        return ru.taska.security.tenant.RpcContextBridge.outbound(() -> dynamicStub().getUserProfile(GetUserProfileRequest.newBuilder()
                         .setHeader(buildGrpcHeader(context))
                         .setBody(GetUserProfileRequestBody.newBuilder()
                                 .setUserId(context.userContext().userId()).build())
-                        .build())
+                        .build()))
                 .filter(response -> response.hasAvatar())
                 .map(response -> profileMapper.toAvatarDto(response.getAvatar()));
     }

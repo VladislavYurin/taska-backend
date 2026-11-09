@@ -25,6 +25,12 @@ import java.time.Duration;
  */
 @Configuration
 public class KafkaConsumerConfig {
+    @Bean
+    TaskaEventRegistry taskaEventRegistry(@Value("${kafka.topics.issue-events}") String issue,
+            @Value("${kafka.topics.project-events}") String project,@Value("${kafka.topics.user-events}") String user){
+        return new TaskaEventRegistry(issue,project,user);
+    }
+
 
     @Value("${kafka.consumer.retry.max-attempts}")
     private long maxAttempts;

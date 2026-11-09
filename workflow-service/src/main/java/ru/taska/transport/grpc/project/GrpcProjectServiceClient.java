@@ -26,19 +26,19 @@ public class GrpcProjectServiceClient {
 
     public Mono<java.util.List<ru.taska.api.project.v1.ProjectIssueTypeResponse>> listIssueTypeDetails(
             String requestId, String nodeId, UUID projectId, UUID actorUserId) {
-        return projectServiceStub.withDeadlineAfter(5, java.util.concurrent.TimeUnit.SECONDS)
+        return ru.taska.security.tenant.RpcContextBridge.outbound(() -> projectServiceStub.withDeadlineAfter(5, java.util.concurrent.TimeUnit.SECONDS)
                 .listProjectIssueTypes(ru.taska.api.project.v1.ProjectIssueTypesRequest.newBuilder()
                         .setHeader(Header.newBuilder().setRequestId(requestId).setNodeId(nodeId))
-                        .setProjectId(projectId.toString()).setActorUserId(actorUserId.toString()).build())
+                        .setProjectId(projectId.toString()).setActorUserId(actorUserId.toString()).build()))
                 .map(ru.taska.api.project.v1.ListProjectIssueTypesResponse::getItemsList);
     }
 
     public Mono<java.util.List<ru.taska.api.project.v1.ProjectIssueTypeResponse>> getIssueTypesInternal(UUID projectId) {
-        return projectServiceStub.withDeadlineAfter(5, java.util.concurrent.TimeUnit.SECONDS)
+        return ru.taska.security.tenant.RpcContextBridge.outbound(() -> projectServiceStub.withDeadlineAfter(5, java.util.concurrent.TimeUnit.SECONDS)
                 .getProjectInfoBatchInternal(ru.taska.api.project.v1.GetProjectInfoBatchInternalRequest.newBuilder()
                         .setHeader(Header.newBuilder().setRequestId(UUID.randomUUID().toString()).setNodeId("workflow-service"))
                         .setBody(ru.taska.api.project.v1.GetProjectInfoBatchInternalRequestBody.newBuilder()
-                                .addProjectIds(projectId.toString())).build())
+                                .addProjectIds(projectId.toString())).build()))
                 .map(response -> response.getProjectsMap().getOrDefault(projectId.toString(),
                         ru.taska.api.project.v1.ProjectShortInfo.getDefaultInstance()).getIssueTypesList());
     }
@@ -73,6 +73,6 @@ public class GrpcProjectServiceClient {
                 )
                 .build();
 
-        return projectServiceStub.checkProjectMemberRole(request);
+        return ru.taska.security.tenant.RpcContextBridge.outbound(() -> projectServiceStub.checkProjectMemberRole(request));
     }
 }

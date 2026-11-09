@@ -1,4 +1,5 @@
 syntax = "proto3";
+import "v1/tenant-context.proto";
 
 package ru.taska.profile.v1;
 
@@ -24,6 +25,9 @@ service ProfileService {
  * Запрос на удаление аватара пользователя.
  */
 message DeleteMyAvatarRequest {
+  // TAS-316: untrusted until verified by the message-bound mTLS/JWS interceptor.
+  ru.taska.b2b.v1.RequestContext context = 100;
+
   /**
    * Заголовок запроса.
    */
@@ -50,6 +54,9 @@ message DeleteMyAvatarRequestBody {
  * После успешного вызова старый аватар пользователя удаляется из хранилища и базы данных.
  */
 message ConfirmAvatarUploadRequest {
+  // TAS-316: untrusted until verified by the message-bound mTLS/JWS interceptor.
+  ru.taska.b2b.v1.RequestContext context = 100;
+
   /**
    * Заголовок запроса.
    */
@@ -100,6 +107,9 @@ message ConfirmAvatarUploadResponse {
  * Запрос на генерацию presigned URL для загрузки аватара.
  */
 message CreateAvatarUploadUrlRequest {
+  // TAS-316: untrusted until verified by the message-bound mTLS/JWS interceptor.
+  ru.taska.b2b.v1.RequestContext context = 100;
+
   /**
    * Заголовок запроса.
    */
@@ -155,6 +165,9 @@ message CreateAvatarUploadUrlResponse {
  * Запрос на получение ссылки для скачивания аватара.
  */
 message GetAvatarDownloadUrlRequest {
+  // TAS-316: untrusted until verified by the message-bound mTLS/JWS interceptor.
+  ru.taska.b2b.v1.RequestContext context = 100;
+
   /**
    * Заголовок запроса.
    */
@@ -190,6 +203,9 @@ message GetAvatarDownloadUrlResponse {
  * Запрос на получение профиля пользователя.
  */
 message GetUserProfileRequest {
+  // TAS-316: untrusted until verified by the message-bound mTLS/JWS interceptor.
+  ru.taska.b2b.v1.RequestContext context = 100;
+
   /**
    * Заголовок запроса.
    */
@@ -268,6 +284,9 @@ message AvatarResponse {
 }
 
 message GetUserDetailsByIdsRequest {
+  // TAS-316: untrusted until verified by the message-bound mTLS/JWS interceptor.
+  ru.taska.b2b.v1.RequestContext context = 100;
+
   ru.taska.common.v1.Header header = 1;
   GetUserDetailsByIdsRequestBody body = 2;
 }
@@ -287,6 +306,9 @@ message UserDetails {
   optional AvatarResponse avatar = 4;
 }
 message UpdateMyProfileRequest {
+  // TAS-316: untrusted until verified by the message-bound mTLS/JWS interceptor.
+  ru.taska.b2b.v1.RequestContext context = 100;
+
   ru.taska.common.v1.Header header = 1;
   string actor_user_id = 2;
   string display_name = 3;

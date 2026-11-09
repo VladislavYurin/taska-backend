@@ -16,6 +16,7 @@ import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.ObjectMapper;
 
 @Repository
+@org.springframework.transaction.annotation.Transactional
 @RequiredArgsConstructor
 public class WorkflowBindingChangeRepository {
     private final DatabaseClient database;

@@ -72,8 +72,8 @@ public class WorkflowBindingMigrationService {
         });
     }
     private Mono<WorkflowBindingIntent> intent(UUID project,UUID operation) {
-        return ReactorWorkflowBindingJournalGrpc.newReactorStub(workflowStub.getChannel()).withDeadlineAfter(5,TimeUnit.SECONDS)
-                .get(client.TypeOperationClients.key(project,operation)).flatMap(intent->{
+        return ru.taska.security.tenant.RpcContextBridge.outbound(() -> ReactorWorkflowBindingJournalGrpc.newReactorStub(workflowStub.getChannel()).withDeadlineAfter(5,TimeUnit.SECONDS)
+                .get(client.TypeOperationClients.key(project,operation))).flatMap(intent->{
                     if(!intent.getProjectId().equals(project.toString())||!intent.getOperationId().equals(operation.toString()))
                         return Mono.error(new DomainException(DomainStatus.UNAVAILABLE,"Workflow journal identity mismatch"));
                     return Mono.just(intent);
