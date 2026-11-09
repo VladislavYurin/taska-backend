@@ -131,7 +131,8 @@
           "PlatformConfigurationSnapshotCacheTest",
           "VersionedCapabilitySourceIntegrationTest",
           "LegacyRpcTransportTest",
-          "TenantRpcTransactionManagerIntegrationTest"
+          "TenantRpcTransactionManagerIntegrationTest",
+          "RpcMessageClaimsTest"
         ],
         "noTestsReason": null
       },
@@ -235,7 +236,8 @@
         "directory": "api-gateway/target/surefire-reports",
         "selectors": [
           "*",
-          "TrustedGatewayContextTest"
+          "TrustedGatewayContextTest",
+          "TrustedRpcConfigurationTest"
         ],
         "noTestsReason": null
       },

@@ -84,3 +84,5 @@ actor mismatch, revoke/outage, scheduler, concurrent tenants, protobuf inventory
 Это локальные изолированные проверки; deploy/stage acceptance фиксируется отдельно.
 
 Trusted tenant directory не направляется в legacy глобальный SQL поиск: до подключения scoped adapter TAS-321 возвращается `UNAVAILABLE` / `TENANT_DIRECTORY_NOT_READY`. Это отдельная готовность доменного маршрута, а не источник полномочий из `GLOBAL_ADMIN`. Новый транспорт не включает ещё не реализованные native B2B API.
+
+В trusted-контуре ошибки legacy REST имеют `application/problem+json`, `code/title/status/requestId/reasons` и совместимые legacy extensions `message/details`. HTTP уточняется по таблице §6 blueprint: `INVALID_STATE` → 409, quota/confirmation → 422, `VERSION_CONFLICT` с ABORTED → 412, с FAILED_PRECONDITION (обязательный If-Match отсутствует) → 428. `details.code` уточняет основной code, `details.reason` сохраняется отдельно в reasons. Действующие legacy маршруты при выключенном flag сохраняют прежнее отображение ошибок.

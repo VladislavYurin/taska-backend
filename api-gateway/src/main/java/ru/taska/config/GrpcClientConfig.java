@@ -37,7 +37,7 @@ public class GrpcClientConfig {
 
     @Bean
     @org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(name="taska.rpc.context.enabled",havingValue="true")
-    public ru.taska.api.b2b.v1.ReactorGatewayCredentialServiceGrpc.ReactorGatewayCredentialServiceStub gatewayCredentialStub(){return ru.taska.api.b2b.v1.ReactorGatewayCredentialServiceGrpc.newReactorStub(authManagedChannel());}
+    public ru.taska.api.b2b.v1.ReactorGatewayCredentialServiceGrpc.ReactorGatewayCredentialServiceStub gatewayCredentialStub(@org.springframework.beans.factory.annotation.Qualifier("authManagedChannel") ManagedChannel channel){return ru.taska.api.b2b.v1.ReactorGatewayCredentialServiceGrpc.newReactorStub(channel);}
 
     @Bean
     public ru.taska.api.oauth.v1.ReactorOAuthServiceGrpc.ReactorOAuthServiceStub oauthServiceStub() {

@@ -6933,6 +6933,13 @@ components:
           type: string
         message:
           type: string
+        title:
+          type: string
+          description: Краткий HTTP title в trusted-контуре.
+        status:
+          type: integer
+          format: int32
+          description: HTTP status в trusted-контуре.
         requestId:
           type: string
           description: Идентификатор запроса, совпадает с X-Request-Id.

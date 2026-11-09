@@ -175,6 +175,41 @@ class TrustedGatewayContextTest {
   }
 
   @Test
+  void canonicalTenantTargetsMatchWithoutTreatingNestedPathsAsTenantRoutes() {
+    assertNotNull(
+        factory
+            .buildContext(
+                UUID.randomUUID().toString(),
+                exchange(
+                    "/api/v1/tenants/" + tenant.toUpperCase(Locale.ROOT),
+                    tenant.toUpperCase(Locale.ROOT)),
+                EndpointSecurity.PROTECTED)
+            .block());
+    assertNotNull(
+        factory
+            .buildContext(
+                UUID.randomUUID().toString(),
+                exchange("/api/v1/projects/example/companies/" + UUID.randomUUID()),
+                EndpointSecurity.PROTECTED)
+            .block());
+    fixture.reply =
+        fixture.reply.toBuilder()
+            .setBinding(
+                fixture.reply.getBinding().toBuilder()
+                    .clearTenantId()
+                    .setCredentialKind(CredentialKind.CREDENTIAL_KIND_WEB_GLOBAL))
+            .build();
+    var global =
+        factory
+            .buildContext(
+                UUID.randomUUID().toString(),
+                exchange("/api/v1/tenants/" + tenant + "/sessions"),
+                EndpointSecurity.PROTECTED)
+            .block();
+    assertNull(global.verified().tenantId());
+  }
+
+  @Test
   void globalSessionCannotBecomeTenantFromHeader() {
     fixture.reply =
         fixture.reply.toBuilder()

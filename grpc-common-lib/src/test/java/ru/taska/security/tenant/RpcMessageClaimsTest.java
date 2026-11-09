@@ -36,6 +36,30 @@ class RpcMessageClaimsTest {
   }
 
   @Test
+  void emptySelfActorAndOmittedBodyAreRejectedBeforeTheHandler() {
+    var c = context("notification-service", "getPreferences");
+    String rpc =
+        ru.taska.api.notification.v1.NotificationSettingsServiceGrpc.getGetPreferencesMethod()
+            .getFullMethodName();
+    assertThrows(
+        StatusRuntimeException.class,
+        () ->
+            RpcMessageClaims.validate(
+                ru.taska.api.notification.v1.NotificationSettingsUserRequest.getDefaultInstance(),
+                rpc,
+                c));
+    var project = context("project-service", "createProject");
+    assertThrows(
+        StatusRuntimeException.class,
+        () ->
+            RpcMessageClaims.validate(
+                ru.taska.api.project.v1.CreateProjectRequest.getDefaultInstance(),
+                ru.taska.api.project.v1.ProjectServiceGrpc.getCreateProjectMethod()
+                    .getFullMethodName(),
+                project));
+  }
+
+  @Test
   void membershipGateCannotSubstituteAnotherAccount() {
     var c = context("project-service", "hasProjectMembershipInternal");
     String rpc =
@@ -57,7 +81,13 @@ class RpcMessageClaimsTest {
   void administrativeRpcNeedsExplicitGrantScopeAndSufficientLevel() {
     String rpc = AdminServiceGrpc.getRetryOutboxEventMethod().getFullMethodName();
     var c = context("admin-service", "retryOutboxEvent");
-    var request = RetryOutboxEventRequest.newBuilder().setHeader(c.getHeader()).build();
+    var request =
+        RetryOutboxEventRequest.newBuilder()
+            .setHeader(c.getHeader())
+            .setBody(
+                RetryOutboxEventRequestBody.newBuilder()
+                    .setActorUserId(c.getContext().getActorUserId()))
+            .build();
     assertThrows(StatusRuntimeException.class, () -> RpcMessageClaims.validate(request, rpc, c));
     var read =
         c.toBuilder()

@@ -94,6 +94,12 @@ public class GatewayContextFactory {
             }));
   }
 
+  private static boolean sameTenant(String bound,String supplied){
+    try {var parsed=java.util.UUID.fromString(supplied);
+      if(!parsed.toString().equalsIgnoreCase(supplied))throw new IllegalArgumentException();
+      return parsed.equals(java.util.UUID.fromString(bound));
+    }catch(IllegalArgumentException e){throw Status.INVALID_ARGUMENT.withDescription("Invalid tenant id").asRuntimeException();}
+  }
   private Mono<GatewayContext> resolveTrustedUserContext(ServerWebExchange exchange,String requestId) {
     return Mono.defer(()->{
       var stub=credentialStubs.getIfAvailable();var security=trustedSecurity.getIfAvailable();
@@ -110,10 +116,10 @@ public class GatewayContextFactory {
           var suppliedTenants=exchange.getRequest().getHeaders().getOrEmpty("X-Tenant-Id");
           if(suppliedTenants.size()>1)return Mono.error(Status.PERMISSION_DENIED.asRuntimeException());
           String selected=exchange.getRequest().getHeaders().getFirst("X-Tenant-Id");
-          if(selected!=null && (!binding.hasTenantId() || !binding.getTenantId().equals(selected)))return Mono.error(Status.PERMISSION_DENIED.asRuntimeException());
+          if(selected!=null && (!binding.hasTenantId() || !sameTenant(binding.getTenantId(),selected)))return Mono.error(Status.PERMISSION_DENIED.asRuntimeException());
           // A URL tenant is a target assertion, never an authority source.
-          var matcher=java.util.regex.Pattern.compile("/(?:tenants|companies)/([^/]+)").matcher(path);
-          if(matcher.find() && (!binding.hasTenantId() || !binding.getTenantId().equals(matcher.group(1))))return Mono.error(Status.PERMISSION_DENIED.asRuntimeException());
+          var matcher=java.util.regex.Pattern.compile("^/api/v1/(?:tenants|companies)/([^/]+)(?:/|$)").matcher(path);
+          if(matcher.find() && binding.hasTenantId() && !sameTenant(binding.getTenantId(),matcher.group(1)))return Mono.error(Status.PERMISSION_DENIED.asRuntimeException());
           var channel=markerVerifier.resolve(exchange.getRequest(),requestId,token,user.tokenKind()==GatewayTokenKind.PAT);
           var now=java.time.Instant.now();
           var claims=binding.toBuilder().setContextVersion(1).setIssuerService("api-gateway").setAudienceService("api-gateway")

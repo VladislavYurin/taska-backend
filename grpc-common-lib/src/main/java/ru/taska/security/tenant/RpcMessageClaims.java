@@ -76,6 +76,31 @@ final class RpcMessageClaims {
 
   private static void check(
       Message message, TrustedTenantContext c, String requestId, String rpc, boolean selfUserId) {
+    // Proto3 omits default strings from getAllFields(): required actor bindings cannot rely on it.
+    for (var f : message.getDescriptorForType().getFields()) {
+      boolean user =
+          f.getName().equals("user_id")
+              && (selfUserId
+                  || rpc.endsWith("/CreateProject")
+                  || rpc.endsWith("/ListMyProjects")
+                  || rpc.endsWith("/HasProjectMembershipInternal")
+                  || message
+                      .getDescriptorForType()
+                      .getFullName()
+                      .equals("ru.taska.common.v1.UserContext"));
+      boolean actor =
+          Set.of("actor_user_id", "author_user_id").contains(f.getName())
+              || (rpc.endsWith("/CreateIssue") && f.getName().equals("reporter_id"));
+      if ((user || actor)
+          && !f.isRepeated()
+          && f.getJavaType() == Descriptors.FieldDescriptor.JavaType.STRING
+          && (!c.hasActorUserId() || !c.getActorUserId().equals(message.getField(f))))
+        throw Status.PERMISSION_DENIED.asRuntimeException();
+      if (f.getName().equals("body")
+          && f.getJavaType() == Descriptors.FieldDescriptor.JavaType.MESSAGE
+          && !message.hasField(f))
+        check((Message) message.getField(f), c, requestId, rpc, selfUserId);
+    }
     for (var entry : message.getAllFields().entrySet()) {
       var f = entry.getKey();
       if (f.getName().equals("context")) continue;

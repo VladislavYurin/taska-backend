@@ -144,6 +144,29 @@ class GatewayCredentialResolverIntegrationTest {
   }
 
   @Test
+  void signedSessionWithoutRequiredBindingClaimsIsUnauthenticated() {
+    for (String missing : List.of("membership_generation", "sid")) {
+      var claims =
+          new HashMap<String, Object>(
+              io.jsonwebtoken.Jwts.parser()
+                  .verifyWith(pair.getPublic())
+                  .build()
+                  .parseSignedClaims(issuer.issue(sessionA))
+                  .getPayload());
+      claims.remove(missing);
+      String malformed =
+          io.jsonwebtoken.Jwts.builder()
+              .header()
+              .keyId("test-key")
+              .and()
+              .claims(claims)
+              .signWith(pair.getPrivate(), io.jsonwebtoken.Jwts.SIG.EdDSA)
+              .compact();
+      assertEquals(DomainStatus.UNAUTHENTICATED, denied(resolver.resolve(malformed)).getStatus());
+    }
+  }
+
+  @Test
   void signedScopeNarrowingSurvivesResolutionAndVerifiedSessionOwnerUsesThatActor() {
     var signed =
         new java.util.HashMap<String, Object>(

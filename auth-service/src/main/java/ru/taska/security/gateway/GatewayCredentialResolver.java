@@ -47,6 +47,7 @@ public final class GatewayCredentialResolver {
   }
 
   private static UUID id(String value) {
+    if (value == null) throw rejected();
     var parsed = UUID.fromString(value);
     if (!parsed.toString().equals(value)) throw rejected();
     return parsed;
@@ -124,6 +125,9 @@ public final class GatewayCredentialResolver {
                     || scopes.contains(value)) return Mono.error(rejected());
                 scopes.add(value);
               }
+              String memberClaim = c.get("membership_generation", String.class);
+              if (tenant && (memberClaim == null || !memberClaim.matches("[1-9][0-9]*")))
+                return Mono.error(rejected());
               UUID company = tenant ? id(c.get("tenant_id", String.class)) : null;
               if (!tenant && c.containsKey("tenant_id")) return Mono.error(rejected());
               var binding =
@@ -165,7 +169,7 @@ public final class GatewayCredentialResolver {
                       generation -> {
                         if (!tenant)
                           return profile(user, binding.addAllScopes(scopes).build(), null);
-                        long claimed = Long.parseLong(c.get("membership_generation", String.class));
+                        long claimed = Long.parseLong(memberClaim);
                         if (generation != claimed) return Mono.error(rejected());
                         return membership(company, user, generation)
                             .flatMap(
@@ -180,7 +184,9 @@ public final class GatewayCredentialResolver {
                                         null));
                       });
             })
-        .onErrorMap(e -> e instanceof IllegalArgumentException, e -> rejected())
+        .onErrorMap(
+            e -> e instanceof IllegalArgumentException || e instanceof io.jsonwebtoken.JwtException,
+            e -> rejected())
         .onErrorMap(
             e ->
                 e instanceof org.springframework.dao.DataAccessException
