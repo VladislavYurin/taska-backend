@@ -83,7 +83,9 @@ primary проверки отвергаются; наличие `GLOBAL_ADMIN` �
 соединение; откат/cancellation бизнес-транзакции не возвращают использованный jti.
 После начала consume cancellation подписчика не отменяет его SQL completion. Повтор
 получает отказ; transport retry создаёт новый jti, сохраняя business idempotency key.
-Запись сохраняется до exp+5s; bounded cleanup удаляет только истёкшие записи. Auth/replay
+Запись сохраняется до exp+5s с дополнительным 5-секундным запасом для разницы часов
+auth primary и recipient; bounded cleanup удаляет только истёкшие записи. Запас относится
+к хранению nonce, а границы exp−iat и receiver skew остаются прежними. Auth/replay
 pool должен иметь запас соединений для control plane отдельно от приостановленных
 business transactions. Отказ auth не обходится локальной in-memory таблицей.
 

@@ -275,6 +275,55 @@ class AuthRpcTrustIntegrationTest {
   }
 
   @Test
+  void replayRetentionCoversTheRecipientWindowWithPrimaryClockSkew() {
+    String jti = UUID.randomUUID().toString();
+    Instant recipientEnd = Instant.now().plusSeconds(1);
+    var ahead =
+        new AuthRpcTrustBackend(
+            db,
+            connections,
+            (t, u) -> Mono.just(2L),
+            fixture.trust("auth-service"),
+            Clock.offset(Clock.systemUTC(), Duration.ofSeconds(5)));
+    assertEquals(
+        true, ahead.consume("project-service", "api-gateway", jti, recipientEnd).block(WAIT));
+    var stored =
+        db.sql("SELECT retain_until FROM taska.rpc_assertion_replay WHERE assertion_id=:id")
+            .bind("id", UUID.fromString(jti))
+            .map((r, m) -> r.get("retain_until", OffsetDateTime.class).toInstant())
+            .one()
+            .block(WAIT);
+    assertFalse(stored.isBefore(recipientEnd.plusSeconds(4)));
+    assertEquals(
+        false, backend.consume("project-service", "api-gateway", jti, recipientEnd).block(WAIT));
+    var behind =
+        new AuthRpcTrustBackend(
+            db,
+            connections,
+            (t, u) -> Mono.just(2L),
+            fixture.trust("auth-service"),
+            Clock.offset(Clock.systemUTC(), Duration.ofSeconds(-5)));
+    assertEquals(
+        true,
+        behind
+            .consume(
+                "project-service",
+                "api-gateway",
+                UUID.randomUUID().toString(),
+                Instant.now().plusSeconds(40))
+            .block(WAIT));
+    assertEquals(
+        false,
+        behind
+            .consume(
+                "project-service",
+                "api-gateway",
+                UUID.randomUUID().toString(),
+                Instant.now().plusSeconds(46))
+            .block(WAIT));
+  }
+
+  @Test
   void mtlsControlPlaneChecksRecipientAndRevokesAnExistingConnection() throws Exception {
     var ssl =
         GrpcSslContexts.forServer(

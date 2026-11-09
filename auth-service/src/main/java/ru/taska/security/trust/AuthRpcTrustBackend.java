@@ -150,10 +150,13 @@ public final class AuthRpcTrustBackend implements RpcTrustBackend {
             () -> {
               var services = trust.snapshot().services();
               var now = clock.instant();
+              // The primary clock may differ from the recipient by the allowed five seconds.
+              // Keep the nonce through the recipient's entire acceptance window even in that case.
+              var primaryRetainUntil = retainUntil.plusSeconds(5);
               if (!services.containsKey(recipient)
                   || !services.containsKey(issuer)
-                  || !retainUntil.isAfter(now)
-                  || retainUntil.isAfter(now.plusSeconds(40))) return Mono.just(false);
+                  || !primaryRetainUntil.isAfter(now)
+                  || retainUntil.isAfter(now.plusSeconds(45))) return Mono.just(false);
               UUID assertion = id(jti);
               // Acquire directly from the pool, outside a caller's reactive transaction.
               // Consumption must
@@ -173,7 +176,7 @@ public final class AuthRpcTrustBackend implements RpcTrustBackend {
                                       .bind(0, recipient)
                                       .bind(1, issuer)
                                       .bind(2, assertion)
-                                      .bind(3, retainUntil.atOffset(ZoneOffset.UTC))
+                                      .bind(3, primaryRetainUntil.atOffset(ZoneOffset.UTC))
                                       .execute()))
                           .flatMap(result -> Mono.from(result.getRowsUpdated()))
                           .map(count -> count == 1),
