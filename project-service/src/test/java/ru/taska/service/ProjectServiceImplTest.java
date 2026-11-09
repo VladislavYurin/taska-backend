@@ -720,9 +720,10 @@ class ProjectServiceImplTest {
                     .verifyComplete();
         }
 
-        @Test
-        @DisplayName("все workflow NOT_FOUND -> контекст 200 с пустым workflows")
-        void asMember_allWorkflowsFail_contextStillReturned() {
+        @ParameterizedTest
+        @EnumSource(value = Status.Code.class, names = {"NOT_FOUND", "UNAVAILABLE", "DEADLINE_EXCEEDED"})
+        @DisplayName("полный отказ workflow не скрывает доступный проект и его контекст")
+        void asMember_allWorkflowsFail_contextStillReturned(Status.Code code) {
             Mockito.when(projectRepository.findProjectMemberShipDtoByProjectIdAndUserId(projectId, actorUserId))
                     .thenReturn(Mono.just(memberProjectDto));
             Mockito.when(projectMemberService.getProjectMembers(requestId, nodeId, projectId, actorUserId))
@@ -734,7 +735,7 @@ class ProjectServiceImplTest {
                     new ru.taska.domain.ProjectIssueType(projectId, "REQUEST", "request", "blue", null, "square", 10, null, null)
             ));
 
-            var failure = Status.NOT_FOUND
+            var failure = Status.fromCode(code)
                     .withDescription("workflow not found")
                     .asRuntimeException();
             Mockito.lenient().when(workflowServiceClient.getWorkflowForProject(

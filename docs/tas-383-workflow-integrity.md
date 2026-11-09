@@ -18,6 +18,11 @@ FROM taska.transitions GROUP BY workflow_id, sort_order HAVING count(*) > 1;
 
 For each affected workflow assign distinct display orders under the operator's normal change
 procedure, preserving every status ID/key, transition and validator rule, then retry Liquibase.
+These ordinary CREATE INDEX statements take table locks and block writes while building.
+Plan a maintenance window for the upgrade, measure index-build time on the expected data size,
+and let active workflow transactions finish before migration. Both indexes remain transactional;
+CONCURRENTLY is deliberately avoided so failure cannot leave a partial index upgrade.
+
 No automatic deletion is safe: issue-service may reference a status that has no local edges.
 No shared data repair is performed by the tests or application startup.
 

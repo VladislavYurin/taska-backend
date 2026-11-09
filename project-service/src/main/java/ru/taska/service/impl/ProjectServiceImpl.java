@@ -128,7 +128,8 @@ public class ProjectServiceImpl implements ProjectService {
      * Доступ к контексту — то же правило, что и у {@link #getProject}: не участник проекта
      * получает PERMISSION_DENIED независимо от глобальной роли. Полноценное чтение контекста
      * для GLOBAL_ADMIN вне проекта (роль в gRPC-заголовке) — отдельная задача.
-     * Отказ members/labels пробрасывается наружу, а не маскируется пустым списком.
+     * Отказ members/labels пробрасывается наружу. Отказ отдельного workflow
+     * логируется и пропускает только соответствующий тип, сохраняя доступный контекст.
      */
     @Override
     public Mono<ProjectContextDto> getProjectContext(

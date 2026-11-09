@@ -2,7 +2,6 @@ package ru.taska.integration;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-import java.nio.charset.StandardCharsets;
 import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.util.UUID;
@@ -30,11 +29,32 @@ class WorkflowSortOrderMigrationTest {
     source.setURL("jdbc:postgresql://" + pg.getHost() + ":" + pg.getMappedPort(5432) + "/" + name);
     source.setUser(pg.getUsername());
     source.setPassword(pg.getPassword());
-    try (var input = getClass().getResourceAsStream("/db/changelog/changes/0000-init.sql");
-        var c = source.getConnection();
-        var s = c.createStatement()) {
-      s.execute(new String(input.readAllBytes(), StandardCharsets.UTF_8));
+    try (var paths =
+        java.nio.file.Files.list(
+            java.nio.file.Path.of(getClass().getResource("/db/changelog/changes").toURI()))) {
+      for (var file :
+          paths
+              .filter(p -> p.getFileName().toString().endsWith(".sql"))
+              .filter(p -> p.getFileName().toString().compareTo("0012") < 0)
+              .sorted()
+              .toList()) {
+        var previous = new SpringLiquibase();
+        previous.setDataSource(source);
+        previous.setChangeLog("classpath:db/changelog/changes/" + file.getFileName());
+        previous.afterPropertiesSet();
+      }
     }
+    update(
+        "INSERT INTO taska.workflows(id,name) VALUES"
+            + " ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa','Upgrade fixture');INSERT INTO"
+            + " taska.statuses(id,workflow_id,status_key,name,category,sort_order) VALUES "
+            + "('aaaaaaaa-0000-0000-0000-000000000001','aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa','TODO','Todo','TODO',10),"
+            + "('aaaaaaaa-0000-0000-0000-000000000002','aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa','BUSY','Busy','IN_PROGRESS',20),"
+            + "('aaaaaaaa-0000-0000-0000-000000000003','aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa','DONE','Done','DONE',30);INSERT"
+            + " INTO taska.transitions(workflow_id,from_status_id,to_status_id,name,sort_order)"
+            + " VALUES "
+            + "('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa','aaaaaaaa-0000-0000-0000-000000000001','aaaaaaaa-0000-0000-0000-000000000002','Start',10),"
+            + "('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa','aaaaaaaa-0000-0000-0000-000000000002','aaaaaaaa-0000-0000-0000-000000000003','Finish',20)");
   }
 
   void migrate() throws Exception {
@@ -111,6 +131,7 @@ class WorkflowSortOrderMigrationTest {
                         + " SELECT workflow_id,'OTHER','Other','IN_PROGRESS',sort_order FROM"
                         + " taska.statuses LIMIT 1"));
     assertEquals("23505", status.getSQLState());
+    assertTrue(status.getMessage().contains("statuses_workflow_sort_order_uniq"));
     SQLException transition =
         assertThrows(
             SQLException.class,
@@ -119,8 +140,10 @@ class WorkflowSortOrderMigrationTest {
                     "INSERT INTO"
                         + " taska.transitions(workflow_id,from_status_id,to_status_id,name,sort_order)"
                         + " SELECT workflow_id,to_status_id,from_status_id,'Reverse',sort_order"
-                        + " FROM taska.transitions LIMIT 1"));
+                        + " FROM taska.transitions WHERE"
+                        + " workflow_id='aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa' LIMIT 1"));
     assertEquals("23505", transition.getSQLState());
+    assertTrue(transition.getMessage().contains("transitions_workflow_sort_order_uniq"));
     assertEquals(before, snapshot());
   }
 }
