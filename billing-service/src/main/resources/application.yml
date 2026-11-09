@@ -29,6 +29,8 @@ management:
 
 taska:
   billing:
+    attempts:
+      enabled: ${TASKA_BILLING_ATTEMPTS_ENABLED:false}
     ingress:
       enabled: ${TASKA_BILLING_INBOX_ENABLED:false}
       payload-key-id: ${TASKA_BILLING_INBOX_PAYLOAD_KEY_ID:}

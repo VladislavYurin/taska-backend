@@ -270,7 +270,9 @@
           "*",
           "WebSessionStoreIntegrationTest",
           "TenantAccessIssuerTest",
-          "AuthSessionBoundaryTest"
+          "AuthSessionBoundaryTest",
+          "TenantPersonalTokenStoreIntegrationTest",
+          "TenantPersonalTokenBoundaryTest"
         ],
         "noTestsReason": null
       },
@@ -342,7 +344,8 @@
         "directory": "workflow-service/target/surefire-reports",
         "selectors": [
           "*",
-          "TenantWorkflowStorageIntegrationTest"
+          "TenantWorkflowStorageIntegrationTest",
+          "WorkflowSortOrderMigrationTest"
         ],
         "noTestsReason": null
       },
@@ -770,7 +773,7 @@
         "workflow-service",
         "-am",
         "test",
-        "-Dtest=IssueTypeWorkflowReservationIT,WorkflowBindingChangeIT,WorkflowCreatedTypeBindingIT,WorkflowScopeCheckIT",
+        "-Dtest=IssueTypeWorkflowReservationIT,WorkflowBindingChangeIT,WorkflowCreatedTypeBindingIT,WorkflowScopeCheckIT,WorkflowCreationIT,WorkflowEditIT,WorkflowServiceIT",
         "-Dsurefire.failIfNoSpecifiedTests=false"
       ],
       "workdir": ".",
@@ -786,7 +789,10 @@
           "IssueTypeWorkflowReservationIT",
           "WorkflowBindingChangeIT",
           "WorkflowCreatedTypeBindingIT",
-          "WorkflowScopeCheckIT"
+          "WorkflowScopeCheckIT",
+          "WorkflowCreationIT",
+          "WorkflowEditIT",
+          "WorkflowServiceIT"
         ]
       },
       "requires": [
@@ -1095,7 +1101,9 @@
           "FakePaymentProviderConcurrencyTest",
           "ProviderInboxIntegrationTest",
           "ProviderInboxRpcIntegrationTest",
-          "InboxCipherTest"
+          "InboxCipherTest",
+          "PaymentAttemptIntegrationTest",
+          "PaymentAttemptConfigurationTest"
         ],
         "noTestsReason": null
       },

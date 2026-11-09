@@ -104,7 +104,7 @@ storage-lib `S3StorageClientIT` по-прежнему запускается я�
 | `admin-service` | `OutboxRetryServiceIT,OutboxRetryRepositoryIT` |
 | `issue-service` | `ListIssuesForBoardIT,IssueTypeMoveIT,WorkflowBindingMigrationIT` |
 | `project-service` | `IssueTypeDeletionIT,IssueTypeCreationIT` |
-| `workflow-service` | `IssueTypeWorkflowReservationIT,WorkflowBindingChangeIT,WorkflowCreatedTypeBindingIT,WorkflowScopeCheckIT` |
+| `workflow-service` | `IssueTypeWorkflowReservationIT,WorkflowBindingChangeIT,WorkflowCreatedTypeBindingIT,WorkflowScopeCheckIT,WorkflowCreationIT,WorkflowEditIT,WorkflowServiceIT` |
 | `auth-service` | `InvitedUnblockIT` |
 
 Источник: [verification.json](../../scripts/harness/verification.json). [PR CI](../../.github/workflows/pr-check.yml) получает все 16 модулей из manifest и вызывает тот же `check --module`. `storage-lib` и `metrics-starter` теперь имеют отдельные matrix jobs. Для `kafka-lib` и `metrics-starter` явно указано отсутствие default Surefire test sources; появление таких тестов требует обновить ожидания manifest. CI проверяет документацию и Python/Node-тесты harness отдельной job.
@@ -213,3 +213,7 @@ explicitly synthetic in this suite; external PSP/bank/public REST acceptance is 
 TAS-320: billing-service.verify additionally requires FakePaymentProviderTest and FakePaymentProviderConcurrencyTest. These are isolated port/fake contract checks, not external PSP E2E. [Provider contract](../../billing-service/PAYMENT-PROVIDER.md).
 
 TAS-351 adds required ProviderInboxIntegrationTest, ProviderInboxRpcIntegrationTest and InboxCipherTest: durable ACK/rollback, scoped mapping, canonical proof, real PostgreSQL/mTLS self-processing, lost Root response and private payload rotation/retention. [Scope and activation](../../billing-service/PROVIDER-INBOX.md). External PSP/public gateway E2E remains separate.
+
+TAS-349: billing-service.verify requires `PaymentAttemptIntegrationTest`; [durable claim, original-provider routing and activation](../../billing-service/PAYMENT-ATTEMPTS.md).
+
+TAS-383: [workflow integrity and upgrade preflight](../tas-383-workflow-integrity.md); `WorkflowSortOrderMigrationTest` is mandatory in workflow verify; creation/edit/read ITs run explicitly.

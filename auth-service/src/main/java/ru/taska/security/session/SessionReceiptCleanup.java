@@ -45,6 +45,13 @@ public final class SessionReceiptCleanup {
                 .bind("now", now)
                 .fetch()
                 .rowsUpdated())
+        .then(
+            db.sql(
+                    "UPDATE taska.personal_token_issuance_receipts SET nonce=NULL,ciphertext=NULL"
+                        + " WHERE expires_at<=:now AND ciphertext IS NOT NULL")
+                .bind("now", now)
+                .fetch()
+                .rowsUpdated())
         .then();
   }
 

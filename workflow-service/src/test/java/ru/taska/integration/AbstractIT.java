@@ -11,6 +11,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE)
 @Testcontainers
+@org.springframework.test.annotation.DirtiesContext(classMode = org.springframework.test.annotation.DirtiesContext.ClassMode.AFTER_CLASS)
 public abstract class AbstractIT {
 
     @Autowired
@@ -40,8 +41,8 @@ public abstract class AbstractIT {
         registry.add("spring.r2dbc.username", postgres::getUsername);
         registry.add("spring.r2dbc.password", postgres::getPassword);
 
-        registry.add("grpc.server.address", () -> "127.0.0.1");
-        registry.add("grpc.server.port", () -> "9090");
+        registry.add("spring.grpc.server.address", () -> "127.0.0.1:0");
+        registry.add("spring.grpc.server.port", () -> "0");
         registry.add("app.grpc.client.workflow-service.host", () -> "127.0.0.1");
         registry.add("app.grpc.client.workflow-service.port", () -> "9090");
         registry.add("grpc.client.project-service.host", () -> "127.0.0.1");

@@ -9,6 +9,7 @@ Security BOM locally; the existing WebFlux services retain their dependency set.
 ## Protocol and trust boundaries
 
 * `/.well-known/oauth-authorization-server` advertises a fixed configured issuer,
+  public-client token authentication method `none` alongside supported confidential methods,
   CIMD support, S256, RFC 9207 response `iss`, read/write/offline_access scopes and,
   only when enabled, the restricted DCR endpoint.
 * MCP serves `/.well-known/oauth-protected-resource` (also `/mcp` suffix), and 401
