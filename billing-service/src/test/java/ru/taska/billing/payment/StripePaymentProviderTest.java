@@ -10,6 +10,7 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.HexFormat;
 import java.util.UUID;
+import java.util.Set;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import org.junit.jupiter.api.Test;
@@ -26,12 +27,12 @@ class StripePaymentProviderTest {
         IllegalArgumentException.class,
         () -> new StripePaymentProvider.Configuration(
             URI.create("https://api.stripe.com"), "sk_live_secret", "whsec_test",
-            URI.create("https://taska.example/ok"), URI.create("https://taska.example/cancel"), 300));
+            URI.create("https://taska.example/ok"), URI.create("https://taska.example/cancel"), Set.of("taska.example"), 300));
     assertThrows(
         IllegalArgumentException.class,
         () -> new StripePaymentProvider.Configuration(
             URI.create("https://api.stripe.com"), "sk_test_secret", "whsec_test",
-            URI.create("http://attacker.example/ok"), URI.create("https://taska.example/cancel"), 300));
+            URI.create("http://attacker.example/ok"), URI.create("https://taska.example/cancel"), Set.of("taska.example"), 300));
   }
 
   @Test
@@ -43,7 +44,8 @@ class StripePaymentProviderTest {
         configuration(secret), new ObjectMapper(), clock);
     var body = ("{\"id\":\"evt_1\",\"created\":1731240000,\"type\":\"checkout.session.completed\","
         + "\"data\":{\"object\":{\"id\":\"cs_1\",\"amount_total\":2000,\"currency\":\"eur\","
-        + "\"payment_status\":\"paid\",\"metadata\":{\"invoice_id\":\"" + INVOICE + "\"}}}}")
+        + "\"payment_status\":\"paid\",\"metadata\":{\"invoice_id\":\"" + INVOICE
+        + "\",\"amount_minor\":\"2000\",\"currency\":\"EUR\",\"merchant_account\":\"acct_test\"}}}}")
         .getBytes(StandardCharsets.UTF_8);
     var signature = signature(secret, NOW.getEpochSecond(), body);
 
@@ -62,7 +64,7 @@ class StripePaymentProviderTest {
   private static StripePaymentProvider.Configuration configuration(String secret) {
     return new StripePaymentProvider.Configuration(
         URI.create("https://api.stripe.com"), "sk_test_secret", secret,
-        URI.create("https://taska.example/ok"), URI.create("https://taska.example/cancel"), 300);
+        URI.create("https://taska.example/ok"), URI.create("https://taska.example/cancel"), Set.of("taska.example"), 300);
   }
 
   private static String signature(String secret, long timestamp, byte[] body) throws Exception {

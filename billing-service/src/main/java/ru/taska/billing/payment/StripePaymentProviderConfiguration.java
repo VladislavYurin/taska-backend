@@ -24,12 +24,13 @@ public class StripePaymentProviderConfiguration {
       @Value("${TASKA_BILLING_STRIPE_WEBHOOK_SECRET}") String webhookSecret,
       @Value("${TASKA_BILLING_STRIPE_SUCCESS_URL}") URI successUrl,
       @Value("${TASKA_BILLING_STRIPE_CANCEL_URL}") URI cancelUrl,
+      @Value("${TASKA_BILLING_STRIPE_ALLOWED_REDIRECT_HOSTS}") Set<String> allowedRedirectHosts,
       @Value("${TASKA_BILLING_STRIPE_ENDPOINT:https://api.stripe.com}") URI endpoint,
       @Value("${TASKA_BILLING_STRIPE_WEBHOOK_TOLERANCE_SECONDS:300}") long tolerance) {
     return new StripePaymentProvider(
         webClient,
         new StripePaymentProvider.Configuration(
-            endpoint, apiKey, webhookSecret, successUrl, cancelUrl, tolerance),
+            endpoint, apiKey, webhookSecret, successUrl, cancelUrl, allowedRedirectHosts, tolerance),
         json,
         Clock.systemUTC());
   }

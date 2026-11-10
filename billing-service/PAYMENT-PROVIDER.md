@@ -36,6 +36,7 @@ TASKA_BILLING_STRIPE_MERCHANT_ACCOUNT=<sandbox merchant account>
 TASKA_BILLING_STRIPE_PROFILE_VERSION=<immutable merchant profile version>
 TASKA_BILLING_STRIPE_SUCCESS_URL=https://<allowlisted-host>/billing/return
 TASKA_BILLING_STRIPE_CANCEL_URL=https://<allowlisted-host>/billing/cancel
+TASKA_BILLING_STRIPE_ALLOWED_REDIRECT_HOSTS=<allowlisted-host>
 ```
 
 The adapter sends Checkout Session creation and refund requests with the durable provider
