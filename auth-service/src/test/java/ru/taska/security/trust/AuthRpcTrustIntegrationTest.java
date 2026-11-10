@@ -175,6 +175,28 @@ class AuthRpcTrustIntegrationTest {
   }
 
   @Test
+  void actorFactsReadCurrentPrimaryRoleAssuranceAndCredentialDeadline() {
+    var c = context();
+    var initial = backend.actorFacts(c, RPC, POLICY).block(WAIT);
+    assertEquals(actor.toString(), initial.getActorUserId());
+    assertFalse(initial.getGlobalAdmin());
+    assertFalse(initial.getWebMfa());
+    sql("UPDATE taska.users SET global_role='GLOBAL_ADMIN' WHERE id='" + actor + "'");
+    sql("UPDATE taska.web_sessions SET assurance='ADMIN_EMAIL_MFA' WHERE id='" + web + "'");
+    sql(
+        "UPDATE taska.tenant_sessions SET expires_at=now()+interval '2 seconds' WHERE id='"
+            + session
+            + "'");
+    var changed = backend.actorFacts(c, RPC, POLICY).block(WAIT);
+    assertTrue(changed.getGlobalAdmin());
+    assertTrue(changed.getWebMfa());
+    assertTrue(Instant.parse(changed.getExpiresAt()).isBefore(Instant.now().plusSeconds(3)));
+    sql("UPDATE taska.web_sessions SET revoked_at=now() WHERE id='" + web + "'");
+    assertThrows(
+        StatusRuntimeException.class, () -> backend.actorFacts(c, RPC, POLICY).block(WAIT));
+  }
+
+  @Test
   void boundPersonalTokenCannotWidenScopesOrSurviveGrantRevocation() {
     UUID grant = UUID.randomUUID(), token = UUID.randomUUID();
     sql(
@@ -350,6 +372,9 @@ class AuthRpcTrustIntegrationTest {
             .create("localhost", server.getPort(), "auth-service");
     try (var control = new RpcControlClient(channel)) {
       assertEquals(true, control.allowed(context(), RPC, POLICY).block(WAIT));
+      assertEquals(
+          actor.toString(),
+          control.actorFacts(context(), RPC, POLICY).block(WAIT).getActorUserId());
       String jti = UUID.randomUUID().toString();
       assertEquals(
           true,

@@ -114,6 +114,11 @@ public final class BillingCatalogRpc extends ReactorBillingServiceGrpc.BillingSe
   }
 
   @Override
+  public Mono<PlanVersion> readReferencedPlanVersion(Mono<ResolvePublishedPlanRpcRequest> request) {
+    return inbound(request.flatMap(catalog::referenced));
+  }
+
+  @Override
   public Mono<PlanVersionPage> listBillingPlans(Mono<ListBillingPlansRpcRequest> request) {
     return inbound(request.flatMap(catalog::list));
   }

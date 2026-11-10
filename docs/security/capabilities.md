@@ -166,3 +166,5 @@ authority, grants, false/unknown flags, exact receipt pinning, clock, no default
 rights and preserved integrity. The real mTLS/JWS test verifies that payload role,
 USER_PAT, ADMIN-kind without a primary grant and bare service identity cannot obtain
 administrative rights. These isolated checks do not establish stage/public API E2E.
+
+Public tenant observations and their managed production wiring: [TAS-497 contract](public-capabilities.md).

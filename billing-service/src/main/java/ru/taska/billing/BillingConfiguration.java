@@ -24,8 +24,8 @@ import ru.taska.billing.SubscriptionDependencies.CoverageEvidence;
 import ru.taska.billing.SubscriptionDependencies.FinancialReadAuthority;
 import ru.taska.billing.SubscriptionDependencies.RevocationEvidence;
 import ru.taska.billing.SubscriptionDependencies.SettlementEvidenceAuthority;
-import ru.taska.billing.payment.PaymentAttemptStore;
 import ru.taska.billing.payment.BillingOperationStore;
+import ru.taska.billing.payment.PaymentAttemptStore;
 import ru.taska.exception.DomainStatus;
 import ru.taska.r2dbc.TenantTransactionExecutor;
 import ru.taska.security.tenant.RpcContextSecurity;
@@ -198,9 +198,33 @@ public class BillingConfiguration {
 
   @Bean
   @ConditionalOnMissingBean
-  EntitlementStore.ReadAuthority entitlementReadAuthority() {
+  EntitlementStore.ReadAuthority entitlementReadAuthority(
+      ObjectProvider<RpcContextSecurity> security,
+      ObjectProvider<ru.taska.security.tenant.ManagedRpcTrust> managed) {
     return context ->
-        Mono.error(CatalogErrors.fail(DomainStatus.UNAVAILABLE, "DEPENDENCY_UNAVAILABLE"));
+        ru.taska.security.tenant.VerifiedTenantContext.current()
+            .flatMap(
+                actual -> {
+                  var guard = security.getIfAvailable();
+                  if (guard == null || managed.getIfAvailable() == null)
+                    return Mono.error(
+                        CatalogErrors.fail(DomainStatus.UNAVAILABLE, "DEPENDENCY_UNAVAILABLE"));
+                  var request = ru.taska.security.tenant.RpcContextBridge.details(context);
+                  var c = request.getContext();
+                  if (actual != context
+                      || c.getCredentialKind()
+                          != ru.taska.api.b2b.v1.CredentialKind.CREDENTIAL_KIND_SERVICE
+                      || !c.hasServicePurpose()
+                      || !"billing".equals(c.getServicePurpose())) return Mono.just(false);
+                  return guard
+                      .authorize(
+                          request,
+                          ru.taska.api.b2b.v1.EntitlementServiceGrpc
+                              .getGetEntitlementSnapshotMethod()
+                              .getFullMethodName(),
+                          new RpcContextSecurity.Policy(true, false))
+                      .thenReturn(true);
+                });
   }
 
   @Bean
@@ -401,7 +425,14 @@ public class BillingConfiguration {
       return new TenantServerInterceptor(
           security,
           Map.ofEntries(
-              Map.entry(ru.taska.api.b2b.v1.PaymentReconciliationServiceGrpc.getReconcilePaymentAttemptMethod().getFullMethodName(),new RpcContextSecurity.Policy(true,true)),
+              java.util.Map.entry(
+                  BillingServiceGrpc.getReadReferencedPlanVersionMethod().getFullMethodName(),
+                  new RpcContextSecurity.Policy(false, false)),
+              Map.entry(
+                  ru.taska.api.b2b.v1.PaymentReconciliationServiceGrpc
+                      .getReconcilePaymentAttemptMethod()
+                      .getFullMethodName(),
+                  new RpcContextSecurity.Policy(true, true)),
               Map.entry(
                   ru.taska.api.b2b.v1.ProviderInboxServiceGrpc.getObserveProviderWebhookMethod()
                       .getFullMethodName(),

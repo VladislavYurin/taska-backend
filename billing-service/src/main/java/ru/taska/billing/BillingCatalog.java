@@ -156,6 +156,38 @@ public final class BillingCatalog {
             });
   }
 
+  public Mono<PlanVersion> referenced(ResolvePublishedPlanRpcRequest request) {
+    return authority("readReferencedPlanVersion", false)
+        .flatMap(
+            v -> {
+              var c = RpcContextBridge.details(v).getContext();
+              if (c.getCredentialKind() != CredentialKind.CREDENTIAL_KIND_SERVICE
+                  || v.tenantId() != null
+                  || !Set.of("tenant-service", "api-gateway").contains(c.getIssuerService())
+                  || !c.hasServicePurpose()
+                  || !"billing".equals(c.getServicePurpose())
+                  || !v.scopes().contains("catalog:read"))
+                return Mono.error(fail(DomainStatus.PERMISSION_DENIED, "SCOPE_DENIED"));
+              UUID id;
+              try {
+                id = UUID.fromString(request.getPlanVersionId());
+                if (!id.toString().equals(request.getPlanVersionId()))
+                  throw new IllegalArgumentException();
+              } catch (IllegalArgumentException bad) {
+                return Mono.error(invalid());
+              }
+              return db.sql(
+                      "SELECT p.*,c.kind FROM taska.catalog_plan_versions p JOIN"
+                          + " taska.catalog_plans c USING(plan_code) WHERE p.id=:id AND"
+                          + " p.published_at IS NOT NULL")
+                  .bind("id", id)
+                  .fetch()
+                  .one()
+                  .map(this::map)
+                  .switchIfEmpty(Mono.error(fail(DomainStatus.NOT_FOUND, "RESOURCE_NOT_FOUND")));
+            });
+  }
+
   private static long number(String s) {
     try {
       if (!s.matches("0|[1-9][0-9]{0,18}")) throw invalid();

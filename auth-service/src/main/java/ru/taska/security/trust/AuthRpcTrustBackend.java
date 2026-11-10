@@ -154,6 +154,85 @@ public final class AuthRpcTrustBackend implements RpcTrustBackend {
         .subscribeOn(reactor.core.scheduler.Schedulers.boundedElastic());
   }
 
+  public Mono<RpcActorFacts> actorFacts(
+      RequestContext request, String rpc, RpcContextSecurity.Policy policy) {
+    return allowed(request, rpc, policy)
+        .flatMap(
+            ok -> {
+              var c = request.getContext();
+              if (!ok || c.getCredentialKind() == CredentialKind.CREDENTIAL_KIND_SERVICE)
+                return Mono.error(io.grpc.Status.UNAUTHENTICATED.asRuntimeException());
+              String sql;
+              boolean pat = c.getCredentialKind() == CredentialKind.CREDENTIAL_KIND_USER_PAT;
+              boolean tenant = c.getCredentialKind() == CredentialKind.CREDENTIAL_KIND_WEB_TENANT;
+              if (pat) {
+                sql =
+                    "SELECT u.global_role,false AS mfa,LEAST(p.expires_at,g.expires_at) AS expires"
+                        + " FROM taska.users u JOIN taska.personal_access_tokens p ON"
+                        + " p.user_id=u.id JOIN taska.integration_grants g ON"
+                        + " g.id=p.integration_grant_id AND g.user_id=u.id WHERE u.id=:actor AND"
+                        + " u.auth_version=:generation AND u.status='ACTIVE' AND p.id=:credential"
+                        + " AND p.revoked_at IS NULL AND p.expires_at>:now AND g.id=:grant AND"
+                        + " g.version=:grant_generation AND g.kind='USER' AND"
+                        + " g.scope_type='ONE_TENANT' AND g.tenant_id=:tenant AND g.revoked_at IS"
+                        + " NULL AND (g.expires_at IS NULL OR g.expires_at>:now) AND p.scopes @>"
+                        + " :scopes::text[]";
+              } else if (tenant) {
+                sql =
+                    "SELECT u.global_role,(w.assurance='ADMIN_EMAIL_MFA') AS"
+                        + " mfa,LEAST(s.expires_at,w.expires_at) AS expires FROM taska.users u JOIN"
+                        + " taska.web_sessions w ON w.user_id=u.id JOIN taska.tenant_sessions s ON"
+                        + " s.web_session_id=w.id AND s.user_id=u.id WHERE u.id=:actor AND"
+                        + " u.auth_version=:generation AND u.status='ACTIVE' AND s.id=:credential"
+                        + " AND s.tenant_id=:tenant AND s.membership_version=:member_generation AND"
+                        + " s.revoked_at IS NULL AND s.expires_at>:now AND w.state='ACTIVE' AND"
+                        + " w.revoked_at IS NULL AND w.expires_at>:now AND"
+                        + " w.auth_version=:generation";
+              } else if (c.getCredentialKind() == CredentialKind.CREDENTIAL_KIND_WEB_GLOBAL) {
+                sql =
+                    "SELECT u.global_role,(w.assurance='ADMIN_EMAIL_MFA') AS mfa,w.expires_at AS"
+                        + " expires FROM taska.users u JOIN taska.web_sessions w ON w.user_id=u.id"
+                        + " WHERE u.id=:actor AND u.auth_version=:generation AND u.status='ACTIVE'"
+                        + " AND w.id=:credential AND w.state='ACTIVE' AND w.revoked_at IS NULL AND"
+                        + " w.expires_at>:now AND w.auth_version=:generation";
+              } else return Mono.error(io.grpc.Status.UNAUTHENTICATED.asRuntimeException());
+              var q =
+                  db.sql(sql)
+                      .bind("actor", id(c.getActorUserId()))
+                      .bind("generation", Long.parseLong(c.getActorGeneration()))
+                      .bind("credential", id(c.getCredentialId()))
+                      .bind("now", clock.instant());
+              if (pat || tenant) q = q.bind("tenant", id(c.getTenantId()));
+              if (tenant)
+                q = q.bind("member_generation", Long.parseLong(c.getMembershipGeneration()));
+              if (pat)
+                q =
+                    q.bind("grant", id(c.getGrantId()))
+                        .bind("grant_generation", Long.parseLong(c.getGrantGeneration()))
+                        .bind("scopes", c.getScopesList().toArray(String[]::new));
+              return q.map(
+                      (r, m) -> {
+                        Instant expiry = r.get("expires", OffsetDateTime.class).toInstant();
+                        Instant assertion = Instant.parse(c.getExpiresAt());
+                        if (assertion.isBefore(expiry)) expiry = assertion;
+                        var out =
+                            RpcActorFacts.newBuilder()
+                                .setActorUserId(c.getActorUserId())
+                                .setActorGeneration(c.getActorGeneration())
+                                .setCredentialId(c.getCredentialId())
+                                .setGlobalAdmin(
+                                    "GLOBAL_ADMIN".equals(r.get("global_role", String.class)))
+                                .setWebMfa(Boolean.TRUE.equals(r.get("mfa", Boolean.class)))
+                                .addAllScopes(c.getScopesList())
+                                .setExpiresAt(expiry.toString());
+                        if (c.hasSessionId()) out.setSessionId(c.getSessionId());
+                        return out.build();
+                      })
+                  .one()
+                  .switchIfEmpty(Mono.error(io.grpc.Status.UNAUTHENTICATED.asRuntimeException()));
+            });
+  }
+
   public Mono<Boolean> consume(String recipient, String issuer, String jti, Instant retainUntil) {
     return Mono.defer(
             () -> {

@@ -41,6 +41,24 @@ public class RpcTrustControlGrpcService
   }
 
   @Override
+  public Mono<RpcActorFacts> getRpcActorFacts(Mono<CheckRpcAuthorityRequest> input) {
+    String peer = ManagedRpcPeerInterceptor.PEER.get();
+    return input
+        .flatMap(
+            r -> {
+              if (peer == null || !peer.equals(r.getContext().getContext().getAudienceService()))
+                return Mono.error(Status.PERMISSION_DENIED.asRuntimeException());
+              return backend.actorFacts(
+                  r.getContext(),
+                  r.getRpc(),
+                  new RpcContextSecurity.Policy(r.getTenantRequired(), r.getMutation()));
+            })
+        .switchIfEmpty(Mono.error(ManagedRpcTrust.unavailable()))
+        .onErrorMap(
+            e -> e instanceof io.grpc.StatusRuntimeException ? e : ManagedRpcTrust.unavailable());
+  }
+
+  @Override
   public Mono<RpcTrustDecision> consumeRpcAssertion(Mono<ConsumeRpcAssertionRequest> input) {
     String peer = ManagedRpcPeerInterceptor.PEER.get();
     return input
