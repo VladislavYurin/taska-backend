@@ -97,7 +97,9 @@ python3 scripts/harness/capabilities_e2e.py
 
 This isolated runner uses seven packaged applications, separate PostgreSQL databases
 and runtime roles, own CA/service/signing keys, managed mTLS/JWS and ownership-checked
-cleanup. It exercises public HTTP, current auth/tenant/billing/configuration, role and
+cleanup. Trust snapshots are copied before startup and atomically replaced inside the
+container filesystem, avoiding host bind-mount inode replacement during reads. Runtime
+trust validation, expiry and fail-closed behavior remain unchanged. It exercises public HTTP, current auth/tenant/billing/configuration, role and
 credential revocation, flag versions, cross-company denial and warm-cache dependency
 failure. Subscription rows are owned synthetic fixtures; this is not payment/PSP E2E
 or a claim about shared-stage activation. Reports and cleanup state stay in ignored

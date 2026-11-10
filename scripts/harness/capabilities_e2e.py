@@ -92,6 +92,11 @@ class CapabilitiesLocal(t.TrustedLocal):
         e.require(a['actorUserId'] == actor and b['actorUserId'] == actor, 'Public actor differs from primary')
         e.require(a['flagVersion'] == b['flagVersion'], 'Company overrides were invented')
         e.require(self.action(a, 'tenant.pause')['allowed'], 'Verified owner write scope was lost')
+        for _ in range(3):
+            self.refresh()
+            self.confirm_delivery()
+            refreshed = self.capabilities(clients[0][1], first)
+            e.require(refreshed['flagVersion'] == a['flagVersion'] and self.action(refreshed, 'tenant.pause')['allowed'], 'Trust publication interrupted an unchanged capability')
         e.require(not self.action(a, 'tenant.transfer_ownership')['allowed'], 'FREE company may transfer')
         e.require('PAYMENT_EXPIRED' in self.action(b, 'tenant.transfer_ownership')['restrictions'], 'Actual expired billing state was omitted')
         # Existing entitlements keep immutable terms when a later version is published.
