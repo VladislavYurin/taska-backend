@@ -18,7 +18,7 @@ public class TenantCapabilitiesCacheFilter implements WebFilter {
         .getPath()
         .pathWithinApplication()
         .value()
-        .matches("/api/v1/tenants/[^/]+/capabilities"))
+        .matches("/api/v1/tenants/[^/]+/capabilities/?"))
       exchange.getResponse().getHeaders().setCacheControl("private, no-store");
     return chain.filter(exchange);
   }

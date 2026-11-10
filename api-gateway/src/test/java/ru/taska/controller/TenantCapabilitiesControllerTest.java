@@ -90,10 +90,17 @@ class TenantCapabilitiesControllerTest {
         .expectHeader()
         .valueMatches("Cache-Control", ".*no-store.*");
     http.get()
-        .uri("/api/v1/tenants/invalid/capabilities")
+        .uri("/api/v1/tenants/invalid/capabilities?ignored=1")
         .exchange()
         .expectStatus()
         .isBadRequest()
+        .expectHeader()
+        .valueMatches("Cache-Control", ".*no-store.*");
+    http.get()
+        .uri("/api/v1/tenants/invalid/capabilities/")
+        .exchange()
+        .expectStatus()
+        .isNotFound()
         .expectHeader()
         .valueMatches("Cache-Control", ".*no-store.*");
     verify(client, times(1)).get(any(), any());

@@ -277,6 +277,19 @@ class TenantCapabilitiesIntegrationTest {
     var ownerB = get(OWNER, B);
     assertTrue(item(ownerA, Action.TENANT_PAUSE).getAllowed());
     assertFalse(item(memberA, Action.TENANT_PAUSE).getAllowed());
+    assertTrue(
+        item(memberA, Action.TENANT_PAUSE)
+            .getDenialCodesList()
+            .contains(ErrorCode.ERROR_CODE_OWNER_REQUIRED));
+    assertTrue(
+        item(memberA, Action.MEMBERSHIP_ROLE_UPDATE)
+            .getDenialCodesList()
+            .contains(ErrorCode.ERROR_CODE_SCOPE_DENIED));
+    for (var response : List.of(ownerA, memberA, ownerB))
+      assertTrue(
+          response.getItemsList().stream()
+              .filter(i -> !i.getAllowed())
+              .allMatch(i -> i.getDenialCodesCount() > 0));
     assertTrue(item(ownerA, Action.TENANT_TRANSFER_OWNERSHIP).getAllowed());
     assertFalse(item(ownerB, Action.TENANT_TRANSFER_OWNERSHIP).getAllowed());
     assertEquals(ownerA.getFlagVersion(), ownerB.getFlagVersion());
@@ -287,6 +300,24 @@ class TenantCapabilitiesIntegrationTest {
         item(ownerA, Action.MEMBERSHIP_LEAVE)
             .getDenialCodesList()
             .contains(ErrorCode.ERROR_CODE_OWNER_MEMBERSHIP_PROTECTED));
+  }
+
+  @Test
+  void invalidTargetPrecedesSourcesAndFutureDatabaseClockCannotMoveEffectiveTime() {
+    var invalid =
+        assertThrows(
+            DomainException.class,
+            () ->
+                RegistryTestContext.withClaims(
+                        claims(OWNER, A, "1"), capabilities.get("not-a-uuid"))
+                    .block(WAIT));
+    assertEquals(DomainStatus.INVALID_ARGUMENT, invalid.getStatus());
+    assertEquals(0, sourceReads.get());
+    assertEquals(0, identityReads.get());
+    sql("UPDATE taska.tenants SET updated_at=now()+interval '2 seconds' WHERE id='" + A + "'");
+    var response = get(OWNER, A);
+    assertFalse(
+        Instant.parse(response.getEffectiveAt()).isAfter(Instant.parse(response.getEvaluatedAt())));
   }
 
   @Test

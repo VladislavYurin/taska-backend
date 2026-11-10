@@ -67,7 +67,9 @@ flag version hashes the complete sorted, versioned public configuration, includi
 its durations; using the maximum per-key version would miss independent changes.
 `entitlementVersion` and `membershipVersion` identify their current primary facts.
 `effectiveAt` describes applicable source/tenant state, while `evaluatedAt` is the
-actual evaluation time. `expiresAt` is the exclusive minimum of source leases,
+actual evaluation time; DB clock skew cannot move `effectiveAt` beyond it. Tenant
+`updated_at` bounds the observed tenant snapshot (including metadata changes), not an
+invented dedicated lifecycle-event timestamp. `expiresAt` is the exclusive minimum of source leases,
 credential/assertion expiration and 30 seconds. A cache read never renews a lease.
 
 `durationsSeconds` exposes only `UNPAID_CREATION_WINDOW_SECONDS` and

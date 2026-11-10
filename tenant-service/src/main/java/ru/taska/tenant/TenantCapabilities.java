@@ -111,6 +111,11 @@ public final class TenantCapabilities {
   }
 
   public Mono<Capabilities> get(String tenant) {
+    try {
+      if (!UUID.fromString(tenant).toString().equals(tenant)) throw new IllegalArgumentException();
+    } catch (IllegalArgumentException | NullPointerException invalid) {
+      return Mono.error(new DomainException(DomainStatus.INVALID_ARGUMENT, "Invalid tenantId"));
+    }
     return VerifiedTenantContext.current()
         .flatMap(
             verified -> {
@@ -286,7 +291,8 @@ public final class TenantCapabilities {
                   .map(
                       decisions -> {
                         Frame f = frame.get();
-                        if (f == null || !clock.instant().isBefore(f.until())) throw unavailable();
+                        Instant evaluated = clock.instant();
+                        if (f == null || !evaluated.isBefore(f.until())) throw unavailable();
                         Instant effective =
                             f.inputs().configuration().snapshot().getItemsList().stream()
                                 .map(v -> Instant.parse(v.getEffectiveAt()))
@@ -299,6 +305,9 @@ public final class TenantCapabilities {
                             && !commercialAt.isAfter(clock.instant())) effective = commercialAt;
                         if (f.access().changedAt().isAfter(effective))
                           effective = f.access().changedAt();
+                        // DB clocks can lead the evaluator; metadata cannot describe a future
+                        // decision.
+                        if (effective.isAfter(evaluated)) effective = evaluated;
                         var result =
                             Capabilities.newBuilder()
                                 .setTenantId(tenant)
@@ -307,7 +316,7 @@ public final class TenantCapabilities {
                                 .setFlagVersion(f.inputs().key().flagsVersion())
                                 .setEntitlementVersion(f.inputs().key().entitlementVersion())
                                 .setMembershipVersion(f.access().membership().getVersion())
-                                .setEvaluatedAt(clock.instant().toString())
+                                .setEvaluatedAt(evaluated.toString())
                                 .setEffectiveAt(effective.toString())
                                 .setExpiresAt(f.until().toString());
                         decisions.entrySet().stream()
