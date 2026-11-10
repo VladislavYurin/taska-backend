@@ -29,6 +29,8 @@ management:
 
 taska:
   billing:
+    stripe:
+      enabled: ${TASKA_BILLING_STRIPE_ENABLED:false}
     reconciliation:
       enabled: ${TASKA_BILLING_RECONCILIATION_ENABLED:false}
       max-attempts: ${TASKA_BILLING_RECONCILIATION_MAX_ATTEMPTS:8}
