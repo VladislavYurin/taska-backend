@@ -282,6 +282,8 @@ service BillingService {
  rpc GetSubscription(GetSubscriptionRpcRequest) returns (Subscription);
  rpc ListSubscriptionPeriods(ListSubscriptionPeriodsRpcRequest) returns (SubscriptionPeriodPage);
  rpc ResolvePublishedPlan(ResolvePublishedPlanRpcRequest) returns (PlanVersion);
+ // Read immutable published terms referenced by an existing entitlement, even after withdrawal.
+ rpc ReadReferencedPlanVersion(ResolvePublishedPlanRpcRequest) returns (PlanVersion);
  rpc ListBillingPlans(ListBillingPlansRpcRequest) returns (PlanVersionPage);
  rpc CreatePlanVersion(CreatePlanVersionRpcRequest) returns (PlanVersion);
  rpc PublishPlanVersion(PublishPlanVersionRpcRequest) returns (PlanVersion);

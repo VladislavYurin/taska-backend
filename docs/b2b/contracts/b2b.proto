@@ -937,6 +937,8 @@ message Capabilities {
   string evaluated_at = 7;
   string expires_at = 8;
   repeated Capability items = 9;
+  string effective_at = 10;
+  map<string, int64> durations_seconds = 11;
 }
 
 message PlatformFlag {

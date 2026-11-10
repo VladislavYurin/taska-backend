@@ -7022,8 +7022,8 @@ components:
         policyVersion:
           type: string
           minLength: 1
-          maxLength: 19
-          pattern: ^(0|[1-9][0-9]{0,18})$
+          maxLength: 100
+          description: Opaque identifier of the common policy or complete public configuration snapshot.
         entitlementVersion:
           type: string
           minLength: 1
@@ -7037,11 +7037,21 @@ components:
         flagVersion:
           type: string
           minLength: 1
-          maxLength: 19
-          pattern: ^(0|[1-9][0-9]{0,18})$
+          maxLength: 100
+          description: Opaque identifier of the common policy or complete public configuration snapshot.
         evaluatedAt:
           type: string
           format: date-time
+        effectiveAt:
+          type: string
+          format: date-time
+        durationsSeconds:
+          type: object
+          additionalProperties:
+            type: integer
+            format: int64
+            minimum: 0
+          description: Public durations only; UNPAID_CREATION_WINDOW_SECONDS and WIRE_RECONCILIATION_TARGET_SECONDS.
         expiresAt:
           type: string
           format: date-time
@@ -7058,6 +7068,8 @@ components:
       - membershipVersion
       - flagVersion
       - evaluatedAt
+      - effectiveAt
+      - durationsSeconds
       - expiresAt
       - items
     PlatformFlag:

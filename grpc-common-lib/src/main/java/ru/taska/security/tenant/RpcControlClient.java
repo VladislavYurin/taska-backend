@@ -57,4 +57,16 @@ public final class RpcControlClient implements RpcTrustBackend, AutoCloseable {
   public void close() {
     channel.shutdownNow();
   }
+
+  public Mono<RpcActorFacts> actorFacts(
+      RequestContext context, String rpc, RpcContextSecurity.Policy policy) {
+    return stub.withDeadlineAfter(3, TimeUnit.SECONDS)
+        .getRpcActorFacts(
+            CheckRpcAuthorityRequest.newBuilder()
+                .setContext(context)
+                .setRpc(rpc)
+                .setTenantRequired(policy.tenantRequired())
+                .setMutation(policy.mutation())
+                .build());
+  }
 }

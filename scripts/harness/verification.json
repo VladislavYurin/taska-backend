@@ -238,6 +238,7 @@
         "selectors": [
           "*",
           "TrustedGatewayContextTest",
+          "TenantCapabilitiesControllerTest",
           "TrustedRpcConfigurationTest",
           "ManagedRpcStartupTest"
         ],
@@ -605,6 +606,7 @@
           "*",
           "TenantRegistryIntegrationTest",
           "TenantMembershipIntegrationTest",
+          "TenantCapabilitiesIntegrationTest",
           "PlatformFlagsIntegrationTest",
           "MerchantConfigurationIntegrationTest",
           "FreeEligibilityIntegrationTest",

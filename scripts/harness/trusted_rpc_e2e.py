@@ -48,6 +48,15 @@ def wait_protected_read(client, path, expected):
 
 
 class TrustedLocal(e.Local):
+    modules = MODULES
+    identities = IDENTITIES
+
+    def configure_service(self, name, env, props):
+        pass
+
+    def prepare_extra_databases(self):
+        pass
+
     def __init__(self, root, store, state):
         super().__init__(root, store, state)
         self.material = self.dir / 'material'
@@ -92,7 +101,7 @@ class TrustedLocal(e.Local):
 
     def confirm_delivery(self):
         generation = self.snapshot['generation']
-        for name in MODULES:
+        for name in self.modules:
             document = json.loads(self.compose('exec', '-T', name, 'cat', '/run/trust/trust.json'))
             e.require(document['generation'] >= generation, 'Public trust delivery is incomplete')
 
@@ -115,19 +124,19 @@ class TrustedLocal(e.Local):
         self.state['composeProject'] = self.project
         self.store.save(self.state)
         with e.mutex(self.store.directory / '.build-lock', wait=True):
-            e.run_command(['./mvnw', '-B', '-ntp', '-pl', ','.join(MODULES), '-am',
+            e.run_command(['./mvnw', '-B', '-ntp', '-pl', ','.join(self.modules), '-am',
                            'package', '-DskipTests'], self.root, 1800)
             jars = self.dir / 'jars'
             jars.mkdir()
-            for module in MODULES:
+            for module in self.modules:
                 shutil.copyfile(e.packaged_jar(self.root, module), jars / (module + '.jar'))
             self.state['jarRevisions'] = {m: hashlib.sha256((jars / (m + '.jar')).read_bytes()).hexdigest()
-                                          for m in MODULES}
+                                          for m in self.modules}
         ca = self.material / 'ca'
         ca.mkdir(mode=0o700)
         self.openssl('req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-keyout', str(ca / 'ca.key'),
                      '-out', str(ca / 'ca.crt'), '-days', '1', '-subj', '/CN=owned-trusted-rpc')
-        for name in IDENTITIES:
+        for name in self.identities:
             directory = self.material / name
             directory.mkdir(mode=0o700)
             shutil.copyfile(ca / 'ca.crt', directory / 'ca.crt')
@@ -163,7 +172,7 @@ class TrustedLocal(e.Local):
         template = copy.deepcopy(compose['services']['auth-service'])
         compose['services'] = {k: v for k, v in compose['services'].items() if k in ('database', 'kafka', 'storage')}
         self.password = secrets.token_hex(24)
-        for name in MODULES:
+        for name in self.modules:
             s = copy.deepcopy(template)
             env = s['environment']
             env.update({'DEPLOY_ENVIRONMENT': 'test', 'SPRING_APPLICATION_NAME': name,
@@ -204,6 +213,7 @@ class TrustedLocal(e.Local):
                     props['taska.b2b.sessions.ed25519-' + kind + '-key'] = base64.b64encode(dest.read_bytes()).decode()
                 props.update({'taska.b2b.sessions.enabled': 'true', 'taska.b2b.sessions.ed25519-kid': 'owned-access',
                               'taska.b2b.sessions.refresh-receipt-key': base64.b64encode(secrets.token_bytes(32)).decode()})
+            self.configure_service(name, env, props)
             path = self.material / name / 'application.properties'
             path.write_text(''.join(k + '=' + v + '\n' for k, v in props.items()))
             compose['services'][name] = s
@@ -211,7 +221,7 @@ class TrustedLocal(e.Local):
             s['labels'], s['networks'] = {e.LABEL: self.state['ownerNonce']}, ['default']
             s['volumes'] = [v.replace('./init-databases.sql', str(self.root / 'mcp-server/src/test/compose/init-databases.sql'))
                             for v in s.get('volumes', [])]
-            if name in MODULES:
+            if name in self.modules:
                 s['image'] = 'eclipse-temurin:21-jre'
         compose['networks'] = {'default': {'labels': {e.LABEL: self.state['ownerNonce']}}}
         e.private_json(self.compose_file, compose)
@@ -224,8 +234,9 @@ class TrustedLocal(e.Local):
         self.compose('cp', str(self.root / 'common-lib/src/main/resources/db/tenant/bootstrap.psql'), 'database:/tmp/bootstrap.psql')
         self.compose('exec', '-T', 'database', 'psql', '-U', 'taska', '-d', 'tenant_db', '-v', 'service=tenant', '-v', 'schema=taska', '-f', '/tmp/bootstrap.psql')
         self.sql('tenant_db', "CREATE SCHEMA tenant_liquibase AUTHORIZATION taska_tenant_migrator;ALTER ROLE taska_tenant_app PASSWORD '%s';ALTER ROLE taska_tenant_deployer PASSWORD '%s';" % (self.password, self.password))
-        self.compose('up', '-d', *MODULES, timeout=180)
-        for name in MODULES:
+        self.prepare_extra_databases()
+        self.compose('up', '-d', *self.modules, timeout=180)
+        for name in self.modules:
             endpoint = 'http://' + self.compose('port', name, '8080').strip()
             self.wait_ready(endpoint)
             if name == 'api-gateway':

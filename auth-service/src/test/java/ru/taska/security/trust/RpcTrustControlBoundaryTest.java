@@ -64,6 +64,46 @@ class RpcTrustControlBoundaryTest {
   }
 
   @Test
+  void actorFactsRequireRecipientAndNeverTurnEmptyPrimaryIntoSuccess() {
+    var backend = mock(AuthRpcTrustBackend.class);
+    when(backend.actorFacts(any(), anyString(), any())).thenReturn(Mono.empty());
+    var control = new RpcTrustControlGrpcService(backend);
+    var request =
+        CheckRpcAuthorityRequest.newBuilder()
+            .setRpc("owned/Read")
+            .setContext(
+                RequestContext.newBuilder()
+                    .setContext(
+                        TrustedTenantContext.newBuilder()
+                            .setIssuerService("api-gateway")
+                            .setAudienceService("tenant-service")))
+            .build();
+    for (String peer : java.util.List.of("api-gateway", "other-service", "tenant-service")) {
+      Context.current()
+          .withValue(ManagedRpcPeerInterceptor.PEER, peer)
+          .run(
+              () ->
+                  assertEquals(
+                      peer.equals("tenant-service")
+                          ? Status.Code.UNAVAILABLE
+                          : Status.Code.PERMISSION_DENIED,
+                      Status.fromThrowable(
+                              assertThrows(
+                                  StatusRuntimeException.class,
+                                  () -> control.getRpcActorFacts(Mono.just(request)).block()))
+                          .getCode()));
+    }
+    verify(backend, times(1)).actorFacts(any(), eq("owned/Read"), any());
+    assertEquals(
+        Status.Code.PERMISSION_DENIED,
+        Status.fromThrowable(
+                assertThrows(
+                    StatusRuntimeException.class,
+                    () -> control.getRpcActorFacts(Mono.just(request)).block()))
+            .getCode());
+  }
+
+  @Test
   void asynchronousCleanupDoesNotOverlapAndCanRunAgainAfterCompletionOrError() {
     var backend = mock(AuthRpcTrustBackend.class);
     Sinks.Empty<Void> blocked = Sinks.empty();

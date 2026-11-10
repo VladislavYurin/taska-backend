@@ -11,4 +11,9 @@ public interface RpcTrustBackend {
   Mono<Boolean> consume(String recipient, String issuer, String jti, Instant retainUntil);
 
   Mono<Boolean> currentKey(String recipient, String issuer, String kid, String peerFingerprint);
+
+  default Mono<ru.taska.api.b2b.v1.RpcActorFacts> actorFacts(
+      RequestContext context, String rpc, RpcContextSecurity.Policy policy) {
+    return Mono.error(ManagedRpcTrust.unavailable());
+  }
 }

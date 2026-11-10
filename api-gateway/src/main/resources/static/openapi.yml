@@ -5009,6 +5009,30 @@ paths:
         default:
           $ref: '#/components/responses/ErrorResponse'
 
+  /api/v1/tenants/{tenantId}/capabilities:
+    get:
+      operationId: getTenantCapabilities
+      tags: [tenant-capabilities]
+      summary: Текущие доступные действия выбранной компании
+      description: Advisory tenant-level policy; every domain operation independently rechecks current authority. No shared HTTP cache or reusable authorization token.
+      x-pat-scope: read
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: tenantId
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+      responses:
+        '200':
+          description: Current policy and hard source deadlines
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantCapabilitiesDto'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
 components:
   parameters:
     OAuthProviderPath:
@@ -5102,6 +5126,189 @@ components:
             $ref: '#/components/schemas/RestErrorResponse'
 
   schemas:
+    CapabilityAction:
+      type: string
+      description: Closed server action registry shared with the common evaluator. Tenant capabilities returns tenant-level actions; resource-specific actions require the corresponding target API.
+      enum:
+        - tenant.create
+        - tenant.list
+        - tenant.read
+        - tenant.update
+        - tenant.pause
+        - tenant.resume
+        - tenant.cancel_creation
+        - tenant.transfer_ownership
+        - tenant.delete
+        - membership.read
+        - membership.role_update
+        - membership.suspend
+        - membership.reactivate
+        - membership.remove
+        - membership.leave
+        - invitation.create
+        - invitation.accept
+        - invitation.resend
+        - invitation.revoke
+        - project.read
+        - project.create
+        - project.update
+        - project.archive
+        - project.restore
+        - project.delete
+        - project.membership_update
+        - workflow.read
+        - issue_type.read
+        - workflow.configure
+        - issue_type.configure
+        - issue.read
+        - issue.search
+        - issue.board
+        - issue.history
+        - issue.create
+        - issue.update
+        - issue.delete
+        - issue.assign
+        - issue.transition
+        - comment.read
+        - worklog.read
+        - label.read
+        - watcher.read
+        - link.read
+        - attachment.read
+        - comment.create
+        - comment.update
+        - comment.delete
+        - worklog.create
+        - worklog.update
+        - worklog.delete
+        - label.configure
+        - watcher.manage
+        - label.attach
+        - label.detach
+        - watcher.self
+        - link.create
+        - link.delete
+        - attachment.upload
+        - attachment.confirm
+        - attachment.delete
+        - export.create
+        - export.download
+        - notification.read
+        - notification.mark_read
+        - notification.preferences
+        - billing.read
+        - billing.pay
+        - billing.subscription_change
+        - billing.autopay_consent
+        - billing.refund_request
+        - billing.bank_confirm
+        - billing.refund_confirm
+        - billing.dispute_decide
+        - account.self_read
+        - account.profile_update
+        - account.avatar_write
+        - account.password_change
+        - account.email_change
+        - account.delete
+        - pat.create
+        - pat.metadata_revoke
+        - oauth.refresh_revoke
+        - admin.grant_issue_expand
+        - admin.account_block
+        - admin.account_role_update
+        - admin.account_delete
+        - admin.query
+        - admin.audit_read
+        - admin.outbox_retry
+        - admin.tenant_block
+        - admin.configuration_write
+        - admin.account_profile_update
+
+    CapabilityDenialCode:
+      type: string
+      enum:
+        - AUTHENTICATION_REQUIRED
+        - MFA_REQUIRED
+        - TOKEN_REVOKED
+        - TENANT_REQUIRED
+        - TENANT_MISMATCH
+        - TENANT_NOT_FOUND
+        - MEMBERSHIP_INACTIVE
+        - SCOPE_DENIED
+        - SESSION_REQUIRED
+        - ADMIN_GRANT_REQUIRED
+        - ADMIN_SCOPE_DENIED
+        - RESOURCE_NOT_FOUND
+        - VERSION_CONFLICT
+        - IDEMPOTENCY_CONFLICT
+        - QUOTA_EXCEEDED
+        - CAPABILITY_DISABLED
+        - READ_ONLY
+        - OWNER_REQUIRED
+        - LAST_ADMIN
+        - OWNER_MEMBERSHIP_PROTECTED
+        - INVITATION_EXPIRED
+        - INVITATION_EMAIL_MISMATCH
+        - FREE_ELIGIBILITY_USED
+        - PAYMENT_PENDING
+        - INVALID_STATE
+        - CONFIRMATION_REQUIRED
+        - CONFIRMATION_EXPIRED
+        - RATE_LIMITED
+        - DEPENDENCY_UNAVAILABLE
+        - POLICY_NOT_CONFIGURED
+        - VALIDATION_FAILED
+    CapabilityRestrictionCode:
+      type: string
+      enum:
+        - PAYMENT_EXPIRED
+        - OVER_QUOTA
+        - OWNER_PAUSE
+        - PLATFORM_BLOCK
+        - PAYMENT_DISPUTE
+        - PENDING_FIRST_PAYMENT
+    TenantCapabilityDto:
+      type: object
+      additionalProperties: false
+      required: [action, allowed, denialCodes, restrictions]
+      properties:
+        action:
+          $ref: '#/components/schemas/CapabilityAction'
+        allowed: {type: boolean}
+        denialCodes:
+          type: array
+          maxItems: 20
+          items:
+            $ref: '#/components/schemas/CapabilityDenialCode'
+        restrictions:
+          type: array
+          maxItems: 20
+          items:
+            $ref: '#/components/schemas/CapabilityRestrictionCode'
+    TenantCapabilitiesDto:
+      type: object
+      additionalProperties: false
+      required: [tenantId, actorUserId, policyVersion, entitlementVersion, membershipVersion, flagVersion, evaluatedAt, effectiveAt, expiresAt, items, durationsSeconds]
+      properties:
+        tenantId: {type: string, format: uuid}
+        actorUserId: {type: string, format: uuid}
+        policyVersion: {type: string, minLength: 1, maxLength: 100}
+        entitlementVersion: {type: string, pattern: '^[1-9][0-9]*$'}
+        membershipVersion: {type: string, pattern: '^[1-9][0-9]*$'}
+        flagVersion: {type: string, minLength: 1, maxLength: 100, description: Opaque hash of the complete versioned public configuration; never a maximum per-key version.}
+        evaluatedAt: {type: string, format: date-time}
+        effectiveAt: {type: string, format: date-time}
+        expiresAt: {type: string, format: date-time, description: "Exclusive minimum of source leases and actual credential expiry, at most 30 seconds; never sliding."}
+        items:
+          type: array
+          maxItems: 200
+          items:
+            $ref: '#/components/schemas/TenantCapabilityDto'
+        durationsSeconds:
+          type: object
+          description: Public UNPAID_CREATION_WINDOW_SECONDS and WIRE_RECONCILIATION_TARGET_SECONDS only.
+          additionalProperties: {type: integer, format: int64, minimum: 1}
+
     ConnectedAppsResponseDto:
       type: object
       required: [available, items]

@@ -97,6 +97,16 @@ public final class CapabilityEvaluator {
     this.clock = Objects.requireNonNull(clock);
   }
 
+  /** Applicable tenant-level advisory actions from the same closed policy inventory. */
+  public static Set<Action> tenantActions() {
+    var result = EnumSet.noneOf(Action.class);
+    RULES.forEach(
+        (action, rule) -> {
+          if (Set.of("TENANT", "TENANT_FINANCE").contains(rule.scope())) result.add(action);
+        });
+    return Collections.unmodifiableSet(result);
+  }
+
   public Mono<Decision> evaluate(Action action, Target target) {
     return decisions(Set.of(Objects.requireNonNull(action)), target).map(d -> d.get(action));
   }

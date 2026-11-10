@@ -12,6 +12,17 @@ message CheckRpcAuthorityRequest {
   bool mutation = 4;
 }
 message RpcTrustDecision { bool allowed = 1; }
+// Current primary authority for advisory capabilities. Never contains credentials or PII.
+message RpcActorFacts {
+  string actor_user_id = 1;
+  string actor_generation = 2;
+  string credential_id = 3;
+  optional string session_id = 4;
+  bool global_admin = 5;
+  bool web_mfa = 6;
+  repeated string scopes = 7;
+  string expires_at = 8;
+}
 message ConsumeRpcAssertionRequest {
   string recipient = 1;
   string issuer = 2;
@@ -29,4 +40,5 @@ service RpcTrustControlService {
   rpc CheckRpcAuthority(CheckRpcAuthorityRequest) returns (RpcTrustDecision);
   rpc ConsumeRpcAssertion(ConsumeRpcAssertionRequest) returns (RpcTrustDecision);
   rpc CheckRpcKey(CheckRpcKeyRequest) returns (RpcTrustDecision);
+  rpc GetRpcActorFacts(CheckRpcAuthorityRequest) returns (RpcActorFacts);
 }
