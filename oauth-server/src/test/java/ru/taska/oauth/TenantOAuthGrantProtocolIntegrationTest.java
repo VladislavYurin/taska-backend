@@ -1,6 +1,7 @@
 package ru.taska.oauth;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.doThrow;
@@ -25,6 +26,8 @@ import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
@@ -200,6 +203,76 @@ class TenantOAuthGrantProtocolIntegrationTest {
                 .getContentAsString());
     assertThat(parent.path("tenant_id").asText()).isEqualTo(A);
     assertThat(parent.path("integration_grant_id").asText()).isEqualTo(grant);
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"deny", "missing", "duplicate"})
+  void refusalRedirectsWithAccessDeniedAndNeverClaimsTheGrant(String decision) throws Exception {
+    var pending = pending("read write offline_access");
+    String grant = approved(pending, A, "read", "write");
+    var refusal =
+        post("/oauth2/authorize")
+            .session(pending.session)
+            .with(authentication(actor()))
+            .param("client_id", CLIENT)
+            .param("state", pending.state)
+            .param("tenant_grant", grant)
+            .param(
+                pending.json.path("csrf_parameter").asText(),
+                pending.json.path("csrf_token").asText());
+    if (!decision.equals("deny")) refusal.param("scope", "read", "write");
+    if (!decision.equals("missing"))
+      refusal.param(
+          "decision",
+          decision.equals("duplicate") ? new String[] {"allow", "deny"} : new String[] {"deny"});
+    var location =
+        mvc.perform(refusal)
+            .andExpect(status().is3xxRedirection())
+            .andReturn()
+            .getResponse()
+            .getRedirectedUrl();
+    assertThat(location)
+        .startsWith(REDIRECT)
+        .contains("error=access_denied", "state=client-state", "iss=")
+        .doesNotContain("code=");
+    verify(identity, never()).claimTenantGrant(anyString(), anyString(), anyString(), anyString());
+    // The pending request is gone, so the refused state can't be completed later either.
+    assertThat(jdbc.queryForObject("SELECT count(*) FROM oauth2_authorization", Integer.class))
+        .isZero();
+    assertThat(jdbc.queryForObject("SELECT count(*) FROM oauth2_authorization_consent", Integer.class))
+        .isZero();
+  }
+
+  @Test
+  void rejectedBindingChangeLeavesTheStoredAuthorizationUntouched() throws Exception {
+    var pending = pending("read offline_access");
+    String grant = approved(pending, A, "read");
+    var issued = token(code(allow(pending, grant, "read", "offline_access")), 200);
+    var authorization =
+        grants.findByToken(
+            issued.path("refresh_token").asText(),
+            org.springframework.security.oauth2.server.authorization.OAuth2TokenType.REFRESH_TOKEN);
+    String other = UUID.randomUUID().toString();
+    assertThatThrownBy(
+            () ->
+                grants.save(
+                    OAuth2Authorization.from(authorization)
+                        .attribute(TenantOAuthGrants.GRANT, other)
+                        .attribute(TenantOAuthGrants.TENANT, B)
+                        .build()))
+        .isInstanceOf(IllegalStateException.class);
+    // Attributes and binding columns roll back together.
+    var stored = grants.findById(authorization.getId());
+    assertThat((String) stored.getAttribute(TenantOAuthGrants.GRANT)).isEqualTo(grant);
+    assertThat((String) stored.getAttribute(TenantOAuthGrants.TENANT)).isEqualTo(A);
+    var row =
+        jdbc.queryForMap(
+            "SELECT integration_grant_id::text AS grant,tenant_id::text AS tenant"
+                + " FROM oauth2_authorization");
+    assertThat(row.get("grant")).isEqualTo(grant);
+    assertThat(row.get("tenant")).isEqualTo(A);
+    assertThat(introspect(issued.path("access_token").asText()).path("tenant_id").asText())
+        .isEqualTo(A);
   }
 
   @Test
