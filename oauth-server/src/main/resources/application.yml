@@ -33,6 +33,8 @@ taska:
     metadata-ttl: 5m
     introspection-client-id: ${OAUTH_INTROSPECTION_CLIENT_ID:auth-service}
     introspection-secret: ${OAUTH_INTROSPECTION_SECRET:}
+    # TAS-498: bind each consent to a tenant grant approved through auth-service; refuses legacy grants.
+    tenant-grants: ${OAUTH_TENANT_GRANTS_ENABLED:false}
     auth:
       host: ${AUTH_GRPC_HOST:auth-service}
       port: ${AUTH_GRPC_PORT:9090}

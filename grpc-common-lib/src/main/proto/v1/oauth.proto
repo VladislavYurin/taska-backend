@@ -62,6 +62,8 @@ message RevokeConnectedAppRequest {
  string user_id = 2;
  string session_access_token = 3;
  string app_id = 4;
+ // TAS-498: revoke only this company's connection; absent revokes every connection of the app.
+ optional string tenant_id = 5;
 }
 message ConnectedApp {
  string app_id = 1;
@@ -72,5 +74,7 @@ message ConnectedApp {
  google.protobuf.Timestamp connected_at = 6;
  google.protobuf.Timestamp last_used_at = 7;
  google.protobuf.Timestamp expires_at = 8;
+ // TAS-498: the one company a tenant-bound connection was approved for; absent for legacy grants.
+ optional string tenant_id = 9;
 }
 message ListConnectedAppsResponse { bool available = 1; repeated ConnectedApp items = 2; }

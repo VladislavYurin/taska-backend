@@ -14,13 +14,15 @@ final class SingleUseCodeProvider implements AuthenticationProvider {
   private final JdbcTemplate jdbc;
   private final TransactionTemplate transactions;
   private final OAuthGrantStore grants;
+  private final TenantOAuthGrants tenants;
 
   SingleUseCodeProvider(AuthenticationProvider delegate, JdbcTemplate jdbc,
-      TransactionTemplate transactions, OAuthGrantStore grants) {
+      TransactionTemplate transactions, OAuthGrantStore grants, TenantOAuthGrants tenants) {
     this.delegate = delegate;
     this.jdbc = jdbc;
     this.transactions = transactions;
     this.grants = grants;
+    this.tenants = tenants;
   }
 
   @Override
@@ -39,7 +41,8 @@ final class SingleUseCodeProvider implements AuthenticationProvider {
           || !grant.getRegisteredClientId().equals(client.getRegisteredClient().getId()))
         return new Outcome(null, true);
       var code = grant.getToken(OAuth2AuthorizationCode.class);
-      if (code == null || !code.isActive()) {
+      // TAS-498: tenant mode exchanges only a bound authorization whose grant is still live.
+      if (code == null || !code.isActive() || (tenants.enabled() && !tenants.live(grant))) {
         grants.revoke(grant.getId());
         return new Outcome(null, true);
       }

@@ -36,6 +36,21 @@ public class OAuthGrantStore implements OAuth2AuthorizationService {
       authorization = OAuth2Authorization.from(authorization)
           .attribute(CONSENT_EXPIRES, Long.toString(Instant.now().plusSeconds(600).getEpochSecond())).build();
     delegate.save(authorization);
+    var binding = TenantOAuthGrants.binding(authorization);
+    // TAS-498: queryable copy of the immutable binding; a different grant can never replace it.
+    if (binding != null
+        && jdbc.update(
+                "UPDATE oauth2_authorization SET integration_grant_id=?,tenant_id=?,grant_version=?"
+                    + " WHERE id=? AND (integration_grant_id IS NULL OR (integration_grant_id=? AND"
+                    + " tenant_id=? AND grant_version=?))",
+                binding.grant(),
+                binding.tenant(),
+                binding.version(),
+                authorization.getId(),
+                binding.grant(),
+                binding.tenant(),
+                binding.version())
+            != 1) throw new IllegalStateException("Tenant grant binding is immutable");
     if (authorization.getRefreshToken() != null)
       jdbc.update(
           "INSERT INTO oauth_refresh_history(token_hash,grant_id,family_expires_at) VALUES (?,?,?)"

@@ -97,9 +97,20 @@ public class OAuthIntrospectionClient {
   }
 
   public Mono<Void> revokeConnectedApp(UUID owner, String appId) {
+    return revokeConnectedApp(owner, appId, null);
+  }
+
+  public Mono<Void> revokeConnectedApp(UUID owner, String appId, UUID tenant) {
+    var uri = appsUri(owner, appId);
+    if (tenant != null)
+      uri =
+          org.springframework.web.util.UriComponentsBuilder.fromUri(uri)
+              .queryParam("tenantId", tenant)
+              .build()
+              .toUri();
     return client
         .delete()
-        .uri(appsUri(owner, appId))
+        .uri(uri)
         .headers(
             headers ->
                 headers.setBasicAuth(
@@ -140,12 +151,33 @@ public class OAuthIntrospectionClient {
         if (!"offline_access".equals(scope)) scopes.add(scope);
       }
       if (!scopes.contains("read") || scopes.size() > 2) throw invalid();
+      UUID subject = UUID.fromString(node.path("sub").asText("")),
+          grant = UUID.fromString(node.path("grant_id").asText("")),
+          token = UUID.fromString(node.path("jti").asText(""));
+      // TAS-498 binding: all three claims together, or none for a legacy unbound grant.
+      int bound = 0;
+      for (String claim : List.of("integration_grant_id", "tenant_id", "grant_version"))
+        if (node.has(claim)) bound++;
+      if (bound == 0)
+        return new OAuthGrantIdentity(subject, grant, token, List.copyOf(scopes), expires);
+      JsonNode generation = node.path("grant_version");
+      long version =
+          generation.isIntegralNumber()
+              ? generation.asLong(0)
+              : Long.parseLong(generation.asText(""));
+      // Standard introspection member: the public client the grant was approved for.
+      String client = node.path("client_id").asText("");
+      if (bound != 3 || version < 1 || client.isBlank()) throw invalid();
       return new OAuthGrantIdentity(
-          UUID.fromString(node.path("sub").asText("")),
-          UUID.fromString(node.path("grant_id").asText("")),
-          UUID.fromString(node.path("jti").asText("")),
+          subject,
+          grant,
+          token,
           List.copyOf(scopes),
-          expires);
+          expires,
+          UUID.fromString(node.path("integration_grant_id").asText("")),
+          UUID.fromString(node.path("tenant_id").asText("")),
+          version,
+          client);
     } catch (IllegalArgumentException error) {
       throw invalid();
     }
