@@ -5,7 +5,6 @@ import java.time.Clock;
 import java.util.Map;
 import java.util.Set;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -36,7 +35,6 @@ public class StripePaymentProviderConfiguration {
   }
 
   @Bean
-  @ConditionalOnMissingBean(PaymentProviderRegistry.class)
   PaymentProviderRegistry stripePaymentProviderRegistry(
       StripePaymentProvider provider,
       @Value("${TASKA_BILLING_STRIPE_MERCHANT_ACCOUNT}") String merchantAccount,

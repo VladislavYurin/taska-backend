@@ -153,8 +153,12 @@ public final class StripePaymentProvider implements PaymentProvider {
         ? request.contentType(MediaType.APPLICATION_FORM_URLENCODED).bodyValue(form)
         : request;
     return prepared.retrieve()
-        .onStatus(s -> s.value() == 404, response -> Mono.error(new ProviderException(ProviderException.Reason.NOT_FOUND)))
-        .onStatus(s -> s.isError(), response -> Mono.error(new ProviderException(ProviderException.Reason.UNKNOWN_OUTCOME)))
+        .onStatus(s -> s.value() == 404,
+            response -> Mono.error(new ProviderException(ProviderException.Reason.NOT_FOUND)))
+        .onStatus(s -> s.value() == 429 || s.is5xxServerError(),
+            response -> Mono.error(new ProviderException(ProviderException.Reason.UNKNOWN_OUTCOME)))
+        .onStatus(s -> s.is4xxClientError(),
+            response -> Mono.error(new ProviderException(ProviderException.Reason.INVALID_STATE)))
         .bodyToMono(String.class).flatMap(raw -> Mono.fromCallable(() -> json.readTree(raw)));
   }
 
