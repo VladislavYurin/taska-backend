@@ -130,6 +130,14 @@
 
 **Очистка:** P/Q архивировать только после зависимых сценариев; собственных участников удалить до архивации, сохранив одного ADMIN.
 
+### Native variant TAS-340
+
+Owned local tier: `python3 scripts/harness/project_acl_e2e.py`; [runtime/setup/cleanup](../../project-service/TENANT-API.md). The ordinary HTTP runner retains its legacy subset.
+
+Against real Auth/Root/Billing and native project/workflow/issue app roles, verify implicit tenant administration, current grant generations, same-company member targets, path/context/batch/stats/direct RPC isolation, actual administrative MFA/audit and current authority on create replay. A retry with the same UUID key uses one resource/slot/event; a different payload conflicts. Settings/types and the complete workflow graph must exist before OPEN. Confirmed initialization rejection compensates owned resources/reservation. Unknown outcome retains the slot; the scoped worker completes the same accepted operation after initiating-credential revocation and creation flag-off, without another admission.
+
+This proves the named subset, not full product E2E, Kafka delivery or stand rollout.
+
 ## E2E-09. Реестр типов, оформление и порядок
 
 **Условия:** ADMIN P; начальный реестр прочитан.

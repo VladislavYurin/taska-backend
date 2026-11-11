@@ -131,7 +131,7 @@ public final class BillingCatalog {
             v -> {
               var c = RpcContextBridge.details(v).getContext();
               if (c.getCredentialKind() != CredentialKind.CREDENTIAL_KIND_SERVICE
-                  || !Set.of("tenant-service", "api-gateway").contains(c.getIssuerService())
+                  || !Set.of("tenant-service", "api-gateway", "project-service").contains(c.getIssuerService())
                   || !v.scopes().contains("catalog:resolve"))
                 return Mono.error(fail(DomainStatus.PERMISSION_DENIED, "SCOPE_DENIED"));
               UUID id;
@@ -163,7 +163,7 @@ public final class BillingCatalog {
               var c = RpcContextBridge.details(v).getContext();
               if (c.getCredentialKind() != CredentialKind.CREDENTIAL_KIND_SERVICE
                   || v.tenantId() != null
-                  || !Set.of("tenant-service", "api-gateway").contains(c.getIssuerService())
+                  || !Set.of("tenant-service", "api-gateway", "project-service").contains(c.getIssuerService())
                   || !c.hasServicePurpose()
                   || !"billing".equals(c.getServicePurpose())
                   || !v.scopes().contains("catalog:read"))

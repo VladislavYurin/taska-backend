@@ -87,14 +87,27 @@ public class TenantStorageConfiguration {
           provider,
       @Value("${DEPLOY_ENVIRONMENT:local}") String environment) {
     var security = provider.getIfAvailable();
-    if (security != null)
-      return new ru.taska.security.tenant.TenantServerInterceptor(
-          security,
-          java.util.Map.of(
-              ru.taska.api.b2b.v1.WorkflowProvisioningServiceGrpc.getProvisionTenantWorkflowMethod()
-                  .getFullMethodName(),
-              new ru.taska.security.tenant.RpcContextSecurity.Policy(true, true)),
-          environment);
+    if (security != null) {
+      var policies =
+          new java.util.HashMap<String, ru.taska.security.tenant.RpcContextSecurity.Policy>();
+      policies.put(
+          ru.taska.api.b2b.v1.WorkflowProvisioningServiceGrpc.getProvisionTenantWorkflowMethod()
+              .getFullMethodName(),
+          new ru.taska.security.tenant.RpcContextSecurity.Policy(true, true));
+      policies.put(
+          ru.taska.api.b2b.v1.ProjectWorkflowBootstrapServiceGrpc.getEnsureMethod()
+              .getFullMethodName(),
+          new ru.taska.security.tenant.RpcContextSecurity.Policy(true, true));
+      policies.put(
+          ru.taska.api.b2b.v1.ProjectWorkflowBootstrapServiceGrpc.getCancelMethod()
+              .getFullMethodName(),
+          new ru.taska.security.tenant.RpcContextSecurity.Policy(true, true));
+      policies.put(
+          ru.taska.api.b2b.v1.ProjectWorkflowBootstrapServiceGrpc.getReadMethod()
+              .getFullMethodName(),
+          new ru.taska.security.tenant.RpcContextSecurity.Policy(true, false));
+      return new ru.taska.security.tenant.TenantServerInterceptor(security, policies, environment);
+    }
     return new ServerInterceptor() {
       public <Q, S> ServerCall.Listener<Q> interceptCall(
           ServerCall<Q, S> call, Metadata headers, ServerCallHandler<Q, S> next) {

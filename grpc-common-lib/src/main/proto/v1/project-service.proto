@@ -79,14 +79,14 @@ service ProjectService {
   rpc CheckProjectMemberRole(CheckProjectMemberRoleRequest) returns (CheckProjectMemberRoleResponse);
 
   /**
-   * Внутренний метод. Возвращает ключ проекта по ID без проверки прав.
-   * Используется только сервисами, которые уже проверили права.
+   * Internal key lookup. Native tenant storage independently checks the delegated actor's ACL.
+   * The legacy profile retains its existing service contract.
    */
   rpc GetProjectKeyInternal (GetProjectKeyInternalRequest) returns (ProjectKeyResponse);
 
   /**
-   * Внутренний метод. Возвращает информацию по списку ID проектов без проверки прав.
-   * Используется сервисами, которые уже проверили права.
+   * Internal batch lookup. Native tenant storage filters tenant and project ACL before results.
+   * The legacy profile retains its existing service contract.
    */
   rpc GetProjectInfoBatchInternal (GetProjectInfoBatchInternalRequest) returns (GetProjectInfoBatchInternalResponse);
 
@@ -97,6 +97,8 @@ service ProjectService {
 }
 
 message CreateProjectRequest {
+  // Stable retry identity for the native tenant API; legacy callers may omit it.
+  optional string idempotency_key = 3;
   // TAS-316: untrusted until verified by the message-bound mTLS/JWS interceptor.
   ru.taska.b2b.v1.RequestContext context = 100;
 

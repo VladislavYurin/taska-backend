@@ -218,6 +218,9 @@ public final class RpcContextSecurity {
       var original = RequestContext.parseFrom(parent.wire());
       if (!parent.scopes().containsAll(scopes)) throw Status.PERMISSION_DENIED.asRuntimeException();
       var now = clock.instant();
+      var expiry = Instant.parse(original.getContext().getExpiresAt());
+      if (!now.isBefore(expiry)) throw unauthenticated();
+      if (expiry.isAfter(now.plusSeconds(30))) expiry = now.plusSeconds(30);
       var c =
           original.getContext().toBuilder()
               .clearScopes()
@@ -226,7 +229,7 @@ public final class RpcContextSecurity {
               .setIssuerService(service)
               .setAudienceService(audience)
               .setIssuedAt(now.toString())
-              .setExpiresAt(now.plusSeconds(30).toString())
+              .setExpiresAt(expiry.toString())
               .setAssertionId(UUID.randomUUID().toString());
       return original.toBuilder().setContext(c).build();
     } catch (InvalidProtocolBufferException e) {

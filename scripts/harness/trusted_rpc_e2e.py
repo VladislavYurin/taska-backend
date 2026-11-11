@@ -57,6 +57,9 @@ class TrustedLocal(e.Local):
     def prepare_extra_databases(self):
         pass
 
+    def configure_container(self, name, service):
+        pass
+
     def __init__(self, root, store, state):
         super().__init__(root, store, state)
         self.material = self.dir / 'material'
@@ -226,6 +229,7 @@ class TrustedLocal(e.Local):
             self.configure_service(name, env, props)
             path = self.material / name / 'application.properties'
             path.write_text(''.join(k + '=' + v + '\n' for k, v in props.items()))
+            self.configure_container(name, s)
             compose['services'][name] = s
         for name, s in compose['services'].items():
             s['labels'], s['networks'] = {e.LABEL: self.state['ownerNonce']}, ['default']

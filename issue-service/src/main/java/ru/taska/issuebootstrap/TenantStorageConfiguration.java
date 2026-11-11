@@ -224,6 +224,7 @@ public class TenantStorageConfiguration {
             ru.taska.api.b2b.v1.ProjectQuotaReadServiceGrpc.getGetTenantTaskQuotaSummaryMethod()
                 .getFullMethodName()))
       policies.put(method, new ru.taska.security.tenant.RpcContextSecurity.Policy(true, false));
+    policies.put(ru.taska.api.b2b.v1.ProjectLabelsServiceGrpc.getReadMethod().getFullMethodName(),new ru.taska.security.tenant.RpcContextSecurity.Policy(true,false));
     ServerInterceptor quotaSecurity =
         trust == null
             ? null

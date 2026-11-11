@@ -585,6 +585,23 @@ class ProjectQuotaIntegrationTest {
   }
 
   @Test
+  void cancellationRemovesInitializedSettingsAndTypesAtomically() {
+    var reservation=reserve(A,UUID.randomUUID(),UUID.randomUUID());
+    as(A,owner.provision(reservation,command("INITIALIZED"))).block(WAIT);
+    var projects=new TenantProjectStore(ownerTx,new tools.jackson.databind.ObjectMapper());
+    as(A,projects.execute(session->session.types().seedDefaults(reservation.resource())
+        .then(session.settings(reservation.resource(),"{\"allowedIssueTypes\":[\"TASK\",\"BUG\",\"STORY\"]}",ACTOR)))).block(WAIT);
+    assertEquals(3,rows(ownerAdmin,"project_issue_types"));
+    assertEquals(1,rows(ownerAdmin,"project_settings"));
+    var released=as(A,authorityClient.release(reservation)).block(WAIT);
+    assertEquals(State.RELEASED,released.state());
+    assertEquals("0",usage(A).getReserved());
+    for(var table:List.of("projects","project_members","project_settings","project_issue_types"))assertEquals(0,rows(ownerAdmin,table));
+    assertEquals(OwnerState.CANCELLED,as(A,owner.inspect(reservation)).block(WAIT).state());
+    assertEquals(State.RELEASED,as(A,authorityClient.release(reservation)).block(WAIT).state());
+  }
+
+  @Test
   void outageNeverFreesUnknownReservationAndReconciliationCancelsHiddenResource() {
     var r = reserve(A, UUID.randomUUID(), UUID.randomUUID());
     as(A, owner.provision(r, command("AA"))).block(WAIT);

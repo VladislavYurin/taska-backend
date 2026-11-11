@@ -34,7 +34,7 @@ class TenantWorkflowStorageIntegrationTest {
   static final Duration WAIT=Duration.ofSeconds(20);
   static final List<String> TABLES=List.of("workflows","statuses","transitions","validator_rules","workflow_bindings",
       "issue_type_move_workflow_pins","workflow_binding_changes","issue_type_creation_workflow_receipts",
-      "tenant_workflow_templates","workflow_template_instances","workflow_provisioning_receipts");
+      "tenant_workflow_templates","workflow_template_instances","workflow_provisioning_receipts","project_initializations");
   static ConnectionPool pool;
   static DatabaseClient raw,operator;
   static TenantTransactionExecutor tx;

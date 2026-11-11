@@ -2,8 +2,11 @@ package ru.taska.transport.grpc;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+
 import org.springframework.stereotype.Component;
+
 import reactor.core.publisher.Mono;
+
 import ru.taska.api.common.v1.Header;
 import ru.taska.api.project.v1.AddProjectMemberRequest;
 import ru.taska.api.project.v1.AddProjectMemberRequestBody;
@@ -53,46 +56,73 @@ public class GrpcProjectServiceClient {
     private final ProjectMapper projectMapper;
     private final GrpcClientProperties properties;
 
+    // Creation coordinates quota and workflow primaries; keep its budget independently
+    // configurable.
+    @org.springframework.beans.factory.annotation.Value("${taska.projects.creation-deadline:15s}")
+    private java.time.Duration creationDeadline = java.time.Duration.ofSeconds(15);
+
+    @org.springframework.beans.factory.annotation.Value("${taska.projects.context-deadline:10s}")
+    private java.time.Duration contextDeadline = java.time.Duration.ofSeconds(10);
+
     /**
      * Вызов создания нового проекта из Rest request
+     *
      * @param request параметры создаваемого проекта (projectKey, name)
      * @param context контекст запроса (содержит userId из JWT)
      * @return Rest DTO созданного проекта
      */
     public Mono<ProjectResponseDto> createProject(
-            Mono<CreateProjectRequestDto> request,
-            GatewayContext context
-    ){
-        log.info("[{}] Calling createProject",context.requestId());
+            Mono<CreateProjectRequestDto> request, GatewayContext context) {
+        return createProject(request, context, null);
+    }
 
-        return request.flatMap(requestDto -> {
-                    CreateProjectRequestBody.Builder body = CreateProjectRequestBody.newBuilder()
-                            .setProjectKey(requestDto.getProjectKey())
-                            .setName(requestDto.getName())
-                            .setUserId(context.userContext().userId());
-                    if (requestDto.getDescription() != null) {
-                        body.setDescription(requestDto.getDescription());
-                    }
-                    if (requestDto.getColor() != null) {
-                        body.setColor(requestDto.getColor());
-                    }
+    public Mono<ProjectResponseDto> createProject(
+            Mono<CreateProjectRequestDto> request, GatewayContext context, String idempotencyKey) {
+        log.info("[{}] Calling createProject", context.requestId());
 
-                    return ru.taska.security.tenant.RpcContextBridge.outbound(() -> dynamicStub().createProject(
-                            CreateProjectRequest.newBuilder()
-                                    .setHeader(buildGrpcHeader(context))
-                                    .setBody(body)
-                                    .build()
-                    ));
-                }
-        ).map(projectMapper::toRestProjectResponse);
+        return request.flatMap(
+                        requestDto -> {
+                            CreateProjectRequestBody.Builder body =
+                                    CreateProjectRequestBody.newBuilder()
+                                            .setProjectKey(requestDto.getProjectKey())
+                                            .setName(requestDto.getName())
+                                            .setUserId(context.userContext().userId());
+                            if (requestDto.getDescription() != null) {
+                                body.setDescription(requestDto.getDescription());
+                            }
+                            if (requestDto.getColor() != null) {
+                                body.setColor(requestDto.getColor());
+                            }
+
+                            var command =
+                                    CreateProjectRequest.newBuilder()
+                                            .setHeader(buildGrpcHeader(context))
+                                            .setBody(body);
+                            if (idempotencyKey != null) command.setIdempotencyKey(idempotencyKey);
+                            return ru.taska.security.tenant.RpcContextBridge.outbound(
+                                    () ->
+                                            projectServiceStub
+                                                    .withDeadlineAfter(
+                                                            Math.max(
+                                                                    properties
+                                                                            .projectService()
+                                                                            .deadlineDuration()
+                                                                            .toMillis(),
+                                                                    creationDeadline.toMillis()),
+                                                            TimeUnit.MILLISECONDS)
+                                                    .createProject(command.build()));
+                        })
+                .map(projectMapper::toRestProjectResponse);
     }
 
     /**
      * Вызов обновления проекта (PATCH-семантика)
+     *
      * @param projectId идентификатор проекта
      * @param request поля для обновления (name/description/color, все опциональны)
      * @param clearColor если true — явный сброс color в null (независимо от request.getColor())
-     * @param clearDescription если true — явный сброс description в null (независимо от request.getDescription())
+     * @param clearDescription если true — явный сброс description в null (независимо от
+     *     request.getDescription())
      * @param context контекст запроса
      * @return Rest DTO обновлённого проекта
      */
@@ -101,8 +131,7 @@ public class GrpcProjectServiceClient {
             Mono<UpdateProjectRequestDto> request,
             boolean clearColor,
             boolean clearDescription,
-            GatewayContext context
-    ) {
+            GatewayContext context) {
         log.info("[{}] Calling updateProject", context.requestId());
 
         return request.flatMap(requestDto -> {
@@ -147,25 +176,42 @@ public class GrpcProjectServiceClient {
 
     /**
      * Вызов получения контекста проекта
+     *
      * @param projectId идентификатор проекта
      * @param context контекст запроса
-     *
      * @return Rest DTO полученного контекста проекта
      */
     public Mono<ProjectContextResponseDto> getProjectContext(
-            String projectId,
-            GatewayContext context
-    ) {
-        return ru.taska.security.tenant.RpcContextBridge.outbound(() -> dynamicStub().getProjectContext(
-                GetProjectContextRequest.newBuilder()
-                        .setHeader(buildGrpcHeader(context))
-                        .setBody(GetProjectContextRequestBody.newBuilder()
-                                .setProjectId(projectId)
-                                .setActorUserId(context.userContext().userId())
-                                .setGlobalRole(projectMapper.toGlobalRoleProto(context.userContext().globalRole()))
-                                .build())
-                        .build()
-        )).map(projectMapper::toRestProjectContextResponse);
+            String projectId, GatewayContext context) {
+        return ru.taska.security.tenant.RpcContextBridge.outbound(
+                        () ->
+                                projectServiceStub
+                                        .withDeadlineAfter(
+                                                Math.max(
+                                                        properties
+                                                                .projectService()
+                                                                .deadlineDuration()
+                                                                .toMillis(),
+                                                        contextDeadline.toMillis()),
+                                                TimeUnit.MILLISECONDS)
+                                        .getProjectContext(
+                                                GetProjectContextRequest.newBuilder()
+                                                        .setHeader(buildGrpcHeader(context))
+                                                        .setBody(
+                                                                GetProjectContextRequestBody
+                                                                        .newBuilder()
+                                                                        .setProjectId(projectId)
+                                                                        .setActorUserId(
+                                                                                context.userContext()
+                                                                                        .userId())
+                                                                        .setGlobalRole(
+                                                                                projectMapper
+                                                                                        .toGlobalRoleProto(
+                                                                                                context.userContext()
+                                                                                                        .globalRole()))
+                                                                        .build())
+                                                        .build()))
+                .map(projectMapper::toRestProjectContextResponse);
     }
 
     /**
