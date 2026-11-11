@@ -1,1 +1,2 @@
 ru.taska.security.tenant.autoconfigure.ManagedRpcTrustAutoConfiguration
+ru.taska.security.tenant.autoconfigure.NativeDomainReadsAutoConfiguration

@@ -40,6 +40,8 @@ public final class TenantProjectStore {
       this.db = db; this.tenant = tenant; this.context=context; this.actor = context.actorId();
     }
 
+    DatabaseClient database() { return db; }
+
     public ProjectIssueTypeRepository types() { return new ProjectIssueTypeRepository(db, tenant); }
     public ProjectTypeOperationRepository operations() { return new ProjectTypeOperationRepository(db, tenant, () -> RecoveryStamp.from(context)); }
     public IssueTypeCreationRepository creations() { return new IssueTypeCreationRepository(db, tenant, () -> RecoveryStamp.from(context), json); }
@@ -195,7 +197,7 @@ public final class TenantProjectStore {
     return value==null ? sql.bindNull(name,String.class) : sql.bind(name,value);
   }
 
-  private static Project project(Row r) {
+  static Project project(Row r) {
     var archived=r.get("archived_at",OffsetDateTime.class);
     return Project.builder().id(r.get("id",UUID.class)).projectKey(r.get("project_key",String.class))
         .name(r.get("name",String.class)).createdBy(r.get("created_by",UUID.class))

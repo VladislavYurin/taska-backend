@@ -30,7 +30,7 @@ class TenantProjectStorageIntegrationTest {
   static final Duration WAIT=Duration.ofSeconds(20);
   static final String APP=UUID.randomUUID().toString(), DEPLOY=UUID.randomUUID().toString();
   static final List<String> TABLES=List.of("projects","project_members","project_settings","project_issue_types",
-      "project_type_operations","issue_type_creations","issue_type_deletions","outbox_events");
+      "project_type_operations","issue_type_creations","issue_type_deletions","outbox_events","project_creation_operations","project_authorization_audit");
   static DatabaseClient operator, raw;
   static ConnectionPool pool;
   static TenantTransactionExecutor tx;

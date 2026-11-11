@@ -261,7 +261,7 @@ class TenantIssueStorageIntegrationTest {
     for (String table :
         java.util.stream.Stream.concat(
                 TABLES.stream(),
-                java.util.stream.Stream.of("task_lifetime_quota_state", "task_quota_outbox"))
+                java.util.stream.Stream.of("task_lifetime_quota_state", "task_quota_outbox", "project_labels"))
             .toList()) assertEquals(0, count(table), table);
   }
 
@@ -642,7 +642,7 @@ class TenantIssueStorageIntegrationTest {
     for (String table :
         java.util.stream.Stream.concat(
                 TABLES.stream(),
-                java.util.stream.Stream.of("task_lifetime_quota_state", "task_quota_outbox"))
+                java.util.stream.Stream.of("task_lifetime_quota_state", "task_quota_outbox", "project_labels"))
             .toList()) {
       assertTrue(
           operator
@@ -665,7 +665,7 @@ class TenantIssueStorageIntegrationTest {
                 .safeIssueRuntime(factory(pg.getUsername(), pg.getPassword()))
                 .afterPropertiesSet());
     assertEquals(
-        4L,
+        5L,
         operator
             .sql("SELECT count(*) n FROM issue_liquibase.databasechangelog")
             .map((r, m) -> r.get("n", Long.class))

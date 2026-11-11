@@ -140,6 +140,8 @@ public final class ProjectQuotaStore implements ProjectQuotaProtocol.Authority, 
                                               DomainStatus.FAILED_PRECONDITION,
                                               "QUOTA_EXCEEDED",
                                               Map.of(
+                                                  "code",
+                                                  "QUOTA_EXCEEDED",
                                                   "quota.kind",
                                                   "PROJECT",
                                                   "quota.used",
@@ -290,7 +292,7 @@ public final class ProjectQuotaStore implements ProjectQuotaProtocol.Authority, 
                                                                                             .expiresAt())
                                                                                 ? "RESERVATION_CHANGED"
                                                                                 : "RESERVATION_EXPIRED")))
-                                                        .then(refresh(db, tenant))
+                                                        .then(refresh(db, tenant, r))
                                                         .then(find(db, tenant, r.operation()));
                                                   });
                                             });
@@ -453,7 +455,7 @@ public final class ProjectQuotaStore implements ProjectQuotaProtocol.Authority, 
                           n == 1
                               ? Mono.<Void>empty()
                               : Mono.error(fail(DomainStatus.ABORTED, "RESERVATION_CHANGED")))
-                  .then(refresh(db, r.tenant()))
+                  .then(refresh(db, r.tenant(), r))
                   .then(find(db, r.tenant(), r.operation()));
             });
   }
@@ -489,7 +491,7 @@ public final class ProjectQuotaStore implements ProjectQuotaProtocol.Authority, 
                                                     DomainStatus.FAILED_PRECONDITION,
                                                     "PHYSICAL_DELETION_REQUIRED"));
                                           return effect(db, r, "RELEASE_USAGE")
-                                              .then(refresh(db, r.tenant()))
+                                              .then(refresh(db, r.tenant(), r))
                                               .then();
                                         });
                               }));
@@ -530,7 +532,11 @@ public final class ProjectQuotaStore implements ProjectQuotaProtocol.Authority, 
   }
 
   private Mono<Counter> refresh(DatabaseClient db, UUID tenant) {
-    return remote(owner.inventory(tenant))
+    return refresh(db, tenant, null);
+  }
+
+  private Mono<Counter> refresh(DatabaseClient db, UUID tenant, Reservation accepted) {
+    return remote(accepted == null ? owner.inventory(tenant) : owner.inventory(tenant, accepted))
         .flatMap(
             inventory -> {
               if (!tenant.equals(inventory.tenant()))
@@ -657,7 +663,11 @@ public final class ProjectQuotaStore implements ProjectQuotaProtocol.Authority, 
         .flatMap(
             c -> {
               String scope =
-                  (command == Command.LOOKUP || command == Command.READ) ? "read" : "write";
+                  command == Command.READ
+                      ? "read"
+                      : (command == Command.LOOKUP && c.scopes().contains("read"))
+                          ? "read"
+                          : "write";
               if (!c.scopes().contains(scope))
                 return Mono.error(fail(DomainStatus.PERMISSION_DENIED, "SCOPE_DENIED"));
               return authorize(c, command, operation).thenReturn(c);

@@ -1,6 +1,7 @@
 package ru.taska.controller;
 
 import io.grpc.Status;
+
 import org.assertj.core.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -17,7 +18,9 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.test.web.reactive.server.WebTestClient;
 import org.springframework.web.server.ResponseStatusException;
+
 import reactor.core.publisher.Mono;
+
 import ru.taska.api.auth.v1.ValidateAccessTokenResponse;
 import ru.taska.api.common.v1.UserContext;
 import ru.taska.domain.GatewayUserContext;
@@ -122,6 +125,58 @@ public class ProjectControllerTest {
     }
 
     @Test
+    void creationForwardsOneCanonicalRetryKey() {
+        mockAuthenticatedUser();
+        var key = UUID.randomUUID().toString();
+        var request = new CreateProjectRequestDto();
+        request.setProjectKey(PROJECT_KEY);
+        request.setName(PROJECT_NAME);
+        var response = new ProjectResponseDto();
+        response.setId(PROJECT_ID);
+        response.setProjectKey(PROJECT_KEY);
+        response.setName(PROJECT_NAME);
+        Mockito.when(projectClient.createProject(Mockito.any(), Mockito.any(), Mockito.eq(key)))
+                .thenReturn(Mono.just(response));
+        webTestClient
+                .post()
+                .uri("/api/v1/projects")
+                .header(HttpHeaders.AUTHORIZATION, TOKEN)
+                .header("Idempotency-Key", key)
+                .contentType(MediaType.APPLICATION_JSON)
+                .bodyValue(request)
+                .exchange()
+                .expectStatus()
+                .isCreated();
+        Mockito.verify(projectClient).createProject(Mockito.any(), Mockito.any(), Mockito.eq(key));
+        Mockito.verify(projectClient, Mockito.never()).createProject(Mockito.any(), Mockito.any());
+    }
+
+    @Test
+    void creationRejectsAmbiguousAndNoncanonicalRetryKeys() {
+        mockAuthenticatedUser();
+        var request = new CreateProjectRequestDto();
+        request.setProjectKey(PROJECT_KEY);
+        request.setName(PROJECT_NAME);
+        for (var headers :
+                List.of(
+                        new String[] {"AAAAAAAA-AAAA-AAAA-AAAA-AAAAAAAAAAAA"},
+                        new String[] {"1-1-1-1-1"},
+                        new String[] {""},
+                        new String[] {UUID.randomUUID().toString(), UUID.randomUUID().toString()}))
+            webTestClient
+                    .post()
+                    .uri("/api/v1/projects")
+                    .header(HttpHeaders.AUTHORIZATION, TOKEN)
+                    .header("Idempotency-Key", headers)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .bodyValue(request)
+                    .exchange()
+                    .expectStatus()
+                    .isBadRequest();
+        Mockito.verifyNoInteractions(projectClient);
+    }
+
+    @Test
     @DisplayName("Должен вернуть 400 Bad Request при пустом projectKey")
     void createProject_shouldReturn400_whenProjectKeyIsEmpty() {
         // given
@@ -179,7 +234,10 @@ public class ProjectControllerTest {
                 request.setName(PROJECT_NAME);
 
         Mockito.when(projectClient.createProject(Mockito.any(), Mockito.any()))
-                .thenReturn(Mono.error(new ResponseStatusException(HttpStatus.CONFLICT, "Project key already exists")));
+                .thenReturn(
+                        Mono.error(
+                                new ResponseStatusException(
+                                        HttpStatus.CONFLICT, "Project key already exists")));
 
         // when & then
         webTestClient.post()
@@ -196,7 +254,19 @@ public class ProjectControllerTest {
     }
 
     @org.junit.jupiter.params.ParameterizedTest
-    @org.junit.jupiter.params.provider.ValueSource(strings = {"", " ", "null", "[]", "42", "{", "{\"name\":123}", "{\"color\":{}}", "{\"projectKey\":\"NEW\"}", "{\"name\":\"   \"}"})
+    @org.junit.jupiter.params.provider.ValueSource(
+            strings = {
+                "",
+                " ",
+                "null",
+                "[]",
+                "42",
+                "{",
+                "{\"name\":123}",
+                "{\"color\":{}}",
+                "{\"projectKey\":\"NEW\"}",
+                "{\"name\":\"   \"}"
+            })
     void updateProjectRejectsInvalidBodyWithoutCallingBackend(String body) {
         mockAuthenticatedUser();
         var call = webTestClient.patch().uri("/api/v1/projects/{projectId}", PROJECT_ID)
@@ -313,7 +383,9 @@ public class ProjectControllerTest {
     }
 
     @Test
-    @DisplayName("PATCH с {\"color\": null} должен смаппиться в clearColor=true (явный сброс, а не \"не менять\")")
+    @DisplayName(
+            "PATCH с {\"color\": null} должен смаппиться в clearColor=true (явный сброс, а не \"не"
+                + " менять\")")
     void updateProject_shouldMapExplicitNullColorToClearColorTrue() {
         // given
         mockAuthenticatedUser();
@@ -338,7 +410,9 @@ public class ProjectControllerTest {
     }
 
     @Test
-    @DisplayName("PATCH без поля color вообще должен смаппиться в clearColor=false (\"не менять\", а не сброс)")
+    @DisplayName(
+            "PATCH без поля color вообще должен смаппиться в clearColor=false (\"не менять\", а не"
+                + " сброс)")
     void updateProject_shouldNotClearColor_whenColorFieldAbsent() {
         // given
         mockAuthenticatedUser();
@@ -519,7 +593,10 @@ public class ProjectControllerTest {
         mockAuthenticatedUser();
 
         Mockito.when(projectClient.getProject(Mockito.any(), Mockito.any()))
-                .thenReturn(Mono.error(new ResponseStatusException(HttpStatus.FORBIDDEN, "Access Denied")));
+                .thenReturn(
+                        Mono.error(
+                                new ResponseStatusException(
+                                        HttpStatus.FORBIDDEN, "Access Denied")));
 
         // when & then
         webTestClient.get()
@@ -578,7 +655,10 @@ public class ProjectControllerTest {
         request.setRole(ProjectMemberRoleDto.MEMBER);
 
         Mockito.when(projectClient.addProjectMember(Mockito.any(), Mockito.any(), Mockito.any()))
-                .thenReturn(Mono.error(new ResponseStatusException(HttpStatus.CONFLICT, "User already a member")));
+                .thenReturn(
+                        Mono.error(
+                                new ResponseStatusException(
+                                        HttpStatus.CONFLICT, "User already a member")));
 
         // when & then
         webTestClient.post()
@@ -702,18 +782,24 @@ public class ProjectControllerTest {
                 );
 
         // when & then
-        webTestClient.patch()
+        webTestClient
+                .patch()
                 .uri("/api/v1/projects/{projectId}/members/{userId}", PROJECT_ID, MEMBER_ID)
                 .header(HttpHeaders.AUTHORIZATION, TOKEN)
                 .contentType(MediaType.APPLICATION_JSON)
                 .bodyValue(request)
                 .exchange()
-                .expectStatus().isBadRequest()
-                .expectHeader().exists("X-Request-Id")
+                .expectStatus()
+                .isBadRequest()
+                .expectHeader()
+                .exists("X-Request-Id")
                 .expectBody()
-                .jsonPath("$.code").exists()
-                .jsonPath("$.message").exists()
-                .jsonPath("$.message").isEqualTo("Can't modify last admin: " + MEMBER_ID + " in project: " + PROJECT_ID);
+                .jsonPath("$.code")
+                .exists()
+                .jsonPath("$.message")
+                .exists()
+                .jsonPath("$.message")
+                .isEqualTo("Can't modify last admin: " + MEMBER_ID + " in project: " + PROJECT_ID);
 
         Mockito.verify(projectClient).changeProjectMemberRole(
                 Mockito.eq(PROJECT_ID),
@@ -772,7 +858,11 @@ public class ProjectControllerTest {
         mockAuthenticatedUser();
 
         Mockito.when(projectClient.listMyProjects(Mockito.any()))
-                .thenReturn(Mono.error(Status.UNAVAILABLE.withDescription("Service Unavailable").asRuntimeException()));
+                .thenReturn(
+                        Mono.error(
+                                Status.UNAVAILABLE
+                                        .withDescription("Service Unavailable")
+                                        .asRuntimeException()));
 
         // when & then
         webTestClient.get()
@@ -790,7 +880,11 @@ public class ProjectControllerTest {
         mockAuthenticatedUser();
 
         Mockito.when(projectClient.listMyProjects(Mockito.any()))
-                .thenReturn(Mono.error(Status.DEADLINE_EXCEEDED.withDescription("Timeout Exceeded").asRuntimeException()));
+                .thenReturn(
+                        Mono.error(
+                                Status.DEADLINE_EXCEEDED
+                                        .withDescription("Timeout Exceeded")
+                                        .asRuntimeException()));
 
         // when & then
         webTestClient.get()
@@ -864,24 +958,32 @@ public class ProjectControllerTest {
             Mockito.when(projectClient.getProjectMembers(Mockito.eq(PROJECT_ID), Mockito.any()))
                     .thenReturn(Mono.just(responseDto));
 
-            webTestClient.get()
+            webTestClient
+                    .get()
                     .uri(getMembersUri, PROJECT_ID)
                     .header(HttpHeaders.AUTHORIZATION, TOKEN)
                     .accept(MediaType.APPLICATION_JSON)
                     .exchange()
-                    .expectStatus().isOk()
+                    .expectStatus()
+                    .isOk()
                     .expectBody(ListProjectMemberDetailsDto.class)
-                    .value(actualResponse -> {
-                        Assertions.assertThat(actualResponse).isNotNull();
-                        Assertions.assertThat(actualResponse.getMembers()).hasSize(1);
+                    .value(
+                            actualResponse -> {
+                                Assertions.assertThat(actualResponse).isNotNull();
+                                Assertions.assertThat(actualResponse.getMembers()).hasSize(1);
 
-                        ProjectMemberDetailsDto actualMember = actualResponse.getMembers().getFirst();
-                        Assertions.assertThat(actualMember.getUserId()).isEqualTo(MEMBER_ID);
-                        Assertions.assertThat(actualMember.getRole()).isEqualTo("MEMBER");
-                        Assertions.assertThat(actualMember.getDisplayName()).isEqualTo("John Doe");
-                        Assertions.assertThat(actualMember.getEmail()).isEqualTo("john.doe@example.com");
-                        Assertions.assertThat(actualMember.getAvatar().getId()).isEqualTo(avatarDto.getId());
-                    });
+                                ProjectMemberDetailsDto actualMember =
+                                        actualResponse.getMembers().getFirst();
+                                Assertions.assertThat(actualMember.getUserId())
+                                        .isEqualTo(MEMBER_ID);
+                                Assertions.assertThat(actualMember.getRole()).isEqualTo("MEMBER");
+                                Assertions.assertThat(actualMember.getDisplayName())
+                                        .isEqualTo("John Doe");
+                                Assertions.assertThat(actualMember.getEmail())
+                                        .isEqualTo("john.doe@example.com");
+                                Assertions.assertThat(actualMember.getAvatar().getId())
+                                        .isEqualTo(avatarDto.getId());
+                            });
 
             Mockito.verify(projectClient, Mockito.times(1))
                     .getProjectMembers(Mockito.eq(PROJECT_ID), Mockito.any());
@@ -891,7 +993,8 @@ public class ProjectControllerTest {
         @DisplayName("Should return error status when projectClient throws exception")
         void getProjectMembers_whenClientFails_thenReturnsErrorStatus() {
             mockAuthenticatedUser();
-            RuntimeException serviceException = new RuntimeException("Service temporarily unavailable");
+            RuntimeException serviceException =
+                    new RuntimeException("Service temporarily unavailable");
 
             Mockito.when(projectClient.getProjectMembers(Mockito.eq(PROJECT_ID), Mockito.any()))
                     .thenReturn(Mono.error(serviceException));
@@ -939,23 +1042,29 @@ public class ProjectControllerTest {
             Mockito.when(projectClient.getProjectContext(Mockito.eq(PROJECT_ID), Mockito.any()))
                     .thenReturn(Mono.just(contextResponse));
 
-            webTestClient.get()
+            webTestClient
+                    .get()
                     .uri(contextUri, PROJECT_ID)
                     .header(HttpHeaders.AUTHORIZATION, TOKEN)
                     .accept(MediaType.APPLICATION_JSON)
                     .exchange()
-                    .expectStatus().isOk()
-                    .expectHeader().exists("X-Request-Id")
+                    .expectStatus()
+                    .isOk()
+                    .expectHeader()
+                    .exists("X-Request-Id")
                     .expectBody(ProjectContextResponseDto.class)
-                    .value(actual -> {
-                        Assertions.assertThat(actual).isNotNull();
-                        Assertions.assertThat(actual.getProject()).isNotNull();
-                        Assertions.assertThat(actual.getProject().getId()).isEqualTo(PROJECT_ID);
-                        Assertions.assertThat(actual.getProject().getCurrentUserRole()).isEqualTo("ADMIN");
-                        Assertions.assertThat(actual.getMembers()).isEmpty();
-                        Assertions.assertThat(actual.getLabels()).isEmpty();
-                        Assertions.assertThat(actual.getWorkflows()).isEmpty();
-                    });
+                    .value(
+                            actual -> {
+                                Assertions.assertThat(actual).isNotNull();
+                                Assertions.assertThat(actual.getProject()).isNotNull();
+                                Assertions.assertThat(actual.getProject().getId())
+                                        .isEqualTo(PROJECT_ID);
+                                Assertions.assertThat(actual.getProject().getCurrentUserRole())
+                                        .isEqualTo("ADMIN");
+                                Assertions.assertThat(actual.getMembers()).isEmpty();
+                                Assertions.assertThat(actual.getLabels()).isEmpty();
+                                Assertions.assertThat(actual.getWorkflows()).isEmpty();
+                            });
 
             Mockito.verify(projectClient, Mockito.times(1))
                     .getProjectContext(Mockito.eq(PROJECT_ID), Mockito.any());
@@ -1039,8 +1148,11 @@ public class ProjectControllerTest {
             mockAuthenticatedUser();
 
             Mockito.when(projectClient.getProjectContext(Mockito.eq(PROJECT_ID), Mockito.any()))
-                    .thenReturn(Mono.error(
-                            Status.UNAVAILABLE.withDescription("Service Unavailable").asRuntimeException()));
+                    .thenReturn(
+                            Mono.error(
+                                    Status.UNAVAILABLE
+                                            .withDescription("Service Unavailable")
+                                            .asRuntimeException()));
 
             webTestClient.get()
                     .uri(contextUri, PROJECT_ID)

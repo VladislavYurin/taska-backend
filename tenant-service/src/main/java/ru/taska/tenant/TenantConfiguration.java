@@ -197,7 +197,7 @@ public class TenantConfiguration {
       TenantTransactionExecutor transactions,
       MembershipCursor cursor,
       @Value(
-              "${taska.tenant.membership-readers:auth-service,api-gateway,project-service,workflow-service,issue-service}")
+              "${taska.tenant.membership-readers:auth-service,api-gateway,project-service,workflow-service,issue-service,tenant-service}")
           java.util.Set<String> readers) {
     return new TenantMembershipService(transactions, cursor, readers);
   }
@@ -332,7 +332,10 @@ public class TenantConfiguration {
       ObjectProvider<
               ru.taska.api.b2b.v1.ReactorEntitlementServiceGrpc.ReactorEntitlementServiceStub>
           stubs,
-      ObjectProvider<RpcContextSecurity> security) {
+      ObjectProvider<RpcContextSecurity> security,
+      ObjectProvider<ru.taska.capability.ManagedDomainReads> sources) {
+    var reads = sources.getIfAvailable();
+    if (reads != null) return reads::entitlement;
     var stub = stubs.getIfAvailable();
     var trust = security.getIfAvailable();
     if (stub != null && trust != null)
@@ -361,7 +364,16 @@ public class TenantConfiguration {
 
   @Bean
   @ConditionalOnMissingBean
-  ProjectQuotaStore.Policy projectQuotaPolicy() {
+  ProjectQuotaStore.Policy projectQuotaPolicy(
+      TenantTransactionExecutor tx,
+      ObjectProvider<ru.taska.capability.ManagedDomainReads> sources,
+      ObjectProvider<ru.taska.security.tenant.RpcTrustBackend> identities,
+      ObjectProvider<RpcContextSecurity> trust) {
+    var reads = sources.getIfAvailable();
+    var backend = identities.getIfAvailable();
+    var security = trust.getIfAvailable();
+    if (reads != null && backend != null && security != null)
+      return new NativeProjectAdmission(tx, reads, backend, security);
     return (c, command, operation) ->
         Mono.error(
             TenantRegistryService.fail(DomainStatus.UNAVAILABLE, "PROJECT_POLICY_NOT_CONFIGURED"));
@@ -374,9 +386,15 @@ public class TenantConfiguration {
               ru.taska.api.b2b.v1.ReactorProjectQuotaOwnerServiceGrpc
                   .ReactorProjectQuotaOwnerServiceStub>
           stubs,
-      ObjectProvider<RpcContextSecurity> security) {
+      ObjectProvider<RpcContextSecurity> security,
+      ObjectProvider<ru.taska.capability.ManagedDomainReads> sources) {
     var stub = stubs.getIfAvailable();
     var trust = security.getIfAvailable();
+    var reads = sources.getIfAvailable();
+    if (stub == null && reads != null)
+      stub =
+          ru.taska.api.b2b.v1.ReactorProjectQuotaOwnerServiceGrpc.newReactorStub(
+              reads.channel("project-service"));
     if (stub != null && trust != null)
       return new ru.taska.quota.GrpcProjectQuotaOwner(
           stub, trust, Clock.systemUTC(), "tenant-service");

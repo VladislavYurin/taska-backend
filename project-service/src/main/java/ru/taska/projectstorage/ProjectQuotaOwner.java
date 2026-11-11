@@ -31,14 +31,25 @@ public final class ProjectQuotaOwner implements Owner {
   public record Create(String key, String name, UUID creator) {
     public Create {
       if (key == null
-          || !key.matches("[A-Z][A-Z0-9]{1,15}")
+          || !key.matches("[\\x21-\\x7E]+")
           || name == null
           || name.isBlank()
-          || name.length() > 200
+          || name.length() > 255
           || creator == null) throw fail(DomainStatus.INVALID_ARGUMENT, "INVALID_PROJECT");
     }
   }
 
+  public interface Initialization {
+    Mono<Void> ensure(Reservation r);
+
+    Mono<Void> ready(Reservation r);
+
+    Mono<Void> cancel(Reservation r);
+
+    Mono<Void> opened(DatabaseClient db, Reservation r);
+  }
+
+  private final Initialization initialization;
   private final TenantTransactionExecutor tx;
   private final ProjectQuotaProtocol.Authority authority;
   private final Policy policy;
@@ -49,6 +60,16 @@ public final class ProjectQuotaOwner implements Owner {
       ProjectQuotaProtocol.Authority authority,
       Policy policy,
       Clock clock) {
+    this(tx, authority, policy, clock, null);
+  }
+
+  public ProjectQuotaOwner(
+      TenantTransactionExecutor tx,
+      ProjectQuotaProtocol.Authority authority,
+      Policy policy,
+      Clock clock,
+      Initialization initialization) {
+    this.initialization = initialization;
     this.tx = Objects.requireNonNull(tx);
     this.authority = Objects.requireNonNull(authority);
     this.policy = Objects.requireNonNull(policy);
@@ -94,7 +115,12 @@ public final class ProjectQuotaOwner implements Owner {
                                 return Mono.error(
                                     fail(DomainStatus.INTERNAL, "INVALID_OWNER_RECEIPT"));
                               }));
-            });
+            })
+        .flatMap(
+            receipt ->
+                initialization == null
+                    ? Mono.just(receipt)
+                    : initialization.ensure(expected).thenReturn(receipt));
   }
 
   private Mono<Void> claim(DatabaseClient db, Reservation r, String hash, Create command) {
@@ -155,6 +181,7 @@ public final class ProjectQuotaOwner implements Owner {
   @Override
   public Mono<Receipt> inspect(Reservation r) {
     return authorized(r, Use.INSPECT)
+        .then(initialization == null ? Mono.empty() : initialization.ready(r))
         .then(
             tx.execute(
                 db ->
@@ -177,6 +204,7 @@ public final class ProjectQuotaOwner implements Owner {
                             ? Mono.just(proof)
                             : Mono.error(
                                 fail(DomainStatus.FAILED_PRECONDITION, "CANCEL_NOT_REQUESTED"))))
+        .then(initialization == null ? Mono.empty() : initialization.cancel(r))
         .then(
             tx.execute(
                 db ->
@@ -220,6 +248,26 @@ public final class ProjectQuotaOwner implements Owner {
                                           .rowsUpdated())
                                   .then(
                                       db.sql(
+                                              "DELETE FROM taska.project_issue_types WHERE"
+                                                  + " tenant_id=:t AND project_id=:id AND"
+                                                  + " EXISTS(SELECT 1 FROM taska.projects p WHERE"
+                                                  + " p.tenant_id=:t AND p.id=:id AND"
+                                                  + " p.admission_state='PROVISIONING')")
+                                          .bind("t", r.tenant())
+                                          .bind("id", r.resource())
+                                          .then())
+                                  .then(
+                                      db.sql(
+                                              "DELETE FROM taska.project_settings WHERE"
+                                                  + " tenant_id=:t AND project_id=:id AND"
+                                                  + " EXISTS(SELECT 1 FROM taska.projects p WHERE"
+                                                  + " p.tenant_id=:t AND p.id=:id AND"
+                                                  + " p.admission_state='PROVISIONING')")
+                                          .bind("t", r.tenant())
+                                          .bind("id", r.resource())
+                                          .then())
+                                  .then(
+                                      db.sql(
                                               "DELETE FROM taska.projects WHERE tenant_id=:t AND"
                                                   + " id=:id AND admission_state='PROVISIONING'")
                                           .bind("t", r.tenant())
@@ -239,74 +287,102 @@ public final class ProjectQuotaOwner implements Owner {
               if (proof.state() != State.COMMITTED)
                 return Mono.error(
                     fail(DomainStatus.FAILED_PRECONDITION, "ADMISSION_NOT_COMMITTED"));
-              return tx.execute(
-                  db ->
-                      operationLock(db, expected)
-                          .then(row(db, expected))
-                          .switchIfEmpty(
-                              Mono.error(fail(DomainStatus.NOT_FOUND, "OWNER_RECEIPT_NOT_FOUND")))
-                          .flatMap(
-                              row -> {
-                                matching(expected, row);
-                                if ("DELETED".equals(row.get("state")))
-                                  return receipt(db, expected);
-                                if (!"COMMITTED".equals(row.get("state")))
-                                  return Mono.error(
-                                      fail(DomainStatus.FAILED_PRECONDITION, "OPERATION_CLOSED"));
-                                if (row.get("opened_at") != null) return receipt(db, expected);
-                                // Receipt and project become OPEN atomically; the DB trigger
-                                // requires this proof.
-                                return db.sql(
-                                        "UPDATE taska.resource_operation_receipts SET"
-                                            + " opened_at=:now WHERE tenant_id=:t AND"
-                                            + " operation_id=:op AND resource_kind='PROJECT'")
-                                    .bind("t", expected.tenant())
-                                    .bind("op", expected.operation())
-                                    .bind("now", offset(clock.instant()))
-                                    .fetch()
-                                    .rowsUpdated()
-                                    .then(
-                                        db.sql(
-                                                "UPDATE taska.projects SET admission_state='OPEN'"
-                                                    + " WHERE tenant_id=:t AND id=:id AND"
-                                                    + " admission_state='PROVISIONING'")
+              return (initialization == null ? Mono.<Void>empty() : initialization.ensure(expected))
+                  .then(
+                      tx.execute(
+                          db ->
+                              operationLock(db, expected)
+                                  .then(row(db, expected))
+                                  .switchIfEmpty(
+                                      Mono.error(
+                                          fail(DomainStatus.NOT_FOUND, "OWNER_RECEIPT_NOT_FOUND")))
+                                  .flatMap(
+                                      row -> {
+                                        matching(expected, row);
+                                        if ("DELETED".equals(row.get("state")))
+                                          return receipt(db, expected);
+                                        if (!"COMMITTED".equals(row.get("state")))
+                                          return Mono.error(
+                                              fail(
+                                                  DomainStatus.FAILED_PRECONDITION,
+                                                  "OPERATION_CLOSED"));
+                                        if (row.get("opened_at") != null)
+                                          return receipt(db, expected);
+                                        // Receipt and project become OPEN atomically; the DB
+                                        // trigger
+                                        // requires this proof.
+                                        return db.sql(
+                                                "UPDATE taska.resource_operation_receipts SET"
+                                                    + " opened_at=:now WHERE tenant_id=:t AND"
+                                                    + " operation_id=:op AND"
+                                                    + " resource_kind='PROJECT'")
                                             .bind("t", expected.tenant())
-                                            .bind("id", expected.resource())
+                                            .bind("op", expected.operation())
+                                            .bind("now", offset(clock.instant()))
                                             .fetch()
-                                            .rowsUpdated())
-                                    .flatMap(
-                                        n -> {
-                                          if (n != 1)
-                                            return Mono.error(
-                                                fail(
-                                                    DomainStatus.FAILED_PRECONDITION,
-                                                    "PROVISIONAL_PROJECT_MISSING"));
-                                          return db.sql(
-                                                  "INSERT INTO"
-                                                      + " taska.outbox_events(tenant_id,aggregate_type,aggregate_id,event_type,payload)"
-                                                      + " VALUES(:t,'project',:id,'ProjectAdmissionOpened',jsonb_build_object('projectId',CAST(:text"
-                                                      + " AS text)))")
-                                              .bind("t", expected.tenant())
-                                              .bind("id", expected.resource())
-                                              .bind("text", expected.resource().toString())
-                                              .fetch()
-                                              .rowsUpdated()
-                                              .then(receipt(db, expected));
-                                        });
-                              }));
+                                            .rowsUpdated()
+                                            .then(
+                                                db.sql(
+                                                        "UPDATE taska.projects SET"
+                                                            + " admission_state='OPEN' WHERE"
+                                                            + " tenant_id=:t AND id=:id AND"
+                                                            + " admission_state='PROVISIONING'")
+                                                    .bind("t", expected.tenant())
+                                                    .bind("id", expected.resource())
+                                                    .fetch()
+                                                    .rowsUpdated())
+                                            .flatMap(
+                                                n -> {
+                                                  if (n != 1)
+                                                    return Mono.error(
+                                                        fail(
+                                                            DomainStatus.FAILED_PRECONDITION,
+                                                            "PROVISIONAL_PROJECT_MISSING"));
+                                                  return db.sql(
+                                                          "INSERT INTO"
+                                                              + " taska.outbox_events(tenant_id,aggregate_type,aggregate_id,event_type,payload)"
+                                                              + " VALUES(:t,'project',:id,'ProjectAdmissionOpened',jsonb_build_object('projectId',CAST(:text"
+                                                              + " AS text)))")
+                                                      .bind("t", expected.tenant())
+                                                      .bind("id", expected.resource())
+                                                      .bind("text", expected.resource().toString())
+                                                      .fetch()
+                                                      .rowsUpdated()
+                                                      .then(
+                                                          initialization == null
+                                                              ? Mono.empty()
+                                                              : initialization.opened(db, expected))
+                                                      .then(receipt(db, expected));
+                                                });
+                                      })));
             });
   }
 
   @Override
   public Mono<Inventory> inventory(UUID tenant) {
+    return inventory(tenant, null);
+  }
+
+  @Override
+  public Mono<Inventory> inventory(UUID tenant, Reservation accepted) {
     return VerifiedTenantContext.current()
         .flatMap(
             c -> {
               if (!tenant.toString().equals(c.tenantId()))
                 return Mono.error(fail(DomainStatus.PERMISSION_DENIED, "TENANT_MISMATCH"));
               return policy
-                  .require(c, Use.INVENTORY, null, null)
+                  .require(
+                      c,
+                      Use.INVENTORY,
+                      accepted == null ? null : accepted.operation(),
+                      accepted == null ? null : accepted.resource())
                   .timeout(Duration.ofSeconds(5))
+                  .then(
+                      accepted == null
+                          ? Mono.empty()
+                          : accepted.tenant().equals(tenant)
+                              ? primary(accepted).then()
+                              : Mono.error(fail(DomainStatus.PERMISSION_DENIED, "TENANT_MISMATCH")))
                   .then(
                       tx.execute(
                           db ->

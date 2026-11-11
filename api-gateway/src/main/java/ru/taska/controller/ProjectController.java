@@ -3,7 +3,9 @@ package ru.taska.controller;
 import jakarta.validation.ConstraintViolation;
 import jakarta.validation.ConstraintViolationException;
 import jakarta.validation.Validator;
+
 import lombok.RequiredArgsConstructor;
+
 import org.springframework.core.io.buffer.DataBuffer;
 import org.springframework.core.io.buffer.DataBufferUtils;
 import org.springframework.http.HttpStatus;
@@ -11,7 +13,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ServerWebExchange;
 import org.springframework.web.server.ServerWebInputException;
+
 import reactor.core.publisher.Mono;
+
 import ru.taska.api.ProjectApi;
 import ru.taska.domain.EndpointSecurity;
 import ru.taska.domain.dto.AddProjectMemberRequestDto;
@@ -25,11 +29,11 @@ import ru.taska.domain.dto.ProjectResponseDto;
 import ru.taska.domain.dto.UpdateProjectRequestDto;
 import ru.taska.filter.GatewayRequestExecutor;
 import ru.taska.transport.grpc.GrpcProjectServiceClient;
+
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 import java.util.Set;
-
 import java.util.UUID;
 
 /**
@@ -46,35 +50,56 @@ public class ProjectController implements ProjectApi {
     private final ObjectMapper objectMapper;
     private final Validator validator;
 
-    /**
-     * POST /api/v1/projects
-     * Создает проект → 201 CREATED
-     */
-    @Override
+    /** POST /api/v1/projects Создает проект → 201 CREATED */
+    // Source-compatible convenience overload for existing callers.
     public Mono<ResponseEntity<ProjectResponseDto>> createProject(
-            Mono<CreateProjectRequestDto> createProjectRequestDto,
-            ServerWebExchange exchange
-    ) {
-        return createProjectRequestDto.flatMap(request -> {
-                    return executor.execute(exchange, EndpointSecurity.PROTECTED, context ->
-                        projectClient.createProject(Mono.just(request), context))
-                            .map(responseBody -> ResponseEntity.status(HttpStatus.CREATED).body(responseBody));
-
-       });
+            Mono<CreateProjectRequestDto> body, ServerWebExchange exchange) {
+        return createProjectBody(body, null, exchange);
     }
 
-    /**
-     * GET /api/v1/projects/{projectId}
-     * Получает проект по ID → 200 OK
-     */
+    @Override
+    public Mono<ResponseEntity<ProjectResponseDto>> createProject(
+            Mono<CreateProjectRequestDto> body, UUID idempotencyKey, ServerWebExchange exchange) {
+        var values = exchange.getRequest().getHeaders().get("Idempotency-Key");
+        if (values != null
+                && (idempotencyKey == null
+                        || values.size() != 1
+                        || !idempotencyKey.toString().equals(values.getFirst())))
+            return Mono.error(
+                    new ServerWebInputException("Idempotency-Key must be a single canonical UUID"));
+        return createProjectBody(body, idempotencyKey, exchange);
+    }
+
+    private Mono<ResponseEntity<ProjectResponseDto>> createProjectBody(
+            Mono<CreateProjectRequestDto> body, UUID idempotencyKey, ServerWebExchange exchange) {
+        return body.flatMap(
+                request ->
+                        executor.execute(
+                                        exchange,
+                                        EndpointSecurity.PROTECTED,
+                                        context ->
+                                                idempotencyKey == null
+                                                        ? projectClient.createProject(
+                                                                Mono.just(request), context)
+                                                        : projectClient.createProject(
+                                                                Mono.just(request),
+                                                                context,
+                                                                idempotencyKey.toString()))
+                                .map(
+                                        response ->
+                                                ResponseEntity.status(HttpStatus.CREATED)
+                                                        .body(response)));
+    }
+
+    /** GET /api/v1/projects/{projectId} Получает проект по ID → 200 OK */
     @Override
     public Mono<ResponseEntity<ProjectResponseDto>> getProject(
-            String projectId,
-            ServerWebExchange exchange
-    ) {
-        return executor.execute(exchange, EndpointSecurity.PROTECTED,context ->
-                projectClient.getProject(projectId,context))
-                        .map(ResponseEntity::ok);
+            String projectId, ServerWebExchange exchange) {
+        return executor.execute(
+                        exchange,
+                        EndpointSecurity.PROTECTED,
+                        context -> projectClient.getProject(projectId, context))
+                .map(ResponseEntity::ok);
     }
 
     /**
@@ -116,23 +141,48 @@ public class ProjectController implements ProjectApi {
             Mono<UpdateProjectRequestDto> updateProjectRequestDto,
             ServerWebExchange exchange
     ) {
-        return executor.execute(exchange, EndpointSecurity.PROTECTED, context -> readBodyAsJsonNode(exchange).flatMap(bodyNode -> {
-            if (isExplicitNull(bodyNode, "name")) {
-                return Mono.error(new ServerWebInputException("Field 'name' must not be null"));
-            }
+        return executor.execute(
+                        exchange,
+                        EndpointSecurity.PROTECTED,
+                        context ->
+                                readBodyAsJsonNode(exchange)
+                                        .flatMap(
+                                                bodyNode -> {
+                                                    if (isExplicitNull(bodyNode, "name")) {
+                                                        return Mono.error(
+                                                                new ServerWebInputException(
+                                                                        "Field 'name' must not be"
+                                                                            + " null"));
+                                                    }
 
-            boolean clearColor = isExplicitNull(bodyNode, "color");
-            boolean clearDescription = isExplicitNull(bodyNode, "description");
+                                                    boolean clearColor =
+                                                            isExplicitNull(bodyNode, "color");
+                                                    boolean clearDescription =
+                                                            isExplicitNull(bodyNode, "description");
 
-            UpdateProjectRequestDto dto;
-            try {
-                dto = objectMapper.treeToValue(bodyNode, UpdateProjectRequestDto.class);
-            } catch (RuntimeException error) {
-                return Mono.error(new ServerWebInputException("Invalid project fields", null, error));
-            }
-            validate(dto);
-            return projectClient.updateProject(projectId, Mono.just(dto), clearColor, clearDescription, context);
-        })).map(ResponseEntity::ok);
+                                                    UpdateProjectRequestDto dto;
+                                                    try {
+                                                        dto =
+                                                                objectMapper.treeToValue(
+                                                                        bodyNode,
+                                                                        UpdateProjectRequestDto
+                                                                                .class);
+                                                    } catch (RuntimeException error) {
+                                                        return Mono.error(
+                                                                new ServerWebInputException(
+                                                                        "Invalid project fields",
+                                                                        null,
+                                                                        error));
+                                                    }
+                                                    validate(dto);
+                                                    return projectClient.updateProject(
+                                                            projectId,
+                                                            Mono.just(dto),
+                                                            clearColor,
+                                                            clearDescription,
+                                                            context);
+                                                }))
+                .map(ResponseEntity::ok);
     }
 
     /**
@@ -209,8 +259,12 @@ public class ProjectController implements ProjectApi {
 
     private Mono<JsonNode> readBodyAsJsonNode(ServerWebExchange exchange) {
         return DataBufferUtils.join(exchange.getRequest().getBody(), 16 * 1024)
-                .onErrorMap(org.springframework.core.io.buffer.DataBufferLimitException.class,
-                        error -> new org.springframework.web.server.ResponseStatusException(HttpStatus.PAYLOAD_TOO_LARGE, "Project request is too large"))
+                .onErrorMap(
+                        org.springframework.core.io.buffer.DataBufferLimitException.class,
+                        error ->
+                                new org.springframework.web.server.ResponseStatusException(
+                                        HttpStatus.PAYLOAD_TOO_LARGE,
+                                        "Project request is too large"))
                 .map(this::parseJsonNode)
                 .switchIfEmpty(Mono.error(new ServerWebInputException("Request body is required")));
     }
@@ -220,12 +274,17 @@ public class ProjectController implements ProjectApi {
             byte[] bytes = new byte[dataBuffer.readableByteCount()];
             dataBuffer.read(bytes);
             JsonNode node = objectMapper.readTree(bytes);
-            if (node == null || !node.isObject()) throw new ServerWebInputException("Project patch must be a JSON object");
+            if (node == null || !node.isObject())
+                throw new ServerWebInputException("Project patch must be a JSON object");
             for (String field : node.propertyNames()) {
-                if (!Set.of("name", "description", "color").contains(field)) throw new ServerWebInputException("Unknown or immutable project field: " + field);
-                if (!node.get(field).isNull() && !node.get(field).isTextual()) throw new ServerWebInputException("Project fields must be strings");
+                if (!Set.of("name", "description", "color").contains(field))
+                    throw new ServerWebInputException(
+                            "Unknown or immutable project field: " + field);
+                if (!node.get(field).isNull() && !node.get(field).isTextual())
+                    throw new ServerWebInputException("Project fields must be strings");
             }
-            if (node.hasNonNull("name") && node.get("name").asString().isBlank()) throw new ServerWebInputException("name must be nonblank");
+            if (node.hasNonNull("name") && node.get("name").asString().isBlank())
+                throw new ServerWebInputException("name must be nonblank");
             return node;
         } catch (ServerWebInputException e) {
             throw e;

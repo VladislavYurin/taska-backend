@@ -2,16 +2,15 @@ package ru.taska.projectstorage;
 
 import mapper.GrpcExceptionMapper;
 import org.springframework.context.annotation.Profile;
-import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 import ru.taska.api.b2b.v1.*;
 import ru.taska.exception.*;
 import ru.taska.quota.ProjectQuotaWire;
 import ru.taska.security.tenant.RpcContextBridge;
 
-@Service
+@org.springframework.grpc.server.service.GrpcService
 @Profile("tenant-storage")
-public final class ProjectQuotaOwnerGrpcService
+public class ProjectQuotaOwnerGrpcService
     extends ReactorProjectQuotaOwnerServiceGrpc.ProjectQuotaOwnerServiceImplBase {
   private final ProjectQuotaOwner owner;
 
@@ -54,7 +53,13 @@ public final class ProjectQuotaOwnerGrpcService
   public Mono<ProjectQuotaOwnerInventory> inventory(Mono<ProjectQuotaOwnerInventoryRequest> r) {
     return errors(
         RpcContextBridge.inbound(
-            r.flatMap(q -> owner.inventory(ProjectQuotaWire.uuid(q.getTenantId())))
+            r.flatMap(
+                    q ->
+                        owner.inventory(
+                            ProjectQuotaWire.uuid(q.getTenantId()),
+                            q.hasAcceptedReservation()
+                                ? ProjectQuotaWire.decode(q.getAcceptedReservation())
+                                : null))
                 .map(ProjectQuotaWire::encode)));
   }
 

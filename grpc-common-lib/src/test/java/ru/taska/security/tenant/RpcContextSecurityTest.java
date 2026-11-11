@@ -16,6 +16,21 @@ import ru.taska.api.b2b.v1.*;
 
 class RpcContextSecurityTest extends RpcContextFixture {
   @Test
+  void delegationCannotExtendParentCredentialLease() {
+    var request=context();
+    request=request.toBuilder().setContext(request.getContext().toBuilder().setExpiresAt(NOW.plusSeconds(2).toString())).build();
+    var parent=sender.authorize(request,RPC,POLICY).block();
+    var delegated=recipient.delegate(parent,"c","test.write",Set.of("write"));
+    assertEquals(request.getContext().getExpiresAt(),delegated.getContext().getExpiresAt());
+    assertEquals(request.getHeader(),delegated.getHeader());
+    assertEquals(parent.actorId(),delegated.getContext().getActorUserId());
+    var expired=new RpcContextSecurity("b",Clock.fixed(NOW.plusSeconds(3),ZoneOffset.UTC),keys,
+        (issuer,jti,until)->Mono.just(true),(context,rpc,policy)->Mono.just(true));
+    assertEquals(Status.Code.UNAUTHENTICATED,Status.fromThrowable(assertThrows(io.grpc.StatusRuntimeException.class,
+        ()->expired.delegate(parent,"c","test.write",Set.of("write")))).getCode());
+  }
+
+  @Test
   void validMessageAndSingleUse() {
     var c = context();
     var m = message(c, "original");

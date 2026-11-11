@@ -75,7 +75,11 @@ public class TenantStorageConfiguration {
 
   @Bean
   @org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
-  ru.taska.projectstorage.ProjectQuotaOwner.Policy projectQuotaPolicy() {
+  ru.taska.projectstorage.ProjectQuotaOwner.Policy projectQuotaPolicy(
+      org.springframework.beans.factory.ObjectProvider<ru.taska.projectstorage.ProjectOwnerPolicy>
+          nativePolicy) {
+    var current = nativePolicy.getIfAvailable();
+    if (current != null) return current;
     return (c, use, op, project) ->
         reactor.core.publisher.Mono.error(
             new ru.taska.exception.DomainException(
@@ -89,9 +93,16 @@ public class TenantStorageConfiguration {
               ru.taska.api.b2b.v1.ReactorQuotaAuthorityServiceGrpc.ReactorQuotaAuthorityServiceStub>
           stubs,
       org.springframework.beans.factory.ObjectProvider<ru.taska.security.tenant.RpcContextSecurity>
-          security) {
+          security,
+      org.springframework.beans.factory.ObjectProvider<ru.taska.capability.ManagedDomainReads>
+          reads) {
     var stub = stubs.getIfAvailable();
     var trust = security.getIfAvailable();
+    var primary = reads.getIfAvailable();
+    if (stub == null && primary != null)
+      stub =
+          ru.taska.api.b2b.v1.ReactorQuotaAuthorityServiceGrpc.newReactorStub(
+              primary.channel("tenant-service"));
     if (stub != null && trust != null)
       return new ru.taska.quota.GrpcProjectQuotaAuthority(
           stub, trust, java.time.Clock.systemUTC(), "project-service");
@@ -125,9 +136,19 @@ public class TenantStorageConfiguration {
   ru.taska.projectstorage.ProjectQuotaOwner projectQuotaOwner(
       ConnectionFactory factory,
       ru.taska.quota.ProjectQuotaProtocol.Authority authority,
-      ru.taska.projectstorage.ProjectQuotaOwner.Policy policy) {
-    return new ru.taska.projectstorage.ProjectQuotaOwner(
-        new TenantTransactionExecutor(factory), authority, policy, java.time.Clock.systemUTC());
+      ru.taska.projectstorage.ProjectQuotaOwner.Policy policy,
+      org.springframework.beans.factory.ObjectProvider<ru.taska.projectstorage.ProjectCreation>
+          creations) {
+    var creation = creations.getIfAvailable();
+    var owner =
+        new ru.taska.projectstorage.ProjectQuotaOwner(
+            new TenantTransactionExecutor(factory),
+            authority,
+            policy,
+            java.time.Clock.systemUTC(),
+            creation);
+    if (creation != null) creation.owner(owner);
+    return owner;
   }
 
   /** TAS-340 supplies verified transport and ACL. Old RPC headers cannot mint tenant authority. */
@@ -152,6 +173,36 @@ public class TenantStorageConfiguration {
     policies.put(
         ru.taska.api.b2b.v1.ProjectQuotaOwnerServiceGrpc.getInventoryMethod().getFullMethodName(),
         new ru.taska.security.tenant.RpcContextSecurity.Policy(true, false));
+    var apiRpc =
+        java.util.Set.of(
+            "CreateProject",
+            "GetProject",
+            "UpdateProject",
+            "GetProjectContext",
+            "ListMyProjects",
+            "AddProjectMember",
+            "RmProjectMember",
+            "ChangeProjectMemberRole",
+            "GetProjectMembers",
+            "CheckProjectMemberRole",
+            "GetProjectKeyInternal",
+            "GetProjectInfoBatchInternal",
+            "GetProjectMemberStatsBatch",
+            "HasProjectMembershipInternal",
+            "ListProjectIssueTypes");
+    ru.taska.security.tenant.RpcRoutePolicies.policies("project-service")
+        .forEach(
+            (rpc, policy) -> {
+              if (apiRpc.contains(rpc.substring(rpc.lastIndexOf('/') + 1)))
+                policies.put(rpc, policy);
+            });
+    policies.put(
+        ru.taska.api.b2b.v1.ProjectInitializationServiceGrpc.getDescribeMethod()
+            .getFullMethodName(),
+        new ru.taska.security.tenant.RpcContextSecurity.Policy(true, false));
+    policies.put(
+        ru.taska.api.b2b.v1.ProjectInitializationServiceGrpc.getRecoverMethod().getFullMethodName(),
+        new ru.taska.security.tenant.RpcContextSecurity.Policy(true, true));
     ServerInterceptor quota =
         security == null
             ? null

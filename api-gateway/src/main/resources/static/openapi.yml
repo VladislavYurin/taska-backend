@@ -1137,6 +1137,15 @@ paths:
         - project
       security:
         - bearerAuth: []
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: false
+          description: Native tenant API retry identity. Reuse with the same project payload; a different payload returns a conflict.
+          schema:
+            type: string
+            format: uuid
+            pattern: '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
       requestBody:
         required: true
         content:

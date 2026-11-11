@@ -21,7 +21,7 @@ message ReserveQuotaRpcRequest {RequestContext context=1;ReserveQuotaRequest pay
 message FinalizeQuotaRpcRequest {RequestContext context=1;string reservation_id=2;FinalizeQuotaRequest payload=3;MutationOptions mutation=4;string fence=5;QuotaReservation.KindValue kind=6;}
 message GetQuotaReservationRequest {RequestContext context=1;string operation_id=2;QuotaReservation.KindValue kind=3;}
 message ProjectQuotaOwnerRequest {RequestContext context=1;QuotaReservation reservation=2;}
-message ProjectQuotaOwnerInventoryRequest {RequestContext context=1;string tenant_id=2;}
+message ProjectQuotaOwnerInventoryRequest {RequestContext context=1;string tenant_id=2; QuotaReservation accepted_reservation=3;}
 message ProjectQuotaOwnerReceipt {
  enum StateValue {STATE_UNSPECIFIED=0;STATE_PROVISIONING=1;STATE_OPEN=2;STATE_CANCELLED=3;STATE_DELETED=4;}
  QuotaReservation reservation=1;StateValue state=2;

@@ -40,6 +40,7 @@ public final class TenantWorkflowStore {
     private Session(DatabaseClient db,UUID tenant,VerifiedTenantContext context) {
       this.db=db;this.tenant=tenant;this.context=context;
     }
+    DatabaseClient database(){return db;}
     public WorkflowBindingChangeRepository changes() {
       return new WorkflowBindingChangeRepository(db,tenant,()->RecoveryStamp.from(context),json);
     }

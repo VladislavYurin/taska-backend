@@ -297,6 +297,65 @@
           }
         ]
       }
+    },
+    {
+      "changeSet": {
+        "id": "project-api-0010",
+        "author": "taska",
+        "changes": [
+          {
+            "sqlFile": {
+              "path": "0010-project-api.sql",
+              "relativeToChangelogFile": true,
+              "splitStatements": false
+            }
+          },
+          {
+            "sql": {
+              "sql": "SELECT set_config('taska.guard_service','project',true),set_config('taska.guard_schema','taska',true),set_config('taska.guard_table','project_creation_operations',true),set_config('taska.guard_column','tenant_id',true),set_config('taska.guard_app_access','read_write',true);"
+            }
+          },
+          {
+            "sqlFile": {
+              "path": "db/tenant/protect-table.sql",
+              "splitStatements": false
+            }
+          },
+          {
+            "sql": {
+              "sql": "SELECT set_config('taska.audit_service','project',true),set_config('taska.audit_schema','taska',true),set_config('taska.audit_table','project_creation_operations',true),set_config('taska.audit_column','tenant_id',true),set_config('taska.audit_app_access','read_write',true);"
+            }
+          },
+          {
+            "sqlFile": {
+              "path": "db/tenant/audit.sql",
+              "splitStatements": false
+            }
+          },
+          {
+            "sql": {
+              "sql": "SELECT set_config('taska.guard_service','project',true),set_config('taska.guard_schema','taska',true),set_config('taska.guard_table','project_authorization_audit',true),set_config('taska.guard_column','tenant_id',true),set_config('taska.guard_app_access','append_only',true);"
+            }
+          },
+          {
+            "sqlFile": {
+              "path": "db/tenant/protect-table.sql",
+              "splitStatements": false
+            }
+          },
+          {
+            "sql": {
+              "sql": "SELECT set_config('taska.audit_service','project',true),set_config('taska.audit_schema','taska',true),set_config('taska.audit_table','project_authorization_audit',true),set_config('taska.audit_column','tenant_id',true),set_config('taska.audit_app_access','append_only',true);"
+            }
+          },
+          {
+            "sqlFile": {
+              "path": "db/tenant/audit.sql",
+              "splitStatements": false
+            }
+          }
+        ]
+      }
     }
   ]
 }

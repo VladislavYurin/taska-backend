@@ -37,6 +37,17 @@ python3 scripts/harness.py cleanup --run-state target/harness-e2e/0123456789abcd
 
 Для создания проекта сначала сохраняется pending intent, затем отправляется единственный POST. После transport timeout повтор записи не выполняется. Stage cleanup ищет свой projectKey и createdBy через публичный список, проверяет также уникальный creation marker из исходного POST description, сохраняет найденный ID и архивирует. Совпадения actor/projectKey недостаточно: старый проект с другим marker не принимается в registry. При явном отказе 4xx intent удаляется; после timeout/5xx сохраняется для безопасного reconcile. Если запись ещё не видна, pending intent остаётся unresolved: повторите cleanup позже. Отсутствие объекта сразу после timeout не считается доказательством отсутствия записи.
 
+## Native project ACL / quota (TAS-340)
+
+```sh
+python3 scripts/harness/project_acl_e2e.py
+python3 scripts/harness/project_acl_e2e.py --cleanup /absolute/owned/run/state.json
+```
+
+This separate local-only tier packages seven real applications and creates owned native databases, app LOGIN/RLS, mTLS/JWS and fixtures. It checks project REST and direct RPC/batch/stats, current roles/generations, MFA/audit, quota/initialization, compensation and recovery after initiating-credential revocation/flag-off. Cleanup uses the signed harness state. Extra gRPC ports bind only to loopback for the owned read-only probe. See [native project API](../../project-service/TENANT-API.md) for setup, contracts and boundaries.
+
+The ordinary `e2e --scenario E2E-08` retains its legacy subset. This native tier does not prove Kafka delivery, full workflow/issue CRUD, real payments or shared-stage rollout. After shared transport changes also run `python3 scripts/harness/trusted_rpc_e2e.py` for the legacy regression.
+
 ## Opt-in stage
 
 Stage не запускается без `--tier stage --config FILE`. До запуска владелец среды выделяет пять разных ACTIVE actors A/M/V/O/G, разрешает создание и архивирование собственных проектов и принимает остаточные archived projects (публичного удаления проекта нет). Обычный JWT нужен для G; GLOBAL_ADMIN не заменяет project ADMIN. Runner не создаёт/блокирует пользователей на stage, не читает secrets из DB и не выполняет fault injection.
