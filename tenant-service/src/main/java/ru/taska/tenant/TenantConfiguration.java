@@ -156,13 +156,17 @@ public class TenantConfiguration {
   @Bean
   @DependsOn("safeRuntimeRole")
   TenantRegistryService tenantRegistry(
-      TenantTransactionExecutor transactions, PublishedPlans plans, FreeAdmission admission) {
+      TenantTransactionExecutor transactions,
+      PublishedPlans plans,
+      FreeAdmission admission,
+      TenantListService tenantLists) {
     return new TenantRegistryService(
         transactions,
         plans,
         admission,
         Clock.systemUTC(),
-        db -> PlatformFlags.duration(db, "UNPAID_CREATION_WINDOW_SECONDS"));
+        db -> PlatformFlags.duration(db, "UNPAID_CREATION_WINDOW_SECONDS"),
+        tenantLists);
   }
 
   @Bean
@@ -189,6 +193,16 @@ public class TenantConfiguration {
   @Bean
   MembershipCursor membershipCursor(@Value("${taska.tenant.membership-cursor-key:}") String key) {
     return new MembershipCursor(key, Clock.systemUTC());
+  }
+
+  @Bean
+  @DependsOn("safeRuntimeRole")
+  TenantListService tenantListService(ConnectionFactory factory, MembershipCursor cursors) {
+    return new TenantListService(
+        org.springframework.r2dbc.core.DatabaseClient.create(factory),
+        org.springframework.transaction.reactive.TransactionalOperator.create(
+            new org.springframework.r2dbc.connection.R2dbcTransactionManager(factory)),
+        cursors);
   }
 
   @Bean
@@ -604,6 +618,12 @@ public class TenantConfiguration {
               java.util.Map.entry(
                   TenantServiceGrpc.getCreateTenantMethod().getFullMethodName(),
                   new RpcContextSecurity.Policy(false, true)),
+              java.util.Map.entry(
+                  TenantServiceGrpc.getListTenantsMethod().getFullMethodName(),
+                  new RpcContextSecurity.Policy(false, false)),
+              java.util.Map.entry(
+                  TenantServiceGrpc.getRenameTenantMethod().getFullMethodName(),
+                  new RpcContextSecurity.Policy(true, true)),
               java.util.Map.entry(
                   TenantServiceGrpc.getGetTenantMethod().getFullMethodName(),
                   new RpcContextSecurity.Policy(true, false)),

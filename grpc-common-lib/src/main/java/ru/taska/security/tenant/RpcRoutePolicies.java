@@ -3,7 +3,7 @@ package ru.taska.security.tenant;
 import java.util.*;
 import tools.jackson.databind.json.JsonMapper;
 
-/** Explicit versioned legacy route inventory; unrelated B2B/public RPCs keep their own policies. */
+/** Explicit versioned claim inventory; unrelated B2B and public RPCs keep their own policies. */
 public final class RpcRoutePolicies {
   public record Route(
       String audience, String scope, boolean tenantRequired, boolean mutation, String action) {
