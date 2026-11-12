@@ -546,7 +546,13 @@ class TenantWorkflowApiIntegrationTest extends TenantWorkflowFixture {
           (tools.jackson.databind.node.ObjectNode)
               json.readTree(java.nio.file.Files.readString(source));
       var sets = (tools.jackson.databind.node.ArrayNode) previous.get("databaseChangeLog");
-      sets.remove(sets.size() - 1);
+      int apiIndex = -1;
+      for (int i = 0; i < sets.size(); i++) {
+        if (sets.get(i).path("changeSet").path("id").asText().equals("workflow-api-0016"))
+          apiIndex = i;
+      }
+      assertTrue(apiIndex > 0, "Previous-schema cutoff must identify TAS-342 migration explicitly");
+      while (sets.size() > apiIndex) sets.remove(sets.size() - 1);
       for (var entry : sets)
         ((tools.jackson.databind.node.ObjectNode) entry.get("changeSet"))
             .put("logicalFilePath", "db/workflow-tenant/changelog.json");
