@@ -117,6 +117,8 @@ public final class StripePaymentProvider implements PaymentProvider {
     return request(HttpMethod.GET, "/v1/checkout/sessions/" + encode(providerPaymentId), null, Map.of())
         .flatMap(body -> {
           if (state(body) != State.SUCCEEDED) return Mono.just(payment(body, null));
+          if (!body.hasNonNull("payment_intent"))
+            return Mono.error(new ProviderException(ProviderException.Reason.UNKNOWN_OUTCOME));
           var intent = text(body, "payment_intent");
           return request(HttpMethod.GET, "/v1/payment_intents/" + encode(intent), null, Map.of())
               .map(intentBody -> payment(body, intentBody));
