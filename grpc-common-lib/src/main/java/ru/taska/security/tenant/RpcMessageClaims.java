@@ -15,6 +15,41 @@ final class RpcMessageClaims {
     var c = context.getContext();
     if (!route.action().equals(c.getAction()) || !route.audience().equals(c.getAudienceService()))
       throw Status.PERMISSION_DENIED.asRuntimeException();
+    if (route.scope().equals("GLOBAL_TENANT_LIST")
+        && (c.getCredentialKind() != CredentialKind.CREDENTIAL_KIND_WEB_GLOBAL
+            || c.hasTenantId()
+            || c.hasGrantId()
+            || c.hasGrantGeneration()
+            || c.hasMembershipGeneration()
+            || hasAdministrativeClaims(c)
+            || !c.hasSessionId()
+            || !c.getSessionId().equals(c.getCredentialId())))
+      throw Status.PERMISSION_DENIED.asRuntimeException();
+    if (route.scope().equals("TENANT_OWNER_OR_ADMIN")) {
+      if (hasAdministrativeClaims(c)) {
+        var scope = c.getAdministrativeScope();
+        if (c.getCredentialKind() != CredentialKind.CREDENTIAL_KIND_WEB_GLOBAL
+            || !c.hasTenantId()
+            || c.hasGrantId()
+            || c.hasGrantGeneration()
+            || c.hasMembershipGeneration()
+            || c.getManageGlobalAccounts()
+            || !c.hasSessionId()
+            || !c.getSessionId().equals(c.getCredentialId())
+            || scope.getKind() != AdminScope.KindValue.KIND_TENANT_SET
+            || scope.getTenantIdsCount() != 1
+            || !scope.getTenantIds(0).equals(c.getTenantId())
+            || (c.getAdministrativeLevel() != AdminGrant.LevelValue.LEVEL_READ
+                && c.getAdministrativeLevel() != AdminGrant.LevelValue.LEVEL_MODIFY)
+            || (route.mutation()
+                && c.getAdministrativeLevel() != AdminGrant.LevelValue.LEVEL_MODIFY))
+          throw Status.PERMISSION_DENIED.asRuntimeException();
+      } else if (c.getCredentialKind() == CredentialKind.CREDENTIAL_KIND_WEB_GLOBAL
+          || c.getCredentialKind() == CredentialKind.CREDENTIAL_KIND_ADMIN_PAT
+          || c.getCredentialKind() == CredentialKind.CREDENTIAL_KIND_ADMIN_OAUTH) {
+        throw Status.PERMISSION_DENIED.asRuntimeException();
+      }
+    }
     if (route.scope().equals("ADMIN_EXPLICIT_SCOPE")) {
       if (!c.hasAdministrativeScope()
           || !c.hasAdministrativeLevel()
@@ -36,7 +71,10 @@ final class RpcMessageClaims {
         && c.getCredentialKind() != CredentialKind.CREDENTIAL_KIND_WEB_GLOBAL
         && c.getCredentialKind() != CredentialKind.CREDENTIAL_KIND_WEB_TENANT)
       throw Status.PERMISSION_DENIED.asRuntimeException();
-    String scope = route.mutation() ? "write" : "read";
+    String scope =
+        route.scope().equals("GLOBAL_TENANT_LIST")
+            ? "tenants:select"
+            : route.mutation() ? "write" : "read";
     if (!c.getScopesList().contains(scope)
         && !(route.scope().equals("GLOBAL_SELF_SESSION_FOR_MUTATION")
             && c.getScopesList().contains(route.mutation() ? "account:write" : "account:read")))
@@ -50,6 +88,12 @@ final class RpcMessageClaims {
                 || route.scope().equals("GLOBAL_SELF_SESSION_FOR_MUTATION"))
             && !java.util.Set.of("getUserProfile", "getUserDetailsByIds", "getAvatarDownloadUrl")
                 .contains(route.action()));
+  }
+
+  private static boolean hasAdministrativeClaims(TrustedTenantContext context) {
+    return context.hasAdministrativeScope()
+        || context.hasAdministrativeLevel()
+        || context.getManageGlobalAccounts();
   }
 
   /** Account GLOBAL_ADMIN is not an implicit project/grant bypass. */

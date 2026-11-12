@@ -143,4 +143,121 @@ class RpcMessageClaimsTest {
             RpcMessageClaims.validate(
                 request.toBuilder().setUserId(UUID.randomUUID().toString()).build(), rpc, c));
   }
+
+  @Test
+  void tenantRegistryReadsAndRenameBindTheVerifiedTargetAndAdminLevel() {
+    var ordinary = context("tenant-service", "getTenant");
+    var tenantId = ordinary.getContext().getTenantId();
+    var getTenantRpc = TenantServiceGrpc.getGetTenantMethod().getFullMethodName();
+    var getTenant = GetTenantRpcRequest.newBuilder().setTenantId(tenantId).build();
+    assertDoesNotThrow(() -> RpcMessageClaims.validate(getTenant, getTenantRpc, ordinary));
+    assertThrows(
+        StatusRuntimeException.class,
+        () ->
+            RpcMessageClaims.validate(
+                getTenant.toBuilder().setTenantId(UUID.randomUUID().toString()).build(),
+                getTenantRpc,
+                ordinary));
+
+    var readAdmin =
+        adminTarget(ordinary, "getTenant", AdminGrant.LevelValue.LEVEL_READ, "read");
+    assertDoesNotThrow(() -> RpcMessageClaims.validate(getTenant, getTenantRpc, readAdmin));
+    var foreignAdmin =
+        readAdmin.toBuilder()
+            .setContext(
+                readAdmin.getContext().toBuilder()
+                    .setAdministrativeScope(
+                        AdminScope.newBuilder()
+                            .setKind(AdminScope.KindValue.KIND_TENANT_SET)
+                            .addTenantIds(UUID.randomUUID().toString())))
+            .build();
+    assertThrows(
+        StatusRuntimeException.class,
+        () -> RpcMessageClaims.validate(getTenant, getTenantRpc, foreignAdmin));
+
+    var renameTenantRpc = TenantServiceGrpc.getRenameTenantMethod().getFullMethodName();
+    var renameTenant = RenameTenantRpcRequest.newBuilder().setTenantId(tenantId).build();
+    var modifyAdmin =
+        adminTarget(
+            ordinary,
+            "renameTenant",
+            AdminGrant.LevelValue.LEVEL_MODIFY,
+            "read",
+            "write");
+    assertDoesNotThrow(
+        () -> RpcMessageClaims.validate(renameTenant, renameTenantRpc, modifyAdmin));
+    var readOnlyRename =
+        adminTarget(ordinary, "renameTenant", AdminGrant.LevelValue.LEVEL_READ, "read");
+    assertThrows(
+        StatusRuntimeException.class,
+        () -> RpcMessageClaims.validate(renameTenant, renameTenantRpc, readOnlyRename));
+  }
+
+  @Test
+  void globalTenantListRequiresGlobalSelectionScopeWithoutTenantOrAdminGrant() {
+    var template = context("tenant-service", "listTenants");
+    String sessionId = UUID.randomUUID().toString();
+    var global =
+        template.toBuilder()
+            .setContext(
+                template.getContext().toBuilder()
+                    .setCredentialKind(CredentialKind.CREDENTIAL_KIND_WEB_GLOBAL)
+                    .setSessionId(sessionId)
+                    .setCredentialId(sessionId)
+                    .clearTenantId()
+                    .clearMembershipGeneration()
+                    .clearScopes()
+                    .addScopes("tenants:select"))
+            .build();
+    var rpc = TenantServiceGrpc.getListTenantsMethod().getFullMethodName();
+    var request = ListTenantsRpcRequest.getDefaultInstance();
+    assertDoesNotThrow(() -> RpcMessageClaims.validate(request, rpc, global));
+    assertThrows(
+        StatusRuntimeException.class,
+        () ->
+            RpcMessageClaims.validate(
+                request,
+                rpc,
+                global.toBuilder()
+                    .setContext(
+                        global.getContext().toBuilder().clearScopes().addScopes("read"))
+                    .build()));
+    assertThrows(
+        StatusRuntimeException.class,
+        () ->
+            RpcMessageClaims.validate(
+                request,
+                rpc,
+                global.toBuilder()
+                    .setContext(global.getContext().toBuilder().setTenantId(UUID.randomUUID().toString()))
+                    .build()));
+  }
+
+  private static RequestContext adminTarget(
+      RequestContext template,
+      String action,
+      AdminGrant.LevelValue level,
+      String... scopes) {
+    String sessionId = UUID.randomUUID().toString();
+    var scope =
+        AdminScope.newBuilder()
+            .setKind(AdminScope.KindValue.KIND_TENANT_SET)
+            .addTenantIds(template.getContext().getTenantId())
+            .build();
+    return template.toBuilder()
+        .setContext(
+            template.getContext().toBuilder()
+                .setCredentialKind(CredentialKind.CREDENTIAL_KIND_WEB_GLOBAL)
+                .setSessionId(sessionId)
+                .setCredentialId(sessionId)
+                .clearMembershipGeneration()
+                .clearGrantId()
+                .clearGrantGeneration()
+                .clearScopes()
+                .addAllScopes(java.util.List.of(scopes))
+                .setAdministrativeScope(scope)
+                .setAdministrativeLevel(level)
+                .setAction(action))
+        .build();
+  }
 }

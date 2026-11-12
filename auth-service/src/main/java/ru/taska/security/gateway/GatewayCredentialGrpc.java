@@ -21,7 +21,12 @@ public class GatewayCredentialGrpc
   public Mono<GatewayCredential> resolveGatewayCredential(
       Mono<ResolveGatewayCredentialRequest> request) {
     return request
-        .flatMap(r -> resolver.resolve(r.getCredential()))
+        .flatMap(
+            r ->
+                resolver.resolve(
+                    r.getCredential(),
+                    r.hasTargetTenantId() ? r.getTargetTenantId() : null,
+                    r.hasTargetAction() ? r.getTargetAction() : null))
         .onErrorMap(DomainException.class, GrpcExceptionMapper::toStatusRuntimeException)
         .onErrorMap(GrpcExceptionMapper::toGrpcStatus);
   }
