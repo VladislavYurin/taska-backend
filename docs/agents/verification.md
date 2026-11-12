@@ -79,7 +79,7 @@ storage-lib `S3StorageClientIT` по-прежнему запускается я�
 | Проекты и типы | `project-service` | `IssueTypeDeletionIT`, `IssueTypeCreationIT`; связанные workflow/issue проверки |
 | Project tenant storage | `project-service` | обязательный `TenantProjectStorageIntegrationTest`: app LOGIN/RLS/FK, A/B, archive/rollback, query plans и чистый профиль |
 | Workflow и привязки типов | `workflow-service`, `project-service`, `issue-service`, gateway при изменении REST | reservation/binding IT из списка ниже; версии, повторы, перенос/восстановление |
-| Workflow tenant storage/templates | `workflow-service`, common RLS templates | обязательный `TenantWorkflowStorageIntegrationTest`: app LOGIN/RLS/FK, parallel provision/instantiate, immutable snapshots, rollback и profile health; `TenantRlsTemplatesIntegrationTest` проверяет v1/v2 |
+| Workflow tenant storage/templates | `workflow-service`, common RLS templates | обязательный `TenantWorkflowStorageIntegrationTest` и `TenantWorkflowApiIntegrationTest`: app LOGIN/RLS/FK, current RPC/ACL, parallel provision/instantiate, immutable snapshots, rollback и profile health; `TenantRlsTemplatesIntegrationTest` проверяет v1/v2 |
 | Доска, issue migration | `issue-service` | `ListIssuesForBoardIT`, `IssueTypeMoveIT`, `WorkflowBindingMigrationIT` по изменённой логике |
 | Блокировка приглашённого | `auth-service`, gateway при изменении REST | `InvitedUnblockIT`; online access и сохранность credentials |
 | Outbox retry/admin | `admin-service`, `kafka-lib` и затронутые владельцы | `OutboxRetryServiceIT`, `OutboxRetryRepositoryIT`; аудит и повторный вызов |

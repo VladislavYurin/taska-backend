@@ -367,6 +367,60 @@
           }
         ]
       }
+    },
+    {
+      "changeSet": {
+        "id": "workflow-api-0016",
+        "author": "taska",
+        "changes": [
+          {
+            "sqlFile": {
+              "path": "workflow-api.sql",
+              "relativeToChangelogFile": true,
+              "splitStatements": false
+            }
+          },
+          {
+            "sqlFile": {
+              "path": "db/tenant/v2/protect-table.sql",
+              "splitStatements": false
+            }
+          },
+          {
+            "sql": {
+              "sql": "SELECT set_config('taska.audit_service','workflow',true),set_config('taska.audit_schema','taska',true),set_config('taska.audit_table','workflow_authorization_audit',true),set_config('taska.audit_column','tenant_id',true),set_config('taska.audit_app_access','append_only',true);"
+            }
+          },
+          {
+            "sqlFile": {
+              "path": "db/tenant/v2/audit.sql",
+              "splitStatements": false
+            }
+          },
+          {
+            "sql": {
+              "sql": "SELECT set_config('taska.guard_service','workflow',true),set_config('taska.guard_schema','taska',true),set_config('taska.guard_table','workflow_creation_receipts',true),set_config('taska.guard_column','tenant_id',true),set_config('taska.guard_app_access','append_only',true);"
+            }
+          },
+          {
+            "sqlFile": {
+              "path": "db/tenant/v2/protect-table.sql",
+              "splitStatements": false
+            }
+          },
+          {
+            "sql": {
+              "sql": "SELECT set_config('taska.audit_service','workflow',true),set_config('taska.audit_schema','taska',true),set_config('taska.audit_table','workflow_creation_receipts',true),set_config('taska.audit_column','tenant_id',true),set_config('taska.audit_app_access','append_only',true);"
+            }
+          },
+          {
+            "sqlFile": {
+              "path": "db/tenant/v2/audit.sql",
+              "splitStatements": false
+            }
+          }
+        ]
+      }
     }
   ]
 }

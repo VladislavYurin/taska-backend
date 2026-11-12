@@ -163,7 +163,7 @@ public final class BillingCatalog {
               var c = RpcContextBridge.details(v).getContext();
               if (c.getCredentialKind() != CredentialKind.CREDENTIAL_KIND_SERVICE
                   || v.tenantId() != null
-                  || !Set.of("tenant-service", "api-gateway", "project-service").contains(c.getIssuerService())
+                  || !Set.of("tenant-service", "api-gateway", "project-service", "workflow-service").contains(c.getIssuerService())
                   || !c.hasServicePurpose()
                   || !"billing".equals(c.getServicePurpose())
                   || !v.scopes().contains("catalog:read"))

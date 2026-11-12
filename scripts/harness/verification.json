@@ -358,7 +358,8 @@
           "*",
           "TenantWorkflowStorageIntegrationTest",
           "WorkflowSortOrderMigrationTest",
-          "LegacyWorkflowScopeIntegrationTest"
+          "LegacyWorkflowScopeIntegrationTest",
+          "TenantWorkflowApiIntegrationTest"
         ],
         "noTestsReason": null
       },

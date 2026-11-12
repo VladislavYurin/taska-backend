@@ -362,6 +362,30 @@ class BillingCatalogIntegrationTest {
   }
 
   @Test
+  void workflowCanReadReferencedKindButCannotResolveANewOffer() {
+    String free = "00000000-0000-8000-8000-000000000001";
+    var request = ResolvePublishedPlanRpcRequest.newBuilder().setPlanVersionId(free).build();
+    var service = TrustedTenantContext.newBuilder()
+        .setAction("readReferencedPlanVersion")
+        .setCredentialKind(CredentialKind.CREDENTIAL_KIND_SERVICE)
+        .setIssuerService("workflow-service").setServiceIdentity("workflow-service")
+        .setAudienceService("billing-service").setServicePurpose("billing")
+        .addScopes("read").addScopes("catalog:read").build();
+    assertEquals(PlanVersion.KindValue.KIND_FREE,
+        RegistryTestContext.withClaims(service, catalog.referenced(request)).block(WAIT).getKind());
+    for (var denied : List.of(service.toBuilder().setIssuerService("issue-service").build(),
+        service.toBuilder().setServicePurpose("membership").build(),
+        service.toBuilder().clearScopes().addScopes("read").build(),
+        service.toBuilder().setTenantId(A.toString()).build())) {
+      rejects(DomainStatus.PERMISSION_DENIED, "SCOPE_DENIED",
+          RegistryTestContext.withClaims(denied, catalog.referenced(request)));
+    }
+    rejects(DomainStatus.PERMISSION_DENIED, "SCOPE_DENIED", RegistryTestContext.withClaims(
+        service.toBuilder().setAction("resolvePublishedPlan").addScopes("catalog:resolve").build(),
+        catalog.resolve(request)));
+  }
+
+  @Test
   void cursorDoesNotRequireTheAnchorToRemainAnActiveOffer() {
     var page = list(1, null);
     assertEquals("FREE", page.getItems(0).getCode());
