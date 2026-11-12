@@ -9,6 +9,7 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.r2dbc.core.DatabaseClient;
@@ -17,7 +18,9 @@ import ru.taska.api.b2b.v1.LeaveTenantRpcRequest;
 import ru.taska.api.b2b.v1.Membership;
 import ru.taska.api.b2b.v1.MutationOptions;
 import ru.taska.api.b2b.v1.Operation;
+import ru.taska.api.b2b.v1.RemoveTenantMemberRpcRequest;
 import ru.taska.api.b2b.v1.SetTenantMemberRoleRpcRequest;
+import ru.taska.api.b2b.v1.SetTenantMemberStateRpcRequest;
 import ru.taska.exception.DomainStatus;
 import ru.taska.r2dbc.TenantTransactionExecutor;
 import ru.taska.security.tenant.RpcContextBridge;
@@ -34,6 +37,7 @@ public final class TenantMembershipMutationService {
       UUID target,
       String action,
       String role,
+      String state,
       String key,
       long expected,
       byte[] hash,
@@ -52,8 +56,48 @@ public final class TenantMembershipMutationService {
             request.getMutation(),
             "setTenantMemberRole",
             request.getPayload().getRole().name(),
+            null,
             false)
         .flatMap(c -> transactions.execute(db -> execute(db, c).map(Result::membership)));
+  }
+
+  public Mono<Membership> setState(SetTenantMemberStateRpcRequest request) {
+    return command(
+            request.getTenantId(),
+            request.getUserId(),
+            request.getMutation(),
+            "setTenantMemberState",
+            null,
+            request.getPayload().getState().name(),
+            false)
+        .flatMap(c -> transactions.execute(db -> execute(db, c).map(Result::membership)));
+  }
+
+  public Mono<Operation> remove(RemoveTenantMemberRpcRequest request) {
+    return command(
+            request.getTenantId(),
+            request.getUserId(),
+            request.getMutation(),
+            "removeTenantMember",
+            null,
+            "REMOVED",
+            false)
+        .flatMap(
+            c ->
+                transactions.execute(
+                    db ->
+                        execute(db, c)
+                            .map(
+                                r ->
+                                    Operation.newBuilder()
+                                        .setId(r.operation().toString())
+                                        .setType("removeTenantMember")
+                                        .setState(Operation.StateValue.STATE_SUCCEEDED)
+                                        .setTenantId(c.tenant().toString())
+                                        .setResourceId(c.target().toString())
+                                        .setCreatedAt(r.created().toString())
+                                        .setUpdatedAt(r.created().toString())
+                                        .build())));
   }
 
   public Mono<Operation> leave(LeaveTenantRpcRequest request) {
@@ -61,7 +105,13 @@ public final class TenantMembershipMutationService {
       return Mono.error(
           TenantRegistryService.fail(DomainStatus.FAILED_PRECONDITION, "CONFIRMATION_REQUIRED"));
     return command(
-            request.getTenantId(), null, request.getMutation(), "leaveTenant", "REMOVED", true)
+            request.getTenantId(),
+            null,
+            request.getMutation(),
+            "leaveTenant",
+            null,
+            "REMOVED",
+            true)
         .flatMap(
             c ->
                 transactions.execute(
@@ -86,11 +136,19 @@ public final class TenantMembershipMutationService {
       MutationOptions mutation,
       String action,
       String roleValue,
+      String stateValue,
       boolean leave) {
     return Mono.defer(
         () -> {
           UUID tenant = TenantRegistryService.uuid(tenantValue);
-          if (!leave && !Set.of("ROLE_MEMBER", "ROLE_TENANT_ADMIN").contains(roleValue))
+          if ("setTenantMemberRole".equals(action)
+              && !Set.of("ROLE_MEMBER", "ROLE_TENANT_ADMIN").contains(roleValue))
+            throw TenantRegistryService.fail(DomainStatus.INVALID_ARGUMENT, "VALIDATION_FAILED");
+          if ("setTenantMemberState".equals(action)
+              && !Set.of("STATE_ACTIVE", "STATE_SUSPENDED").contains(stateValue))
+            throw TenantRegistryService.fail(DomainStatus.INVALID_ARGUMENT, "VALIDATION_FAILED");
+          if (!Set.of("setTenantMemberRole", "setTenantMemberState", "removeTenantMember", "leaveTenant")
+              .contains(action))
             throw TenantRegistryService.fail(DomainStatus.INVALID_ARGUMENT, "VALIDATION_FAILED");
           String key = mutation.getIdempotencyKey();
           TenantRegistryService.uuid(key);
@@ -146,7 +204,8 @@ public final class TenantMembershipMutationService {
                             action,
                             tenant.toString(),
                             target.toString(),
-                            roleValue,
+                            Objects.toString(roleValue, ""),
+                            Objects.toString(stateValue, ""),
                             Long.toString(expected));
                     return new Command(
                         tenant,
@@ -154,6 +213,7 @@ public final class TenantMembershipMutationService {
                         target,
                         action,
                         roleValue,
+                        stateValue,
                         key,
                         expected,
                         hash,
@@ -261,20 +321,57 @@ public final class TenantMembershipMutationService {
 
   private Mono<Result> change(
       DatabaseClient db, Command c, Map<String, Object> target, UUID owner) {
-    if (!"ACTIVE".equals(target.get("status")))
-      return Mono.error(TenantRegistryService.fail(DomainStatus.ABORTED, "INVALID_STATE"));
-    if (c.target().equals(owner) && (c.leave() || !"ROLE_TENANT_ADMIN".equals(c.role())))
-      return Mono.error(
-          TenantRegistryService.fail(
-              DomainStatus.FAILED_PRECONDITION, "OWNER_MEMBERSHIP_PROTECTED"));
     if (((Number) target.get("version")).longValue() != c.expected())
       return Mono.error(TenantRegistryService.fail(DomainStatus.ABORTED, "VERSION_CONFLICT"));
     String oldRole = target.get("role").toString();
-    String newRole = c.leave() ? oldRole : c.role().substring(5);
-    String newStatus = c.leave() ? "REMOVED" : "ACTIVE";
-    boolean changed = !oldRole.equals(newRole) || c.leave();
+    String oldStatus = target.get("status").toString();
+    String requestedState = c.state() == null ? null : c.state().substring(6);
+    String newRole;
+    String newStatus;
+    switch (c.action()) {
+      case "setTenantMemberRole" -> {
+        if (!"ACTIVE".equals(oldStatus))
+          return Mono.error(TenantRegistryService.fail(DomainStatus.ABORTED, "INVALID_STATE"));
+        newRole = c.role().substring(5);
+        newStatus = "ACTIVE";
+      }
+      case "setTenantMemberState" -> {
+        if ("ACTIVE".equals(requestedState)) {
+          if (!"SUSPENDED".equals(oldStatus))
+            return Mono.error(TenantRegistryService.fail(DomainStatus.ABORTED, "INVALID_STATE"));
+          // D63: reactivation never restores tenant-admin or project capabilities.
+          newRole = "MEMBER";
+          newStatus = "ACTIVE";
+        } else {
+          if (!"ACTIVE".equals(oldStatus))
+            return Mono.error(TenantRegistryService.fail(DomainStatus.ABORTED, "INVALID_STATE"));
+          newRole = oldRole;
+          newStatus = "SUSPENDED";
+        }
+      }
+      case "removeTenantMember", "leaveTenant" -> {
+        if (!Set.of("ACTIVE", "SUSPENDED").contains(oldStatus))
+          return Mono.error(TenantRegistryService.fail(DomainStatus.ABORTED, "INVALID_STATE"));
+        newRole = oldRole;
+        newStatus = "REMOVED";
+      }
+      default -> throw TenantRegistryService.fail(DomainStatus.INVALID_ARGUMENT, "VALIDATION_FAILED");
+    }
+    if (c.target().equals(owner)
+        && (!"TENANT_ADMIN".equals(newRole) || !"ACTIVE".equals(newStatus)))
+      return Mono.error(
+          TenantRegistryService.fail(
+              DomainStatus.FAILED_PRECONDITION, "OWNER_MEMBERSHIP_PROTECTED"));
+    boolean changed = !oldRole.equals(newRole) || !oldStatus.equals(newStatus);
+    boolean revokesAccess = !"ACTIVE".equals(newStatus);
+    boolean revokesInvitations =
+        "TENANT_ADMIN".equals(oldRole)
+            && (!"TENANT_ADMIN".equals(newRole) || revokesAccess);
+    String cleanupScopes = cleanupScopes(revokesAccess, revokesInvitations);
     Mono<Long> adminCount =
-        "TENANT_ADMIN".equals(oldRole) && (!"TENANT_ADMIN".equals(newRole) || c.leave())
+        "ACTIVE".equals(oldStatus)
+                && "TENANT_ADMIN".equals(oldRole)
+                && (!"ACTIVE".equals(newStatus) || !"TENANT_ADMIN".equals(newRole))
             ? db.sql(
                     "SELECT count(*) AS n FROM taska.tenant_memberships WHERE tenant_id=:tenant"
                         + " AND role='TENANT_ADMIN' AND status='ACTIVE'")
@@ -293,12 +390,17 @@ public final class TenantMembershipMutationService {
               changed
                   ? db.sql(
                           "UPDATE taska.tenant_memberships SET role=:role,status=:status,"
-                              + " version=version+1,removed_at=CASE WHEN :leaving THEN :now ELSE"
-                              + " removed_at END WHERE tenant_id=:tenant AND user_id=:target"
+                              + " version=version+1,"
+                              + " suspended_at=CASE WHEN :suspended THEN :now WHEN :active THEN NULL"
+                              + " ELSE suspended_at END,"
+                              + " removed_at=CASE WHEN :removed THEN :now ELSE removed_at END"
+                              + " WHERE tenant_id=:tenant AND user_id=:target"
                               + " RETURNING tenant_id,user_id,role,status,version")
                       .bind("role", newRole)
                       .bind("status", newStatus)
-                      .bind("leaving", c.leave())
+                      .bind("suspended", "SUSPENDED".equals(newStatus))
+                      .bind("active", "ACTIVE".equals(newStatus))
+                      .bind("removed", "REMOVED".equals(newStatus))
                       .bind("now", now.atOffset(ZoneOffset.UTC))
                       .bind("tenant", c.tenant())
                       .bind("target", c.target())
@@ -325,9 +427,13 @@ public final class TenantMembershipMutationService {
                                         "INSERT INTO taska.outbox_events"
                                             + "(id,tenant_id,aggregate_type,aggregate_id,aggregate_version,event_type,schema_version,payload,operation_id,status,created_at)"
                                             + " VALUES"
-                                            + "(:id,:tenant,'MEMBERSHIP',:target,:version,'TenantMembershipChanged',1,"
+                                            + "(:id,:tenant,'MEMBERSHIP',:target,:version,'TenantMembershipChanged',2,"
                                             + "jsonb_build_object('tenantId',:tenant::text,'userId',:target::text,"
-                                            + "'actorId',:actor::text,'role',:role,'status',:status,'result','SUCCEEDED'),"
+                                            + "'actorId',:actor::text,'role',:role,'status',:status,'result','SUCCEEDED',"
+                                            + "'previousVersion',:previousVersion,"
+                                            + "'revokedAt',CASE WHEN :revokesAccess OR :revokesInvitations"
+                                            + " THEN to_jsonb(:now::timestamptz) ELSE NULL END,"
+                                            + "'cleanupScopes',CAST(:cleanupScopes AS jsonb)),"
                                             + ":operation,'NEW',:now)")
                                     .bind("id", UUID.randomUUID())
                                     .bind("tenant", c.tenant())
@@ -336,6 +442,12 @@ public final class TenantMembershipMutationService {
                                     .bind("actor", c.actor())
                                     .bind("role", newRole)
                                     .bind("status", newStatus)
+                                    .bind(
+                                        "previousVersion",
+                                        ((Number) target.get("version")).longValue())
+                                    .bind("revokesAccess", revokesAccess)
+                                    .bind("revokesInvitations", revokesInvitations)
+                                    .bind("cleanupScopes", cleanupScopes)
                                     .bind("operation", operation)
                                     .bind("now", now.atOffset(ZoneOffset.UTC))
                                     .fetch()
@@ -347,7 +459,7 @@ public final class TenantMembershipMutationService {
                                 "INSERT INTO taska.membership_audit"
                                     + "(id,tenant_id,actor_id,target_user_id,action,result,old_role,new_role,old_status,new_status,membership_version,operation_id,created_at)"
                                     + " VALUES"
-                                    + "(:id,:tenant,:actor,:target,:action,:result,:oldRole,:newRole,'ACTIVE',"
+                                    + "(:id,:tenant,:actor,:target,:action,:result,:oldRole,:newRole,:oldStatus,"
                                     + ":newStatus,:version,:operation,:now)")
                             .bind("id", UUID.randomUUID())
                             .bind("tenant", c.tenant())
@@ -357,12 +469,17 @@ public final class TenantMembershipMutationService {
                             .bind("result", changed ? "SUCCEEDED" : "NO_CHANGE")
                             .bind("oldRole", oldRole)
                             .bind("newRole", newRole)
+                            .bind("oldStatus", oldStatus)
                             .bind("newStatus", newStatus)
                             .bind("version", version)
                             .bind("operation", operation)
                             .bind("now", now.atOffset(ZoneOffset.UTC))
                             .fetch()
                             .rowsUpdated())
+                    .then(
+                        !oldStatus.equals(newStatus)
+                            ? refreshSeatUsage(db, c.tenant(), now)
+                            : Mono.empty())
                     .then(
                         db.sql(
                                 "INSERT INTO taska.idempotency_records"
@@ -387,5 +504,49 @@ public final class TenantMembershipMutationService {
                     .thenReturn(new Result(membership, operation, now));
               });
         });
+  }
+
+  private static String cleanupScopes(boolean access, boolean invitations) {
+    var scopes = new java.util.ArrayList<String>(3);
+    if (access) {
+      scopes.add("PROJECT_GRANTS");
+      scopes.add("ISSUE_ASSIGNMENTS");
+    }
+    if (invitations) scopes.add("PENDING_INVITATIONS");
+    return scopes.stream()
+        .map(value -> "\"" + value + "\"")
+        .collect(java.util.stream.Collectors.joining(",", "[", "]"));
+  }
+
+  /** Keeps the SEAT projection identical to the authoritative membership rows in this transaction. */
+  private static Mono<Void> refreshSeatUsage(DatabaseClient db, UUID tenant, Instant now) {
+    return db.sql(
+            "INSERT INTO taska.quota_counters(tenant_id,resource,scope_id)"
+                + " VALUES(:tenant,'SEAT',:tenant) ON CONFLICT DO NOTHING")
+        .bind("tenant", tenant)
+        .fetch()
+        .rowsUpdated()
+        .then(
+            db.sql(
+                    """
+                    WITH actual AS (
+                      SELECT
+                        (SELECT count(*) FROM taska.tenant_memberships
+                         WHERE tenant_id=:tenant AND status IN ('ACTIVE','SUSPENDED')) used,
+                        (SELECT coalesce(sum(amount),0)::bigint FROM taska.quota_reservations
+                         WHERE tenant_id=:tenant AND resource='SEAT' AND state='ACTIVE') reserved
+                    )
+                    UPDATE taska.quota_counters c
+                    SET used=a.used,reserved=a.reserved,reconciled_at=:now,
+                        version=c.version+CASE
+                          WHEN c.used<>a.used OR c.reserved<>a.reserved THEN 1 ELSE 0 END
+                    FROM actual a
+                    WHERE c.tenant_id=:tenant AND c.resource='SEAT'
+                    """)
+                .bind("tenant", tenant)
+                .bind("now", now.atOffset(ZoneOffset.UTC))
+                .fetch()
+                .rowsUpdated()
+                .then());
   }
 }

@@ -424,6 +424,21 @@
           }
         ]
       }
+    },
+    {
+      "changeSet": {
+        "id": "tenant-membership-lifecycle-0014",
+        "author": "taska",
+        "changes": [
+          {
+            "sqlFile": {
+              "path": "0014-membership-lifecycle.sql",
+              "relativeToChangelogFile": true,
+              "splitStatements": false
+            }
+          }
+        ]
+      }
     }
   ]
 }

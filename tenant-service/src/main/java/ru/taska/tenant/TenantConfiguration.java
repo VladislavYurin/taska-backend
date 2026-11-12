@@ -533,6 +533,12 @@ public class TenantConfiguration {
                   TenantServiceGrpc.getSetTenantMemberRoleMethod().getFullMethodName(),
                   new RpcContextSecurity.Policy(true, false)),
               java.util.Map.entry(
+                  TenantServiceGrpc.getSetTenantMemberStateMethod().getFullMethodName(),
+                  new RpcContextSecurity.Policy(true, false)),
+              java.util.Map.entry(
+                  TenantServiceGrpc.getRemoveTenantMemberMethod().getFullMethodName(),
+                  new RpcContextSecurity.Policy(true, false)),
+              java.util.Map.entry(
                   TenantServiceGrpc.getLeaveTenantMethod().getFullMethodName(),
                   new RpcContextSecurity.Policy(true, false)),
               java.util.Map.entry(
