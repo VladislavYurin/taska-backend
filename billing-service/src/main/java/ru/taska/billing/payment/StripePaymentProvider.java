@@ -10,6 +10,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.UUID;
 import java.util.Set;
+import java.util.List;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import org.springframework.http.HttpHeaders;
@@ -114,7 +115,12 @@ public final class StripePaymentProvider implements PaymentProvider {
     requireTest(merchant);
     PaymentProvider.require(providerPaymentId, "providerPaymentId");
     return request(HttpMethod.GET, "/v1/checkout/sessions/" + encode(providerPaymentId), null, Map.of())
-        .map(body -> payment(body));
+        .flatMap(body -> {
+          if (state(body) != State.SUCCEEDED) return Mono.just(payment(body, null));
+          var intent = text(body, "payment_intent");
+          return request(HttpMethod.GET, "/v1/payment_intents/" + encode(intent), null, Map.of())
+              .map(intentBody -> payment(body, intentBody));
+        });
   }
 
   @Override
@@ -132,7 +138,7 @@ public final class StripePaymentProvider implements PaymentProvider {
           return request(HttpMethod.POST, "/v1/refunds", key, form);
         })
         .map(body -> new Refund(text(body, "id"), providerPaymentId, amount,
-            "succeeded".equals(body.path("status").asText()) ? RefundState.SUCCEEDED : RefundState.PENDING, key));
+            refundState(body), key));
   }
 
   @Override
@@ -170,7 +176,8 @@ public final class StripePaymentProvider implements PaymentProvider {
       var mac = Mac.getInstance("HmacSHA256");
       mac.init(new SecretKeySpec(configuration.webhookSecret().getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
       var expected = HexFormat.of().formatHex(mac.doFinal(signed.getBytes(StandardCharsets.UTF_8)));
-      return MessageDigest.isEqual(expected.getBytes(StandardCharsets.US_ASCII), part(header, "v1").getBytes(StandardCharsets.US_ASCII));
+      return signatures(header, "v1").stream().anyMatch(value ->
+          MessageDigest.isEqual(expected.getBytes(StandardCharsets.US_ASCII), value.getBytes(StandardCharsets.US_ASCII)));
     } catch (Exception e) { return false; }
   }
 
@@ -197,6 +204,8 @@ public final class StripePaymentProvider implements PaymentProvider {
   }
 
   private static State state(JsonNode body) {
+    if ("expired".equals(body.path("status").asText())
+        && "unpaid".equals(body.path("payment_status").asText())) return State.DECLINED;
     return switch (body.path("payment_status").asText()) {
       case "paid" -> State.SUCCEEDED;
       case "unpaid" -> State.PENDING;
@@ -212,14 +221,37 @@ public final class StripePaymentProvider implements PaymentProvider {
     };
   }
 
-  private static Payment payment(JsonNode body) {
+  private static Payment payment(JsonNode body, JsonNode paymentIntent) {
     try {
       var metadata = body.path("metadata");
+      var state = state(body);
+      Instant occurredAt = state == State.SUCCEEDED ? paymentIntentCreated(paymentIntent) : null;
       return new Payment(text(body, "id"), parseUuid(metadata, "invoice_id"),
-          new Money(body.path("amount_total").longValue(), text(body, "currency").toUpperCase()), state(body));
+          new Money(parseAmount(body, "amount_total"), text(body, "currency").toUpperCase()), state, occurredAt);
     } catch (RuntimeException error) {
       throw new ProviderException(ProviderException.Reason.UNKNOWN_OUTCOME);
     }
+  }
+
+  private static RefundState refundState(JsonNode body) {
+    return switch (body.path("status").asText()) {
+      case "succeeded" -> RefundState.SUCCEEDED;
+      case "failed", "canceled" -> RefundState.DECLINED;
+      case "pending", "requires_action" -> RefundState.PENDING;
+      default -> RefundState.UNKNOWN;
+    };
+  }
+
+  private static long parseAmount(JsonNode node, String name) {
+    if (!node.hasNonNull(name) || !node.path(name).canConvertToLong())
+      throw new ProviderException(ProviderException.Reason.UNKNOWN_OUTCOME);
+    return node.path(name).longValue();
+  }
+
+  private static Instant paymentIntentCreated(JsonNode intent) {
+    if (intent == null || !intent.path("created").canConvertToLong())
+      throw new ProviderException(ProviderException.Reason.UNKNOWN_OUTCOME);
+    return Instant.ofEpochSecond(intent.path("created").longValue());
   }
 
   private static UUID parseUuid(JsonNode node, String name) {
@@ -233,9 +265,13 @@ public final class StripePaymentProvider implements PaymentProvider {
   }
 
   private static String part(String header, String name) {
+    return signatures(header, name).stream().findFirst().orElse("");
+  }
+
+  private static List<String> signatures(String header, String name) {
     return java.util.Arrays.stream(header.split(","))
         .map(String::trim).filter(p -> p.startsWith(name + "="))
-        .map(p -> p.substring(name.length() + 1)).findFirst().orElse("");
+        .map(p -> p.substring(name.length() + 1)).toList();
   }
 
   private static String encode(String value) {

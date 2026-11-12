@@ -4,11 +4,13 @@ import java.net.URI;
 import java.time.Clock;
 import java.util.Map;
 import java.util.Set;
+import java.util.List;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.reactive.function.client.WebClient;
+import ru.taska.billing.ingress.ProviderWebhookRegistry;
 import tools.jackson.databind.ObjectMapper;
 
 /** Opt-in sandbox wiring; absent configuration leaves payment attempts unavailable. */
@@ -44,5 +46,17 @@ public class StripePaymentProviderConfiguration {
         Map.of(
             new PaymentProviderRegistry.Identity("stripe", merchant),
             new PaymentProviderRegistry.Registration(provider, Set.of(profileVersion))));
+  }
+
+  @Bean
+  ProviderWebhookRegistry stripeProviderWebhookRegistry(
+      StripePaymentProvider provider,
+      @Value("${TASKA_BILLING_STRIPE_MERCHANT_ACCOUNT}") String merchantAccount,
+      @Value("${TASKA_BILLING_STRIPE_PROFILE_VERSION}") String profileVersion) {
+    var identity = new ProviderWebhookRegistry.Identity(
+        "stripe", merchantAccount, PaymentProvider.Environment.TEST);
+    return new ProviderWebhookRegistry(List.of(
+        new ProviderWebhookRegistry.Registration(
+            identity, Set.of(profileVersion), List.of(ProviderWebhookRegistry.adapter(provider)))));
   }
 }
