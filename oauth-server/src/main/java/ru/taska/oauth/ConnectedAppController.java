@@ -22,8 +22,11 @@ public class ConnectedAppController {
 
   @DeleteMapping("/{appId}")
   @ResponseStatus(HttpStatus.NO_CONTENT)
-  public void revoke(@PathVariable UUID userId, @PathVariable String appId) {
-    store.revoke(userId.toString(), appId);
+  public void revoke(
+      @PathVariable UUID userId,
+      @PathVariable String appId,
+      @RequestParam(required = false) UUID tenantId) {
+    store.revoke(userId.toString(), appId, tenantId);
   }
 
   public record App(
@@ -34,5 +37,6 @@ public class ConnectedAppController {
       List<String> scopes,
       Instant connectedAt,
       Instant lastUsedAt,
-      Instant expiresAt) {}
+      Instant expiresAt,
+      UUID tenantId) {}
 }

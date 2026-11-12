@@ -18,16 +18,19 @@ final class RotatingRefreshProvider implements AuthenticationProvider {
   private final JdbcTemplate jdbc;
   private final TransactionTemplate transactions;
   private final OAuthGrantStore grants;
+  private final TenantOAuthGrants tenants;
 
   RotatingRefreshProvider(
       AuthenticationProvider delegate,
       JdbcTemplate jdbc,
       TransactionTemplate transactions,
-      OAuthGrantStore grants) {
+      OAuthGrantStore grants,
+      TenantOAuthGrants tenants) {
     this.delegate = delegate;
     this.jdbc = jdbc;
     this.transactions = transactions;
     this.grants = grants;
+    this.tenants = tenants;
   }
 
   @Override
@@ -67,6 +70,14 @@ final class RotatingRefreshProvider implements AuthenticationProvider {
                   grants.revoke(parent.id);
                   return new Result(null, true);
                 }
+                // TAS-498: a revoked or changed grant never revives through refresh.
+                if (tenants.enabled() && !tenants.live(authorization)) {
+                  grants.revoke(parent.id);
+                  return new Result(null, true);
+                }
+              } else if (tenants.enabled()) {
+                // Every issued refresh token has history; an unknown one is never exchanged here.
+                return new Result(null, true);
               }
               Authentication success = delegate.authenticate(authentication);
               jdbc.update(

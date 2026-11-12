@@ -73,6 +73,61 @@ public class TaskaIdentityClient {
     }
   }
 
+  /** TAS-498: consume an approval for this pending authorization; one success per grant. */
+  public TenantOAuthGrantBinding claimTenantGrant(
+      String grantId, String subject, String clientId, String authorizationRequestId) {
+    return tenantGrant(
+        () ->
+            stub.withDeadlineAfter(properties.auth().timeout().toMillis(), TimeUnit.MILLISECONDS)
+                .claimTenantOAuthGrant(
+                    ClaimTenantOAuthGrantRequest.newBuilder()
+                        .setHeader(header())
+                        .setGrantId(grantId)
+                        .setUserId(subject)
+                        .setClientId(clientId)
+                        .setAuthorizationRequestId(authorizationRequestId)
+                        .build()),
+        grantId);
+  }
+
+  /** TAS-498: the bound grant is still live at the generation recorded on the authorization. */
+  public TenantOAuthGrantBinding validateTenantGrant(
+      String grantId, String subject, String clientId, long version) {
+    return tenantGrant(
+        () ->
+            stub.withDeadlineAfter(properties.auth().timeout().toMillis(), TimeUnit.MILLISECONDS)
+                .validateTenantOAuthGrant(
+                    ValidateTenantOAuthGrantRequest.newBuilder()
+                        .setHeader(header())
+                        .setGrantId(grantId)
+                        .setUserId(subject)
+                        .setClientId(clientId)
+                        .setGrantGeneration(Long.toString(version))
+                        .build()),
+        grantId);
+  }
+
+  private static TenantOAuthGrantBinding tenantGrant(
+      java.util.function.Supplier<TenantOAuthGrantBinding> call, String grantId) {
+    try {
+      var binding = call.get();
+      if (!grantId.equals(binding.getGrantId()) || binding.getTenantId().isBlank())
+        throw new TenantGrantRejectedException();
+      return binding;
+    } catch (StatusRuntimeException failure) {
+      if (java.util.Set.of(Status.Code.UNAVAILABLE, Status.Code.DEADLINE_EXCEEDED, Status.Code.INTERNAL)
+          .contains(failure.getStatus().getCode())) throw new AuthenticationServiceException("Identity service is unavailable");
+      throw new TenantGrantRejectedException();
+    }
+  }
+
+  /** A definitive refusal: unknown, foreign, consumed, revoked or changed grant. */
+  public static final class TenantGrantRejectedException extends RuntimeException {
+    TenantGrantRejectedException() {
+      super("Tenant OAuth grant rejected", null, false, false);
+    }
+  }
+
   private Header header() {
     return Header.newBuilder()
         .setNodeId("oauth-server")
