@@ -90,6 +90,10 @@ public class TenantStorageConfiguration {
     if (security != null) {
       var policies =
           new java.util.HashMap<String, ru.taska.security.tenant.RpcContextSecurity.Policy>();
+      // Register only the native WorkflowService methods implemented by this profile.
+      ru.taska.security.tenant.RpcRoutePolicies.policies("workflow-service").forEach((rpc, policy) -> {
+        if (rpc.startsWith("ru.taska.workflow.v1.WorkflowService/")) policies.put(rpc, policy);
+      });
       policies.put(
           ru.taska.api.b2b.v1.WorkflowProvisioningServiceGrpc.getProvisionTenantWorkflowMethod()
               .getFullMethodName(),
