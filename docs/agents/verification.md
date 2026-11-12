@@ -166,6 +166,8 @@ TAS-311: `tenant-service.verify` также требует свежий `TenantM
 
 TAS-312: тот же `TenantMembershipIntegrationTest` проверяет role/leave RPC на PostgreSQL: ACTIVE admin, owner guard, stale version, идемпотентный повтор, отказ постороннему/неактивному actor, атомарный outbox и одновременный выход двух администраторов. Проверка публичного REST остаётся неприменимой до gateway adapter. [Контракт мутаций](../../tenant-service/README.md#изменение-роли-и-выход--tas-312).
 
+TAS-323: `TenantMembershipIntegrationTest` проверяет suspend/re-activation/remove на PostgreSQL: owner/last-admin guards, stale version без side effects, сохранение/однократное освобождение SEAT, `TENANT_ADMIN → MEMBER`, идемпотентный replay, append-only audit и schema v2 cleanup contract (`previousVersion`, `revokedAt`, `cleanupScopes`). Реальный loopback mTLS/JWS запускает membership mutations через production policy map. Публичный REST, tenant outbox publisher и downstream Kafka consumers остаются отдельными activation scopes. [Контракт lifecycle](../../tenant-service/README.md#suspend-remove-и-reactivation--tas-323).
+
 ## Billing catalog
 
 `python3 scripts/harness.py check --module billing-service` requires fresh nonempty `BillingCatalogIntegrationTest`, `SubscriptionIntegrationTest`, `InvoiceIntegrationTest` and `FinancialLedgerIntegrationTest` reports. It exercises real PostgreSQL 16, Liquibase, app role/RLS, concurrent catalog mutations and mTLS/JWS production policies. See [billing-service](../../billing-service/README.md) for the delivered RPCs and activation boundaries. Public REST/PSP E2E is not established by these checks.

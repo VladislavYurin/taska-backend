@@ -56,6 +56,7 @@ import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 import ru.taska.api.b2b.v1.BatchValidateMembershipsRpcRequest;
 import ru.taska.api.b2b.v1.ChangeMemberRoleRequest;
+import ru.taska.api.b2b.v1.ChangeMemberStateRequest;
 import ru.taska.api.b2b.v1.ConfirmedAction;
 import ru.taska.api.b2b.v1.Entitlement;
 import ru.taska.api.b2b.v1.GetMembershipRpcRequest;
@@ -73,7 +74,9 @@ import ru.taska.api.b2b.v1.PageRequest;
 import ru.taska.api.b2b.v1.QuotaLimit;
 import ru.taska.api.b2b.v1.QuotaUsage;
 import ru.taska.api.b2b.v1.RequestContext;
+import ru.taska.api.b2b.v1.RemoveTenantMemberRpcRequest;
 import ru.taska.api.b2b.v1.SetTenantMemberRoleRpcRequest;
+import ru.taska.api.b2b.v1.SetTenantMemberStateRpcRequest;
 import ru.taska.api.b2b.v1.Tenant;
 import ru.taska.api.b2b.v1.TenantMembershipServiceGrpc;
 import ru.taska.api.b2b.v1.TenantServiceGrpc;
@@ -356,6 +359,35 @@ class TenantMembershipIntegrationTest {
                 .build()));
   }
 
+  Mono<Membership> state(
+      TrustedTenantContext claims, UUID target, String state, String version, String key) {
+    return as(
+        claims,
+        mutations.setState(
+            SetTenantMemberStateRpcRequest.newBuilder()
+                .setTenantId(claims.getTenantId())
+                .setUserId(target.toString())
+                .setPayload(
+                    ChangeMemberStateRequest.newBuilder()
+                        .setState(ChangeMemberStateRequest.StateValue.valueOf(state)))
+                .setMutation(
+                    MutationOptions.newBuilder().setIdempotencyKey(key).setExpectedVersion(version))
+                .build()));
+  }
+
+  Mono<Operation> remove(
+      TrustedTenantContext claims, UUID target, String version, String key) {
+    return as(
+        claims,
+        mutations.remove(
+            RemoveTenantMemberRpcRequest.newBuilder()
+                .setTenantId(claims.getTenantId())
+                .setUserId(target.toString())
+                .setMutation(
+                    MutationOptions.newBuilder().setIdempotencyKey(key).setExpectedVersion(version))
+                .build()));
+  }
+
   long count(String sql) {
     return operator.sql(sql).map((r, m) -> r.get("n", Long.class)).one().block(WAIT);
   }
@@ -536,6 +568,133 @@ class TenantMembershipIntegrationTest {
     assertEquals(11L, count("SELECT membership_version n FROM taska.tenants WHERE id='" + A + "'"));
     assertEquals(1L, count("SELECT count(*) n FROM taska.outbox_events"));
     assertEquals(1L, count("SELECT count(*) n FROM taska.membership_audit"));
+  }
+
+  @Test
+  void suspendAndReactivationAreImmediateAuditedAndDoNotRestoreAdmin() {
+    var admin = writer(OWNER, A, "1", "setTenantMemberState");
+    String suspendKey = UUID.randomUUID().toString();
+    var suspended = state(admin, ADMIN, "STATE_SUSPENDED", "11", suspendKey).block(WAIT);
+    assertEquals(Membership.StateValue.STATE_SUSPENDED, suspended.getState());
+    assertEquals(Membership.RoleValue.ROLE_TENANT_ADMIN, suspended.getRole());
+    assertEquals("12", suspended.getVersion());
+    assertEquals(suspended, state(admin, ADMIN, "STATE_SUSPENDED", "11", suspendKey).block(WAIT));
+    assertEquals(
+        4L,
+        count(
+            "SELECT used n FROM taska.quota_counters WHERE tenant_id='"
+                + A
+                + "' AND resource='SEAT'"));
+    assertEquals(
+        "[\"PROJECT_GRANTS\", \"ISSUE_ASSIGNMENTS\", \"PENDING_INVITATIONS\"]",
+        operator
+            .sql("SELECT payload->'cleanupScopes' scope FROM taska.outbox_events")
+            .map((r, m) -> r.get("scope", String.class))
+            .one()
+            .block(WAIT));
+    assertEquals(
+        "11",
+        operator
+            .sql("SELECT payload->>'previousVersion' version FROM taska.outbox_events")
+            .map((r, m) -> r.get("version", String.class))
+            .one()
+            .block(WAIT));
+    assertEquals(
+        NOW,
+        Instant.parse(
+            operator
+                .sql("SELECT payload->>'revokedAt' revoked FROM taska.outbox_events")
+                .map((r, m) -> r.get("revoked", String.class))
+                .one()
+                .block(WAIT)));
+
+    String reactivateKey = UUID.randomUUID().toString();
+    var reactivated = state(admin, ADMIN, "STATE_ACTIVE", "12", reactivateKey).block(WAIT);
+    assertEquals(Membership.StateValue.STATE_ACTIVE, reactivated.getState());
+    assertEquals(Membership.RoleValue.ROLE_MEMBER, reactivated.getRole());
+    assertEquals("13", reactivated.getVersion());
+    assertEquals(
+        reactivated, state(admin, ADMIN, "STATE_ACTIVE", "12", reactivateKey).block(WAIT));
+    assertEquals(2L, count("SELECT count(*) n FROM taska.outbox_events"));
+    assertEquals(
+        "[\"PENDING_INVITATIONS\"]",
+        operator
+            .sql(
+                "SELECT payload->'cleanupScopes' scope FROM taska.outbox_events"
+                    + " WHERE payload->>'previousVersion'='12'")
+            .map((r, m) -> r.get("scope", String.class))
+            .one()
+            .block(WAIT));
+    assertEquals(2L, count("SELECT count(*) n FROM taska.membership_audit"));
+  }
+
+  @Test
+  void removeReleasesSeatOnceAndQueuesGenerationBoundCleanup() {
+    var admin = writer(OWNER, A, "1", "removeTenantMember");
+    String key = UUID.randomUUID().toString();
+    var removed = remove(admin, SHARED, "3", key).block(WAIT);
+    assertEquals(Operation.StateValue.STATE_SUCCEEDED, removed.getState());
+    assertEquals(removed, remove(admin, SHARED, "3", key).block(WAIT));
+    assertEquals(Membership.StateValue.STATE_REMOVED, get(A, SHARED).block(WAIT).getState());
+    assertEquals("4", get(A, SHARED).block(WAIT).getVersion());
+    rejects(
+        DomainStatus.ABORTED,
+        remove(admin, SHARED, "4", UUID.randomUUID().toString()));
+    assertEquals(
+        3L,
+        count(
+            "SELECT used n FROM taska.quota_counters WHERE tenant_id='"
+                + A
+                + "' AND resource='SEAT'"));
+    assertEquals(1L, count("SELECT count(*) n FROM taska.outbox_events"));
+    assertEquals(
+        "[\"PROJECT_GRANTS\", \"ISSUE_ASSIGNMENTS\"]",
+        operator
+            .sql("SELECT payload->'cleanupScopes' scope FROM taska.outbox_events")
+            .map((r, m) -> r.get("scope", String.class))
+            .one()
+            .block(WAIT));
+    rejects(
+        DomainStatus.ABORTED,
+        state(
+            writer(OWNER, A, "1", "setTenantMemberState"),
+            SHARED,
+            "STATE_ACTIVE",
+            "4",
+            UUID.randomUUID().toString()));
+  }
+
+  @Test
+  void lifecycleValidationKeepsOwnerOtherTenantAndStateUnchanged() {
+    rejects(
+        DomainStatus.FAILED_PRECONDITION,
+        state(
+            writer(OWNER, A, "1", "setTenantMemberState"),
+            OWNER,
+            "STATE_SUSPENDED",
+            "1",
+            UUID.randomUUID().toString()));
+    rejects(
+        DomainStatus.FAILED_PRECONDITION,
+        remove(
+            writer(OWNER, A, "1", "removeTenantMember"),
+            OWNER,
+            "1",
+            UUID.randomUUID().toString()));
+    rejects(
+        DomainStatus.ABORTED,
+        state(
+            writer(OWNER, A, "1", "setTenantMemberState"),
+            SHARED,
+            "STATE_SUSPENDED",
+            "99",
+            UUID.randomUUID().toString()));
+    assertEquals(Membership.StateValue.STATE_ACTIVE, get(A, SHARED).block(WAIT).getState());
+    assertEquals("3", get(A, SHARED).block(WAIT).getVersion());
+    assertEquals("99", get(B, FOREIGN).block(WAIT).getVersion());
+    assertEquals(0L, count("SELECT count(*) n FROM taska.outbox_events"));
+    assertEquals(0L, count("SELECT count(*) n FROM taska.membership_audit"));
+    assertEquals(0L, count("SELECT count(*) n FROM taska.quota_counters"));
   }
 
   @Test
@@ -1292,6 +1451,72 @@ class TenantMembershipIntegrationTest {
                   .getCode());
           assertEquals(
               Membership.RoleValue.ROLE_MEMBER, signedChange.setTenantMemberRole(change).getRole());
+          var suspend =
+              SetTenantMemberStateRpcRequest.newBuilder()
+                  .setTenantId(A.toString())
+                  .setUserId(ADMIN.toString())
+                  .setPayload(
+                      ChangeMemberStateRequest.newBuilder()
+                          .setState(ChangeMemberStateRequest.StateValue.STATE_SUSPENDED))
+                  .setMutation(
+                      MutationOptions.newBuilder()
+                          .setIdempotencyKey(UUID.randomUUID().toString())
+                          .setExpectedVersion("12"))
+                  .setContext(wire(writer(OWNER, A, "1", "setTenantMemberState")))
+                  .build();
+          var suspendStub =
+              plain.withInterceptors(
+                  io.grpc.stub.MetadataUtils.newAttachHeadersInterceptor(
+                      TenantRegistryIntegrationTest.signed(
+                          sender,
+                          suspend,
+                          policy,
+                          TenantServiceGrpc.getSetTenantMemberStateMethod().getFullMethodName())));
+          assertEquals(
+              Membership.StateValue.STATE_SUSPENDED,
+              suspendStub.setTenantMemberState(suspend).getState());
+          var reactivate =
+              suspend.toBuilder()
+                  .setPayload(
+                      ChangeMemberStateRequest.newBuilder()
+                          .setState(ChangeMemberStateRequest.StateValue.STATE_ACTIVE))
+                  .setMutation(
+                      MutationOptions.newBuilder()
+                          .setIdempotencyKey(UUID.randomUUID().toString())
+                          .setExpectedVersion("13"))
+                  .build();
+          var reactivateStub =
+              plain.withInterceptors(
+                  io.grpc.stub.MetadataUtils.newAttachHeadersInterceptor(
+                      TenantRegistryIntegrationTest.signed(
+                          sender,
+                          reactivate,
+                          policy,
+                          TenantServiceGrpc.getSetTenantMemberStateMethod().getFullMethodName())));
+          assertEquals(
+              Membership.RoleValue.ROLE_MEMBER,
+              reactivateStub.setTenantMemberState(reactivate).getRole());
+          var remove =
+              RemoveTenantMemberRpcRequest.newBuilder()
+                  .setTenantId(A.toString())
+                  .setUserId(SUSPENDED.toString())
+                  .setMutation(
+                      MutationOptions.newBuilder()
+                          .setIdempotencyKey(UUID.randomUUID().toString())
+                          .setExpectedVersion("5"))
+                  .setContext(wire(writer(OWNER, A, "1", "removeTenantMember")))
+                  .build();
+          var removeStub =
+              plain.withInterceptors(
+                  io.grpc.stub.MetadataUtils.newAttachHeadersInterceptor(
+                      TenantRegistryIntegrationTest.signed(
+                          sender,
+                          remove,
+                          policy,
+                          TenantServiceGrpc.getRemoveTenantMemberMethod().getFullMethodName())));
+          assertEquals(
+              Operation.StateValue.STATE_SUCCEEDED,
+              removeStub.removeTenantMember(remove).getState());
           var quotaRequest =
               GetTenantQuotasRpcRequest.newBuilder()
                   .setTenantId(A.toString())
@@ -1310,7 +1535,7 @@ class TenantMembershipIntegrationTest {
                   io.grpc.stub.MetadataUtils.newAttachHeadersInterceptor(
                       TenantRegistryIntegrationTest.signed(
                           sender, quotaRequest, policy, quotaRpc)));
-          assertEquals("4", quotaStub.getTenantQuotas(quotaRequest).getQuotas(0).getUsed());
+          assertEquals("3", quotaStub.getTenantQuotas(quotaRequest).getQuotas(0).getUsed());
           var leaveRequest =
               LeaveTenantRpcRequest.newBuilder()
                   .setTenantId(A.toString())
@@ -1329,7 +1554,7 @@ class TenantMembershipIntegrationTest {
                           TenantServiceGrpc.getLeaveTenantMethod().getFullMethodName())));
           var receipt = leaveStub.leaveTenant(leaveRequest);
           assertEquals(receipt, leaveStub.leaveTenant(leaveRequest));
-          assertEquals("3", quotaStub.getTenantQuotas(quotaRequest).getQuotas(0).getUsed());
+          assertEquals("2", quotaStub.getTenantQuotas(quotaRequest).getQuotas(0).getUsed());
           operator
               .sql(
                   "UPDATE taska.tenant_memberships SET status='SUSPENDED' WHERE tenant_id=:t AND"
