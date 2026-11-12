@@ -1,6 +1,13 @@
 SET LOCAL ROLE taska_workflow_migrator;
 SET LOCAL search_path=pg_catalog;
 
+-- Index builds validate all rows even with FORCE RLS. Refuse ties transactionally before creating
+-- API tables; never deduplicate nodes or silently renumber a configured graph during startup.
+CREATE UNIQUE INDEX statuses_workflow_order_unique
+  ON taska.statuses(tenant_id,workflow_id,sort_order);
+CREATE UNIQUE INDEX transitions_workflow_order_unique
+  ON taska.transitions(tenant_id,workflow_id,sort_order);
+
 CREATE TABLE taska.workflow_authorization_audit (
   tenant_id uuid NOT NULL,
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -30,11 +37,6 @@ CREATE TABLE taska.workflow_creation_receipts (
   UNIQUE(tenant_id,id),
   UNIQUE(tenant_id,project_id,actor_id,request_id)
 );
-
-CREATE UNIQUE INDEX statuses_workflow_order_unique
-  ON taska.statuses(tenant_id,workflow_id,sort_order);
-CREATE UNIQUE INDEX transitions_workflow_order_unique
-  ON taska.transitions(tenant_id,workflow_id,sort_order);
 
 SELECT set_config('taska.guard_service','workflow',true),
        set_config('taska.guard_schema','taska',true),

@@ -31,6 +31,17 @@ class WorkflowAclLocal(ProjectAclLocal):
     def workflows(self, client, project):
         return client.expect('GET', '/api/v1/projects/' + project + '/workflows', 200).json()
 
+    @staticmethod
+    def graph_payload(name, workflow):
+        keys = {node['id']: node['statusKey'] for node in workflow['statuses']}
+        return {'name': name, 'issueTypes': ['TASK', 'BUG', 'STORY'],
+            'statuses': [{k: node[k] for k in ('statusKey', 'name', 'category', 'sortOrder')}
+                         for node in workflow['statuses']],
+            'transitions': [{'fromStatusKey': keys[edge['fromStatusId']],
+                'toStatusKey': keys[edge['toStatusId']], 'name': edge['name'],
+                'sortOrder': edge['sortOrder'], 'hidden': edge.get('hidden', False)}
+                for edge in workflow['transitions']]}
+
     def scenarios(self):
         actor, clients = self.seed()
         projects = []
@@ -46,24 +57,24 @@ class WorkflowAclLocal(ProjectAclLocal):
         initial = self.workflows(owner, project)
         foreign = self.workflows(other, foreign_project)['items'][0]['workflow']
         workflow = initial['items'][0]['workflow']
-        keys = {node['id']: node['statusKey'] for node in workflow['statuses']}
-        payload = {'name': 'Owned custom workflow', 'issueTypes': ['TASK', 'BUG', 'STORY'],
-            'statuses': [{k: node[k] for k in ('statusKey', 'name', 'category', 'sortOrder')}
-                         for node in workflow['statuses']],
-            'transitions': [{'fromStatusKey': keys[edge['fromStatusId']],
-                'toStatusKey': keys[edge['toStatusId']], 'name': edge['name'],
-                'sortOrder': edge['sortOrder'], 'hidden': edge.get('hidden', False)}
-                for edge in workflow['transitions']]}
+        payload = self.graph_payload('Owned custom workflow', workflow)
         headers = {'X-Request-Id': str(uuid.uuid4())}
         created = owner.expect('POST', '/api/v1/projects/' + project + '/workflows', 201, payload, headers).json()
         e.require(owner.expect('POST', '/api/v1/projects/' + project + '/workflows', 201, payload, headers).json() == created,
                   'Create replay changed its frozen graph/response')
         owner.expect('POST', '/api/v1/projects/' + project + '/workflows', 409,
             dict(payload, name='Conflicting create'), headers)
+        # Owned storage fixture, not a claim that native issue creation has been activated.
+        issue = str(uuid.uuid4())
+        self.sql('issue_db', "INSERT INTO taska.project_counters(tenant_id,project_id,next_issue_number,lifetime_created) VALUES('%s','%s',2,1);INSERT INTO taska.issues(tenant_id,id,project_id,issue_number,issue_key,issue_type,summary,status_key,priority,reporter_id) VALUES('%s','%s','%s',1,'WF-1','TASK','Owned history fixture','TODO','MEDIUM','%s');INSERT INTO taska.issue_history(tenant_id,issue_id,event_type,actor_user_id,occurred_at,payload) VALUES('%s','%s','CREATED','%s',now(),jsonb_build_object('workflowId','%s'));" % (tenant, project, tenant, issue, project, actor, tenant, issue, actor, created['workflow']['id']))
+        history_query = "SELECT jsonb_build_array((SELECT to_jsonb(i) FROM taska.issues i WHERE id='%s'),(SELECT jsonb_agg(to_jsonb(h) ORDER BY id) FROM taska.issue_history h WHERE issue_id='%s'))::text;" % (issue, issue)
+        history_before = self.sql('issue_db', history_query)
         restored = owner.expect('DELETE', '/api/v1/projects/' + project + '/workflows/' + created['workflow']['id'],
             200, {}).json()['workflow']
         e.require(restored['id'] not in (workflow['id'], created['workflow']['id']),
                   'Delete reused a mutable/shared fallback graph')
+        e.require(self.sql('issue_db', history_query) == history_before,
+                  'Compatible workflow delete changed issue state or historical graph identity')
         initial = self.workflows(owner, project)
         workflow = initial['items'][0]['workflow']
         path = '/api/v1/projects/' + project + '/workflows/' + workflow['id']
@@ -98,8 +109,18 @@ class WorkflowAclLocal(ProjectAclLocal):
         viewer.expect('PATCH', path, 403, {'name': 'Denied'})
         owner.expect('PATCH', '/api/v1/projects/' + project + '/members/' + member, 200, {'role': 'ADMIN'})
         viewer.expect('PATCH', path, 200, {'name': 'Project admin edit'})
+        member_payload = self.graph_payload('Member-created workflow', self.workflows(viewer, project)['items'][0]['workflow'])
+        member_headers = {'X-Request-Id': str(uuid.uuid4())}
+        viewer.expect('POST', '/api/v1/projects/' + project + '/workflows', 201, member_payload, member_headers)
         owner.expect('PATCH', '/api/v1/projects/' + project + '/members/' + member, 200, {'role': 'VIEWER'})
         viewer.expect('PATCH', path, 403, {'name': 'Stale admin denied'})
+        viewer.expect('POST', '/api/v1/projects/' + project + '/workflows', 403, member_payload, member_headers)
+        self.sql('tenant_db', "INSERT INTO taska.platform_configuration_versions(key,version,value_type,value,effective_at,changed_by,created_at) SELECT key,2,value_type,'false'::jsonb,now(),'%s',now() FROM taska.platform_configuration_definitions WHERE key='ISSUE_TYPE_CONFIGURATION';" % actor)
+        owner.expect('POST', '/api/v1/projects/' + project + '/workflows', 403, payload,
+                     {'X-Request-Id': str(uuid.uuid4())})
+        visible = self.workflows(owner, project)['items'][0]['workflow']['id']
+        owner.expect('PATCH', '/api/v1/projects/' + project + '/workflows/' + visible, 200,
+                     {'name': 'Graph configuration independent of type flag'})
         before_flags = self.workflows(owner, project)
         self.sql('tenant_db', "INSERT INTO taska.platform_configuration_versions(key,version,value_type,value,effective_at,changed_by,created_at) SELECT key,2,value_type,'false'::jsonb,now(),'%s',now() FROM taska.platform_configuration_definitions WHERE key='WORKFLOW_CONFIGURATION';" % actor)
         owner.expect('PATCH', path, 403, {'name': 'Flag denied'})
@@ -114,13 +135,18 @@ class WorkflowAclLocal(ProjectAclLocal):
         self.sql('tenant_db', "UPDATE taska.tenant_memberships SET status='SUSPENDED',version=version+1 WHERE tenant_id='%s' AND user_id='%s';" % (tenant, member))
         e.require(viewer.request('GET', '/api/v1/projects/' + project + '/workflows').status in (401, 403),
                   'Suspended member retained workflow access')
+        e.require(viewer.request('POST', '/api/v1/projects/' + project + '/workflows', member_payload,
+                                member_headers).status in (401, 403),
+                  'Suspended membership replayed a completed create receipt')
         self.compose('stop', 'project-service')
         owner.expect('GET', '/api/v1/projects/' + project + '/workflows', 503)
         self.compose('start', 'project-service')
         self.wait_ready('http://' + self.compose('port', 'project-service', '8080').strip())
         t.wait_protected_read(owner, '/api/v1/projects/' + project + '/workflows', 200)
         e.require(self.workflows(owner, project) == before_flags, 'Primary outage changed the graph')
-        return {'nativeWorkflowRest': 'PASS', 'createReplayAndPrivateFallback': 'PASS', 'foreignNestedIds': 'PASS', 'currentProjectRoles': 'PASS',
+        return {'nativeWorkflowRest': 'PASS', 'createReplayAndPrivateFallback': 'PASS', 'replayCurrentRoleAndMembership': 'PASS',
+                'seededIssueHistoryPreserved': 'PASS', 'independentTypeConfigurationFlag': 'PASS',
+                'foreignNestedIds': 'PASS', 'currentProjectRoles': 'PASS',
                 'flagOffRuntimePreserved': 'PASS', 'doneCategory': 'PASS', 'primaryOutage': 'PASS', **probe}
 
     def direct_workflow_probe(self, client, actor, tenant, project, foreign, workflow):

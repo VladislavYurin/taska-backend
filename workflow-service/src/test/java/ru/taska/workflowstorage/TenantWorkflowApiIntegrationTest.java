@@ -443,4 +443,215 @@ class TenantWorkflowApiIntegrationTest extends TenantWorkflowFixture {
     assertEquals(edges, count("transitions"));
     assertEquals(before, get());
   }
+
+  @Test
+  void concurrentAdditionsSerializeWithoutLostNodesOrEdges() {
+    var statuses =
+        Flux.range(0, 2)
+            .flatMap(
+                i ->
+                    as(
+                        A,
+                        ACTOR,
+                        api.addStatus(
+                            AddWorkflowStatusRequestBody.newBuilder()
+                                .setProjectId(project.toString())
+                                .setActorUserId(ACTOR.toString())
+                                .setWorkflowId(workflow.id().toString())
+                                .setStatus(
+                                    WorkflowStatusCreateRequest.newBuilder()
+                                        .setStatusKey("QA" + i)
+                                        .setName("QA")
+                                        .setCategory(StatusCategory.STATUS_CATEGORY_IN_PROGRESS)
+                                        .setSortOrder(90 + i))
+                                .build())))
+            .collectList()
+            .block(WAIT);
+    assertEquals(
+        Set.of(2, 3),
+        statuses.stream()
+            .map(WorkflowResponse::getVersion)
+            .collect(java.util.stream.Collectors.toSet()));
+    assertEquals(5, get().getStatusesCount());
+    var transitions =
+        Flux.range(0, 2)
+            .flatMap(
+                i ->
+                    as(
+                        A,
+                        ACTOR,
+                        api.addTransition(
+                            AddWorkflowTransitionRequestBody.newBuilder()
+                                .setProjectId(project.toString())
+                                .setActorUserId(ACTOR.toString())
+                                .setWorkflowId(workflow.id().toString())
+                                .setTransition(
+                                    WorkflowTransitionCreateRequest.newBuilder()
+                                        .setFromStatusKey("TODO")
+                                        .setToStatusKey("QA" + i)
+                                        .setName("Review")
+                                        .setSortOrder(90 + i))
+                                .build())))
+            .collectList()
+            .block(WAIT);
+    assertEquals(
+        Set.of(4, 5),
+        transitions.stream()
+            .map(WorkflowResponse::getVersion)
+            .collect(java.util.stream.Collectors.toSet()));
+    assertEquals(8, get().getTransitionsCount());
+    assertEquals(5, get().getVersion());
+  }
+
+  @Test
+  void concurrentDuplicateAdditionHasOneWinnerAndNoLoserVersionOrNode() {
+    var q =
+        AddWorkflowStatusRequestBody.newBuilder()
+            .setProjectId(project.toString())
+            .setActorUserId(ACTOR.toString())
+            .setWorkflowId(workflow.id().toString())
+            .setStatus(
+                WorkflowStatusCreateRequest.newBuilder()
+                    .setStatusKey("QA")
+                    .setName("QA")
+                    .setCategory(StatusCategory.STATUS_CATEGORY_IN_PROGRESS)
+                    .setSortOrder(90))
+            .build();
+    var outcomes =
+        Flux.range(0, 2)
+            .flatMap(
+                i ->
+                    as(A, ACTOR, api.addStatus(q))
+                        .map(x -> "OK")
+                        .onErrorResume(DomainException.class, e -> Mono.just(e.getStatus().name())))
+            .collectList()
+            .block(WAIT);
+    assertEquals(1, Collections.frequency(outcomes, "OK"));
+    assertEquals(1, Collections.frequency(outcomes, "INVALID_ARGUMENT"));
+    assertEquals(4, get().getStatusesCount());
+    assertEquals(2, get().getVersion());
+  }
+
+  @Test
+  void upgradeFromPreviousNativeSchemaIsAtomicAndNeverDeduplicatesGraphData() throws Exception {
+    var source =
+        java.nio.file.Path.of(getClass().getResource("/db/workflow-tenant/changelog.json").toURI());
+    var folder = java.nio.file.Files.createTempDirectory("tas342-upgrade-");
+    try {
+      try (var files = java.nio.file.Files.list(source.getParent())) {
+        for (var file : files.filter(java.nio.file.Files::isRegularFile).toList())
+          java.nio.file.Files.copy(file, folder.resolve(file.getFileName()));
+      }
+      var previous =
+          (tools.jackson.databind.node.ObjectNode)
+              json.readTree(java.nio.file.Files.readString(source));
+      var sets = (tools.jackson.databind.node.ArrayNode) previous.get("databaseChangeLog");
+      sets.remove(sets.size() - 1);
+      for (var entry : sets)
+        ((tools.jackson.databind.node.ObjectNode) entry.get("changeSet"))
+            .put("logicalFilePath", "db/workflow-tenant/changelog.json");
+      var oldMaster = folder.resolve("changelog.json");
+      java.nio.file.Files.writeString(oldMaster, json.writeValueAsString(previous));
+      for (String variant : List.of("valid", "statuses", "transitions")) {
+        String database = "upgrade_" + UUID.randomUUID().toString().replace("-", "");
+        sql("CREATE DATABASE " + database);
+        String url =
+            "jdbc:postgresql://" + pg.getHost() + ":" + pg.getMappedPort(5432) + "/" + database;
+        try {
+          bootstrap(database);
+          try (var connection =
+                  java.sql.DriverManager.getConnection(url, pg.getUsername(), pg.getPassword());
+              var statement = connection.createStatement()) {
+            statement.execute(
+                "CREATE SCHEMA workflow_liquibase AUTHORIZATION taska_workflow_migrator;REVOKE ALL"
+                    + " ON SCHEMA workflow_liquibase FROM PUBLIC");
+          }
+          var old =
+              new ru.taska.workflowbootstrap.TenantStorageConfiguration()
+                  .workflowTenantLiquibase(url, "taska_workflow_deployer", DEPLOY);
+          old.setChangeLog(oldMaster.toUri().toString());
+          old.afterPropertiesSet();
+          String graph = UUID.randomUUID().toString(), p = UUID.randomUUID().toString();
+          try (var connection =
+                  java.sql.DriverManager.getConnection(url, pg.getUsername(), pg.getPassword());
+              var statement = connection.createStatement()) {
+            statement.execute(
+                "INSERT INTO taska.workflows(tenant_id,id,owner_project_id,name) VALUES('"
+                    + A
+                    + "','"
+                    + graph
+                    + "','"
+                    + p
+                    + "','Upgrade graph');INSERT INTO"
+                    + " taska.statuses(tenant_id,workflow_id,status_key,name,category,sort_order)"
+                    + " VALUES('"
+                    + A
+                    + "','"
+                    + graph
+                    + "','TODO','Todo','TODO',10),('"
+                    + A
+                    + "','"
+                    + graph
+                    + "','DONE','Done','DONE',20);INSERT INTO"
+                    + " taska.transitions(tenant_id,workflow_id,from_status_id,to_status_id,name,sort_order)"
+                    + " SELECT '"
+                    + A
+                    + "','"
+                    + graph
+                    + "',a.id,b.id,'Finish',10 FROM taska.statuses a,taska.statuses b WHERE"
+                    + " a.status_key='TODO' AND b.status_key='DONE';INSERT INTO"
+                    + " taska.transitions(tenant_id,workflow_id,from_status_id,to_status_id,name,sort_order)"
+                    + " SELECT '"
+                    + A
+                    + "','"
+                    + graph
+                    + "',a.id,b.id,'Reopen',20 FROM taska.statuses a,taska.statuses b WHERE"
+                    + " a.status_key='DONE' AND b.status_key='TODO';");
+            if (!variant.equals("valid"))
+              statement.execute("UPDATE taska." + variant + " SET sort_order=10");
+            String before = upgradeSnapshot(statement);
+            if (variant.equals("valid")) {
+              migrate(url);
+              migrate(url);
+            } else {
+              var failure = assertThrows(Exception.class, () -> migrate(url));
+              boolean duplicate = false;
+              for (Throwable cause = failure; cause != null; cause = cause.getCause())
+                if (cause instanceof java.sql.SQLException sql && "23505".equals(sql.getSQLState()))
+                  duplicate = true;
+              assertTrue(
+                  duplicate,
+                  "Upgrade must reject duplicate orders, not fail on another prerequisite");
+            }
+            assertEquals(before, upgradeSnapshot(statement));
+            try (var rows =
+                statement.executeQuery(
+                    "SELECT to_regclass('taska.workflow_creation_receipts') IS NOT NULL")) {
+              assertTrue(rows.next());
+              assertEquals(variant.equals("valid"), rows.getBoolean(1));
+            }
+          }
+        } finally {
+          sql("DROP DATABASE " + database + " WITH (FORCE)");
+        }
+      }
+    } finally {
+      try (var files = java.nio.file.Files.walk(folder)) {
+        for (var file : files.sorted(Comparator.reverseOrder()).toList())
+          java.nio.file.Files.deleteIfExists(file);
+      }
+    }
+  }
+
+  private String upgradeSnapshot(java.sql.Statement statement) throws Exception {
+    try (var rows =
+        statement.executeQuery(
+            "SELECT jsonb_build_array((SELECT jsonb_agg(to_jsonb(w) ORDER BY id) FROM"
+                + " taska.workflows w),(SELECT jsonb_agg(to_jsonb(s) ORDER BY id) FROM"
+                + " taska.statuses s),(SELECT jsonb_agg(to_jsonb(t) ORDER BY id) FROM"
+                + " taska.transitions t))::text")) {
+      assertTrue(rows.next());
+      return rows.getString(1);
+    }
+  }
 }

@@ -55,7 +55,10 @@ later project/type operation activation TAS-493 are not claimed here. Existing j
 generation fences remain enforced; no global recovery scan or fabricated recovery actor is enabled.
 
 The additive migration creates append-only, RLS-protected creation receipts and authorization
-audit, and enforces status/transition order uniqueness. Applied changesets remain intact.
+audit, and enforces unique graph orders. Upgrade preflight refuses existing tied orders before
+creating API tables or constraints; it never deletes nodes or silently renumbers an existing graph.
+Resolve ties explicitly before retrying the upgrade, as with legacy order migration 0012.
+Valid upgrades and repeated application preserve graph contents. Applied changesets remain intact.
 The gateway binds every mutation publisher to the verified outbound context, including direct
 metadata/status/transition/delete RPCs.
 
