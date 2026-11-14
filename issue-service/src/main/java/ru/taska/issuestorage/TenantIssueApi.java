@@ -32,7 +32,6 @@ import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
 import ru.taska.issuestorage.TenantIssueStore.CreateIssue;
 import ru.taska.issuestorage.TenantIssueStore.Snapshot;
-import ru.taska.issuestorage.TenantIssueStore.TenantIssueStore;
 import ru.taska.security.tenant.VerifiedTenantContext;
 
 /**
