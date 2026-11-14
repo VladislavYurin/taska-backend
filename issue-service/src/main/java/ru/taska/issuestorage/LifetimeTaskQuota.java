@@ -97,9 +97,20 @@ public final class LifetimeTaskQuota {
                                                 if (!terms.limit().getUnlimited()
                                                     && max > limit(terms))
                                                   return Mono.error(
-                                                      fail(
+                                                      new DomainException(
                                                           DomainStatus.FAILED_PRECONDITION,
-                                                          "TENANT_READ_ONLY_OVER_QUOTA"));
+                                                          "TENANT_READ_ONLY_OVER_QUOTA",
+                                                          Map.of(
+                                                              "code",
+                                                              "READ_ONLY",
+                                                              "reason",
+                                                              "OVER_QUOTA",
+                                                              "quotaKind",
+                                                              "TASK_LIFETIME",
+                                                              "quotaLimit",
+                                                              Long.toString(limit(terms)),
+                                                              "quotaUsed",
+                                                              Long.toString(max))));
                                               }
                                               return db.sql(
                                                       "INSERT INTO"
@@ -113,12 +124,12 @@ public final class LifetimeTaskQuota {
                                                   .then(
                                                       db.sql(
                                                               """
-                                                              UPDATE taska.project_counters SET next_issue_number=next_issue_number+1,lifetime_created=lifetime_created+1,version=version+1
-                                                              WHERE tenant_id=:t AND project_id=:p AND retired_at IS NULL
-                                                                AND next_issue_number<2147483647 AND version<9223372036854775807 AND lifetime_created<9223372036854775807
-                                                                AND (:bypass OR :unlimited OR lifetime_created<:lim)
-                                                              RETURNING next_issue_number-1 AS allocated
-                                                              """)
+UPDATE taska.project_counters SET next_issue_number=next_issue_number+1,lifetime_created=lifetime_created+1,version=version+1
+WHERE tenant_id=:t AND project_id=:p AND retired_at IS NULL
+  AND next_issue_number<2147483647 AND version<9223372036854775807 AND lifetime_created<9223372036854775807
+  AND (:bypass OR :unlimited OR lifetime_created<:lim)
+RETURNING next_issue_number-1 AS allocated
+""")
                                                           .bind("t", tenant)
                                                           .bind("p", project)
                                                           .bind(
@@ -165,7 +176,19 @@ public final class LifetimeTaskQuota {
               if (!grant.bypassBusinessRules()
                   && !terms.limit().getUnlimited()
                   && ((Long) row.get("lifetime_created")) >= limit(terms))
-                return Mono.error(fail(DomainStatus.FAILED_PRECONDITION, "QUOTA_EXCEEDED"));
+                return Mono.error(
+                    new DomainException(
+                        DomainStatus.FAILED_PRECONDITION,
+                        "QUOTA_EXCEEDED",
+                        Map.of(
+                            "code",
+                            "QUOTA_EXCEEDED",
+                            "quotaKind",
+                            "TASK_LIFETIME",
+                            "quotaLimit",
+                            Long.toString(limit(terms)),
+                            "quotaUsed",
+                            row.get("lifetime_created").toString())));
               return Mono.error(fail(DomainStatus.RESOURCE_EXHAUSTED, "Issue numbering exhausted"));
             });
   }
@@ -438,9 +461,9 @@ public final class LifetimeTaskQuota {
                   .then(
                       db.sql(
                               """
-                              INSERT INTO taska.task_quota_outbox(tenant_id,version,entitlement_version,maximum_created,over_limit,request_id)
-                              VALUES(:t,:v,:e,:max,:over,:request)
-                              """)
+INSERT INTO taska.task_quota_outbox(tenant_id,version,entitlement_version,maximum_created,over_limit,request_id)
+VALUES(:t,:v,:e,:max,:over,:request)
+""")
                           .bind("t", tenant)
                           .bind("v", next.version())
                           .bind("e", next.entitlement())

@@ -129,4 +129,30 @@ class GatewayErrorHandlerTest {
         assertThat(body.getCode()).isEqualTo("INTERNAL");
         assertThat(body.getMessage()).isEqualTo("Internal server error");
     }
+    @Test
+    void lifetimeQuotaDetailsSurviveGrpcAndReachProblemBody() {
+      org.springframework.test.util.ReflectionTestUtils.setField(handler, "trustedEnabled", true);
+      var error =
+          mapper.GrpcExceptionMapper.toStatusRuntimeException(
+              new ru.taska.exception.DomainException(
+                  ru.taska.exception.DomainStatus.FAILED_PRECONDITION,
+                  "QUOTA_EXCEEDED",
+                  java.util.Map.of(
+                      "code",
+                      "QUOTA_EXCEEDED",
+                      "quotaKind",
+                      "TASK_LIFETIME",
+                      "quotaLimit",
+                      "50",
+                      "quotaUsed",
+                      "50")));
+      StepVerifier.create(handler.handleError(exchange, error, REQUEST_ID)).verifyComplete();
+      var capture = ArgumentCaptor.forClass(RestErrorResponse.class);
+      verify(objectMapper).writeValueAsBytes(capture.capture());
+      assertThat(capture.getValue().getQuota().getKind()).isEqualTo("TASK_LIFETIME");
+      assertThat(capture.getValue().getQuota().getLimit()).isEqualTo(50L);
+      assertThat(capture.getValue().getQuota().getUsed()).isEqualTo(50L);
+      assertThat(capture.getValue().getCode()).isEqualTo("QUOTA_EXCEEDED");
+    }
+
 }

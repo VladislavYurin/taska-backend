@@ -244,7 +244,10 @@ class NoRedirect(HTTPRedirectHandler):
 
 
 class Http:
-    def __init__(self, origin, token=None):
+    def __init__(self, origin, token=None, timeout=10):
+        if not 0 < timeout <= 120:
+            raise Invalid("HTTP timeout must be between 0 and 120 seconds")
+        self.timeout = timeout
         self.origin, self.token = origin, token
         self.operations = set()
         self.request_ids = []
@@ -262,7 +265,7 @@ class Http:
         req = Request(self.origin + path, data=None if body is None else canonical(body), headers=hdr, method=method)
         try:
             try:
-                response = self.opener.open(req, timeout=10)
+                response = self.opener.open(req, timeout=self.timeout)
             except HTTPError as exc:
                 response = exc
             with response:

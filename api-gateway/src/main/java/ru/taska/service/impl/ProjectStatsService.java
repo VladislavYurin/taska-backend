@@ -29,6 +29,7 @@ public class ProjectStatsService {
     private final ReactorIssueServiceGrpc.ReactorIssueServiceStub issueStub;
     private final GrpcClientProperties properties;
     private final ProjectMapper mapper;
+    private final ru.taska.transport.grpc.TaskQuotaClient taskQuotas;
 
     public Mono<ListProjectStatsDto> getProjectStats(GatewayContext context) {
         var header = ru.taska.mapper.MappingUtils.buildGrpcHeader(context);
@@ -37,10 +38,10 @@ public class ProjectStatsService {
             if (ids.isEmpty()) {
                 return Mono.just(new ListProjectStatsDto(List.of()));
             }
-            return projectStub.withDeadlineAfter(properties.projectService().deadlineDuration().toMillis(),
+            return ru.taska.security.tenant.RpcContextBridge.outbound(() -> projectStub.withDeadlineAfter(properties.projectService().deadlineDuration().toMillis(),
                             TimeUnit.MILLISECONDS)
                     .getProjectMemberStatsBatch(GetProjectMemberStatsBatchRequest.newBuilder().setHeader(header)
-                            .setActorUserId(context.userContext().userId()).addAllProjectIds(ids).build())
+                            .setActorUserId(context.userContext().userId()).addAllProjectIds(ids).build()))
                     .flatMap(members -> {
                         // A membership removed since ListMyProjects must not expose statistics.
                         var byProject = members.getItemsList().stream().collect(Collectors.toMap(
@@ -49,10 +50,10 @@ public class ProjectStatsService {
                         if (authorized.isEmpty()) {
                             return Mono.just(new ListProjectStatsDto(List.of()));
                         }
-                        return issueStub.withDeadlineAfter(properties.issueService().deadlineDuration().toMillis(),
+                        return ru.taska.security.tenant.RpcContextBridge.outbound(() -> issueStub.withDeadlineAfter(properties.issueService().deadlineDuration().toMillis(),
                                         TimeUnit.MILLISECONDS)
                                 .countProjectIssuesBatchInternal(CountProjectIssuesBatchInternalRequest.newBuilder()
-                                        .setHeader(header).addAllProjectIds(authorized).build())
+                                        .setHeader(header).addAllProjectIds(authorized).build()))
                                 .map(counts -> {
                                     Map<String, Long> countByProject = counts.getItemsList().stream()
                                             .collect(Collectors.toMap(ProjectIssueCount::getProjectId,
@@ -65,6 +66,11 @@ public class ProjectStatsService {
                                     }).toList());
                                 });
                     });
-        });
+        }).flatMap(result -> taskQuotas.read(
+                result.getItems().stream().map(ProjectStatsDto::getProjectId).toList(), context)
+                .map(quotas -> {
+                    result.getItems().forEach(item -> item.setTaskQuota(quotas.get(item.getProjectId())));
+                    return result;
+                }));
     }
 }

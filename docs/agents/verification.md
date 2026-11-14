@@ -229,3 +229,9 @@ TAS-316: `grpc-common-lib.verify`, `auth-service.verify`, `api-gateway.verify` �
 Большой security PR должен получить полный AI review: default `DEEPSEEK_MAX_DIFF_LINES=12000` в workflow и shell runner. При превышении предела runner сокращает окружающий контекст 40 → 10 → 3 строки, сохраняя изменённые строки. Если diff всё же обрезан, зелёный job не закрывает непроверенные файлы; `publish-review` перечисляет пропуски. Настройка repository variable может переопределить предел.
 
 TAS-317: `python3 scripts/harness/trusted_rpc_e2e.py` — отдельный изолированный local REST/auth/RPC/RLS/outbox/Kafka acceptance на production providers; prerequisites, signed cleanup и scope описаны в [контракте service identity](../security/rpc-service-identity.md). Это не stage activation. Required selectors дополнены ManagedRpcTrustTest и AuthRpcTrustIntegrationTest.
+
+TAS-343: native issue CRUD/ACL and lifetime project reads require `issue-service`, `api-gateway`
+and `billing-service` checks plus affected shared-proto consumers. The owned local tier
+`python3 scripts/harness/issue_acl_e2e.py` exercises real primaries/mTLS/JWS and signed cleanup;
+see [native issue API](../../issue-service/TENANT-API.md). Test doubles alone do not establish
+this transport path or shared-stage activation.

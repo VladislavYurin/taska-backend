@@ -68,6 +68,19 @@ class CapabilityEvaluatorTest {
             .setAssertionId(UUID.randomUUID().toString());
   }
 
+  @Test
+  void issueCollectionsUseTheirProjectWhileInstanceReadsStillRequireAnIssue() {
+    target = new Target(TENANT, PROJECT, null, null);
+    allowed(ISSUE_CREATE);
+    allowed(ISSUE_SEARCH);
+    allowed(ISSUE_BOARD);
+    denied(ISSUE_READ, ERROR_CODE_RESOURCE_NOT_FOUND);
+    denied(ISSUE_UPDATE, ERROR_CODE_RESOURCE_NOT_FOUND);
+    target = new Target(TENANT, null, null, null);
+    denied(ISSUE_CREATE, ERROR_CODE_RESOURCE_NOT_FOUND);
+    denied(ISSUE_SEARCH, ERROR_CODE_RESOURCE_NOT_FOUND);
+  }
+
   static <T> Mono<T> as(TrustedTenantContext claims, Mono<T> work) {
     var request = UUID.randomUUID().toString();
     var wire =

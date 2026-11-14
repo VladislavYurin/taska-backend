@@ -1179,6 +1179,15 @@
       "mutation": false,
       "action": "validateTransition",
       "requestClass": "ru.taska.api.workflow.v1.ValidateTransitionRequest"
+    },
+    {
+      "rpc": "ru.taska.issue.v1.IssueService/GetProjectTaskQuotas",
+      "audience": "issue-service",
+      "scope": "TENANT_RESOURCE_ACL_CAPABILITY",
+      "tenantRequired": true,
+      "mutation": false,
+      "action": "getProjectTaskQuotas",
+      "requestClass": "ru.taska.api.issue.v1.GetProjectTaskQuotasRequest"
     }
   ]
 }

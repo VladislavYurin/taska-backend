@@ -91,6 +91,21 @@ public class GatewayErrorHandler {
       errorResponse.setTitle(httpStatus.getReasonPhrase());
     }
     errorResponse.setDetails(details.isEmpty() ? null : details);
+    if ("TASK_LIFETIME".equals(details.get("quotaKind"))) {
+      try {
+        long limit = Long.parseLong(details.getOrDefault("quotaLimit", "-1"));
+        long used = Long.parseLong(details.getOrDefault("quotaUsed", "-1"));
+        if (limit >= 0 && used >= 0) {
+          var quota = new ru.taska.domain.dto.QuotaErrorDto();
+          quota.setKind("TASK_LIFETIME");
+          quota.setLimit(limit);
+          quota.setUsed(used);
+          errorResponse.setQuota(quota);
+        }
+      } catch (NumberFormatException ignored) {
+        // A malformed optional diagnostic must not replace the original domain failure.
+      }
+    }
 
     var response = exchange.getResponse();
     response.setStatusCode(httpStatus);

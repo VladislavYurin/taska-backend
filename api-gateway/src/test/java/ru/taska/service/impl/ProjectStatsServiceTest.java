@@ -37,7 +37,8 @@ class ProjectStatsServiceTest {
     void setUp() {
         var props = new GrpcClientProperties.Service("localhost", 1, Duration.ofSeconds(2));
         service = new ProjectStatsService(projects, projectStub, issueStub,
-                new GrpcClientProperties(props, props, props, props, props, props), new ProjectMapper());
+                new GrpcClientProperties(props, props, props, props, props, props), new ProjectMapper(),
+                new ru.taska.transport.grpc.TaskQuotaClient(issueStub, false));
         lenient().when(projectStub.withDeadlineAfter(anyLong(), any())).thenReturn(projectStub);
         lenient().when(issueStub.withDeadlineAfter(anyLong(), any())).thenReturn(issueStub);
     }

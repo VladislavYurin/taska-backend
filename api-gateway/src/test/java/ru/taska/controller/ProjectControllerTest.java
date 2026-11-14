@@ -82,11 +82,16 @@ public class ProjectControllerTest {
     private GrpcProjectServiceClient projectClient;
 
     @MockitoBean
+    private ru.taska.transport.grpc.TaskQuotaClient taskQuotas;
+
+    @MockitoBean
     private ContextMapper contextMapper;
 
     @BeforeEach
     void setUp() {
         ReflectionTestUtils.setField(contextFactory, "nodeId", "gateway-test-node");
+        Mockito.lenient().when(taskQuotas.read(Mockito.anyList(), Mockito.any()))
+                .thenReturn(Mono.just(java.util.Map.of()));
     }
 
     // ========== CREATE PROJECT ==========

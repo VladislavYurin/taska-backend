@@ -362,18 +362,19 @@ class BillingCatalogIntegrationTest {
   }
 
   @Test
-  void workflowCanReadReferencedKindButCannotResolveANewOffer() {
+  void workflowAndIssueCanReadReferencedKindButCannotResolveANewOffer() {
     String free = "00000000-0000-8000-8000-000000000001";
     var request = ResolvePublishedPlanRpcRequest.newBuilder().setPlanVersionId(free).build();
+    for (String issuer : List.of("workflow-service", "issue-service")) {
     var service = TrustedTenantContext.newBuilder()
         .setAction("readReferencedPlanVersion")
         .setCredentialKind(CredentialKind.CREDENTIAL_KIND_SERVICE)
-        .setIssuerService("workflow-service").setServiceIdentity("workflow-service")
+        .setIssuerService(issuer).setServiceIdentity(issuer)
         .setAudienceService("billing-service").setServicePurpose("billing")
         .addScopes("read").addScopes("catalog:read").build();
     assertEquals(PlanVersion.KindValue.KIND_FREE,
         RegistryTestContext.withClaims(service, catalog.referenced(request)).block(WAIT).getKind());
-    for (var denied : List.of(service.toBuilder().setIssuerService("issue-service").build(),
+    for (var denied : List.of(service.toBuilder().setIssuerService("notification-service").build(),
         service.toBuilder().setServicePurpose("membership").build(),
         service.toBuilder().clearScopes().addScopes("read").build(),
         service.toBuilder().setTenantId(A.toString()).build())) {
@@ -383,6 +384,7 @@ class BillingCatalogIntegrationTest {
     rejects(DomainStatus.PERMISSION_DENIED, "SCOPE_DENIED", RegistryTestContext.withClaims(
         service.toBuilder().setAction("resolvePublishedPlan").addScopes("catalog:resolve").build(),
         catalog.resolve(request)));
+    }
   }
 
   @Test
