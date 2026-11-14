@@ -1813,4 +1813,35 @@ class TenantIssueStorageIntegrationTest {
         DomainStatus.ALREADY_EXISTS);
     assertEquals(2, create(A, "after-concurrent-native").number());
   }
+
+  @Test
+  void legacyCreateReceiptCannotAcquireANewNativeSnapshot() {
+    var first = nativeCreate("legacy-receipt");
+    operator
+        .sql(
+            "UPDATE taska.idempotency_keys SET response=response-'wireHash'-'snapshot' WHERE"
+                + " tenant_id='"
+                + A
+                + "' AND key='legacy-receipt'")
+        .fetch()
+        .rowsUpdated()
+        .block(WAIT);
+    denied(api.create(createRequest("legacy-receipt")), "createIssue", DomainStatus.ALREADY_EXISTS);
+    assertEquals(
+        first,
+        as(A, ACTOR, "getIssue", api.get(first.identity().id().toString(), ACTOR.toString()))
+            .block(WAIT));
+  }
+
+  @Test
+  void quotaRecheckCannotIntroduceBypassAbsentFromAuditedPermit() {
+    unlimited.set(false);
+    catalogLimit.set(0);
+    bypass.set(true);
+    denied(
+        api.create(createRequest("no-new-bypass")),
+        "createIssue",
+        DomainStatus.FAILED_PRECONDITION);
+    for (String table : TABLES) assertEquals(0L, count(table));
+  }
 }

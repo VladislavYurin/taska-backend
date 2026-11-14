@@ -391,12 +391,21 @@ WHERE tenant_id=:t AND issue_id=:id ORDER BY occurred_at,id
     }
 
     Mono<Snapshot> replayCreate(String key, String fingerprint, TenantIssueAccess.Permit permit) {
+      return replayCreate(key, fingerprint, permit, false);
+    }
+
+    private Mono<Snapshot> replayCreate(
+        String key, String fingerprint, TenantIssueAccess.Permit permit, boolean initializing) {
       return guarded(
           receipt(key)
               .flatMap(
                   row -> {
                     var response = json.readTree(row.get("response").toString());
-                    if (!response.has("wireHash")) return Mono.empty();
+                    if (!response.has("wireHash"))
+                      return initializing
+                          ? Mono.empty()
+                          : Mono.error(
+                              failure(DomainStatus.ALREADY_EXISTS, "IDEMPOTENCY_CONFLICT"));
                     if (!fingerprint.equals(response.path("wireHash").asText()))
                       return Mono.error(
                           failure(DomainStatus.ALREADY_EXISTS, "IDEMPOTENCY_CONFLICT"));
@@ -407,7 +416,7 @@ WHERE tenant_id=:t AND issue_id=:id ORDER BY occurred_at,id
 
     Mono<Snapshot> completeCreate(
         String key, String fingerprint, Created result, TenantIssueAccess.Permit permit) {
-      return replayCreate(key, fingerprint, permit)
+      return replayCreate(key, fingerprint, permit, true)
           .switchIfEmpty(
               Mono.defer(
                   () ->
@@ -759,6 +768,14 @@ VALUES(:t,'ISSUE',:id,:e,CAST(:payload AS jsonb),'TENANT',:v,1,:r)
 
     Mono<Created> create(
         String key, CreateIssue input, Function<CreateIssue, Mono<Void>> validation) {
+      return create(key, input, validation, true);
+    }
+
+    Mono<Created> create(
+        String key,
+        CreateIssue input,
+        Function<CreateIssue, Mono<Void>> validation,
+        boolean allowBusinessBypass) {
       return guarded(
           transactions.execute(
               ignored ->
@@ -832,7 +849,10 @@ WHERE tenant_id=:tenant AND user_id=:actor AND operation_code=:op AND key=:key F
                                                                     "Incomplete idempotency"
                                                                         + " claim"));
                                                           return quota
-                                                              .allocate(db, command.projectId())
+                                                              .allocate(
+                                                                  db,
+                                                                  command.projectId(),
+                                                                  allowBusinessBypass)
                                                               .flatMap(
                                                                   number ->
                                                                       validation

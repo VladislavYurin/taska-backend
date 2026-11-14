@@ -87,6 +87,11 @@ public final class LifetimeTaskQuota {
 
   /** Выполняется в транзакции создания после резервирования записи идемпотентности. */
   Mono<Integer> allocate(DatabaseClient db, UUID project) {
+    return allocate(db, project, true);
+  }
+
+  // Повторная проверка может сузить обход, но не расширить исходное аудируемое разрешение.
+  Mono<Integer> allocate(DatabaseClient db, UUID project, boolean allowBusinessBypass) {
     return VerifiedTenantContext.current()
         .flatMap(
             c -> {
@@ -96,7 +101,8 @@ public final class LifetimeTaskQuota {
                   .flatMap(
                       pair -> {
                         var state = pair.getT1();
-                        var grant = pair.getT2();
+                        var grant =
+                            new Grant(pair.getT2().bypassBusinessRules() && allowBusinessBypass);
                         return terms(tenant, state.entitlement())
                             .flatMap(
                                 terms ->

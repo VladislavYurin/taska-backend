@@ -150,7 +150,8 @@ public final class TenantIssueApi {
                                                                                     .actor()
                                                                                     .toString(),
                                                                                 permit.operation(),
-                                                                                project))))
+                                                                                project))),
+                                                        permit.bypassBusinessRules())
                                                     .flatMap(
                                                         created ->
                                                             s.completeCreate(

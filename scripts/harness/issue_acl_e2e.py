@@ -1,6 +1,7 @@
 """TAS-343: изолированный CRUD задач с реальными сервисами авторизации, арендаторов, проектов, workflow и биллинга."""
 import base64
 import json
+import time
 import uuid
 import zipfile
 
@@ -44,6 +45,17 @@ class IssueAclLocal(WorkflowAclLocal):
             diagnostic_path=self.dir / 'issue-probe-diagnostic.json')
         return json.loads(next(line for line in reversed(output.splitlines()) if line.startswith('{')))
 
+    def ready_workflow(self, client, project):
+        # Повторяем только чтение готовности; результат последнего успешного чтения сохраняется.
+        deadline = time.monotonic() + 60
+        while time.monotonic() < deadline:
+            response = client.request('GET', '/api/v1/projects/' + project + '/workflows')
+            if response.status == 200:
+                return response.json()
+            e.require(response.status == 503, 'Workflow readiness returned unexpected status')
+            time.sleep(1)
+        raise e.Blocked('Workflow readiness deadline exceeded')
+
     def scenarios(self):
         actor, clients = self.seed()
         for _, client in clients:
@@ -59,9 +71,8 @@ class IssueAclLocal(WorkflowAclLocal):
         _, other = clients[1]
         project, foreign = projects
         # Проверяем готовность чтением до первой записи, не повторяя команды после тайм-аута.
-        for client, identifier in ((owner, project), (other, foreign)):
-            t.wait_protected_read(client, '/api/v1/projects/' + identifier + '/workflows', 200)
-        workflow = self.workflows(owner, project)['items'][0]['workflow']
+        workflow = self.ready_workflow(owner, project)['items'][0]['workflow']
+        self.ready_workflow(other, foreign)
         # Публичное создание проверяет нативный контекст gateway, квоту и выбор реального workflow.
         foreign_issue = other.expect('POST', '/api/v1/projects/' + foreign + '/issues', 201,
             {'issueType': 'TASK', 'summary': 'Owned foreign fixture', 'description': 'Owned fixture', 'priority': 'MEDIUM'},
