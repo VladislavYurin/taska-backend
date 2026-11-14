@@ -15,6 +15,9 @@ class IssueAclLocal(WorkflowAclLocal):
         # Последовательный запуск ограничивает пиковую память семи JVM в локальном Docker.
         for name in ('auth-service', 'tenant-service', 'billing-service', 'project-service',
                      'workflow-service', 'issue-service', 'api-gateway'):
+            # Ещё не запущенные контейнеры не получают фоновое обновление снимка доверия.
+            self.refresh()
+            self.compose('cp', str(self.public / 'trust.json'), name + ':/run/trust/trust.json')
             self.compose('up', '-d', '--no-deps', name, timeout=180)
             self.wait_ready('http://' + self.compose('port', name, '8080').strip())
 
