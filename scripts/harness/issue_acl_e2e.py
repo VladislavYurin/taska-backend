@@ -58,11 +58,14 @@ class IssueAclLocal(WorkflowAclLocal):
         tenant, owner = clients[0]
         _, other = clients[1]
         project, foreign = projects
+        # Проверяем готовность чтением до первой записи, не повторяя команды после тайм-аута.
+        for client, identifier in ((owner, project), (other, foreign)):
+            t.wait_protected_read(client, '/api/v1/projects/' + identifier + '/workflows', 200)
+        workflow = self.workflows(owner, project)['items'][0]['workflow']
         # Публичное создание проверяет нативный контекст gateway, квоту и выбор реального workflow.
         foreign_issue = other.expect('POST', '/api/v1/projects/' + foreign + '/issues', 201,
             {'issueType': 'TASK', 'summary': 'Owned foreign fixture', 'description': 'Owned fixture', 'priority': 'MEDIUM'},
             {'Idempotency-Key': str(uuid.uuid4())}).json()['id']
-        workflow = self.workflows(owner, project)['items'][0]['workflow']
         source = next(s['id'] for s in workflow['statuses'] if s['statusKey'] == 'TODO')
         transition = next(x['id'] for x in workflow['transitions'] if x['fromStatusId'] == source)
         core = self.probe(owner, actor, tenant, project, foreignProject=foreign, foreignIssue=foreign_issue, transition=transition)
