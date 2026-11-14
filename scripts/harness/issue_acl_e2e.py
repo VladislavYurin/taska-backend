@@ -1,4 +1,4 @@
-"""TAS-343: owned native issue CRUD with real auth/root/project/workflow/billing primaries."""
+"""TAS-343: изолированный CRUD задач с реальными сервисами авторизации, арендаторов, проектов, workflow и биллинга."""
 import base64
 import json
 import uuid
@@ -39,8 +39,9 @@ class IssueAclLocal(WorkflowAclLocal):
             'credential': claims['sid'], 'project': project,
             'authPort': int(self.compose('port', 'auth-service', '9090').strip().rsplit(':', 1)[1]),
             'issuePort': int(self.compose('port', 'issue-service', '9090').strip().rsplit(':', 1)[1]), **extra})
-        output = self.command('java', '--class-path', str(libraries / '*'),
-            str(self.root / 'scripts/harness/IssueAclProbe.java'), str(parameters))
+        output = e.run_command(['java', '--class-path', str(libraries / '*'),
+            str(self.root / 'scripts/harness/IssueAclProbe.java'), str(parameters)], self.root, 180,
+            diagnostic_path=self.dir / 'issue-probe-diagnostic.json')
         return json.loads(next(line for line in reversed(output.splitlines()) if line.startswith('{')))
 
     def scenarios(self):
@@ -57,7 +58,7 @@ class IssueAclLocal(WorkflowAclLocal):
         tenant, owner = clients[0]
         _, other = clients[1]
         project, foreign = projects
-        # Public create exercises native gateway binding, quota and actual workflow selection.
+        # Публичное создание проверяет нативный контекст gateway, квоту и выбор реального workflow.
         foreign_issue = other.expect('POST', '/api/v1/projects/' + foreign + '/issues', 201,
             {'issueType': 'TASK', 'summary': 'Owned foreign fixture', 'description': 'Owned fixture', 'priority': 'MEDIUM'},
             {'Idempotency-Key': str(uuid.uuid4())}).json()['id']
@@ -82,14 +83,23 @@ class IssueAclLocal(WorkflowAclLocal):
         self.sql('project_db', "INSERT INTO taska.project_members(tenant_id,project_id,user_id,role,added_by,root_membership_version) VALUES('%s','%s','%s','VIEWER','%s',1);" % (tenant, project, member, actor))
         viewer, session = self.member_client(tenant, member, 1)
         denied = self.probe(viewer, member, tenant, project, mode='denyWrite', issue=issue)
+        self.sql('auth_db', "UPDATE taska.users SET global_role='GLOBAL_ADMIN' WHERE id='%s';" % member)
+        viewer.expect('GET', '/api/v1/issues/' + issue, 403)
+        claims = json.loads(base64.urlsafe_b64decode(viewer.token.split('.')[1] + '=='))
+        self.sql('auth_db', "UPDATE taska.web_sessions SET assurance='ADMIN_EMAIL_MFA' WHERE id=(SELECT web_session_id FROM taska.tenant_sessions WHERE id='%s');" % claims['sid'])
+        admin = self.probe(viewer, member, tenant, project, mode='adminWrite', issue=issue)
+        e.require(int(self.sql('issue_db', "SELECT count(*) FROM taska.issue_authorization_audit WHERE tenant_id='%s' AND actor_id='%s' AND action='patchIssue';" % (tenant, member)).strip()) > 0,
+                  'Administrative issue write was not audited')
+        self.sql('auth_db', "UPDATE taska.users SET global_role='USER' WHERE id='%s';" % member)
+
         self.sql('project_db', "UPDATE taska.projects SET archived_at=now() WHERE tenant_id='%s' AND id='%s';" % (tenant, project))
         archived = self.probe(owner, actor, tenant, project, mode='denyWrite', issue=issue)
         self.sql('project_db', "UPDATE taska.projects SET archived_at=NULL WHERE tenant_id='%s' AND id='%s';" % (tenant, project))
         self.sql('tenant_db', "UPDATE taska.tenant_memberships SET status='SUSPENDED',version=version+1 WHERE tenant_id='%s' AND user_id='%s';" % (tenant, member))
         e.require(viewer.request('GET', '/api/v1/issues/by-key/ISS-1').status in (401, 403), 'Revoked member retained access')
         deleted = self.probe(owner, actor, tenant, project, mode='delete', issue=issue)
-        # Metadata-only history/outbox and retained lifetime usage.
-        e.require(self.sql('issue_db', "SELECT count(*) FROM taska.issue_history WHERE issue_id='%s';" % issue).strip() == '4', 'History lost or duplicated')
+        # История и outbox содержат метаданные; пожизненное использование сохраняется после удаления.
+        e.require(self.sql('issue_db', "SELECT count(*) FROM taska.issue_history WHERE issue_id='%s';" % issue).strip() == '5', 'History lost or duplicated')
         e.require(self.sql('issue_db', "SELECT lifetime_created FROM taska.project_counters WHERE tenant_id='%s' AND project_id='%s';" % (tenant, project)).strip() == '1', 'Delete reclaimed lifetime quota')
         self.sql('issue_db', "UPDATE taska.project_counters SET lifetime_created=50 WHERE tenant_id='%s' AND project_id='%s';" % (tenant, project))
         quota = owner.expect('POST', '/api/v1/projects/' + project + '/issues', 422,
@@ -97,7 +107,7 @@ class IssueAclLocal(WorkflowAclLocal):
             {'Idempotency-Key': str(uuid.uuid4())}).json()
         e.require(quota['code'] == 'QUOTA_EXCEEDED' and quota['quota'] == {'kind': 'TASK_LIFETIME', 'limit': 50, 'used': 50},
                   'Public quota problem lost authoritative usage')
-        return {**core, **denied, **deleted, 'archivedWriteDenied': archived['aclReadAndWriteDenial'], 'revokedMembership': 'PASS', 'publicQuotaAndVersionProblems': 'PASS'}
+        return {**core, **denied, **deleted, **admin, 'archivedWriteDenied': archived['aclReadAndWriteDenial'], 'revokedMembership': 'PASS', 'publicQuotaAndVersionProblems': 'PASS'}
 
 
 def main():

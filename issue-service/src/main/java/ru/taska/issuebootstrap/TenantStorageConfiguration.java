@@ -219,7 +219,10 @@ SELECT current_user='taska_issue_app' AND NOT
         java.time.Clock.systemUTC());
   }
 
-  /** TAS-343 supplies verified transport and ACL. Old RPC headers cannot mint tenant authority. */
+  /**
+   * TAS-343 использует проверенный транспорт и ACL. Старые заголовки RPC не дают полномочий
+   * арендатора.
+   */
   @Bean
   @GlobalServerInterceptor
   ServerInterceptor issueTenantTransportClosed(
@@ -242,8 +245,7 @@ SELECT current_user='taska_issue_app' AND NOT
             ru.taska.api.b2b.v1.ProjectQuotaReadServiceGrpc.getGetTenantTaskQuotaSummaryMethod()
                 .getFullMethodName()))
       policies.put(method, new ru.taska.security.tenant.RpcContextSecurity.Policy(true, false));
-    // Only implemented native CRUD methods are admitted; search/board and nested domains remain
-    // closed.
+    // Разрешены только реализованные нативные CRUD-методы; поиск, доска и вложенные домены закрыты.
     ru.taska.security.tenant.RpcRoutePolicies.policies("issue-service")
         .forEach(
             (rpc, policy) -> {
@@ -253,7 +255,7 @@ SELECT current_user='taska_issue_app' AND NOT
                       "GetProjectTaskQuotas",
                       "CreateIssue",
                       "GetIssue",
-                  "GetIssueDetails",
+                      "GetIssueDetails",
                       "GetIssueByKey",
                       "PatchIssue",
                       "UpdateIssue",

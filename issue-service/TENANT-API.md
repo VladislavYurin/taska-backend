@@ -1,80 +1,83 @@
-# Native issue CRUD — TAS-343
+# Нативные CRUD-операции задач — TAS-343
 
-The optional `tenant-storage` profile implements the existing IssueService CreateIssue,
+Профиль `tenant-storage` реализует существующие контракты IssueService: CreateIssue,
 GetIssue/GetIssueDetails/GetIssueByKey, UpdateIssue/PatchIssue, AssignIssue, TransitionIssue
-and DeleteIssue contracts when managed mTLS/JWS trust is configured. Default/legacy behavior
-is unchanged. This does not enable native storage on a shared environment.
+и DeleteIssue при настроенном доверии mTLS/JWS. Поведение стандартного профиля сохраняется.
+Само изменение кода не включает нативное хранилище в общей среде.
 
-## Authority
+## Проверка полномочий
 
-Only the recipient's message-bound verified context supplies tenant, actor, credential and
-scopes. Payload reporter/actor must match it. Each operation reads current auth/root membership,
-project ACL/archive state, platform configuration and billing facts. A company administrator
-receives the effective project role from project-service; a global role string never establishes
-project access or a business bypass. The common capability evaluator retains scoped/MFA rules.
+Арендатор, пользователь, учётные данные и scopes берутся только из проверенного контекста,
+привязанного к сообщению получателя. Reporter/actor из запроса должны ему соответствовать.
+Каждая операция читает актуальные данные авторизации, членства в компании, ACL и архивации
+проекта, конфигурации платформы и биллинга. Администратор компании получает эффективную
+роль от project-service. Строка глобальной роли сама по себе не даёт доступа к проекту
+или обхода бизнес-ограничений. Общая проверка capabilities сохраняет ограничения scope и MFA.
 
-Project keys and initial status are obtained from their owners. Without an explicit status,
-the first TODO-category workflow status by sort order/id is used, including custom keys.
-Transitions are validated against the current project/type workflow and source status. An
-assignee requires current ACTIVE root membership and either a current project grant or the
-company administrator's effective project rights. UUID/key reads have explicit tenant predicates;
-missing/deleted keys never fall back to a global issue lookup.
+Ключ проекта и начальный статус запрашиваются у сервисов-владельцев. Если статус не указан,
+выбирается первый статус категории TODO по порядку сортировки и идентификатору, включая
+пользовательские ключи. Переходы проверяются по актуальному workflow проекта/типа и исходному
+статусу. Исполнитель должен иметь активное членство в компании и права проекта либо эффективные
+права администратора компании. Поиск по UUID и ключу всегда ограничен арендатором; отсутствие
+или удаление записи не запускает глобальный поиск.
 
-Identity/project/capability primary reads precede mutation SQL. Workflow and target-membership
-checks are composed within the owner transaction before persistence, with bounded RPC deadlines.
-The bounded authority permit is bound to tenant, actor,
-action and project, and checked again after waiting for the issue lock. Lifetime create
-admission additionally rechecks primary authority and current billing under its existing quota
-lock. No guessed tenant, synthetic user or permissive default authority is configured.
+Проверки личности, проекта и capabilities предшествуют SQL изменениям. Проверки workflow
+и членства исполнителя выполняются в транзакции сервиса-владельца до записи с ограниченными
+сроками RPC. Разрешение ограничено по времени, привязано к арендатору, пользователю, действию
+и проекту; после ожидания блокировки строки его проверяют повторно. Выделение пожизненной
+квоты дополнительно проверяет полномочия и актуальный биллинг под блокировкой квоты.
+Предполагаемые арендаторы, вымышленные пользователи и разрешающие заглушки не используются.
 
-## Transactions and retries
+## Транзакции и повторные вызовы
 
-Create retains the TAS-332/TAS-460 owner transaction and writes issue, display numbering,
-lifetime admission, history, issue outbox, quota outbox and receipt together. Create uses
-`Idempotency-Key`. Other mutations use a stable `X-Request-Id`; retries must preserve it and
-all body fields. The exact native response is stored with the receipt. Replays reauthorize the
-current requester but do not rerun a transition against its already-changed source status or
-increment version/history/outbox/quota again. Reusing the key with another body conflicts.
+Создание сохраняет транзакцию TAS-332/TAS-460: задача, отображаемый номер, пожизненная квота,
+история, outbox задачи и квоты, запись идемпотентности фиксируются вместе. Для создания нужен
+`Idempotency-Key`. Для остальных изменений используется стабильный `X-Request-Id`;
+повтор должен сохранять его и все поля тела. Точный ответ сохраняется с записью идемпотентности.
+Повторный запрос заново проверяет права пользователя, но не выполняет переход из уже изменённого
+статуса и не увеличивает версию, историю, outbox или квоту. Повтор ключа с другим телом конфликтует.
 
-Mutations claim the actor/action-scoped receipt and lock the tenant-owned issue row. PATCH and
-versioned transitions check the supplied version; the legacy mutation shapes use a compare-and-set
-against the preflight version. Concurrent changes cannot overwrite a newer row. Issue mutation,
-version, metadata-only history/outbox, authorization audit and receipt commit atomically. Soft
-delete hides the issue without removing history or releasing lifetime usage.
+Изменения резервируют запись идемпотентности в области пользователя/действия и блокируют строку
+задачи данного арендатора. PATCH и версионированные переходы проверяют переданную версию;
+старые формы запросов используют сравнение с версией предварительного чтения. Конкурирующее
+изменение не перезаписывает новую версию. Данные задачи, версия, история с метаданными,
+outbox, аудит полномочий и результат повтора фиксируются атомарно. Мягкое удаление скрывает
+задачу, сохраняя историю и пожизненное использование квоты.
 
-The new additive migration creates FORCE-RLS, append-only `issue_authorization_audit` for actual
-administrative bypasses. Actor, target, action, request correlation and closed bypass reasons
-are recorded. Payload text, credentials and author profile snapshots are not written there.
-Existing applied changesets are unchanged.
+Добавочная миграция создаёт `issue_authorization_audit` с FORCE RLS и запретом изменения записей.
+Для фактического административного обхода сохраняются пользователь, цель, действие, корреляция
+запроса и причины обхода из закрытого набора. Текст задачи, учётные данные и снимки профилей
+туда не записываются. Ранее применённые миграции не изменяются.
 
-History is read with its issue row locked so returned state/history are consistent. Profiles of
-historical authors are not globally enriched. Native details return core fields and history;
-optional comment/watch/link/file facets remain absent until their separate native domain tasks.
-Type-changing PATCH is refused until the native type-move protocol is activated, rather than
-silently rewriting workflow bindings. Search/board, nested-domain handlers and workflow status
-migration remain separate activation boundaries (TAS-344/362/363/364/365 and related tasks).
+История читается под блокировкой строки задачи, чтобы состояние и история соответствовали
+одной версии. Профили исторических авторов не обогащаются через глобальный поиск.
+Нативные детали возвращают основные поля и историю; комментарии, подписки, связи и файлы
+активируются отдельными задачами. Изменение типа через PATCH запрещено до активации нативного
+протокола переноса типа. Поиск, доска, вложенные домены и миграция статусов workflow относятся
+к отдельным задачам активации (TAS-344/362/363/364/365 и связанные задачи).
 
-## Task usage in project reads
+## Использование квоты в ответах проекта
 
-`GetProjectTaskQuotas` accepts at most 100 project IDs, authorizes the complete set using one
-current owner batch read, and loads counters with one tenant-qualified SQL query. An accessible
-project with no counter has zero creations; an unavailable authority never becomes zero. Usage
-is `lifetime_created`, including deleted issues, with the current numeric limit or `unlimited`.
-The native count batch uses the same read boundary and supports its type/deletion filters.
+`GetProjectTaskQuotas` принимает до 100 идентификаторов проектов, проверяет весь набор одним
+актуальным пакетным чтением сервиса-владельца и загружает счётчики одним SQL запросом
+в пределах арендатора. У доступного проекта без счётчика число созданий равно нулю;
+недоступность проверки прав не превращается в нулевое использование. Возвращается
+`lifetime_created`, включая удалённые задачи, и актуальный лимит либо `unlimited`.
+Пакетный подсчёт задач использует ту же проверку прав и поддерживает фильтры типа и удаления.
 
-The gateway composes `taskQuota {used, limit?, unlimited}` into project context and project stats.
-Legacy responses may omit this optional additive field. Native failures propagate; unknown
-usage is not fabricated. A create quota refusal carries `quota {kind, limit, used}` through gRPC
-trailers into the REST problem response.
+Gateway добавляет `taskQuota {used, limit?, unlimited}` в контекст и статистику проекта.
+Стандартный профиль может не возвращать это необязательное поле. Нативные ошибки передаются
+вызывающей стороне без подмены неизвестного использования нулём. Отказ создания по квоте
+передаёт `quota {kind, limit, used}` через gRPC trailers в REST ошибку.
 
-Exact managed service edges are required from issue-service to root membership/configuration,
-billing entitlement/referenced catalog and project/workflow reads. Referenced catalog access
-uses SERVICE purpose `billing`, scopes `read/catalog:read`; this grants neither offer resolution
-nor catalog mutation. Preserve operator-managed trust and update all consumers of the additive
-proto before enabling the routes. Existing database role/bootstrap requirements are documented
-in [TENANT-STORAGE](TENANT-STORAGE.md); lifetime semantics in [TASK-QUOTAS](TASK-QUOTAS.md).
+Нужны точные разрешения управляемого доверия от issue-service к сервисам членства,
+конфигурации, биллинга, проектов и workflow. Чтение указанной версии каталога использует
+SERVICE purpose `billing` и scopes `read/catalog:read`; это не разрешает выбор предложения
+или изменение каталога. Перед включением маршрутов необходимо обновить всех потребителей
+добавочного proto и сохранить операторские настройки доверия. Требования к ролям БД
+описаны в [TENANT-STORAGE](TENANT-STORAGE.md), семантика квоты — в [TASK-QUOTAS](TASK-QUOTAS.md).
 
-## Verification
+## Проверки
 
 ```sh
 python3 scripts/harness.py check --module issue-service
@@ -83,9 +86,10 @@ python3 scripts/harness.py check --module billing-service
 python3 scripts/harness/issue_acl_e2e.py
 ```
 
-Storage integration tests use actual PostgreSQL, app LOGIN/RLS and shipped migrations, including
-concurrent updates, stale/expired authority, retries and rollback after outbox/audit failure.
-The owned E2E packages seven applications with managed mTLS/JWS and fresh databases. It checks
-REST/direct RPC, foreign IDs, project roles, archived writes, revocation, lifetime reads and
-receipt/history behavior. Its signed cleanup affects only its own resources. It does not establish
-shared-stage activation, Kafka delivery, external payments or unimplemented native domains.
+Интеграционные тесты используют настоящий PostgreSQL, прикладную роль LOGIN/RLS и миграции:
+проверяют конкурентные изменения, устаревшие версии и разрешения, повторы и откат при отказе
+outbox или аудита. Изолированный E2E собирает семь приложений с mTLS/JWS и новыми БД,
+проверяет REST и прямой RPC, чужие идентификаторы, роли проекта, архив, отзыв членства,
+чтение пожизненной квоты, историю и идемпотентность. Подписанная очистка затрагивает только
+ресурсы прогона. Это не подтверждает активацию общей среды, доставку Kafka, внешние платежи
+или работу ещё не реализованных нативных доменов.

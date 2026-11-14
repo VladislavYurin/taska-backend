@@ -1,19 +1,109 @@
 package ru.taska.security.tenant;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static ru.taska.api.b2b.v1.ErrorCode.*;
-import static ru.taska.api.b2b.v1.RestrictionCode.*;
-import static ru.taska.capability.Action.*;
-import static ru.taska.capability.CapabilityFacts.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static ru.taska.api.b2b.v1.ErrorCode.ERROR_CODE_ADMIN_GRANT_REQUIRED;
+import static ru.taska.api.b2b.v1.ErrorCode.ERROR_CODE_ADMIN_SCOPE_DENIED;
+import static ru.taska.api.b2b.v1.ErrorCode.ERROR_CODE_AUTHENTICATION_REQUIRED;
+import static ru.taska.api.b2b.v1.ErrorCode.ERROR_CODE_CAPABILITY_DISABLED;
+import static ru.taska.api.b2b.v1.ErrorCode.ERROR_CODE_DEPENDENCY_UNAVAILABLE;
+import static ru.taska.api.b2b.v1.ErrorCode.ERROR_CODE_INVALID_STATE;
+import static ru.taska.api.b2b.v1.ErrorCode.ERROR_CODE_LAST_ADMIN;
+import static ru.taska.api.b2b.v1.ErrorCode.ERROR_CODE_MEMBERSHIP_INACTIVE;
+import static ru.taska.api.b2b.v1.ErrorCode.ERROR_CODE_MFA_REQUIRED;
+import static ru.taska.api.b2b.v1.ErrorCode.ERROR_CODE_OWNER_MEMBERSHIP_PROTECTED;
+import static ru.taska.api.b2b.v1.ErrorCode.ERROR_CODE_OWNER_REQUIRED;
+import static ru.taska.api.b2b.v1.ErrorCode.ERROR_CODE_QUOTA_EXCEEDED;
+import static ru.taska.api.b2b.v1.ErrorCode.ERROR_CODE_READ_ONLY;
+import static ru.taska.api.b2b.v1.ErrorCode.ERROR_CODE_RESOURCE_NOT_FOUND;
+import static ru.taska.api.b2b.v1.ErrorCode.ERROR_CODE_SCOPE_DENIED;
+import static ru.taska.api.b2b.v1.ErrorCode.ERROR_CODE_SESSION_REQUIRED;
+import static ru.taska.api.b2b.v1.ErrorCode.ERROR_CODE_TENANT_MISMATCH;
+import static ru.taska.api.b2b.v1.ErrorCode.ERROR_CODE_TENANT_REQUIRED;
+import static ru.taska.api.b2b.v1.ErrorCode.ERROR_CODE_TOKEN_REVOKED;
+import static ru.taska.api.b2b.v1.ErrorCode.ERROR_CODE_VERSION_CONFLICT;
+import static ru.taska.api.b2b.v1.RestrictionCode.RESTRICTION_CODE_OVER_QUOTA;
+import static ru.taska.api.b2b.v1.RestrictionCode.RESTRICTION_CODE_OWNER_PAUSE;
+import static ru.taska.api.b2b.v1.RestrictionCode.RESTRICTION_CODE_PAYMENT_DISPUTE;
+import static ru.taska.api.b2b.v1.RestrictionCode.RESTRICTION_CODE_PAYMENT_EXPIRED;
+import static ru.taska.api.b2b.v1.RestrictionCode.RESTRICTION_CODE_PENDING_FIRST_PAYMENT;
+import static ru.taska.api.b2b.v1.RestrictionCode.RESTRICTION_CODE_PLATFORM_BLOCK;
+import static ru.taska.capability.Action.ACCOUNT_DELETE;
+import static ru.taska.capability.Action.ADMIN_ACCOUNT_BLOCK;
+import static ru.taska.capability.Action.ADMIN_AUDIT_READ;
+import static ru.taska.capability.Action.ADMIN_GRANT_ISSUE_EXPAND;
+import static ru.taska.capability.Action.ADMIN_QUERY;
+import static ru.taska.capability.Action.ATTACHMENT_CONFIRM;
+import static ru.taska.capability.Action.ATTACHMENT_DELETE;
+import static ru.taska.capability.Action.ATTACHMENT_UPLOAD;
+import static ru.taska.capability.Action.BILLING_PAY;
+import static ru.taska.capability.Action.BILLING_READ;
+import static ru.taska.capability.Action.BILLING_REFUND_REQUEST;
+import static ru.taska.capability.Action.BILLING_SUBSCRIPTION_CHANGE;
+import static ru.taska.capability.Action.COMMENT_DELETE;
+import static ru.taska.capability.Action.EXPORT_CREATE;
+import static ru.taska.capability.Action.INVITATION_ACCEPT;
+import static ru.taska.capability.Action.INVITATION_REVOKE;
+import static ru.taska.capability.Action.ISSUE_BOARD;
+import static ru.taska.capability.Action.ISSUE_CREATE;
+import static ru.taska.capability.Action.ISSUE_DELETE;
+import static ru.taska.capability.Action.ISSUE_READ;
+import static ru.taska.capability.Action.ISSUE_SEARCH;
+import static ru.taska.capability.Action.ISSUE_UPDATE;
+import static ru.taska.capability.Action.MEMBERSHIP_LEAVE;
+import static ru.taska.capability.Action.MEMBERSHIP_REMOVE;
+import static ru.taska.capability.Action.NOTIFICATION_READ;
+import static ru.taska.capability.Action.PROJECT_ARCHIVE;
+import static ru.taska.capability.Action.PROJECT_CREATE;
+import static ru.taska.capability.Action.PROJECT_DELETE;
+import static ru.taska.capability.Action.PROJECT_READ;
+import static ru.taska.capability.Action.PROJECT_UPDATE;
+import static ru.taska.capability.Action.TENANT_CANCEL_CREATION;
+import static ru.taska.capability.Action.TENANT_DELETE;
+import static ru.taska.capability.Action.TENANT_READ;
+import static ru.taska.capability.Action.TENANT_TRANSFER_OWNERSHIP;
+import static ru.taska.capability.CapabilityFacts.Accepted;
+import static ru.taska.capability.CapabilityFacts.Channel;
+import static ru.taska.capability.CapabilityFacts.Flag;
+import static ru.taska.capability.CapabilityFacts.Identity;
+import static ru.taska.capability.CapabilityFacts.PaymentChannel;
+import static ru.taska.capability.CapabilityFacts.PlanKind;
+import static ru.taska.capability.CapabilityFacts.ProjectRole;
+import static ru.taska.capability.CapabilityFacts.Target;
+import static ru.taska.capability.CapabilityFacts.Worker;
 
-import java.time.*;
-import java.util.*;
-import java.util.concurrent.atomic.*;
-import org.junit.jupiter.api.*;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.ZoneOffset;
+import java.util.EnumMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import reactor.core.publisher.Mono;
-import ru.taska.api.b2b.v1.*;
+import ru.taska.api.b2b.v1.AdminGrant;
+import ru.taska.api.b2b.v1.AdminScope;
+import ru.taska.api.b2b.v1.CredentialKind;
+import ru.taska.api.b2b.v1.Entitlement;
+import ru.taska.api.b2b.v1.ErrorCode;
+import ru.taska.api.b2b.v1.Membership;
+import ru.taska.api.b2b.v1.MembershipSnapshot;
+import ru.taska.api.b2b.v1.QuotaLimit;
+import ru.taska.api.b2b.v1.RequestContext;
+import ru.taska.api.b2b.v1.RestrictionCode;
+import ru.taska.api.b2b.v1.Tenant;
+import ru.taska.api.b2b.v1.TrustedTenantContext;
 import ru.taska.api.common.v1.Header;
-import ru.taska.capability.*;
+import ru.taska.capability.Action;
+import ru.taska.capability.CapabilityEvaluator;
+import ru.taska.capability.CapabilityFacts;
 import ru.taska.exception.DomainException;
 
 class CapabilityEvaluatorTest {
@@ -643,7 +733,8 @@ class CapabilityEvaluatorTest {
 }
 
 /**
- * Test-only stand-in for current primary authorities. Mutable facts are re-read each subscription.
+ * Тестовая замена актуальных сервисов-владельцев. Изменяемые факты читаются заново при каждой
+ * подписке.
  */
 final class CapabilityTestFacts {
   UUID actor;

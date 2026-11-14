@@ -41,7 +41,10 @@ import ru.taska.quota.SignedQuotaClient;
 import ru.taska.security.tenant.RpcContextSecurity;
 import ru.taska.security.tenant.VerifiedTenantContext;
 
-/** No role, project key, workflow or target membership is accepted from an issue request. */
+/**
+ * Роль, ключ проекта, workflow и членство исполнителя проверяются в сервисах-владельцах, а не
+ * берутся из запроса задачи.
+ */
 public final class PrimaryIssueAccess implements TenantIssueAccess {
   private final TenantDecisionFacts facts;
   private final ManagedDomainReads reads;
@@ -173,10 +176,9 @@ public final class PrimaryIssueAccess implements TenantIssueAccess {
                                             id,
                                             null,
                                             null);
-                                    // The owner established project READ for this exact actor;
-                                    // VIEWER is the minimum read role,
-                                    // never a grant of MEMBER/ADMIN or permission to mutate the
-                                    // project.
+                                    // Сервис-владелец подтвердил чтение проекта этим пользователем.
+                                    // VIEWER обозначает минимальные права чтения и не разрешает
+                                    // изменение проекта.
                                     return facts
                                         .decision(
                                             frame,

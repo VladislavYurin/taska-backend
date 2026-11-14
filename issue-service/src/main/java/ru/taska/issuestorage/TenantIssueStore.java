@@ -21,7 +21,7 @@ import ru.taska.security.tenant.VerifiedTenantContext;
 import tools.jackson.databind.ObjectMapper;
 
 /**
- * Storage foundation only. TAS-343 must authorize project, workflow and nested IDs before calling.
+ * Слой хранения. До вызова TAS-343 проверяет права на проект, workflow и вложенные идентификаторы.
  */
 public final class TenantIssueStore {
   public record CreateIssue(
@@ -41,7 +41,7 @@ public final class TenantIssueStore {
 
   public record Created(UUID id, UUID projectId, int number, String key, int version) {}
 
-  /** Native issue state; profile information is deliberately absent from this storage view. */
+  /** Нативное состояние задачи без данных профилей пользователей. */
   public record Snapshot(
       Created identity,
       String issueType,
@@ -111,13 +111,16 @@ public final class TenantIssueStore {
   }
 
   private static DomainException failure(DomainStatus status, String reason) {
-    var details = java.util.Set.of("VERSION_CONFLICT", "IDEMPOTENCY_CONFLICT").contains(reason)
-        ? java.util.Map.of("code", reason) : java.util.Map.<String,String>of();
+    var details =
+        java.util.Set.of("VERSION_CONFLICT", "IDEMPOTENCY_CONFLICT").contains(reason)
+            ? java.util.Map.of("code", reason)
+            : java.util.Map.<String, String>of();
     return new DomainException(status, reason, details);
   }
 
   /**
-   * Never retain this handle or subscribe detached work; its client is bound to the executor frame.
+   * Не сохранять этот объект и не запускать отдельные подписки: клиент привязан к текущей
+   * транзакции исполнителя.
    */
   public final class Session {
     private final java.util.concurrent.atomic.AtomicBoolean active =
@@ -155,7 +158,7 @@ public final class TenantIssueStore {
           });
     }
 
-    /** Internal storage read. The business boundary must separately authorize the project. */
+    /** Внутреннее чтение хранилища. Бизнес-слой отдельно проверяет права на проект. */
     public Mono<Snapshot> findActive(UUID id) {
       return guarded(
           Mono.defer(
@@ -171,7 +174,9 @@ public final class TenantIssueStore {
               }));
     }
 
-    /** Tenant-qualified key lookup; an absent key never falls back to a global lookup. */
+    /**
+     * Поиск по ключу в пределах арендатора; при отсутствии ключа глобальный поиск не выполняется.
+     */
     public Mono<Snapshot> findActiveByKey(String key) {
       return guarded(
           Mono.defer(
@@ -292,7 +297,7 @@ public final class TenantIssueStore {
               }));
     }
 
-    /** Tombstones are available only to internal authorization/retry paths. */
+    /** Удалённые записи доступны только внутренним проверкам прав и повторным вызовам. */
     Mono<Snapshot> stored(UUID id, boolean lock) {
       return guarded(
           db.sql(
@@ -435,7 +440,9 @@ WHERE tenant_id=:t AND user_id=:a AND operation_code=:op AND key=:k AND state='S
 
     private record Claim(long inserted, String hash, String state, String response) {}
 
-    /** Version, mutation, history, outbox and the exact replay response commit together. */
+    /**
+     * Версия, изменение, история, outbox и точный ответ для повтора фиксируются одной транзакцией.
+     */
     Mono<Snapshot> mutate(
         String key,
         String fingerprint,
@@ -743,8 +750,8 @@ VALUES(:t,'ISSUE',:id,:e,CAST(:payload AS jsonb),'TENANT',:v,1,:r)
     }
 
     /**
-     * Claims receipt before allocating a number. All five tables commit together, including
-     * retries.
+     * Резервирует запись идемпотентности до выделения номера. Изменения всех пяти таблиц
+     * фиксируются вместе, в том числе при повторных вызовах.
      */
     public Mono<Created> create(String key, CreateIssue input) {
       return create(key, input, c -> Mono.empty());
@@ -767,8 +774,8 @@ VALUES(:t,'ISSUE',:id,:e,CAST(:payload AS jsonb),'TENANT',:v,1,:r)
                         var command = canonical(input);
                         String hash = hash(key, command);
                         OffsetDateTime now = clock.instant().atOffset(ZoneOffset.UTC);
-                        // A concurrent INSERT waits for the winner. The next SELECT uses a fresh
-                        // READ COMMITTED snapshot.
+                        // Конкурирующий INSERT ждёт завершения победителя. Следующий SELECT читает
+                        // новый снимок READ COMMITTED.
                         return quota
                             .authorize(LifetimeTaskQuota.Use.CREATE, command.projectId())
                             .flatMap(
@@ -866,7 +873,7 @@ VALUES(:tenant,:id,:project,:number,:key,:type,:summary,:description,:status,:pr
       q = nullable(q, "due", c.dueDate(), LocalDate.class);
       q = nullable(q, "original", c.originalEstimateMinutes(), Integer.class);
       q = nullable(q, "remaining", c.remainingEstimateMinutes(), Integer.class);
-      // Metadata-only events: summaries/descriptions never enter outbox/history payloads here.
+      // События содержат только метаданные: названия и описания не попадают в outbox и историю.
       String payload =
           json.writeValueAsString(
               json.createObjectNode()

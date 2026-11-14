@@ -63,7 +63,7 @@ enum IssueLinkViewType {
 }
 
 service IssueService {
-  // Native bounded read: every project is reauthorized; usage is lifetime creations.
+  // Ограниченное нативное чтение: права на каждый проект проверяются заново; учитываются все создания за всё время.
   rpc GetProjectTaskQuotas(GetProjectTaskQuotasRequest) returns (GetProjectTaskQuotasResponse);
 
   // Controlled workflow administration: refuses unmapped issues or moves them atomically

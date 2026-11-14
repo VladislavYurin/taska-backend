@@ -35,8 +35,8 @@ import ru.taska.issuestorage.TenantIssueStore.Snapshot;
 import ru.taska.security.tenant.VerifiedTenantContext;
 
 /**
- * Native business operations. Caller fields never establish tenant, actor, ACL or workflow
- * authority.
+ * Нативные бизнес-операции. Поля запроса не определяют арендатора, пользователя, права ACL или
+ * полномочия workflow.
  */
 public final class TenantIssueApi {
   private final TenantIssueStore store;
@@ -187,7 +187,20 @@ public final class TenantIssueApi {
             permit -> store.execute(s -> s.audit(permit, row.identity().id()).thenReturn(row)));
   }
 
+  private record View(
+      Snapshot issue, java.util.List<ru.taska.api.issue.v1.IssueHistoryResponse> history) {}
+
   public Mono<IssueWithHistoryResponse> getWithHistory(GetIssueRequestBody q) {
+    return view(q)
+        .map(
+            v ->
+                IssueWithHistoryResponse.newBuilder()
+                    .setIssue(response(v.issue()))
+                    .addAllHistory(v.history())
+                    .build());
+  }
+
+  private Mono<View> view(GetIssueRequestBody q) {
     return get(q.getIssueId(), q.getActorUserId())
         .flatMap(
             row ->
@@ -206,19 +219,14 @@ public final class TenantIssueApi {
                                             current ->
                                                 session
                                                     .history(current.identity().id(), permit)
-                                                    .map(
-                                                        history ->
-                                                            IssueWithHistoryResponse.newBuilder()
-                                                                .setIssue(response(current))
-                                                                .addAllHistory(history)
-                                                                .build())))));
+                                                    .map(history -> new View(current, history))))));
   }
 
   public Mono<GetIssueDetailsResponse> details(GetIssueRequestBody q) {
-    return getWithHistory(q)
+    return view(q)
         .map(
             value -> {
-              var issue = value.getIssue();
+              var issue = response(value.issue());
               var b =
                   IssueDetailsResponse.newBuilder()
                       .setId(issue.getId())
@@ -235,7 +243,8 @@ public final class TenantIssueApi {
                       .setUpdatedAt(issue.getUpdatedAt())
                       .setVersion(issue.getVersion())
                       .setTimeSpentMinutes(issue.getTimeSpentMinutes());
-              if (!issue.getDescription().isEmpty()) b.setDescription(issue.getDescription());
+              if (value.issue().description() != null)
+                b.setDescription(value.issue().description());
               if (!issue.getAssigneeId().isEmpty()) b.setAssigneeId(issue.getAssigneeId());
               if (issue.hasStoryPoints()) b.setStoryPoints(issue.getStoryPoints());
               if (issue.hasStartDate()) b.setStartDate(issue.getStartDate());
@@ -244,13 +253,12 @@ public final class TenantIssueApi {
                 b.setOriginalEstimateMinutes(issue.getOriginalEstimateMinutes());
               if (issue.hasRemainingEstimateMinutes())
                 b.setRemainingEstimateMinutes(issue.getRemainingEstimateMinutes());
-              // Native comment/watch/link/file domains have separate activation tasks. Do not
-              // enrich author
-              // IDs through an unscoped global directory or fabricate profiles for deleted
-              // identities.
+              // Комментарии, подписки, связи и файлы активируются отдельными задачами.
+              // Нельзя обогащать авторов через глобальный каталог без контекста арендатора
+              // или создавать вымышленные профили удалённых пользователей.
               return GetIssueDetailsResponse.newBuilder()
                   .setIssue(b)
-                  .addAllHistory(value.getHistoryList())
+                  .addAllHistory(value.history())
                   .build();
             });
   }
@@ -432,6 +440,7 @@ public final class TenantIssueApi {
       String event,
       boolean delete,
       Function<Snapshot, Mono<CreateIssue>> command) {
+    if (expected != null && expected < 1) return Mono.error(invalid());
     return store
         .execute(s -> s.stored(id, false))
         .switchIfEmpty(Mono.error(missing()))

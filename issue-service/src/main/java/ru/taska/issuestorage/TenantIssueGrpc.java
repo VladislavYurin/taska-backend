@@ -26,7 +26,10 @@ import ru.taska.api.issue.v1.UpdateIssueResponse;
 import ru.taska.exception.DomainException;
 import ru.taska.security.tenant.RpcContextBridge;
 
-/** The existing IssueService contract, admitted only through message-bound native transport. */
+/**
+ * Существующий контракт IssueService, доступный только через нативный транспорт с привязкой к
+ * сообщению.
+ */
 @GrpcService
 public final class TenantIssueGrpc extends ReactorIssueServiceGrpc.IssueServiceImplBase {
   private final TenantIssueApi api;

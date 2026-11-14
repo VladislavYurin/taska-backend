@@ -282,7 +282,7 @@ class Http:
         return response
 
 
-def run_command(argv, cwd, timeout=600, input_text=None):
+def run_command(argv, cwd, timeout=600, input_text=None, diagnostic_path=None):
     # A process group bounds Maven/Docker descendants, including interrupted runs.
     try:
         child = subprocess.Popen(argv, cwd=cwd, stdin=subprocess.PIPE if input_text is not None else subprocess.DEVNULL,
@@ -290,7 +290,7 @@ def run_command(argv, cwd, timeout=600, input_text=None):
     except FileNotFoundError as exc:
         raise Blocked('Required executable unavailable') from exc
     try:
-        output, _ = child.communicate(input_text, timeout=timeout)
+        output, error_output = child.communicate(input_text, timeout=timeout)
     except (subprocess.TimeoutExpired, KeyboardInterrupt) as interrupted:
         termination_error = False
         try:
@@ -310,6 +310,8 @@ def run_command(argv, cwd, timeout=600, input_text=None):
             raise
         raise Failure('Local command timed out') from None
     if child.returncode:
+        if diagnostic_path is not None:
+            private_json(Path(diagnostic_path), {'stdout': output, 'stderr': error_output})
         raise Failure('Local command failed (%s)' % child.returncode)
     return output
 

@@ -43,7 +43,7 @@ public class ProjectStatsService {
                     .getProjectMemberStatsBatch(GetProjectMemberStatsBatchRequest.newBuilder().setHeader(header)
                             .setActorUserId(context.userContext().userId()).addAllProjectIds(ids).build()))
                     .flatMap(members -> {
-                        // A membership removed since ListMyProjects must not expose statistics.
+                        // Отзыв членства после ListMyProjects должен закрывать доступ к статистике.
                         var byProject = members.getItemsList().stream().collect(Collectors.toMap(
                                 m -> m.getProjectId(), Function.identity()));
                         var authorized = ids.stream().filter(byProject::containsKey).toList();

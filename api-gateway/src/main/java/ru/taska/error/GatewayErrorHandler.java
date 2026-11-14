@@ -103,7 +103,7 @@ public class GatewayErrorHandler {
           errorResponse.setQuota(quota);
         }
       } catch (NumberFormatException ignored) {
-        // A malformed optional diagnostic must not replace the original domain failure.
+        // Некорректная необязательная диагностика не должна подменять исходную доменную ошибку.
       }
     }
 

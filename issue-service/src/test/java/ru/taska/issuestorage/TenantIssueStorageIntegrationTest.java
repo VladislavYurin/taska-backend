@@ -1652,6 +1652,16 @@ class TenantIssueStorageIntegrationTest {
   @Test
   void assignmentAndNullablePatchPreserveOtherFieldsAndSupportUnassignment() {
     var first = nativeCreate("assign");
+    var detailRequest =
+        ru.taska.api.issue.v1.GetIssueRequestBody.newBuilder()
+            .setIssueId(first.identity().id().toString())
+            .setActorUserId(ACTOR.toString())
+            .build();
+    assertTrue(
+        as(A, ACTOR, "getIssueDetails", api.details(detailRequest))
+            .block(WAIT)
+            .getIssue()
+            .hasDescription());
     var q =
         ru.taska.api.issue.v1.AssignIssueRequestBody.newBuilder()
             .setIssueId(first.identity().id().toString())
@@ -1669,6 +1679,10 @@ class TenantIssueStorageIntegrationTest {
     assertNull(result.assigneeId());
     assertNull(result.description());
     assertEquals("TODO", result.statusKey());
+    var details = as(A, ACTOR, "getIssueDetails", api.details(detailRequest)).block(WAIT);
+    assertFalse(details.getIssue().hasDescription());
+    assertEquals(3, details.getIssue().getVersion());
+    assertEquals(3, details.getHistoryCount());
   }
 
   @Test
@@ -1777,5 +1791,26 @@ class TenantIssueStorageIntegrationTest {
     assertEquals(1, count("idempotency_keys"));
     assertEquals(1, count("issue_history"));
     assertEquals(1, count("outbox_events"));
+  }
+
+  @Test
+  void concurrentIdenticalCreatesFreezeOneResponseAndConsumeOneLifetimeSlot() {
+    var request = createRequest("concurrent-native");
+    var responses =
+        Flux.range(0, 6)
+            .flatMap(i -> as(A, ACTOR, "createIssue", api.create(request)), 6)
+            .collectList()
+            .block(WAIT);
+    assertNotNull(responses);
+    assertEquals(1, responses.stream().distinct().count());
+    assertEquals(1, count("issues"));
+    assertEquals(1, count("issue_history"));
+    assertEquals(1, count("outbox_events"));
+    assertEquals(1, count("idempotency_keys"));
+    denied(
+        api.create(request.toBuilder().setSummary("Different command").build()),
+        "createIssue",
+        DomainStatus.ALREADY_EXISTS);
+    assertEquals(2, create(A, "after-concurrent-native").number());
   }
 }

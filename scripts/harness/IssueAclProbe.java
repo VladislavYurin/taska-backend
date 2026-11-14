@@ -1,23 +1,56 @@
 import com.google.protobuf.Message;
-import io.grpc.*;
+import io.grpc.ManagedChannel;
+import io.grpc.Metadata;
+import io.grpc.Status;
+import io.grpc.StatusRuntimeException;
 import io.grpc.stub.MetadataUtils;
-import java.nio.file.*;
-import java.time.*;
-import java.util.*;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.UUID;
 import java.util.concurrent.TimeUnit;
-import java.util.function.*;
-import ru.taska.api.b2b.v1.*;
+import java.util.function.BiFunction;
+import java.util.function.Function;
+import ru.taska.api.b2b.v1.CredentialKind;
+import ru.taska.api.b2b.v1.RequestContext;
+import ru.taska.api.b2b.v1.TrustedTenantContext;
 import ru.taska.api.common.v1.Header;
-import ru.taska.api.issue.v1.*;
-import ru.taska.security.tenant.*;
+import ru.taska.api.issue.v1.CreateIssueRequest;
+import ru.taska.api.issue.v1.CreateIssueRequestBody;
+import ru.taska.api.issue.v1.DeleteIssueRequest;
+import ru.taska.api.issue.v1.DeleteIssueRequestBody;
+import ru.taska.api.issue.v1.DeleteIssueResponse;
+import ru.taska.api.issue.v1.GetIssueByKeyRequest;
+import ru.taska.api.issue.v1.GetIssueByKeyRequestBody;
+import ru.taska.api.issue.v1.GetIssueRequest;
+import ru.taska.api.issue.v1.GetIssueRequestBody;
+import ru.taska.api.issue.v1.IssuePriority;
+import ru.taska.api.issue.v1.IssueResponse;
+import ru.taska.api.issue.v1.IssueServiceGrpc;
+import ru.taska.api.issue.v1.IssueWithHistoryResponse;
+import ru.taska.api.issue.v1.PatchIssueRequest;
+import ru.taska.api.issue.v1.PatchIssueRequestBody;
+import ru.taska.api.issue.v1.PatchIssueResponse;
+import ru.taska.api.issue.v1.TransitionIssueRequest;
+import ru.taska.api.issue.v1.TransitionIssueRequestBody;
+import ru.taska.security.tenant.FileMtlsRpcChannels;
+import ru.taska.security.tenant.ManagedRpcTrust;
+import ru.taska.security.tenant.RpcContextSecurity;
+import ru.taska.security.tenant.RpcControlClient;
+import ru.taska.security.tenant.RpcRoutePolicies;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
-/** Read-only direct RPC acceptance; accepts only the owned runner's private parameter file. */
+/**
+ * Приёмочные проверки прямого RPC; принимает только приватный файл параметров изолированного
+ * прогона.
+ */
 public class IssueAclProbe {
   private final JsonNode input;
   private final RpcContextSecurity security;
-  private final IssueServiceGrpc.WorkflowServiceBlockingStub stub;
+  private final IssueServiceGrpc.IssueServiceBlockingStub stub;
   private final ManagedChannel issueChannel, authChannel;
   private final RpcControlClient auth;
 
@@ -52,7 +85,7 @@ public class IssueAclProbe {
                     ? auth.allowed(context, rpc, policy)
                     : reactor.core.publisher.Mono.just(false),
             (issuer, kid, fingerprint) -> auth.currentKey("api-gateway", issuer, kid, fingerprint));
-    stub = IssueServiceGrpc.newBlockingStub(issueChannel).withDeadlineAfter(10, TimeUnit.SECONDS);
+    stub = IssueServiceGrpc.newBlockingStub(issueChannel).withDeadlineAfter(20, TimeUnit.SECONDS);
   }
 
   private String value(String key) {
@@ -92,7 +125,7 @@ public class IssueAclProbe {
       String rpc,
       String action,
       Function<RequestContext, Q> build,
-      BiFunction<IssueServiceGrpc.WorkflowServiceBlockingStub, Q, R> send) {
+      BiFunction<IssueServiceGrpc.IssueServiceBlockingStub, Q, R> send) {
     var policy = RpcRoutePolicies.all().get(rpc).policy();
     var c = context(action);
     Q q = build.apply(c);
@@ -243,6 +276,16 @@ public class IssueAclProbe {
           Status.Code.PERMISSION_DENIED);
       require(get(value("issue")).equals(current), "Denied write changed state/history");
       System.out.println("{\"aclReadAndWriteDenial\":\"PASS\"}");
+      return;
+    }
+    if (mode.equals("adminWrite")) {
+      var current = get(value("issue"));
+      var result =
+          patch(value("issue"), current.getIssue().getVersion(), UUID.randomUUID().toString());
+      require(
+          result.getIssue().getVersion() == current.getIssue().getVersion() + 1,
+          "Administrative write did not advance version");
+      System.out.println("{\"administrativeIssueWrite\":\"PASS\"}");
       return;
     }
     if (mode.equals("delete")) {

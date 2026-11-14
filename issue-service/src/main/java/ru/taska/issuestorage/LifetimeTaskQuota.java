@@ -1,19 +1,30 @@
 package ru.taska.issuestorage;
 
-import java.time.*;
-import java.util.*;
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.util.Map;
+import java.util.Objects;
+import java.util.UUID;
 import org.springframework.r2dbc.core.DatabaseClient;
 import reactor.core.publisher.Mono;
-import ru.taska.api.b2b.v1.*;
+import ru.taska.api.b2b.v1.Entitlement;
+import ru.taska.api.b2b.v1.GetProjectTaskQuotaRpcRequest;
+import ru.taska.api.b2b.v1.GetTenantTaskQuotaSummaryRequest;
+import ru.taska.api.b2b.v1.QuotaLimit;
+import ru.taska.api.b2b.v1.QuotaUsage;
+import ru.taska.api.b2b.v1.TenantTaskQuotaSummary;
 import ru.taska.entitlement.EntitlementProjection;
-import ru.taska.exception.*;
+import ru.taska.exception.DomainException;
+import ru.taska.exception.DomainStatus;
 import ru.taska.r2dbc.TenantTransactionExecutor;
 import ru.taska.security.tenant.VerifiedTenantContext;
 
 /**
- * Issue-owned lifetime admission. Authority must check current membership/project ACL and
- * lifecycle. RETIRE additionally requires the project owner's durable, confirmed physical deletion
- * receipt. Neither a global role string nor request DTO can supply a bypass/deletion grant.
+ * Выделение пожизненной квоты в сервисе задач. Проверяются актуальные членство, ACL проекта и
+ * жизненный цикл. RETIRE дополнительно требует сохранённое подтверждение физического удаления от
+ * сервиса-владельца проекта. Глобальная роль и DTO запроса не дают права обхода или удаления.
  */
 public final class LifetimeTaskQuota {
   public enum Use {
@@ -74,7 +85,7 @@ public final class LifetimeTaskQuota {
             });
   }
 
-  /** Must join the create transaction after its idempotency claim. */
+  /** Выполняется в транзакции создания после резервирования записи идемпотентности. */
   Mono<Integer> allocate(DatabaseClient db, UUID project) {
     return VerifiedTenantContext.current()
         .flatMap(
@@ -222,8 +233,9 @@ RETURNING next_issue_number-1 AS allocated
                                                                     "PROJECT_NOT_FOUND"))
                                                             : Mono.just(
                                                                 (Long) row.get("lifetime_created")))
-                                                // Authority already established a live accessible
-                                                // project, including one with no issues yet.
+                                                // Проверка полномочий уже подтвердила доступный
+                                                // действующий проект,
+                                                // в том числе проект без задач.
                                                 .defaultIfEmpty(0L)
                                                 .flatMap(
                                                     used ->
@@ -293,7 +305,8 @@ RETURNING next_issue_number-1 AS allocated
   }
 
   /**
-   * TAS-459 joins its owner-confirmed project deletion transaction; archiving must never call this.
+   * TAS-459 вызывает это в транзакции подтверждённого удаления проекта; архивация не должна
+   * вызывать этот метод.
    */
   public Mono<Void> retire(DatabaseClient db, UUID project) {
     Objects.requireNonNull(project);
@@ -353,8 +366,9 @@ RETURNING next_issue_number-1 AS allocated
                                                       .bind("e", state.entitlement())
                                                       .bind("max", max)
                                                       .bind("request", c.requestId());
-                                              // Cleanup is allowed during billing outage. Unknown
-                                              // commercial facts stay unknown.
+                                              // Очистка разрешена при недоступности биллинга.
+                                              // Неизвестные коммерческие условия не подменяются
+                                              // значениями по умолчанию.
                                               event =
                                                   state.entitlement() == 0
                                                       ? event.bindNull("over", Boolean.class)
@@ -453,7 +467,7 @@ RETURNING next_issue_number-1 AS allocated
                       .bind("u", next.unlimited());
               update =
                   value == null ? update.bindNull("lim", Long.class) : update.bind("lim", value);
-              // Separate transactional outbox: issue outbox deliberately requires an existing ISSUE
+              // Отдельный транзакционный outbox: outbox задач требует существующую задачу ISSUE
               // FK.
               return update
                   .fetch()
@@ -488,8 +502,8 @@ VALUES(:t,:v,:e,:max,:over,:request)
                 throw fail(DomainStatus.PERMISSION_DENIED, "TENANT_MISMATCH");
               long version = Long.parseLong(e.getVersion());
               if (version < minimum) throw fail(DomainStatus.UNAVAILABLE, "ENTITLEMENT_STALE");
-              // Read endpoints may report restrictions, but never treat an expired snapshot as
-              // current.
+              // Методы чтения могут сообщать ограничения, но не должны считать просроченный снимок
+              // актуальным.
               Instant now = clock.instant();
               if (now.isBefore(Instant.parse(e.getValidFrom()))
                   || (e.hasValidUntil() && !now.isBefore(Instant.parse(e.getValidUntil())))

@@ -9,7 +9,8 @@ import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
 
 /**
- * Current primary authority. A permit is bounded and tied to the verified invocation and project.
+ * Актуальные полномочия от сервисов-владельцев. Разрешение ограничено по времени и привязано к
+ * проверенному вызову и проекту.
  */
 public interface TenantIssueAccess {
   record Permit(

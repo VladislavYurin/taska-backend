@@ -13,7 +13,10 @@ import ru.taska.domain.GatewayContext;
 import ru.taska.domain.dto.TaskQuotaDto;
 import ru.taska.security.tenant.RpcContextBridge;
 
-/** One scoped RPC per page. Unavailable usage fails rather than inventing a zero. */
+/**
+ * Один RPC в контексте арендатора на страницу. Недоступность данных возвращает ошибку, а не нулевое
+ * использование.
+ */
 @Component
 public final class TaskQuotaClient {
   private final ReactorIssueServiceGrpc.ReactorIssueServiceStub stub;
