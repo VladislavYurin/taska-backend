@@ -85,7 +85,7 @@ public class IssueAclProbe {
                     ? auth.allowed(context, rpc, policy)
                     : reactor.core.publisher.Mono.just(false),
             (issuer, kid, fingerprint) -> auth.currentKey("api-gateway", issuer, kid, fingerprint));
-    stub = IssueServiceGrpc.newBlockingStub(issueChannel).withDeadlineAfter(20, TimeUnit.SECONDS);
+    stub = IssueServiceGrpc.newBlockingStub(issueChannel);
   }
 
   private String value(String key) {
@@ -133,7 +133,10 @@ public class IssueAclProbe {
     var assertion = security.sign(parent, q, rpc, policy).block(Duration.ofSeconds(10));
     var headers = new Metadata();
     headers.put(Metadata.Key.of("x-taska-context", Metadata.ASCII_STRING_MARSHALLER), assertion);
-    return send.apply(stub.withInterceptors(MetadataUtils.newAttachHeadersInterceptor(headers)), q);
+    return send.apply(
+        stub.withDeadlineAfter(20, TimeUnit.SECONDS)
+            .withInterceptors(MetadataUtils.newAttachHeadersInterceptor(headers)),
+        q);
   }
 
   private static void require(boolean value, String message) {
@@ -328,13 +331,14 @@ public class IssueAclProbe {
     require(get(first.getId()).getHistoryCount() == 3, "Mutation history was lost or duplicated");
     denied(
         () ->
-            stub.getIssue(
-                GetIssueRequest.newBuilder()
-                    .setBody(
-                        GetIssueRequestBody.newBuilder()
-                            .setIssueId(first.getId())
-                            .setActorUserId(value("actor")))
-                    .build()),
+            stub.withDeadlineAfter(20, TimeUnit.SECONDS)
+                .getIssue(
+                    GetIssueRequest.newBuilder()
+                        .setBody(
+                            GetIssueRequestBody.newBuilder()
+                                .setIssueId(first.getId())
+                                .setActorUserId(value("actor")))
+                        .build()),
         Status.Code.UNAUTHENTICATED);
     System.out.println(
         "{\"nativeIssueRpc\":\"PASS\",\"rpcChecks\":13,\"issue\":\"" + first.getId() + "\"}");

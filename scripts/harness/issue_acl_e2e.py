@@ -11,6 +11,13 @@ from workflow_acl_e2e import WorkflowAclLocal
 
 
 class IssueAclLocal(WorkflowAclLocal):
+    def start_applications(self):
+        # Последовательный запуск ограничивает пиковую память семи JVM в локальном Docker.
+        for name in ('auth-service', 'tenant-service', 'billing-service', 'project-service',
+                     'workflow-service', 'issue-service', 'api-gateway'):
+            self.compose('up', '-d', '--no-deps', name, timeout=180)
+            self.wait_ready('http://' + self.compose('port', name, '8080').strip())
+
     def configure_container(self, name, service):
         super().configure_container(name, service)
         if name == 'issue-service':
