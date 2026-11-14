@@ -56,7 +56,7 @@ public class IssueAclProbe {
 
   IssueAclProbe(Path parameters) throws Exception {
     input = JsonMapper.builder().build().readTree(Files.readAllBytes(parameters));
-    Path material = Path.of(input.path("material").asText()),
+    Path material = Path.of(input.path("material").asString()),
         identity = material.resolve("api-gateway");
     var channels =
         new FileMtlsRpcChannels(
@@ -89,7 +89,7 @@ public class IssueAclProbe {
   }
 
   private String value(String key) {
-    return input.path(key).asText();
+    return input.path(key).asString("");
   }
 
   private String commandKey;
