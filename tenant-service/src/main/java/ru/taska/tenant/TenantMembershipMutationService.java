@@ -431,7 +431,7 @@ public final class TenantMembershipMutationService {
                                             + "jsonb_build_object('tenantId',:tenant::text,'userId',:target::text,"
                                             + "'actorId',:actor::text,'role',:role,'status',:status,'result','SUCCEEDED',"
                                             + "'previousVersion',:previousVersion,"
-                                            + "'revokedAt',CASE WHEN :revokesAccess OR :revokesInvitations"
+                                            + "'revokedAt',CASE WHEN :revokesAccess"
                                             + " THEN to_jsonb(:now::timestamptz) ELSE NULL END,"
                                             + "'cleanupScopes',CAST(:cleanupScopes AS jsonb)),"
                                             + ":operation,'NEW',:now)")
@@ -446,7 +446,6 @@ public final class TenantMembershipMutationService {
                                         "previousVersion",
                                         ((Number) target.get("version")).longValue())
                                     .bind("revokesAccess", revokesAccess)
-                                    .bind("revokesInvitations", revokesInvitations)
                                     .bind("cleanupScopes", cleanupScopes)
                                     .bind("operation", operation)
                                     .bind("now", now.atOffset(ZoneOffset.UTC))

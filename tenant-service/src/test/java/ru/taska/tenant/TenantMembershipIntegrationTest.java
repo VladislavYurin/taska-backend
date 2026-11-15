@@ -625,6 +625,19 @@ class TenantMembershipIntegrationTest {
             .map((r, m) -> r.get("scope", String.class))
             .one()
             .block(WAIT));
+    assertTrue(
+        operator
+            .sql(
+                "SELECT payload->>'revokedAt' IS NULL revoked_missing"
+                    + " FROM taska.outbox_events"
+                    + " WHERE payload->>'previousVersion'='12'")
+            .map((r, m) -> r.get("revoked_missing", Boolean.class))
+            .one()
+            .block(WAIT));
+    // Replay is an idempotency receipt, not a fresh read of the current membership.
+    assertEquals(
+        suspended, state(admin, ADMIN, "STATE_SUSPENDED", "11", suspendKey).block(WAIT));
+    assertEquals(Membership.StateValue.STATE_ACTIVE, get(A, ADMIN).block(WAIT).getState());
     assertEquals(2L, count("SELECT count(*) n FROM taska.membership_audit"));
   }
 
@@ -665,6 +678,84 @@ class TenantMembershipIntegrationTest {
   }
 
   @Test
+  void concurrentSuspendAndRemoveAllowOnlyOneVersionWinner() {
+    var suspend =
+        state(
+                writer(OWNER, A, "1", "setTenantMemberState"),
+                SHARED,
+                "STATE_SUSPENDED",
+                "3",
+                UUID.randomUUID().toString())
+            .map(value -> "success")
+            .onErrorResume(error -> Mono.just("failure"));
+    var remove =
+        remove(
+                writer(OWNER, A, "1", "removeTenantMember"),
+                SHARED,
+                "3",
+                UUID.randomUUID().toString())
+            .map(value -> "success")
+            .onErrorResume(error -> Mono.just("failure"));
+    var outcomes = Flux.merge(suspend, remove).collectList().block(WAIT);
+    assertEquals(1, outcomes.stream().filter("success"::equals).count());
+    assertEquals(1, outcomes.stream().filter("failure"::equals).count());
+    var member = get(A, SHARED).block(WAIT);
+    assertEquals("4", member.getVersion());
+    assertTrue(
+        Set.of(Membership.StateValue.STATE_SUSPENDED, Membership.StateValue.STATE_REMOVED)
+            .contains(member.getState()));
+    assertEquals(1L, count("SELECT count(*) n FROM taska.outbox_events"));
+    assertEquals(1L, count("SELECT count(*) n FROM taska.membership_audit"));
+  }
+
+  @Test
+  void seatRecalculationPreservesActiveInvitationReservation() {
+    UUID operation = UUID.randomUUID();
+    operator
+        .sql(
+            "INSERT INTO taska.quota_counters(tenant_id,resource,scope_id)"
+                + " VALUES(:tenant,'SEAT',:tenant)")
+        .bind("tenant", A)
+        .fetch()
+        .rowsUpdated()
+        .then(
+            operator
+                .sql(
+                    "INSERT INTO taska.quota_reservations"
+                        + "(id,tenant_id,resource,scope_id,operation_id,resource_owner,fence,"
+                        + "request_hash,amount,state,entitlement_version,expires_at,created_at)"
+                        + " VALUES(:id,:tenant,'SEAT',:tenant,:operation,'INVITATION',1,"
+                        + "repeat('0',64),1,'ACTIVE',1,:expires,:now)")
+                .bind("id", UUID.randomUUID())
+                .bind("tenant", A)
+                .bind("operation", operation)
+                .bind("expires", NOW.plusSeconds(600).atOffset(ZoneOffset.UTC))
+                .bind("now", NOW.atOffset(ZoneOffset.UTC))
+                .fetch()
+                .rowsUpdated())
+        .block(WAIT);
+
+    remove(
+            writer(OWNER, A, "1", "removeTenantMember"),
+            SHARED,
+            "3",
+            UUID.randomUUID().toString())
+        .block(WAIT);
+
+    var counter =
+        operator
+            .sql(
+                "SELECT used,reserved FROM taska.quota_counters"
+                    + " WHERE tenant_id=:tenant AND resource='SEAT'")
+            .bind("tenant", A)
+            .fetch()
+            .one()
+            .block(WAIT);
+    assertEquals(3L, ((Number) counter.get("used")).longValue());
+    assertEquals(1L, ((Number) counter.get("reserved")).longValue());
+  }
+
+  @Test
   void lifecycleValidationKeepsOwnerOtherTenantAndStateUnchanged() {
     rejects(
         DomainStatus.FAILED_PRECONDITION,
@@ -689,6 +780,17 @@ class TenantMembershipIntegrationTest {
             "STATE_SUSPENDED",
             "99",
             UUID.randomUUID().toString()));
+    rejects(
+        DomainStatus.FAILED_PRECONDITION,
+        as(
+            writer(OWNER, A, "1", "removeTenantMember"),
+            mutations.remove(
+                RemoveTenantMemberRpcRequest.newBuilder()
+                    .setTenantId(A.toString())
+                    .setUserId(SHARED.toString())
+                    .setMutation(
+                        MutationOptions.newBuilder().setIdempotencyKey(UUID.randomUUID().toString()))
+                    .build())));
     assertEquals(Membership.StateValue.STATE_ACTIVE, get(A, SHARED).block(WAIT).getState());
     assertEquals("3", get(A, SHARED).block(WAIT).getVersion());
     assertEquals("99", get(B, FOREIGN).block(WAIT).getVersion());
