@@ -256,8 +256,7 @@ WHERE i.tenant_id=:t AND i.id=:i AND i.purpose='RENEWAL' AND i.method='PSP'
     if (profile == null || profile.isBlank())
       return Mono.error(fail(DomainStatus.FAILED_PRECONDITION, "SEALED_PROFILE_REQUIRED"));
     // Только исходный провайдер и одобренный профиль запечатанного счёта.
-    if (store.providers.require(grant.method().provider(), grant.method().merchant(), profile)
-        != provider)
+    if (store.approvedProvider(grant.method(), profile) != provider)
       return Mono.error(fail(DomainStatus.FAILED_PRECONDITION, "AUTOPAY_PROVIDER_CHANGED"));
     String key = "autopay:" + invoiceId;
     String snapshot =
@@ -341,11 +340,7 @@ VALUES(:t,:i,:m,:a,:source,:generation,:now)
               matching(last, mandate);
               if (!last.admissionAllowed())
                 return Mono.error(fail(DomainStatus.FAILED_PRECONDITION, "AUTOPAY_UNAVAILABLE"));
-              if (store.providers.require(
-                      last.method().provider(),
-                      last.method().merchant(),
-                      last.method().profileVersion())
-                  != provider)
+              if (store.approvedProvider(last.method(), last.method().profileVersion()) != provider)
                 return Mono.error(
                     fail(DomainStatus.FAILED_PRECONDITION, "AUTOPAY_PROVIDER_CHANGED"));
               return attempts
@@ -386,12 +381,16 @@ VALUES(:t,:i,:m,:a,:source,:generation,:now)
               return attempts.mark(attempt, state, result.providerPaymentId());
             })
         .onErrorResume(
-            ProviderException.class,
-            e ->
-                e.reason() == ProviderException.Reason.UNKNOWN_OUTCOME
-                    ? attempts.unknown(attempt)
-                    : Mono.error(e))
-        .onErrorResume(java.util.concurrent.TimeoutException.class, e -> attempts.unknown(attempt))
+            Exception.class,
+            error -> {
+              boolean unknown =
+                  error instanceof java.util.concurrent.TimeoutException
+                      || error instanceof ProviderException p
+                          && p.reason() == ProviderException.Reason.UNKNOWN_OUTCOME;
+              return unknown
+                  ? attempts.unknown(attempt)
+                  : attempts.unknown(attempt).then(Mono.error(error));
+            })
         .flatMap(result -> observer.get(result.tenantId(), result.id()));
   }
 }

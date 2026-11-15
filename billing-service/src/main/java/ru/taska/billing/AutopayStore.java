@@ -17,14 +17,18 @@ import java.util.Map;
 import java.util.UUID;
 import org.springframework.r2dbc.core.DatabaseClient;
 import reactor.core.publisher.Mono;
+import ru.taska.api.b2b.v1.AdminGrant;
+import ru.taska.api.b2b.v1.AdminScope;
 import ru.taska.api.b2b.v1.AutopayMandate;
 import ru.taska.api.b2b.v1.ConsentSnapshot;
+import ru.taska.api.b2b.v1.CredentialKind;
 import ru.taska.api.b2b.v1.SetAutopayConsentRpcRequest;
 import ru.taska.billing.AutopayDependencies.Grant;
 import ru.taska.billing.AutopayDependencies.Policy;
 import ru.taska.billing.AutopayDependencies.Use;
 import ru.taska.billing.payment.PaymentProvider;
 import ru.taska.billing.payment.PaymentProviderRegistry;
+import ru.taska.billing.payment.ProviderException;
 import ru.taska.exception.DomainStatus;
 import ru.taska.r2dbc.TenantTransactionExecutor;
 import ru.taska.security.tenant.RpcContextBridge;
@@ -88,7 +92,7 @@ public final class AutopayStore {
         .flatMap(
             c ->
                 current(c, Use.REPLAY, method)
-                    .doOnNext(g -> owner(c, g))
+                    .doOnNext(g -> actor(c, g))
                     .then(transactions.execute(db -> lockedConsent(db, c, command))));
   }
 
@@ -115,8 +119,10 @@ public final class AutopayStore {
                 current(c, Use.REPLAY, q.method())
                     .flatMap(
                         grant -> {
-                          owner(c, grant);
+                          actor(c, grant);
                           return receipt(db, q.tenant(), c, q.key(), q.hash())
+                              .flatMap(
+                                  result -> audit(db, c, grant, result, true).thenReturn(result))
                               .switchIfEmpty(
                                   Mono.defer(() -> changeConsent(db, c, q, subscription)));
                         }));
@@ -139,7 +145,7 @@ public final class AutopayStore {
     return current(c, payload.getConsent() ? Use.CONSENT : Use.REVOKE, q.method())
         .flatMap(
             grant -> {
-              owner(c, grant);
+              actor(c, grant);
               Mono<AutopayMandate> change =
                   payload.getConsent()
                       ? enable(
@@ -164,7 +170,8 @@ public final class AutopayStore {
                           .flatMap(
                               n ->
                                   n == 1
-                                      ? complete(db, q.tenant(), c, q.key(), q.hash(), result, next)
+                                      ? complete(
+                                          db, q.tenant(), c, q.key(), q.hash(), result, next, grant)
                                       : Mono.error(
                                           fail(DomainStatus.ABORTED, "VERSION_CONFLICT"))));
             });
@@ -177,20 +184,40 @@ public final class AutopayStore {
         .switchIfEmpty(Mono.error(fail(DomainStatus.UNAVAILABLE, "AUTOPAY_POLICY_UNAVAILABLE")));
   }
 
-  static void owner(VerifiedTenantContext c, Grant g) {
-    if (c.actorId() == null || !g.owner().toString().equals(c.actorId()))
+  static void actor(VerifiedTenantContext c, Grant g) {
+    var claims = RpcContextBridge.details(c).getContext();
+    boolean adminCredential =
+        java.util.Set.of(
+                CredentialKind.CREDENTIAL_KIND_WEB_GLOBAL,
+                CredentialKind.CREDENTIAL_KIND_ADMIN_PAT,
+                CredentialKind.CREDENTIAL_KIND_ADMIN_OAUTH)
+            .contains(claims.getCredentialKind());
+    if (c.actorId() == null) throw fail(DomainStatus.PERMISSION_DENIED, "OWNER_REQUIRED");
+    if (g.administrative() || adminCredential) {
+      if (!g.administrative()
+          || !adminCredential
+          || claims.getAdministrativeLevel() != AdminGrant.LevelValue.LEVEL_MODIFY
+          || !(claims.getAdministrativeScope().getKind() == AdminScope.KindValue.KIND_PLATFORM
+              || claims.getAdministrativeScope().getKind() == AdminScope.KindValue.KIND_TENANT_SET
+                  && claims.getAdministrativeScope().getTenantIdsList().contains(c.tenantId())))
+        throw fail(DomainStatus.PERMISSION_DENIED, "ADMIN_AUTHORITY_REQUIRED");
+    } else if (!g.owner().toString().equals(c.actorId()))
       throw fail(DomainStatus.PERMISSION_DENIED, "OWNER_REQUIRED");
   }
 
   Mono<PaymentProvider> ready(Grant g) {
-    if (!g.admissionAllowed())
+    return ready(g, false);
+  }
+
+  private Mono<PaymentProvider> ready(Grant g, boolean administrative) {
+    if (!g.admissionAllowed() && !administrative)
       return Mono.error(fail(DomainStatus.FAILED_PRECONDITION, "AUTOPAY_UNAVAILABLE"));
     if (providers == null || g.method() == null)
       return Mono.error(fail(DomainStatus.UNAVAILABLE, "AUTOPAY_PROVIDER_NOT_CONFIGURED"));
     return Mono.defer(
         () -> {
           var b = g.method();
-          var adapter = providers.require(b.provider(), b.merchant(), b.profileVersion());
+          var adapter = approvedProvider(b, b.profileVersion());
           return adapter
               .capabilities(b.merchant())
               .timeout(Duration.ofSeconds(5))
@@ -199,6 +226,17 @@ public final class AutopayStore {
                   Mono.error(fail(DomainStatus.FAILED_PRECONDITION, "RECURRING_UNSUPPORTED")))
               .thenReturn(adapter);
         });
+  }
+
+  PaymentProvider approvedProvider(AutopayDependencies.MethodBinding binding, String profile) {
+    if (providers == null) throw fail(DomainStatus.UNAVAILABLE, "AUTOPAY_PROVIDER_NOT_CONFIGURED");
+    try {
+      return providers.require(binding.provider(), binding.merchant(), profile);
+    } catch (ProviderException e) {
+      if (e.reason() == ProviderException.Reason.UNSUPPORTED_CAPABILITY)
+        throw fail(DomainStatus.FAILED_PRECONDITION, "RECURRING_UNSUPPORTED");
+      throw e;
+    }
   }
 
   private Mono<AutopayMandate> enable(
@@ -228,7 +266,17 @@ public final class AutopayStore {
             m -> {
               if (!grant.owner().equals(m.get("owner_id")) || !"ACTIVE".equals(m.get("status")))
                 return Mono.error(fail(DomainStatus.PERMISSION_DENIED, "PAYMENT_METHOD_NOT_OWNED"));
-              return ready(grant)
+              return ready(grant, grant.administrative())
+                  .delayUntil(
+                      adapter ->
+                          current(c, Use.CONSENT, method)
+                              .map(
+                                  fresh -> {
+                                    actor(c, fresh);
+                                    if (!fresh.equals(grant))
+                                      throw fail(DomainStatus.ABORTED, "AUTOPAY_AUTHORITY_CHANGED");
+                                    return fresh;
+                                  }))
                   .flatMap(
                       adapter -> {
                         if (!grant.method().provider().equals(m.get("provider")))
@@ -401,39 +449,84 @@ VALUES(:id,:t,'SUBSCRIPTION',:t,:v,'AUTOPAY_INVALIDATED',1,jsonb_build_object('m
       String key,
       byte[] hash,
       AutopayMandate result,
-      long version) {
+      long version,
+      Grant grant) {
     UUID operation = UUID.randomUUID();
-    return db.sql(
-            """
-INSERT INTO taska.idempotency_records(tenant_id,actor_id,operation_code,key,request_hash,operation_id,state,response,created_at,expires_at)
-VALUES(:t,:a,'setAutopayConsent',:k,:hash,:op,'SUCCEEDED',jsonb_build_object('proto',CAST(:response AS text)),:now,:expires)
-""")
-        .bind("t", tenant)
-        .bind("a", uuid(c.actorId()))
-        .bind("k", key)
-        .bind("hash", hash)
-        .bind("op", operation)
-        .bind("response", Base64.getEncoder().encodeToString(result.toByteArray()))
-        .bind("now", now())
-        .bind("expires", now().plusDays(1))
-        .fetch()
-        .rowsUpdated()
+    return audit(db, c, grant, result, false)
         .then(
             db.sql(
                     """
+INSERT INTO taska.idempotency_records(tenant_id,actor_id,operation_code,key,request_hash,operation_id,state,response,created_at,expires_at)
+VALUES(:t,:a,'setAutopayConsent',:k,:hash,:op,'SUCCEEDED',jsonb_build_object('proto',CAST(:response AS text)),:now,:expires)
+""")
+                .bind("t", tenant)
+                .bind("a", uuid(c.actorId()))
+                .bind("k", key)
+                .bind("hash", hash)
+                .bind("op", operation)
+                .bind("response", Base64.getEncoder().encodeToString(result.toByteArray()))
+                .bind("now", now())
+                .bind("expires", now().plusDays(1))
+                .fetch()
+                .rowsUpdated()
+                .then(
+                    db.sql(
+                            """
 INSERT INTO taska.outbox_events(id,tenant_id,aggregate_type,aggregate_id,aggregate_version,event_type,schema_version,payload,operation_id,status,created_at,attempts)
 VALUES(:id,:t,'SUBSCRIPTION',:t,:v,'AUTOPAY_CONSENT_CHANGED',1,jsonb_build_object('mandateId',CAST(:mandate AS text),'state',CAST(:state AS text)),:op,'NEW',:now,0)
 """)
-                .bind("id", UUID.randomUUID())
-                .bind("t", tenant)
-                .bind("v", version)
-                .bind("mandate", result.getId())
-                .bind("state", result.getState().name())
-                .bind("op", operation)
-                .bind("now", now())
-                .fetch()
-                .rowsUpdated())
-        .thenReturn(result);
+                        .bind("id", UUID.randomUUID())
+                        .bind("t", tenant)
+                        .bind("v", version)
+                        .bind("mandate", result.getId())
+                        .bind("state", result.getState().name())
+                        .bind("op", operation)
+                        .bind("now", now())
+                        .fetch()
+                        .rowsUpdated())
+                .thenReturn(result));
+  }
+
+  private Mono<Void> audit(
+      DatabaseClient db,
+      VerifiedTenantContext c,
+      Grant grant,
+      AutopayMandate result,
+      boolean replay) {
+    if (!grant.administrative()) return Mono.empty();
+    var claims = RpcContextBridge.details(c).getContext();
+    var query =
+        db.sql(
+                """
+INSERT INTO taska.autopay_authorization_audit(id,tenant_id,actor_id,owner_id,credential_kind,grant_id,scope_kind,action,request_id,decision,occurred_at)
+VALUES(:id,:t,:a,:o,:kind,:grant,:scope,:action,:request,CAST(:decision AS jsonb),:now)
+""")
+            .bind("id", UUID.randomUUID())
+            .bind("t", uuid(c.tenantId()))
+            .bind("a", uuid(c.actorId()))
+            .bind("o", grant.owner())
+            .bind("kind", claims.getCredentialKind().name())
+            .bind("scope", claims.getAdministrativeScope().getKind().name())
+            .bind("action", c.action())
+            .bind("request", c.requestId())
+            .bind("now", now())
+            .bind(
+                "decision",
+                json.writeValueAsString(
+                    Map.of(
+                        "ownerBypass",
+                        !c.actorId().equals(grant.owner().toString()),
+                        "businessBypass",
+                        !grant.admissionAllowed(),
+                        "replayed",
+                        replay,
+                        "mandateId",
+                        result.getId())));
+    query =
+        claims.hasGrantId() && !claims.getGrantId().isBlank()
+            ? query.bind("grant", uuid(claims.getGrantId()))
+            : query.bindNull("grant", UUID.class);
+    return query.fetch().rowsUpdated().then();
   }
 
   private ConsentSnapshot snapshot(
@@ -441,10 +534,11 @@ VALUES(:id,:t,'SUBSCRIPTION',:t,:v,'AUTOPAY_CONSENT_CHANGED',1,jsonb_build_objec
     var details = RpcContextBridge.details(c);
     var channel =
         switch (details.getContext().getCredentialKind()) {
-          case CREDENTIAL_KIND_WEB_TENANT ->
+          case CREDENTIAL_KIND_WEB_TENANT, CREDENTIAL_KIND_WEB_GLOBAL ->
               ConsentSnapshot.ConsentChannelValue.CONSENT_CHANNEL_WEB;
-          case CREDENTIAL_KIND_USER_PAT -> ConsentSnapshot.ConsentChannelValue.CONSENT_CHANNEL_PAT;
-          case CREDENTIAL_KIND_USER_OAUTH ->
+          case CREDENTIAL_KIND_USER_PAT, CREDENTIAL_KIND_ADMIN_PAT ->
+              ConsentSnapshot.ConsentChannelValue.CONSENT_CHANNEL_PAT;
+          case CREDENTIAL_KIND_USER_OAUTH, CREDENTIAL_KIND_ADMIN_OAUTH ->
               ConsentSnapshot.ConsentChannelValue.CONSENT_CHANNEL_OAUTH;
           default -> throw fail(DomainStatus.PERMISSION_DENIED, "OWNER_SESSION_REQUIRED");
         };

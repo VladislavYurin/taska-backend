@@ -107,3 +107,10 @@ END $$;
 CREATE TRIGGER immutable_attempt_mandate BEFORE UPDATE ON taska.payment_attempts
  FOR EACH ROW EXECUTE FUNCTION taska.protect_attempt_mandate();
 REVOKE DELETE,TRUNCATE ON taska.payment_methods FROM taska_billing_app;
+
+CREATE TABLE taska.autopay_authorization_audit (
+ id uuid PRIMARY KEY,tenant_id uuid NOT NULL,actor_id uuid NOT NULL,owner_id uuid NOT NULL,
+ credential_kind text NOT NULL,grant_id uuid,scope_kind text NOT NULL,
+ action text NOT NULL,request_id text NOT NULL,decision jsonb NOT NULL CHECK(jsonb_typeof(decision)='object'),
+ occurred_at timestamptz NOT NULL
+);

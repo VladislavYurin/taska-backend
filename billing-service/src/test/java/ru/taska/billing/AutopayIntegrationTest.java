@@ -666,8 +666,34 @@ class AutopayIntegrationTest {
         .when(provider)
         .chargeRecurring(any(), any(), any(), any(), any());
     assertThrows(IllegalStateException.class, this::dispatch);
-    assertEquals(PaymentAttemptStore.State.SUBMITTED, dispatch().state());
+    assertEquals(PaymentAttemptStore.State.UNKNOWN, dispatch().state());
     assertEquals(1, count("autopay_dispatches"));
+    verify(provider, times(1)).chargeRecurring(any(), any(), any(), any(), any());
+    fixture.f.time.set(fixture.f.time.get().plusSeconds(61));
+    var jobs =
+        new ru.taska.billing.reconciliation.PaymentReconciliationStore(
+            SubscriptionIntegrationTest.db, fixture.f.clock, 3);
+    var job = jobs.claim(1).block(WAIT).getFirst();
+    var recovery =
+        new ru.taska.billing.reconciliation.PaymentReconciliation(
+            jobs,
+            attempts,
+            operations,
+            registry,
+            org.mockito.Mockito.mock(ru.taska.billing.ingress.ProviderWebhookRegistry.class),
+            org.mockito.Mockito.mock(ru.taska.billing.ingress.ProviderInboxStore.class),
+            (tenant, evidence) ->
+                Mono.error(new AssertionError("No settlement without original PSP identity")));
+    var context =
+        fixture.f.worker(A, "reconcilePaymentAttempt", "billing-service").toBuilder()
+            .addScopes("payment:reconcile")
+            .build();
+    var status =
+        RegistryTestContext.withClaims(
+                context, recovery.process(job.tenantId(), job.attemptId(), job.token()))
+            .block(WAIT);
+    assertEquals("MANUAL", status.state());
+    assertEquals("ORIGINAL_OBJECT_ID_REQUIRED", status.reason());
     verify(provider, times(1)).chargeRecurring(any(), any(), any(), any(), any());
   }
 
@@ -833,6 +859,15 @@ class AutopayIntegrationTest {
     refusesDispatch();
     assertEquals(previous + 1, version());
     assertEquals(
+        version(),
+        operator
+            .sql(
+                "SELECT aggregate_version FROM taska.outbox_events WHERE"
+                    + " event_type='AUTOPAY_INVALIDATED'")
+            .map((r, m) -> r.get("aggregate_version", Long.class))
+            .one()
+            .block(WAIT));
+    assertEquals(
         0,
         operator
             .sql("SELECT count(*) n FROM taska.autopay_mandates WHERE state='ACTIVE'")
@@ -945,5 +980,219 @@ class AutopayIntegrationTest {
     assertEquals(0, count("billing_operations"));
     assertEquals(2, capabilityCalls.get());
     verify(provider, times(0)).chargeRecurring(any(), any(), any(), any(), any());
+  }
+
+  @Test
+  void receiptKeysAreActorScopedAndOldOwnerCannotReadWarmReceipt() {
+    var original = request(true, "same-owner-key", 1);
+    var first = as(store.consent(original)).block(WAIT);
+    fixture.f.owners.put(A.toString(), OTHER.toString());
+    fixture.f.active.add(OTHER.toString());
+    ownerVersion.incrementAndGet();
+    UUID newMethod = UUID.randomUUID();
+    sql(
+        "INSERT INTO"
+            + " taska.payment_methods(id,tenant_id,owner_id,provider,provider_customer_ref,provider_method_ref,status,created_at)"
+            + " VALUES('"
+            + newMethod
+            + "','"
+            + A
+            + "','"
+            + OTHER
+            + "','OLD','new-owner-customer','new-owner-method','ACTIVE',now())");
+    var q = request(true, "same-owner-key", version());
+    q =
+        q.toBuilder()
+            .setPayload(q.getPayload().toBuilder().setPaymentMethodId(newMethod.toString()))
+            .build();
+    var next =
+        RegistryTestContext.withClaims(
+                fixture.f.human(OTHER, A, "setAutopayConsent").toBuilder()
+                    .addScopes("write")
+                    .build(),
+                store.consent(q))
+            .block(WAIT);
+    assertNotEquals(first.getId(), next.getId());
+    assertEquals(2, count("idempotency_records"));
+    denied(store.consent(original), DomainStatus.PERMISSION_DENIED);
+  }
+
+  @Test
+  void unregisteredProviderFailsBeforeConsentWithoutInternalError() {
+    var closed =
+        new AutopayStore(
+            fixture.f.store, store.policy, new PaymentProviderRegistry(Map.of()), fixture.f.clock);
+    denied(closed.consent(request(true, "no-provider", 1)), DomainStatus.FAILED_PRECONDITION);
+    assertEquals(1, version());
+    assertEquals(0, count("autopay_mandates"));
+    assertEquals(0, count("idempotency_records"));
+  }
+
+  AutopayStore administrativeStore(boolean currentProof) {
+    var original = store;
+    return new AutopayStore(
+        fixture.f.store,
+        (c, use, id) ->
+            original
+                .policy
+                .require(c, use, id)
+                .map(
+                    g ->
+                        new Grant(
+                            g.owner(),
+                            g.ownerVersion(),
+                            g.revocationBarrier(),
+                            g.admissionAllowed(),
+                            g.termsVersion(),
+                            g.termsSha256(),
+                            g.method(),
+                            g.termsText(),
+                            g.configurationVersion(),
+                            currentProof)),
+        registry,
+        fixture.f.clock);
+  }
+
+  ru.taska.api.b2b.v1.TrustedTenantContext administrator(
+      UUID scopedTenant, ru.taska.api.b2b.v1.AdminGrant.LevelValue level) {
+    return fixture.f.human(SubscriptionIntegrationTest.ADMIN, A, "setAutopayConsent").toBuilder()
+        .setCredentialKind(ru.taska.api.b2b.v1.CredentialKind.CREDENTIAL_KIND_ADMIN_PAT)
+        .clearSessionId()
+        .clearMembershipGeneration()
+        .setCredentialId(UUID.randomUUID().toString())
+        .setGrantId(UUID.randomUUID().toString())
+        .setGrantGeneration("1")
+        .setAdministrativeLevel(level)
+        .setAdministrativeScope(
+            ru.taska.api.b2b.v1.AdminScope.newBuilder()
+                .setKind(ru.taska.api.b2b.v1.AdminScope.KindValue.KIND_TENANT_SET)
+                .addTenantIds(scopedTenant.toString()))
+        .addScopes("write")
+        .build();
+  }
+
+  @Test
+  void scopedAdminPreservesRealActorAndWritesPrivateAuditWithoutGrantingWorkerBypass() {
+    renewal();
+    enabled.set(false);
+    store = administrativeStore(true);
+    var q = request(true, "admin-consent", version());
+    var claims = administrator(A, ru.taska.api.b2b.v1.AdminGrant.LevelValue.LEVEL_MODIFY);
+    var result = RegistryTestContext.withClaims(claims, store.consent(q)).block(WAIT);
+    assertEquals(OWNER_A.toString(), result.getOwnerId());
+    assertEquals(
+        SubscriptionIntegrationTest.ADMIN.toString(), result.getConsentSnapshot().getActorUserId());
+    assertEquals(
+        result,
+        RegistryTestContext.withClaims(
+                administrator(A, ru.taska.api.b2b.v1.AdminGrant.LevelValue.LEVEL_MODIFY),
+                store.consent(q))
+            .block(WAIT));
+    assertEquals(2, count("autopay_authorization_audit"));
+    assertEquals(
+        SubscriptionIntegrationTest.ADMIN,
+        operator
+            .sql("SELECT actor_id FROM taska.autopay_authorization_audit LIMIT 1")
+            .map((r, m) -> r.get("actor_id", UUID.class))
+            .one()
+            .block(WAIT));
+    assertThrows(
+        RuntimeException.class,
+        () ->
+            as(fixture.f.transactions.execute(
+                    db ->
+                        db.sql("SELECT actor_id FROM taska.autopay_authorization_audit")
+                            .map((r, m) -> r.get("actor_id", UUID.class))
+                            .all()
+                            .collectList()))
+                .block(WAIT));
+    assertThrows(
+        RuntimeException.class,
+        () ->
+            as(fixture.f.transactions.execute(
+                    db ->
+                        db.sql("DELETE FROM taska.autopay_authorization_audit")
+                            .fetch()
+                            .rowsUpdated()))
+                .block(WAIT));
+    coordinator = new AutopayCoordinator(store, attempts, operations, a -> Mono.empty());
+    refusesDispatch();
+    assertEquals(1, count("subscription_periods"));
+  }
+
+  @Test
+  void adminNeedsCurrentPrimaryProofModifyLevelAndMatchingExplicitScope() {
+    var q = request(true, "bad-admin", 1);
+    var admin = administrativeStore(true);
+    for (var claims :
+        java.util.List.of(
+            administrator(B, ru.taska.api.b2b.v1.AdminGrant.LevelValue.LEVEL_MODIFY),
+            administrator(A, ru.taska.api.b2b.v1.AdminGrant.LevelValue.LEVEL_READ))) {
+      assertEquals(
+          DomainStatus.PERMISSION_DENIED,
+          assertThrows(
+                  DomainException.class,
+                  () -> RegistryTestContext.withClaims(claims, admin.consent(q)).block(WAIT))
+              .getStatus());
+    }
+    var noProof = administrativeStore(false);
+    assertEquals(
+        DomainStatus.PERMISSION_DENIED,
+        assertThrows(
+                DomainException.class,
+                () ->
+                    RegistryTestContext.withClaims(
+                            administrator(
+                                A, ru.taska.api.b2b.v1.AdminGrant.LevelValue.LEVEL_MODIFY),
+                            noProof.consent(q))
+                        .block(WAIT))
+            .getStatus());
+    denied(admin.consent(q), DomainStatus.PERMISSION_DENIED);
+    assertEquals(0, count("autopay_mandates"));
+    assertEquals(0, count("autopay_authorization_audit"));
+    assertEquals(1, version());
+  }
+
+  @Test
+  void administrativeAuditFailureRollsBackMandateVersionReceiptAndOutbox() {
+    var admin = administrativeStore(true);
+    sql(
+        "CREATE FUNCTION taska.fail_admin_autopay_test() RETURNS trigger LANGUAGE plpgsql AS $$"
+            + " BEGIN RAISE EXCEPTION 'fixture'; END $$; CREATE TRIGGER fail_admin_autopay_test"
+            + " BEFORE INSERT ON taska.autopay_authorization_audit FOR EACH ROW EXECUTE FUNCTION"
+            + " taska.fail_admin_autopay_test()");
+    try {
+      assertThrows(
+          RuntimeException.class,
+          () ->
+              RegistryTestContext.withClaims(
+                      administrator(A, ru.taska.api.b2b.v1.AdminGrant.LevelValue.LEVEL_MODIFY),
+                      admin.consent(request(true, "admin-failed", 1)))
+                  .block(WAIT));
+    } finally {
+      sql(
+          "DROP TRIGGER fail_admin_autopay_test ON taska.autopay_authorization_audit; DROP FUNCTION"
+              + " taska.fail_admin_autopay_test()");
+    }
+    assertEquals(1, version());
+    assertEquals(0, count("autopay_mandates"));
+    assertEquals(0, count("idempotency_records"));
+    assertEquals(0, count("autopay_authorization_audit"));
+  }
+
+  @Test
+  void consentCannotUseOwnerProofThatChangedDuringProviderReadiness() {
+    doAnswer(
+            i -> {
+              ownerVersion.incrementAndGet();
+              return Mono.just(
+                  new PaymentProvider.Capabilities(true, true, true, false, true, true));
+            })
+        .when(provider)
+        .capabilities(any());
+    denied(store.consent(request(true, "changed-consent-owner", 1)), DomainStatus.ABORTED);
+    assertEquals(1, version());
+    assertEquals(0, count("autopay_mandates"));
+    assertEquals(0, count("idempotency_records"));
   }
 }

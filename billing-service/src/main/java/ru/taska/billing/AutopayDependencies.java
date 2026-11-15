@@ -30,7 +30,31 @@ public final class AutopayDependencies {
       String termsSha256,
       MethodBinding method,
       String termsText,
-      String configurationVersion) {
+      String configurationVersion,
+      boolean administrative) {
+    public Grant(
+        UUID owner,
+        long ownerVersion,
+        String revocationBarrier,
+        boolean admissionAllowed,
+        String termsVersion,
+        String termsSha256,
+        MethodBinding method,
+        String termsText,
+        String configurationVersion) {
+      this(
+          owner,
+          ownerVersion,
+          revocationBarrier,
+          admissionAllowed,
+          termsVersion,
+          termsSha256,
+          method,
+          termsText,
+          configurationVersion,
+          false);
+    }
+
     public Grant {
       Objects.requireNonNull(owner);
       if (ownerVersion <= 0 || revocationBarrier == null || revocationBarrier.isBlank())
@@ -62,7 +86,11 @@ public final class AutopayDependencies {
 
   @FunctionalInterface
   public interface Policy {
-    /** Проверяет текущую identity/членство, владельца, lifecycle, PSP/autopay flags и спор. */
+    /**
+     * Проверяет текущую identity/членство, владельца, lifecycle, PSP/autopay flags и спор.
+     * administrative требует текущего GLOBAL_ADMIN, MFA и подходящей административной области;
+     * заявленная строка роли не является таким доказательством.
+     */
     Mono<Grant> require(VerifiedTenantContext context, Use use, UUID paymentMethod);
   }
 }
