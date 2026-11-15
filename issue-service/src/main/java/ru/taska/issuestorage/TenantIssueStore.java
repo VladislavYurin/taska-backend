@@ -193,6 +193,46 @@ public final class TenantIssueStore {
               }));
     }
 
+    Mono<TenantIssueQueries.Page> search(
+        TenantIssueQueries.Search q, TenantIssueAccess.ReadBatch batch) {
+      return query(
+          batch, q.projects(), () -> new TenantIssueQuerySql(db, tenant, this::snapshot).search(q));
+    }
+
+    Mono<TenantIssueQueries.BoardPage> board(
+        TenantIssueQueries.Board q,
+        TenantIssueQueries.Workflow workflow,
+        TenantIssueAccess.ReadBatch batch) {
+      return query(
+          batch,
+          List.of(q.project()),
+          () -> new TenantIssueQuerySql(db, tenant, this::snapshot).board(q, workflow));
+    }
+
+    private <T> Mono<T> query(
+        TenantIssueAccess.ReadBatch batch,
+        List<UUID> projects,
+        java.util.function.Supplier<Mono<T>> work) {
+      return guarded(
+          Mono.defer(
+              () -> {
+                TenantIssueQueries.checkScope(projects, batch);
+                for (var p : batch.permits()) p.check(tenant, actor, operation, p.project());
+                return work.get()
+                    .flatMap(
+                        result ->
+                            reactor.core.publisher.Flux.fromIterable(batch.permits())
+                                .concatMap(p -> audit(p, null))
+                                .then(
+                                    Mono.fromSupplier(
+                                        () -> {
+                                          for (var p : batch.permits())
+                                            p.check(tenant, actor, operation, p.project());
+                                          return result;
+                                        })));
+              }));
+    }
+
     private Snapshot snapshot(io.r2dbc.spi.Row row) {
       return new Snapshot(
           new Created(
@@ -261,40 +301,37 @@ public final class TenantIssueStore {
 
     Mono<List<ru.taska.api.issue.v1.ProjectIssueCount>> counts(
         TenantIssueAccess.ReadBatch batch, String type, boolean deleted) {
-      return guarded(
-          Mono.defer(
-              () -> {
-                for (var p : batch.permits()) p.check(tenant, actor, operation, p.project());
-                var ids = batch.permits().stream().map(TenantIssueAccess.Permit::project).toList();
-                if (ids.isEmpty()) return Mono.just(List.of());
-                var query =
-                    db.sql(
-                            "SELECT project_id,count(*) n FROM taska.issues WHERE tenant_id=:t AND"
-                                + " project_id IN (:ids)"
-                                + (deleted ? "" : " AND deleted_at IS NULL")
-                                + (type == null ? "" : " AND issue_type=:type")
-                                + " GROUP BY project_id")
-                        .bind("t", tenant)
-                        .bind("ids", ids);
-                if (type != null) query = query.bind("type", type);
-                return query
-                    .fetch()
-                    .all()
-                    .collectMap(r -> (UUID) r.get("project_id"), r -> (Long) r.get("n"))
-                    .flatMap(
-                        rows ->
-                            reactor.core.publisher.Flux.fromIterable(batch.permits())
-                                .concatMap(
-                                    p ->
-                                        audit(p, null)
-                                            .thenReturn(
-                                                ru.taska.api.issue.v1.ProjectIssueCount.newBuilder()
-                                                    .setProjectId(p.project().toString())
-                                                    .setIssueCount(
-                                                        rows.getOrDefault(p.project(), 0L))
-                                                    .build()))
-                                .collectList());
-              }));
+      var ids = batch.permits().stream().map(TenantIssueAccess.Permit::project).toList();
+      if (ids.isEmpty()) return guarded(Mono.just(List.of()));
+      return query(
+          batch,
+          ids,
+          () -> {
+            var query =
+                db.sql(
+                        "SELECT project_id,count(*) n FROM taska.issues WHERE tenant_id=:t AND"
+                            + " project_id IN (:ids)"
+                            + (deleted ? "" : " AND deleted_at IS NULL")
+                            + (type == null ? "" : " AND issue_type=:type")
+                            + " GROUP BY project_id")
+                    .bind("t", tenant)
+                    .bind("ids", ids);
+            if (type != null) query = query.bind("type", type);
+            return query
+                .fetch()
+                .all()
+                .collectMap(r -> (UUID) r.get("project_id"), r -> (Long) r.get("n"))
+                .map(
+                    rows ->
+                        ids.stream()
+                            .map(
+                                id ->
+                                    ru.taska.api.issue.v1.ProjectIssueCount.newBuilder()
+                                        .setProjectId(id.toString())
+                                        .setIssueCount(rows.getOrDefault(id, 0L))
+                                        .build())
+                            .toList());
+          });
     }
 
     /** Удалённые записи доступны только внутренним проверкам прав и повторным вызовам. */

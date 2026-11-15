@@ -39,6 +39,12 @@ public class IssueApiConfiguration {
   }
 
   @Bean
+  ru.taska.issuestorage.TenantIssueQueries tenantIssueQueries(
+      TenantIssueStore store, TenantIssueAccess access) {
+    return new ru.taska.issuestorage.TenantIssueQueries(store, access);
+  }
+
+  @Bean
   TenantIssueApi tenantIssueApi(TenantIssueStore store, TenantIssueAccess access) {
     return new TenantIssueApi(store, access);
   }

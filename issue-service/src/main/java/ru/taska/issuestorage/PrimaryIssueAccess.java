@@ -233,7 +233,7 @@ public final class PrimaryIssueAccess implements TenantIssueAccess {
             });
   }
 
-  public Mono<String> initialStatus(UUID project, String type, String requested) {
+  private Mono<ru.taska.api.workflow.v1.WorkflowResponse> workflow(UUID project, String type) {
     return VerifiedTenantContext.current()
         .flatMap(
             parent ->
@@ -255,7 +255,36 @@ public final class PrimaryIssueAccess implements TenantIssueAccess {
                         ReactorWorkflowServiceGrpc.newReactorStub(reads.channel("workflow-service"))
                             .withInterceptors(a)
                             .withDeadlineAfter(5, java.util.concurrent.TimeUnit.SECONDS)
-                            .getWorkflowForProject(q)))
+                            .getWorkflowForProject(q)));
+  }
+
+  @Override
+  public Mono<TenantIssueQueries.Workflow> boardWorkflow(UUID project, String type) {
+    return workflow(project, type)
+        .map(
+            w -> {
+              var keys = w.getStatusesList().stream().map(WorkflowStatus::getStatusKey).toList();
+              if (keys.isEmpty()
+                  || keys.size() > 100
+                  || keys.stream().anyMatch(k -> k.isBlank() || k.length() > 100)
+                  || Set.copyOf(keys).size() != keys.size()
+                  || w.getStatusesList().stream()
+                      .anyMatch(
+                          s ->
+                              s.getCategory() == StatusCategory.UNRECOGNIZED
+                                  || s.getCategory() == StatusCategory.STATUS_CATEGORY_UNSPECIFIED))
+                throw fail(DomainStatus.UNAVAILABLE, "INVALID_WORKFLOW_CATEGORIES");
+              return new TenantIssueQueries.Workflow(
+                  Set.copyOf(keys),
+                  w.getStatusesList().stream()
+                      .filter(s -> s.getCategory() == StatusCategory.STATUS_CATEGORY_DONE)
+                      .map(WorkflowStatus::getStatusKey)
+                      .collect(java.util.stream.Collectors.toSet()));
+            });
+  }
+
+  public Mono<String> initialStatus(UUID project, String type, String requested) {
+    return workflow(project, type)
         .flatMap(
             w -> {
               if (requested != null)

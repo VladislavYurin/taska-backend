@@ -57,7 +57,11 @@ public final class TenantIssueApi {
           CountProjectIssuesBatchInternalResponse.newBuilder().setFiltersApplied(true).build());
     return access
         .readMany(ids)
-        .flatMap(batch -> store.execute(s -> s.counts(batch, type, q.getIncludeDeleted())))
+        .flatMap(
+            batch -> {
+              TenantIssueQueries.checkScope(ids, batch);
+              return store.execute(s -> s.counts(batch, type, q.getIncludeDeleted()));
+            })
         .map(
             items ->
                 CountProjectIssuesBatchInternalResponse.newBuilder()

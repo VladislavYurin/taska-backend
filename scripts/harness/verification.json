@@ -396,6 +396,7 @@
         "selectors": [
           "*",
           "TenantIssueStorageIntegrationTest",
+          "TenantIssueQueryIntegrationTest",
           "TrustedIssueOutboxIntegrationTest"
         ],
         "noTestsReason": null

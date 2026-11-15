@@ -48,6 +48,11 @@ public interface TenantIssueAccess {
         new DomainException(DomainStatus.UNAVAILABLE, "BULK_QUOTA_AUTHORITY_UNAVAILABLE"));
   }
 
+  default Mono<TenantIssueQueries.Workflow> boardWorkflow(UUID project, String type) {
+    return Mono.error(
+        new DomainException(DomainStatus.UNAVAILABLE, "WORKFLOW_QUERY_AUTHORITY_UNAVAILABLE"));
+  }
+
   Mono<Permit> authorize(Action action, UUID project, UUID issue);
 
   Mono<String> projectKey(UUID project);

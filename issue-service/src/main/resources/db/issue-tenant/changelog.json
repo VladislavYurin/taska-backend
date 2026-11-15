@@ -423,6 +423,21 @@
           }
         ]
       }
+    },
+    {
+      "changeSet": {
+        "id": "issue-query-indexes-0023",
+        "author": "taska",
+        "changes": [
+          {
+            "sqlFile": {
+              "path": "issue-query-indexes.sql",
+              "relativeToChangelogFile": true,
+              "splitStatements": false
+            }
+          }
+        ]
+      }
     }
   ]
 }
