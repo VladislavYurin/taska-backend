@@ -485,6 +485,12 @@ public class BillingConfiguration {
                   BillingServiceGrpc.getResumeSubscriptionRenewalMethod().getFullMethodName(),
                   new RpcContextSecurity.Policy(true, true)),
               Map.entry(
+                  ru.taska.api.b2b.v1.AutopayWorkerServiceGrpc.getDispatchAutopayMethod().getFullMethodName(),
+                  new RpcContextSecurity.Policy(true, true)),
+              Map.entry(
+                  BillingServiceGrpc.getSetAutopayConsentMethod().getFullMethodName(),
+                  new RpcContextSecurity.Policy(true, true)),
+              Map.entry(
                   BillingServiceGrpc.getGetSubscriptionMethod().getFullMethodName(),
                   new RpcContextSecurity.Policy(true, false)),
               Map.entry(

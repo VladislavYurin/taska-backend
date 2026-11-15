@@ -55,3 +55,5 @@ python3 scripts/harness.py check --module billing-service
 [PaymentProvider и управляемый fake — TAS-320](PAYMENT-PROVIDER.md).
 
 [Authenticated durable provider inbox and activation boundaries (TAS-351)](PROVIDER-INBOX.md).
+
+Явное согласие владельца и автоматическое продление: [TAS-355](AUTOPAY.md). Dispatcher и scheduler закрыты до явной настройки актуальных authority ports и одобренного recurring-провайдера.

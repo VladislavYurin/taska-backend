@@ -1124,7 +1124,10 @@
           "ProviderInboxWorkerValidationTest",
           "PaymentReconciliationIntegrationTest",
           "PaymentReconciliationConfigurationTest",
-          "PaymentReconciliationRpcIntegrationTest"
+          "PaymentReconciliationRpcIntegrationTest",
+          "AutopayIntegrationTest",
+          "AutopayRpcIntegrationTest",
+          "AutopayConfigurationTest"
         ],
         "noTestsReason": null
       },
