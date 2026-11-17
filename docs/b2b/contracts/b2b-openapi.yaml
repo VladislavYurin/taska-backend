@@ -56,6 +56,14 @@ paths:
     get:
       operationId: listTenants
       summary: listTenants
+      description: |
+        WEB_GLOBAL account session only. Lists every company where the caller's
+        membership is ACTIVE, in any lifecycle except DELETED: PROVISIONING,
+        AWAITING_PAYMENT, ACTIVE, AUTO_CLOSED, OWNER_CANCELLED and DELETING.
+        SUSPENDED and REMOVED memberships are not listed. Order is (createdAt,id)
+        ascending. Each item carries the caller's membership and restriction codes.
+        Available actions come from getTenantCapabilities; entering a company is
+        decided by createTenantSession. Every call reads current memberships.
       tags:
       - Tenant
       x-policy: WEB_ACCOUNT
@@ -4275,6 +4283,8 @@ components:
           type: string
           pattern: ^[1-9][0-9]{0,18}$
           maxLength: 19
+        membership:
+          $ref: '#/components/schemas/CallerMembership'
       required:
       - id
       - name
@@ -4284,6 +4294,36 @@ components:
       - createdAt
       - version
       - ownerVersion
+    CallerMembership:
+      type: object
+      additionalProperties: false
+      description: |
+        TAS-338: the caller's own membership. Returned by listTenants and by getTenant
+        for a member; absent on administrative reads and on create/cancel/rename responses.
+      properties:
+        role:
+          type: string
+          enum:
+          - MEMBER
+          - TENANT_ADMIN
+        state:
+          type: string
+          enum:
+          - ACTIVE
+          - SUSPENDED
+          - REMOVED
+        isOwner:
+          type: boolean
+        version:
+          type: string
+          minLength: 1
+          maxLength: 19
+          pattern: ^[1-9][0-9]{0,18}$
+      required:
+      - role
+      - state
+      - isOwner
+      - version
     TenantPage:
       type: object
       additionalProperties: false

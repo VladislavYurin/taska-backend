@@ -60,6 +60,15 @@ class TenantRenameLocal(t.TrustedLocal):
         return response.json()
 
     @staticmethod
+    def membership(role, owner, version):
+        return {'role': role, 'state': 'ACTIVE', 'isOwner': owner, 'version': str(version)}
+
+    @staticmethod
+    def company(tenant):
+        """Company fields without the caller-specific membership (TAS-338)."""
+        return {key: value for key, value in tenant.items() if key != 'membership'}
+
+    @staticmethod
     def headers(version, key=None):
         return {'If-Match': '"' + version + '"', 'Idempotency-Key': key or str(uuid.uuid4())}
 
@@ -91,6 +100,8 @@ class TenantRenameLocal(t.TrustedLocal):
         t.wait_protected_read(owner, path, 200)
         initial = self.uncached(owner.expect('GET', path, 200))
         e.require(initial['id'] == first and initial['name'] == 'Owned', 'Unexpected details fixture')
+        e.require(initial.get('membership') == self.membership('TENANT_ADMIN', True, 1),
+                  'Member details lack the caller membership')
         page = self.uncached(global_owner.expect('GET', list_path + '?limit=1', 200))
         e.require(len(page['items']) == 1 and page.get('nextCursor'), 'First list page is not bounded')
         next_page = self.uncached(global_owner.expect('GET', list_path + '?' + urlencode(
@@ -100,12 +111,21 @@ class TenantRenameLocal(t.TrustedLocal):
         e.require('nextCursor' not in next_page, 'The last page contains an unexpected cursor')
         limited = self.uncached(member_list.expect('GET', list_path, 200))
         e.require([item['id'] for item in limited['items']] == [first], 'List exposed another membership')
+        e.require(limited['items'][0].get('membership') == self.membership('MEMBER', False, 1),
+                  'List item lacks the caller membership')
         member_list.expect('GET', list_path + '?' + urlencode({'cursor': page['nextCursor']}), 400)
         version = initial['version']
         member.expect('PATCH', path, 403, {'name': 'Forbidden'}, self.headers(version))
         other_scope.expect('PATCH', path, 403, {'name': 'Foreign tenant'}, self.headers(version))
         self.sql('tenant_db', "UPDATE taska.tenant_memberships SET role='TENANT_ADMIN',version=version+1"
                  " WHERE tenant_id='%s' AND user_id='%s';" % (first, member_id))
+        promoted = self.uncached(member_list.expect('GET', list_path, 200))
+        e.require([item.get('membership') for item in promoted['items']]
+                  == [self.membership('TENANT_ADMIN', False, 2)],
+                  'List did not reflect the membership change on the next call')
+        stale = self.web_client(member_id, first).request('GET', path)
+        e.require(stale.status in (401, 403, 404) and b'Owned' not in stale.body,
+                  'A stale tenant session opened company details')
         # Start the preservation snapshot after the fixture's deliberate role change.
         before = self.tenant_snapshot()
         self.web_client(member_id, first, 2).expect('PATCH', path, 403,
@@ -125,8 +145,10 @@ class TenantRenameLocal(t.TrustedLocal):
         owner.expect('PATCH', path, 409, {'name': 'Changed receipt'}, mutation)
         details = self.uncached(owner.expect('GET', path, 200))
         listed = self.uncached(global_owner.expect('GET', list_path, 200))
-        e.require(details == renamed and any(item == renamed for item in listed['items']),
+        e.require(self.company(details) == renamed
+                  and any(self.company(item) == renamed for item in listed['items']),
                   'List/details did not observe the committed rename')
+        e.require('membership' not in renamed, 'Rename response carries a caller membership')
 
         def race(name):
             contender = e.Http(self.state['origin'], owner.token)
@@ -138,6 +160,7 @@ class TenantRenameLocal(t.TrustedLocal):
         winner = next(result.json() for result in results if result.status == 200)
         admin_details = self.uncached(admin.expect('GET', path, 200))
         e.require(admin_details == winner, 'Verified admin did not get current details')
+        e.require('membership' not in admin_details, 'Administrative details carry a membership view')
         denied = self.web_client(admin_id).request('PATCH', path, {'name': 'No MFA'},
                                                    self.headers(winner['version']))
         e.require(denied.status in (401, 403), 'Administrative rename admitted a session without MFA')
@@ -151,6 +174,7 @@ class TenantRenameLocal(t.TrustedLocal):
                          " WHERE administrative AND actor_id='%s' AND result='SUCCEEDED';" % admin_id).strip()
         e.require(events == '3' and audit == '1', 'Rename event or administrative audit did not match effects')
         return {'tenantRenameRest': 'PASS', 'freshListAndDetails': 'PASS',
+                'callerMembership': 'PASS',
                 'ownerAndAdminAuthority': 'PASS', 'versionAndRetry': 'PASS',
                 'concurrencyAndStatePreservation': 'PASS'}
 

@@ -98,7 +98,8 @@ final class TenantListService {
                 "SELECT id,name,owner_id,lifecycle,created_at,version,owner_version,"
                     + "plan_version_id,creation_operation_id,creation_kind,"
                     + "creation_closure_reason,creation_closed_at,creation_deadline_at,"
-                    + "pending_first_payment FROM taska.list_tenants_for_actor("
+                    + "pending_first_payment,actor_membership_role,actor_membership_status,"
+                    + "actor_membership_version FROM taska.list_tenants_for_actor("
                     + ":actor,:after_created_at,:after_tenant_id,:fetch_limit)")
             .bind("actor", actor)
             .bind("fetch_limit", limit + 1);
@@ -120,15 +121,19 @@ final class TenantListService {
         .fetch()
         .all()
         .collectList()
-        .map(rows -> page(rows, binding, actorGeneration, limit));
+        .map(rows -> page(rows, actor, binding, actorGeneration, limit));
   }
 
   private TenantPage page(
-      List<Map<String, Object>> rows, String binding, long actorGeneration, int limit) {
+      List<Map<String, Object>> rows,
+      UUID actor,
+      String binding,
+      long actorGeneration,
+      int limit) {
     var result = TenantPage.newBuilder();
     int visible = Math.min(limit, rows.size());
     for (Map<String, Object> row : rows.subList(0, visible))
-      result.addItems(TenantRegistryService.tenant(row));
+      result.addItems(TenantRegistryService.withCaller(row, actor));
     if (rows.size() > limit) {
       var last = rows.get(limit - 1);
       result.setNextCursor(
