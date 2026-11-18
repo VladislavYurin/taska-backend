@@ -20,6 +20,7 @@ import tools.jackson.databind.ObjectMapper;
 
 @Configuration
 @Profile("tenant-storage")
+@org.springframework.context.annotation.Import(ru.taska.issuestorage.StorageQuotaOwnerGrpcService.class)
 public class TenantStorageConfiguration {
   @Bean
   public liquibase.integration.spring.SpringLiquibase issueTenantLiquibase(
@@ -146,11 +147,20 @@ SELECT current_user='taska_issue_app' AND NOT
 
   @Bean
   @org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
-  ru.taska.issuestorage.StorageQuotaOwner.Policy storageQuotaPolicy() {
-    return (c, use, r, mime) ->
-        reactor.core.publisher.Mono.error(
+  ru.taska.issuestorage.StorageQuotaOwner.Policy storageQuotaPolicy(
+      org.springframework.beans.factory.ObjectProvider<ru.taska.issuestorage.AttachmentUploadStore> stores,
+      org.springframework.beans.factory.ObjectProvider<ru.taska.issuestorage.AttachmentUploadPolicy> policies) {
+    return (c,use,r,mime) -> {
+      var store=stores.getIfAvailable();var policy=policies.getIfAvailable();
+      if(store!=null && policy!=null && r!=null) return store.operation(r.operation()).flatMap(u -> {
+        if(!u.request().equals(r.request()) || !u.tenant().equals(r.tenant()) || !u.actor().equals(r.actor()))
+          return reactor.core.publisher.Mono.error(new ru.taska.exception.DomainException(ru.taska.exception.DomainStatus.PERMISSION_DENIED,"UPLOAD_INTENT_MISMATCH"));
+        return policy.check(r.project(),r.issue(),u,use.name()).then();
+      });
+      return reactor.core.publisher.Mono.error(
             new ru.taska.exception.DomainException(
                 ru.taska.exception.DomainStatus.UNAVAILABLE, "STORAGE_POLICY_UNAVAILABLE"));
+    };
   }
 
   @Bean
@@ -160,9 +170,11 @@ SELECT current_user='taska_issue_app' AND NOT
               ru.taska.api.b2b.v1.ReactorQuotaAuthorityServiceGrpc.ReactorQuotaAuthorityServiceStub>
           stubs,
       org.springframework.beans.factory.ObjectProvider<ru.taska.security.tenant.RpcContextSecurity>
-          security) {
+          security, org.springframework.beans.factory.ObjectProvider<ru.taska.capability.ManagedDomainReads> sources) {
     var stub = stubs.getIfAvailable();
     var trust = security.getIfAvailable();
+    if(stub==null && sources.getIfAvailable()!=null)
+      stub=ru.taska.api.b2b.v1.ReactorQuotaAuthorityServiceGrpc.newReactorStub(sources.getIfAvailable().channel("tenant-service"));
     if (stub != null && trust != null)
       return new ru.taska.quota.GrpcStorageQuotaAuthority(
           stub, trust, java.time.Clock.systemUTC(), "issue-service");
@@ -264,6 +276,10 @@ SELECT current_user='taska_issue_app' AND NOT
                       "DeleteIssue")
                   .contains(method)) policies.put(rpc, policy);
             });
+    policies.put(ru.taska.api.issue.attachment.v1.IssueAttachmentServiceGrpc.getCreateAttachmentUploadUrlMethod().getFullMethodName(),new ru.taska.security.tenant.RpcContextSecurity.Policy(true,true));
+    policies.put(ru.taska.api.issue.attachment.v1.IssueAttachmentServiceGrpc.getConfirmAttachmentUploadMethod().getFullMethodName(),new ru.taska.security.tenant.RpcContextSecurity.Policy(true,true));
+    policies.put(ru.taska.api.issue.attachment.v1.AttachmentAdmissionServiceGrpc.getReconcileUploadsMethod().getFullMethodName(),new ru.taska.security.tenant.RpcContextSecurity.Policy(true,true));
+    policies.put(ru.taska.api.issue.attachment.v1.AttachmentAdmissionServiceGrpc.getCheckAdmissionMethod().getFullMethodName(),new ru.taska.security.tenant.RpcContextSecurity.Policy(true,false));
     policies.put(
         ru.taska.api.b2b.v1.ProjectLabelsServiceGrpc.getReadMethod().getFullMethodName(),
         new ru.taska.security.tenant.RpcContextSecurity.Policy(true, false));

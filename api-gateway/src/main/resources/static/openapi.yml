@@ -2749,6 +2749,13 @@ paths:
           schema:
             type: string
             format: uuid
+        - name: Idempotency-Key
+          in: header
+          required: false
+          description: Ключ повтора нативной загрузки. Повтор использует тот же ключ и неизменное тело; иначе конфликт. Без заголовка используется X-Request-Id, который клиент обязан сохранить и передать при повторе. Новый X-Request-Id означает новую загрузку.
+          schema:
+            type: string
+            maxLength: 128
       requestBody:
         required: true
         content:
@@ -8147,8 +8154,7 @@ components:
           type: integer
           format: int64
           minimum: 1
-          maximum: 2097152
-          description: Размер файла в байтах (максимум 2 МБ)
+          description: Размер файла в байтах; допустимый размер проверяется по актуальной версии тарифа.
 
     CreateAttachmentUploadUrlResponseDto:
       type: object

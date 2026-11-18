@@ -340,6 +340,14 @@ This proves the named subset, not full product E2E, Kafka delivery or stand roll
 
 ## E2E-22. Вложения и аватар через object storage
 
+Для native `tenant-storage` TAS-365 реализует upload-url/confirm; размер ограничен
+текущим типизированным catalog cap, а не legacy порогом 2 MiB. Изолированный runner
+`python3 scripts/harness/attachment_upload_e2e.py` проверяет эту часть через REST,
+реальные primary ACL и versioned S3, включая повторы, X-Request-Id fallback, чужие
+tenant/project/issue и административный bypass с честным учётом. Project/issue
+создаются как собственные fixtures. List/download/delete и аватары этим runner
+не покрыты; полный E2E-22 остаётся отдельным набором. Для native delete нужна TAS-367.
+
 **Условия:** выделенная активная учётная запись без чужого аватара, задача P, небольшой валидный PNG и доступный клиенту S3.
 
 1. `POST /api/v1/projects/{P}/issues/{id}/attachments/upload-url` с `{"fileName":"e2e.png","contentType":"image/png","sizeBytes":${SIZE}}`: 200, objectKey/presigned upload URL. До PUT вложение не считается подтверждённым.

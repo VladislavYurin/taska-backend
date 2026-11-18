@@ -138,7 +138,7 @@ class TrustedLocal(e.Local):
         self.store.save(self.state)
         with e.mutex(self.store.directory / '.build-lock', wait=True):
             e.run_command(['./mvnw', '-B', '-ntp', '-pl', ','.join(self.modules), '-am',
-                           'package', '-DskipTests'], self.root, 1800)
+                           'package', '-DskipTests'], self.root, 1800, diagnostic_path=self.dir / 'build-diagnostic.json')
             jars = self.dir / 'jars'
             jars.mkdir()
             for module in self.modules:
