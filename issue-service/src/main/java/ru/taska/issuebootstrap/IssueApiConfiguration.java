@@ -71,9 +71,12 @@ public class IssueApiConfiguration {
   }
 
   @Bean
-  ru.taska.issuestorage.AttachmentUploadStore attachmentUploadStore(ConnectionFactory factory) {
+  ru.taska.issuestorage.AttachmentUploadStore attachmentUploadStore(
+      ConnectionFactory factory, ru.taska.storage.config.StorageProperties properties) {
     return new ru.taska.issuestorage.AttachmentUploadStore(
-        new TenantTransactionExecutor(factory), Clock.systemUTC());
+        new TenantTransactionExecutor(factory),
+        Clock.systemUTC(),
+        java.util.Set.copyOf(properties.getAllowedContentTypes()));
   }
 
   @Bean

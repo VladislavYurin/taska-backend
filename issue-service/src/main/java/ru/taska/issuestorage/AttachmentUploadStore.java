@@ -53,8 +53,13 @@ public final class AttachmentUploadStore {
 
   private final TenantTransactionExecutor tx;
   private final Clock clock;
+  private final java.util.Set<String> allowedMimes;
 
-  public AttachmentUploadStore(TenantTransactionExecutor tx, Clock clock) {
+  public AttachmentUploadStore(
+      TenantTransactionExecutor tx, Clock clock, java.util.Set<String> allowedMimes) {
+    if (allowedMimes == null || allowedMimes.isEmpty())
+      throw new IllegalArgumentException("Allowed MIME configuration required");
+    this.allowedMimes = java.util.Set.copyOf(allowedMimes);
     this.tx = tx;
     this.clock = clock;
   }
@@ -68,6 +73,7 @@ public final class AttachmentUploadStore {
         || mime == null
         || !mime.matches("[A-Za-z0-9!#$&^_.+-]+/[A-Za-z0-9!#$&^_.+-]+")
         || mime.length() > 255
+        || !allowedMimes.contains(mime)
         || filename == null
         || filename.isBlank()
         || filename.length() > 255

@@ -104,6 +104,9 @@ class AttachmentUploadLocal(IssueAclLocal):
         _, foreign, foreign_project, foreign_issue = fixtures[1]
         path = '/api/v1/projects/' + project + '/issues/' + issue + '/attachments/'
         payload = {'fileName': 'owned.txt', 'contentType': 'text/plain', 'sizeBytes': 10}
+        owner.expect('POST', path + 'upload-url', 400, dict(payload, contentType='application/x-msdownload'),
+                     {'Idempotency-Key': str(uuid.uuid4())})
+        e.require(self.sql('issue_db', "SELECT count(*) FROM taska.attachment_uploads WHERE tenant_id='%s';" % tenant).strip() == '0', 'Rejected MIME persisted an intent')
         key = str(uuid.uuid4())
         uploaded = positive(owner, path + 'upload-url', 200, payload, {'Idempotency-Key': key})
         repeated = positive(owner, path + 'upload-url', 200, payload, {'Idempotency-Key': key})
@@ -164,7 +167,7 @@ class AttachmentUploadLocal(IssueAclLocal):
         response = owner.request('POST', path + 'confirm', body=dict(confirm, objectKey=late['objectKey']))
         e.require(response.status in (401, 403), 'Revoked membership retained confirm access')
         return {'publicRestSignedPutConfirm': 'PASS', 'tenantAndProjectIsolation': 'PASS',
-                'retryAndAccountingOnce': 'PASS', 'payloadConflict': 'PASS', 'membershipRevocation': 'PASS', 'primaryAdminBypassAccounting': 'PASS', 'requestIdFallback': 'PASS', 'actorOwnership': 'PASS', 'transient503Retries': transients}
+                'retryAndAccountingOnce': 'PASS', 'payloadConflict': 'PASS', 'membershipRevocation': 'PASS', 'primaryAdminBypassAccounting': 'PASS', 'requestIdFallback': 'PASS', 'actorOwnership': 'PASS', 'mimeAdmission': 'PASS', 'transient503Retries': transients}
 
 
 def main():

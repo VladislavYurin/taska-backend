@@ -91,7 +91,9 @@ class AttachmentUploadIntegrationTest {
     fixture.seed();
     store =
         new AttachmentUploadStore(
-            StorageQuotaIntegrationTest.ownerTx, StorageQuotaIntegrationTest.clock);
+            StorageQuotaIntegrationTest.ownerTx,
+            StorageQuotaIntegrationTest.clock,
+            java.util.Set.of("text/plain"));
     policy =
         (project, issue, u, phase) ->
             VerifiedTenantContext.current()
@@ -821,5 +823,27 @@ class AttachmentUploadIntegrationTest {
     assertThrows(DomainException.class, () -> invocation.block(WAIT));
     org.mockito.Mockito.verify(authority, org.mockito.Mockito.times(1))
         .commit(org.mockito.ArgumentMatchers.any());
+  }
+
+  @Test
+  void disallowedMimeDoesNotPersistIntentOrConsumeReservation() {
+    assertThrows(
+        DomainException.class,
+        () ->
+            as(
+                    A,
+                    ACTOR,
+                    "createAttachmentUploadUrl",
+                    uploads.initiate(
+                        request("blocked-mime").toBuilder()
+                            .setContentType("application/x-msdownload")
+                            .build()))
+                .block(WAIT));
+    assertEquals(0, rows("attachment_uploads"));
+    assertEquals(
+        0,
+        StorageQuotaIntegrationTest.rows(
+            StorageQuotaIntegrationTest.rootAdmin, "quota_reservations"));
+    assertEquals("0", StorageQuotaIntegrationTest.usage(A).getReserved());
   }
 }

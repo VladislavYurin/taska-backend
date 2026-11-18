@@ -14,6 +14,10 @@
 - **WHEN** текущий actor имеет write и доступ к существующему issue, а новые uploads разрешены
 - **THEN** сервер сохраняет intent с исходными actor/tenant/project/issue, размером и сроком, резервирует bytes и выдаёт PUT только на собственный staging key после фиксации окна не длиннее пяти минут
 
+#### Scenario: MIME не разрешён конфигурацией
+- **WHEN** запрос нового upload содержит MIME вне storage.allowed-content-types
+- **THEN** сервер возвращает контролируемый отказ до сохранения intent и reservation
+
 #### Scenario: Чужой объект или отозванный доступ
 - **WHEN** confirm содержит чужой key, issue или actor либо membership/ACL отозван
 - **THEN** attachment и расход не появляются, а чужой объект не удаляется

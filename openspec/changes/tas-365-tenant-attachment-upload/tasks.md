@@ -11,7 +11,7 @@
 ## 2. Проверка и PR
 
 - [ ] 2.1 Пройти harness verify затронутых модулей, явные issue/project IT и проверить свежие XML/counts/skips.
-- [ ] 2.2 Пройти AttachmentUploadIntegrationTest, включая COPY unknown, сохранность чужого объекта и staging overwrite.
+- [x] 2.2 Пройти AttachmentUploadIntegrationTest, включая COPY unknown, сохранность чужого объекта и staging overwrite.
 - [ ] 2.3 Пройти public REST/mTLS/S3 E2E на итоговом head и подтвердить cleanup.
 - [ ] 2.4 Пройти docs, harness/config и strict OpenSpec validation.
 - [ ] 2.5 Открыть русский PR в develop, дождаться CI и AI review, разобрать замечания и повторить затронутые проверки после final review.
