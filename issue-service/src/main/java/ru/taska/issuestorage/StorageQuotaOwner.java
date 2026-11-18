@@ -184,6 +184,21 @@ VALUES(:id,:t,:p,:i,:a,:key,:staging,:reservation,:op,:f,'RESERVED',:bytes,:mime
             });
   }
 
+  /** Только чтение сохранённого окна; выдающий URL обязан проверить текущий root и policy. */
+  public Mono<Boolean> hasUploadWindow(Reservation r, Instant until) {
+    return tx.execute(
+        db ->
+            manifest(db, r)
+                .map(
+                    row -> {
+                      match(r, row);
+                      return "RESERVED".equals(row.get("state"))
+                          && row.get("put_not_after") != null
+                          && until.equals(((OffsetDateTime) row.get("put_not_after")).toInstant());
+                    })
+                .defaultIfEmpty(false));
+  }
+
   public Mono<Void> recordUploadWindow(Reservation r, Instant notAfter) {
     if (notAfter == null
         || !notAfter.isAfter(clock.instant())

@@ -65,8 +65,7 @@ public final class AttachmentUploads {
                                   r ->
                                       store
                                           .accepted(u, r)
-                                          .then(owner.prepare(r, u.mime()))
-                                          .then(owner.recordUploadWindow(r, u.putUntil()))
+                                          .then(prepareWindow(u, r))
                                           .then(policy.check(project, issue, u, "UPLOAD_WINDOW"))
                                           .then(
                                               objects.presign(
@@ -89,6 +88,20 @@ public final class AttachmentUploads {
                                                                   - 1))
                                                       .build())));
             });
+  }
+
+  private Mono<Void> prepareWindow(AttachmentUploadStore.Upload u, Reservation r) {
+    if (r.state() != State.ACTIVE
+        || r.cancelRequested()
+        || !clock.instant().isBefore(r.expiresAt()))
+      return Mono.error(new DomainException(DomainStatus.FAILED_PRECONDITION, "UPLOAD_CLOSED"));
+    return owner
+        .hasUploadWindow(r, u.putUntil())
+        .flatMap(
+            ready ->
+                ready
+                    ? Mono.empty()
+                    : owner.prepare(r, u.mime()).then(owner.recordUploadWindow(r, u.putUntil())));
   }
 
   public Mono<AttachmentResponse> confirm(ConfirmAttachmentUploadRequestBody q) {
@@ -266,7 +279,15 @@ public final class AttachmentUploads {
   }
 
   private Mono<AttachmentResponse> activate(AttachmentUploadStore.Upload u, Reservation r) {
-    return owner.activate(r).then(store.result(u));
+    return store
+        .result(u)
+        .onErrorResume(
+            DomainException.class,
+            error ->
+                error.getStatus() == DomainStatus.UNAVAILABLE
+                        && "ATTACHMENT_ACTIVATION_PENDING".equals(error.getMessage())
+                    ? owner.activate(r).then(store.result(u))
+                    : Mono.error(error));
   }
 
   private Mono<VerifiedTenantContext> context(String actor, String action) {

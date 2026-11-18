@@ -232,6 +232,25 @@ class AttachmentUploadIntegrationTest {
                     "createAttachmentUploadUrl",
                     uploads.initiate(request("key").toBuilder().setSizeBytes(11).build()))
                 .block(WAIT));
+    var stored =
+        as(A, ACTOR, "confirmAttachmentUpload", store.staging(a.getObjectKey())).block(WAIT);
+    var reservation =
+        as(
+                A,
+                ACTOR,
+                "confirmAttachmentUpload",
+                StorageQuotaIntegrationTest.authorityClient.get(stored.operation()))
+            .block(WAIT);
+    assertThrows(
+        RuntimeException.class,
+        () ->
+            as(
+                    A,
+                    ACTOR,
+                    "confirmAttachmentUpload",
+                    StorageQuotaIntegrationTest.authorityClient.release(reservation))
+                .block(WAIT));
+    assertThrows(DomainException.class, () -> begin("key"));
   }
 
   @Test
@@ -567,6 +586,21 @@ class AttachmentUploadIntegrationTest {
                     StorageQuotaIntegrationTest.authorityClient.release(reservation))
                 .block(WAIT));
     assertEquals("10", StorageQuotaIntegrationTest.usage(A).getReserved());
+    // В том числе старое состояние EXPIRED не служит доказательством отсутствия позднего COPY.
+    sql("UPDATE taska.attachment_object_manifest SET state='EXPIRED' WHERE id='" + u.id() + "'");
+    var unknown =
+        assertThrows(
+            io.grpc.StatusRuntimeException.class,
+            () ->
+                as(
+                        A,
+                        ACTOR,
+                        "confirmAttachmentUpload",
+                        StorageQuotaIntegrationTest.authorityClient.release(reservation))
+                    .block(WAIT));
+    assertEquals(io.grpc.Status.Code.UNAVAILABLE, unknown.getStatus().getCode());
+    assertTrue(unknown.getStatus().getDescription().contains("COPY_OUTCOME_UNKNOWN"));
+    assertEquals("10", StorageQuotaIntegrationTest.usage(A).getReserved());
     // Позднее положительное доказательство COPY позволяет безопасно убрать обе собственные версии.
     storage
         .copyPinned(u.stagingKey(), version, u.finalKey(), u.operation().toString(), u.mime())
@@ -699,5 +733,25 @@ class AttachmentUploadIntegrationTest {
             .map((r, m) -> r.get(0, Long.class))
             .one()
             .block(WAIT));
+  }
+
+  @Test
+  void repeatedActivationWithoutUploadIntentPreservesExistingQuotaProtocol() throws Exception {
+    var reservation = StorageQuotaIntegrationTest.reserve(10);
+    StorageQuotaIntegrationTest.upload(reservation, 7);
+    var committed = StorageQuotaIntegrationTest.commit(reservation);
+    StorageQuotaIntegrationTest.commit(reservation);
+    assertEquals(
+        ru.taska.quota.StorageQuotaProtocol.OwnerState.CONFIRMED,
+        as(
+                A,
+                ACTOR,
+                "confirmAttachmentUpload",
+                StorageQuotaIntegrationTest.owner.activate(committed))
+            .block(WAIT)
+            .state());
+    assertEquals(0, rows("attachment_uploads"));
+    assertEquals(0, rows("issue_attachments"));
+    assertEquals("7", StorageQuotaIntegrationTest.usage(A).getUsed());
   }
 }

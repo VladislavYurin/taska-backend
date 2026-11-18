@@ -261,7 +261,11 @@ public final class AttachmentUploadStore {
   public Mono<ru.taska.api.issue.attachment.v1.AttachmentResponse> result(Upload u) {
     return tx.execute(
             db ->
-                db.sql("SELECT * FROM taska.issue_attachments WHERE tenant_id=:t AND id=:id")
+                db.sql(
+                        "SELECT a.* FROM taska.issue_attachments a JOIN"
+                            + " taska.attachment_object_manifest m ON m.tenant_id=a.tenant_id AND"
+                            + " m.id=a.id WHERE a.tenant_id=:t AND a.id=:id AND"
+                            + " m.state='CONFIRMED'")
                     .bind("t", u.tenant())
                     .bind("id", u.id())
                     .fetch()
