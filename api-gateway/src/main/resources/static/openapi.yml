@@ -5018,6 +5018,135 @@ paths:
         default:
           $ref: '#/components/responses/ErrorResponse'
 
+  /api/v1/tenants:
+    get:
+      operationId: listTenants
+      tags: [tenant]
+      summary: List companies available to the current account
+      description: WEB_GLOBAL account session only. Returns the actor's active tenant memberships and is never cached.
+      x-pat-scope: session
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: cursor
+          in: query
+          required: false
+          schema: {type: string, minLength: 1, maxLength: 2048}
+        - name: limit
+          in: query
+          required: false
+          schema: {type: integer, minimum: 1, maximum: 100, default: 50}
+      responses:
+        '200':
+          description: Current active memberships, with no shared cache.
+          headers:
+            Cache-Control:
+              schema: {type: string}
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantPageDto'
+        '400': {$ref: '#/components/responses/ErrorResponse'}
+        '401': {$ref: '#/components/responses/ErrorResponse'}
+        '403': {$ref: '#/components/responses/ErrorResponse'}
+        '429': {$ref: '#/components/responses/ErrorResponse'}
+        '503': {$ref: '#/components/responses/ErrorResponse'}
+        default: {$ref: '#/components/responses/ErrorResponse'}
+
+  /api/v1/tenants/{tenantId}:
+    get:
+      operationId: getTenant
+      tags: [tenant]
+      summary: Get company details
+      description: Tenant access is checked against the current credential binding and membership. Response is never cached.
+      x-pat-scope: read
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: tenantId
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+      responses:
+        '200':
+          description: Current company details and mutation version.
+          headers:
+            Cache-Control:
+              schema: {type: string}
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantDto'
+        '400': {$ref: '#/components/responses/ErrorResponse'}
+        '401': {$ref: '#/components/responses/ErrorResponse'}
+        '403': {$ref: '#/components/responses/ErrorResponse'}
+        '404': {$ref: '#/components/responses/ErrorResponse'}
+        '429': {$ref: '#/components/responses/ErrorResponse'}
+        '503': {$ref: '#/components/responses/ErrorResponse'}
+        default: {$ref: '#/components/responses/ErrorResponse'}
+    patch:
+      operationId: renameTenant
+      tags: [tenant]
+      summary: Rename a company
+      description: >-
+        Only the current owner or a trusted GLOBAL_ADMIN with a target-bound current MFA context may rename the company.
+        TENANT_ADMIN without ownership is denied. The body is closed and contains only name. Name has 1 to 120 Unicode
+        code points, no leading/trailing Java strip whitespace and no ISO control characters. Send the current Tenant.version
+        as a strong quoted If-Match. A missing If-Match returns 428 VERSION_CONFLICT.
+        The request requires a canonical lowercase UUID Idempotency-Key. After authorization, a replay
+        with the original name and If-Match returns the saved response, even if the current version has advanced.
+        Changing the name or If-Match with the same key returns 409 IDEMPOTENCY_CONFLICT.
+        For a new key, a stale If-Match returns 412 VERSION_CONFLICT. Response is never cached.
+        DELETING returns 409 INVALID_STATE for both owners and administrators. DELETED returns 404.
+      x-pat-scope: write
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: tenantId
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+            pattern: '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+        - name: If-Match
+          in: header
+          required: true
+          description: Semantically required. Missing header returns 428 VERSION_CONFLICT.
+          schema:
+            type: string
+            pattern: '^"[1-9][0-9]{0,18}"$'
+            maxLength: 21
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RenameTenantRequestDto'
+      responses:
+        '200':
+          description: Company after the rename. Same-name requests preserve the current version.
+          headers:
+            Cache-Control:
+              schema: {type: string}
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantDto'
+        '400': {$ref: '#/components/responses/ErrorResponse'}
+        '401': {$ref: '#/components/responses/ErrorResponse'}
+        '403': {$ref: '#/components/responses/ErrorResponse'}
+        '404': {$ref: '#/components/responses/ErrorResponse'}
+        '409': {$ref: '#/components/responses/ErrorResponse'}
+        '412': {$ref: '#/components/responses/ErrorResponse'}
+        '422': {$ref: '#/components/responses/ErrorResponse'}
+        '428': {$ref: '#/components/responses/ErrorResponse'}
+        '429': {$ref: '#/components/responses/ErrorResponse'}
+        '503': {$ref: '#/components/responses/ErrorResponse'}
+        default: {$ref: '#/components/responses/ErrorResponse'}
   /api/v1/tenants/{tenantId}/capabilities:
     get:
       operationId: getTenantCapabilities
@@ -5267,6 +5396,72 @@ components:
         - DEPENDENCY_UNAVAILABLE
         - POLICY_NOT_CONFIGURED
         - VALIDATION_FAILED
+    TenantLifecycle:
+      type: string
+      enum: [PROVISIONING, AWAITING_PAYMENT, ACTIVE, AUTO_CLOSED, OWNER_CANCELLED, DELETING, DELETED]
+    TenantRestrictionCode:
+      type: string
+      enum: [PAYMENT_EXPIRED, OVER_QUOTA, OWNER_PAUSE, PLATFORM_BLOCK, PAYMENT_DISPUTE, PENDING_FIRST_PAYMENT]
+    TenantCreationClosureReason:
+      type: string
+      enum: [AUTO_EXPIRED, OWNER_CANCELLED]
+    TenantDto:
+      type: object
+      x-class-extra-annotation: '@com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)'
+      additionalProperties: false
+      properties:
+        id: {type: string, format: uuid}
+        name:
+          type: string
+          minLength: 1
+          maxLength: 128
+          description: Response may include pre-existing names stored before the 120-code-point rename limit.
+        ownerId: {type: string, format: uuid}
+        lifecycle: {$ref: '#/components/schemas/TenantLifecycle'}
+        restrictions:
+          type: array
+          maxItems: 20
+          items: {$ref: '#/components/schemas/TenantRestrictionCode'}
+        createdAt: {type: string, format: date-time}
+        creationDeadline: {type: string, format: date-time}
+        creationClosureReason: {$ref: '#/components/schemas/TenantCreationClosureReason'}
+        creationClosedAt: {type: string, format: date-time}
+        version:
+          type: string
+          minLength: 1
+          maxLength: 19
+          pattern: '^[1-9][0-9]{0,18}$'
+          description: Positive int64, returned as a decimal string and used by If-Match.
+        ownerVersion:
+          type: string
+          minLength: 1
+          maxLength: 19
+          pattern: '^[1-9][0-9]{0,18}$'
+      required: [id, name, ownerId, lifecycle, restrictions, createdAt, version, ownerVersion]
+    TenantPageDto:
+      type: object
+      x-class-extra-annotation: '@com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)'
+      additionalProperties: false
+      properties:
+        items:
+          type: array
+          maxItems: 100
+          items: {$ref: '#/components/schemas/TenantDto'}
+        nextCursor: {type: string, minLength: 1, maxLength: 2048}
+      required: [items]
+    TenantName:
+      type: string
+      minLength: 1
+      maxLength: 120
+      description: 1 to 120 Unicode code points. No leading or trailing Java strip whitespace or ISO control characters.
+      not:
+        pattern: '[\u0000-\u001F\u007F-\u009F]|^[\u0020\u1680\u2000-\u2006\u2008-\u200A\u2028\u2029\u205F\u3000]|[\u0020\u1680\u2000-\u2006\u2008-\u200A\u2028\u2029\u205F\u3000]$'
+    RenameTenantRequestDto:
+      type: object
+      additionalProperties: false
+      properties:
+        name: {$ref: '#/components/schemas/TenantName'}
+      required: [name]
     CapabilityRestrictionCode:
       type: string
       enum:

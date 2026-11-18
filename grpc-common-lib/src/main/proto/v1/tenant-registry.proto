@@ -82,9 +82,21 @@ message Tenant {
   optional string creation_closed_at = 14;
 }
 
+message TenantPage {
+  repeated Tenant items = 1;
+  optional string next_cursor = 2;
+}
+
 message CreateTenantRequest {
   string name = 1;
   string plan_version_id = 2;
+}
+
+// TAS-333: same validation as CreateTenantRequest.name.
+message RenameTenantRequest {
+  // Required, 1 to 120 Unicode code points. Leading or trailing whitespace and
+  // ISO control characters are invalid. Report VALIDATION_FAILED on field name.
+  string name = 1;
 }
 
 message CreateTenantResponse {
@@ -102,10 +114,27 @@ message CreateTenantRpcRequest {
   MutationOptions mutation = 3;
 }
 
+message ListTenantsRpcRequest {
+  RequestContext context = 1;
+  PageRequest page = 2;
+}
+
 message GetTenantRpcRequest {
   RequestContext context = 1;
   string tenant_id = 2;
 }
+// Field numbers match the B2B blueprint.
+message RenameTenantRpcRequest {
+  RequestContext context = 1;
+  string tenant_id = 2;
+  RenameTenantRequest payload = 3;
+  // Requires a canonical UUID idempotency_key and expected_version from GetTenant.
+  // expected_version is the positive decimal Tenant.version, without HTTP quotes.
+  // Missing version: FAILED_PRECONDITION. Stale version: ABORTED.
+  // Both use VERSION_CONFLICT; malformed input uses INVALID_ARGUMENT/VALIDATION_FAILED.
+  MutationOptions mutation = 4;
+}
+
 message PageRequest { optional string cursor = 1; uint32 limit = 2; }
 
 message Membership {
@@ -173,7 +202,11 @@ service TenantService {
   rpc CancelTenantCreation(CancelTenantCreationRpcRequest) returns (Tenant);
   rpc GetTenantOperation(GetTenantOperationRpcRequest) returns (Operation);
   rpc CreateTenant(CreateTenantRpcRequest) returns (CreateTenantResponse);
+  rpc ListTenants(ListTenantsRpcRequest) returns (TenantPage);
   rpc GetTenant(GetTenantRpcRequest) returns (Tenant);
+  // Current owner or trusted GLOBAL_ADMIN only. With the current version,
+  // the same name returns the current Tenant without advancing its version.
+  rpc RenameTenant(RenameTenantRpcRequest) returns (Tenant);
   rpc ListTenantMembers(ListTenantMembersRpcRequest) returns (MembershipPage);
 }
 

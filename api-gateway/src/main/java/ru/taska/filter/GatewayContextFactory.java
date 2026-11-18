@@ -94,11 +94,30 @@ public class GatewayContextFactory {
             }));
   }
 
-  private static boolean sameTenant(String bound,String supplied){
-    try {var parsed=java.util.UUID.fromString(supplied);
+  private record TenantTarget(String id,String action) {}
+
+  private static boolean isTenantListPath(String path,String method){
+    return ("GET".equals(method)||"HEAD".equals(method)) && "/api/v1/tenants".equals(path);
+  }
+
+  private static TenantTarget tenantTarget(String path,String method){
+    if(!"GET".equals(method)&&!"HEAD".equals(method)&&!"PATCH".equals(method))return null;
+    var matcher=java.util.regex.Pattern.compile("^/api/v1/tenants/([^/]+)$").matcher(path);
+    if(!matcher.matches())return null;
+    var id=canonicalTenantId(matcher.group(1));
+    return new TenantTarget(id,"PATCH".equals(method)?"renameTenant":"getTenant");
+  }
+
+  private static String canonicalTenantId(String supplied){
+    try {
+      var parsed=java.util.UUID.fromString(supplied);
       if(!parsed.toString().equalsIgnoreCase(supplied))throw new IllegalArgumentException();
-      return parsed.equals(java.util.UUID.fromString(bound));
+      return parsed.toString();
     }catch(IllegalArgumentException e){throw Status.INVALID_ARGUMENT.withDescription("Invalid tenant id").asRuntimeException();}
+  }
+
+  private static boolean sameTenant(String bound,String supplied){
+    return canonicalTenantId(bound).equals(canonicalTenantId(supplied));
   }
   private Mono<GatewayContext> resolveTrustedUserContext(ServerWebExchange exchange,String requestId) {
     return Mono.defer(()->{
@@ -106,13 +125,23 @@ public class GatewayContextFactory {
       if(stub==null || security==null)return Mono.error(Status.UNAVAILABLE.asRuntimeException());
       try {java.util.UUID.fromString(requestId);}catch(IllegalArgumentException e){return Mono.error(Status.INVALID_ARGUMENT.withDescription("Invalid X-Request-Id").asRuntimeException());}
       String token=bearerTokenExtractor.extract(exchange,requestId);
+      String path=EndpointAccessPolicy.canonicalPath(exchange.getRequest());
+      String method=exchange.getRequest().getMethod().name();
+      var target=tenantTarget(path,method);
+      boolean tenantList=isTenantListPath(path,method);
+      var credentialRequest=ru.taska.api.b2b.v1.ResolveGatewayCredentialRequest.newBuilder().setCredential(token);
+      if(target!=null)credentialRequest.setTargetTenantId(target.id()).setTargetAction(target.action());
       return stub.withDeadlineAfter(5,java.util.concurrent.TimeUnit.SECONDS)
-        .resolveGatewayCredential(ru.taska.api.b2b.v1.ResolveGatewayCredentialRequest.newBuilder().setCredential(token).build())
+        .resolveGatewayCredential(credentialRequest.build())
         .flatMap(resolved->{
           var user=contextMapper.mapToGatewayUserContext(resolved.getUser());
           var binding=resolved.getBinding();
           if(!binding.getActorUserId().equals(user.userId()))return Mono.error(Status.UNAUTHENTICATED.asRuntimeException());
-          String path=EndpointAccessPolicy.canonicalPath(exchange.getRequest());
+          if(tenantList && (binding.hasTenantId()
+              || binding.getCredentialKind()!=ru.taska.api.b2b.v1.CredentialKind.CREDENTIAL_KIND_WEB_GLOBAL
+              || !binding.getScopesList().contains("tenants:select")))return Mono.error(Status.PERMISSION_DENIED.asRuntimeException());
+          if(target!=null && (!binding.hasTenantId() || !sameTenant(binding.getTenantId(),target.id())))return Mono.error(Status.PERMISSION_DENIED.asRuntimeException());
+          if(target!=null && !binding.getScopesList().contains("renameTenant".equals(target.action())?"write":"read"))return Mono.error(Status.PERMISSION_DENIED.asRuntimeException());
           var suppliedTenants=exchange.getRequest().getHeaders().getOrEmpty("X-Tenant-Id");
           if(suppliedTenants.size()>1)return Mono.error(Status.PERMISSION_DENIED.asRuntimeException());
           String selected=exchange.getRequest().getHeaders().getFirst("X-Tenant-Id");

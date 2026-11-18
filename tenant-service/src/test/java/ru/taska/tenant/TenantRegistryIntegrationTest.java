@@ -260,12 +260,21 @@ class TenantRegistryIntegrationTest {
   }
 
   Mono<Tenant> get(UUID actor, UUID tenant) {
-    return RegistryTestContext.as(
-        actor,
-        tenant,
-        "getTenant",
-        CREDENTIAL_KIND_WEB_TENANT,
-        true,
+    var claims =
+        TrustedTenantContext.newBuilder()
+            .setActorUserId(actor.toString())
+            .setTenantId(tenant.toString())
+            .setActorGeneration("1")
+            .setMembershipGeneration("1")
+            .setCredentialKind(CREDENTIAL_KIND_WEB_TENANT)
+            .setSessionId(UUID.randomUUID().toString())
+            .setIssuerService("api-gateway")
+            .setAudienceService("tenant-service")
+            .addScopes("read")
+            .setAction("getTenant")
+            .build();
+    return RegistryTestContext.withClaims(
+        claims,
         service.get(GetTenantRpcRequest.newBuilder().setTenantId(tenant.toString()).build()));
   }
 

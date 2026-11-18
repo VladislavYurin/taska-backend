@@ -1046,6 +1046,33 @@
       "requestClass": "ru.taska.api.registry.v1.TypeOperationKey"
     },
     {
+      "rpc": "ru.taska.b2b.v1.TenantService/GetTenant",
+      "audience": "tenant-service",
+      "scope": "TENANT_OWNER_OR_ADMIN",
+      "tenantRequired": true,
+      "mutation": false,
+      "action": "getTenant",
+      "requestClass": "ru.taska.api.b2b.v1.GetTenantRpcRequest"
+    },
+    {
+      "rpc": "ru.taska.b2b.v1.TenantService/ListTenants",
+      "audience": "tenant-service",
+      "scope": "GLOBAL_TENANT_LIST",
+      "tenantRequired": false,
+      "mutation": false,
+      "action": "listTenants",
+      "requestClass": "ru.taska.api.b2b.v1.ListTenantsRpcRequest"
+    },
+    {
+      "rpc": "ru.taska.b2b.v1.TenantService/RenameTenant",
+      "audience": "tenant-service",
+      "scope": "TENANT_OWNER_OR_ADMIN",
+      "tenantRequired": true,
+      "mutation": true,
+      "action": "renameTenant",
+      "requestClass": "ru.taska.api.b2b.v1.RenameTenantRpcRequest"
+    },
+    {
       "rpc": "ru.taska.workflow.v1.WorkflowService/AddWorkflowStatus",
       "audience": "workflow-service",
       "scope": "TENANT_PROJECT_ACL_CAPABILITY",

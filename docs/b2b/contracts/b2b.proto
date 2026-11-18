@@ -160,6 +160,8 @@ message Tenant {
   repeated RestrictionCode restrictions = 5;
   string created_at = 6;
   optional string creation_deadline = 7;
+  // Positive int64 as a decimal string. Advances on changes to name, owner,
+  // restrictions or lifecycle. GetTenant returns this version for mutations.
   string version = 8;
   string owner_version = 9;
   optional string plan_version_id = 10;
@@ -176,6 +178,7 @@ message TenantPage {
   optional string next_cursor = 2;
 }
 
+// Uses the TenantName validation shared with RenameTenantRequest.
 message CreateTenantRequest {
   string name = 1;
   string plan_version_id = 2;
@@ -187,6 +190,8 @@ message CreateTenantResponse {
 }
 
 message RenameTenantRequest {
+  // Required, 1 to 120 Unicode code points. Leading or trailing whitespace and
+  // ISO control characters are invalid. Report VALIDATION_FAILED on field name.
   string name = 1;
 }
 
@@ -1038,6 +1043,9 @@ message RenameTenantRpcRequest {
   RequestContext context = 1;
   string tenant_id = 2;
   RenameTenantRequest payload = 3;
+  // Requires an idempotency key and expected_version from GetTenant's Tenant.version.
+  // Missing version: FAILED_PRECONDITION. Stale version: ABORTED.
+  // Both return VERSION_CONFLICT in B2bErrorDetail.
   MutationOptions mutation = 4;
 }
 
@@ -1554,6 +1562,8 @@ service TenantService {
   rpc CreateTenant(CreateTenantRpcRequest) returns (CreateTenantResponse);
   rpc ListTenants(ListTenantsRpcRequest) returns (TenantPage);
   rpc GetTenant(GetTenantRpcRequest) returns (Tenant);
+  // Current owner or trusted GLOBAL_ADMIN only. With the current version,
+  // the same name returns the current Tenant without advancing its version.
   rpc RenameTenant(RenameTenantRpcRequest) returns (Tenant);
   rpc CancelTenantCreation(CancelTenantCreationRpcRequest) returns (Tenant);
   rpc PauseTenant(PauseTenantRpcRequest) returns (Tenant);

@@ -301,7 +301,8 @@ class LegacyRpcTransportTest {
               "workflow-service",
               "auth-service",
               "admin-service",
-              "notification-service")) {
+              "notification-service",
+              "tenant-service")) {
         try (var files = java.nio.file.Files.walk(root.resolve(module + "/src/main/java"))) {
           for (var source : files.filter(p -> p.toString().endsWith(".java")).toList()) {
             var match =
@@ -313,8 +314,8 @@ class LegacyRpcTransportTest {
       }
       for (var r : routes) {
         String rpc = r.path("rpc").asText();
-        String service = rpc.substring(0, rpc.indexOf('/'));
-        service = service.substring(service.lastIndexOf('.') + 1);
+        String fullService = rpc.substring(0, rpc.indexOf('/'));
+        String service = fullService.substring(fullService.lastIndexOf('.') + 1);
         assertEquals(owners.get(service), r.path("audience").asText(), rpc);
         var clazz = Class.forName(r.path("requestClass").asText());
         var message =
@@ -322,7 +323,9 @@ class LegacyRpcTransportTest {
         var f = message.getDescriptorForType().findFieldByName("context");
         assertNotNull(f, r.path("rpc").asText());
         assertEquals(RequestContext.getDescriptor(), f.getMessageType());
-        assertEquals(100, f.getNumber());
+        // The native TenantService declares context as field 1 in the B2B contract.
+        int expectedContextNumber = TenantServiceGrpc.SERVICE_NAME.equals(fullService) ? 1 : 100;
+        assertEquals(expectedContextNumber, f.getNumber(), rpc);
       }
     }
     assertEquals(1, CreateProjectRequest.getDescriptor().findFieldByName("header").getNumber());

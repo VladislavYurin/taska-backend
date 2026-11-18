@@ -15,12 +15,16 @@ import java.util.UUID;
 import java.util.function.Function;
 import org.springframework.r2dbc.core.DatabaseClient;
 import reactor.core.publisher.Mono;
+import ru.taska.api.b2b.v1.AdminGrant;
+import ru.taska.api.b2b.v1.AdminScope;
+import ru.taska.api.b2b.v1.CredentialKind;
 import ru.taska.api.b2b.v1.CreateTenantResponse;
 import ru.taska.api.b2b.v1.CreateTenantRpcRequest;
 import ru.taska.api.b2b.v1.GetTenantRpcRequest;
 import ru.taska.api.b2b.v1.Operation;
 import ru.taska.api.b2b.v1.RestrictionCode;
 import ru.taska.api.b2b.v1.Tenant;
+import ru.taska.api.b2b.v1.TrustedTenantContext;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
 import ru.taska.r2dbc.TenantTransactionExecutor;
@@ -37,6 +41,7 @@ public final class TenantRegistryService {
   private final FreeAdmission free;
   private final Clock clock;
   private final Function<DatabaseClient, Mono<Duration>> creationWindows;
+  private final TenantListService tenantLists;
 
   public TenantRegistryService(
       TenantTransactionExecutor transactions,
@@ -55,12 +60,23 @@ public final class TenantRegistryService {
       FreeAdmission free,
       Clock clock,
       Function<DatabaseClient, Mono<Duration>> creationWindows) {
+    this(transactions, plans, free, clock, creationWindows, null);
+  }
+
+  public TenantRegistryService(
+      TenantTransactionExecutor transactions,
+      PublishedPlans plans,
+      FreeAdmission free,
+      Clock clock,
+      Function<DatabaseClient, Mono<Duration>> creationWindows,
+      TenantListService tenantLists) {
     this.transactions = transactions;
     this.creations = new TenantCreationTransaction(transactions);
     this.plans = plans;
     this.free = free;
     this.clock = clock;
     this.creationWindows = creationWindows;
+    this.tenantLists = tenantLists;
   }
 
   static DomainException fail(DomainStatus status, String code) {
@@ -98,6 +114,28 @@ public final class TenantRegistryService {
         (hi & 0xffffffffffff0fffL) | 0x8000L, (lo & 0x3fffffffffffffffL) | 0x8000000000000000L);
   }
 
+  static void validateName(String name) {
+    if (name.isBlank()
+        || !name.equals(name.strip())
+        || name.codePointCount(0, name.length()) > 120
+        || name.codePoints().anyMatch(Character::isISOControl))
+      throw new DomainException(
+          DomainStatus.INVALID_ARGUMENT,
+          "VALIDATION_FAILED",
+          Map.of("code", "VALIDATION_FAILED", "field", "name", "reason", "INVALID_NAME"));
+  }
+
+  public Mono<Tenant> rename(ru.taska.api.b2b.v1.RenameTenantRpcRequest request) {
+    return new TenantRenameService(transactions, clock).rename(request);
+  }
+
+  public Mono<ru.taska.api.b2b.v1.TenantPage> listTenants(
+      ru.taska.api.b2b.v1.ListTenantsRpcRequest request) {
+    return tenantLists == null
+        ? Mono.error(fail(DomainStatus.UNAVAILABLE, "POLICY_NOT_CONFIGURED"))
+        : tenantLists.list(request);
+  }
+
   public Mono<CreateTenantResponse> create(CreateTenantRpcRequest request) {
     return Mono.defer(
         () -> {
@@ -105,14 +143,7 @@ public final class TenantRegistryService {
               key = request.getMutation().getIdempotencyKey();
           UUID plan = uuid(request.getPayload().getPlanVersionId());
           uuid(key);
-          if (name.isBlank()
-              || !name.equals(name.strip())
-              || name.codePointCount(0, name.length()) > 120
-              || name.codePoints().anyMatch(Character::isISOControl))
-            throw new DomainException(
-                DomainStatus.INVALID_ARGUMENT,
-                "VALIDATION_FAILED",
-                Map.of("code", "VALIDATION_FAILED", "field", "name", "reason", "INVALID_NAME"));
+          validateName(name);
           if (key.isBlank()
               || key.length() > 128
               || key.codePoints().anyMatch(c -> c < 33 || c > 126)
@@ -345,27 +376,97 @@ public final class TenantRegistryService {
         () -> {
           UUID id = uuid(request.getTenantId());
           return VerifiedTenantContext.current()
+              .onErrorMap(
+                  IllegalStateException.class,
+                  e -> fail(DomainStatus.UNAUTHENTICATED, "AUTHENTICATION_REQUIRED"))
               .flatMap(
                   identity -> {
                     if (!"getTenant".equals(identity.action())
                         || !id.toString().equals(identity.tenantId())
                         || identity.actorId() == null)
                       return Mono.error(fail(DomainStatus.PERMISSION_DENIED, "TENANT_MISMATCH"));
+                    TrustedTenantContext claims =
+                        ru.taska.security.tenant.RpcContextBridge.details(identity).getContext();
+                    if (!identity.scopes().contains("read")
+                        || !positiveGeneration(claims.getActorGeneration()))
+                      return Mono.error(fail(DomainStatus.PERMISSION_DENIED, "SCOPE_DENIED"));
+                    boolean admin = administrativeRead(claims, id);
+                    if (!admin && !ordinaryRead(claims))
+                      return Mono.error(fail(DomainStatus.PERMISSION_DENIED, "SCOPE_DENIED"));
                     return transactions.execute(
                         db ->
-                            activeMember(db, id, uuid(identity.actorId()))
-                                .then(
-                                    db.sql(
-                                            "SELECT * FROM taska.tenants WHERE id=:id AND"
-                                                + " lifecycle<>'DELETED'")
-                                        .bind("id", id)
-                                        .fetch()
-                                        .one())
+                            db.sql(
+                                    "SELECT t.*,m.status AS actor_membership_status,m.version AS"
+                                        + " actor_membership_version FROM taska.tenants t LEFT JOIN"
+                                        + " taska.tenant_memberships m ON m.tenant_id=t.id AND"
+                                        + " m.user_id=:actor WHERE t.id=:id AND"
+                                        + " t.lifecycle<>'DELETED'")
+                                .bind("actor", uuid(identity.actorId()))
+                                .bind("id", id)
+                                .fetch()
+                                .one()
                                 .switchIfEmpty(
                                     Mono.error(fail(DomainStatus.NOT_FOUND, "TENANT_NOT_FOUND")))
-                                .map(TenantRegistryService::tenant));
+                                .flatMap(
+                                    row -> {
+                                      if (!admin) {
+                                        if (!"ACTIVE".equals(row.get("actor_membership_status")))
+                                          return Mono.error(
+                                              fail(DomainStatus.NOT_FOUND, "TENANT_NOT_FOUND"));
+                                        if (!claims
+                                            .getMembershipGeneration()
+                                            .equals(
+                                                row.get("actor_membership_version").toString()))
+                                          return Mono.error(
+                                              fail(DomainStatus.UNAUTHENTICATED, "TOKEN_REVOKED"));
+                                      }
+                                      return Mono.just(tenant(row));
+                                    }));
                   });
         });
+  }
+
+  private static boolean positiveGeneration(String generation) {
+    return generation != null && generation.matches("[1-9][0-9]*");
+  }
+
+  private static boolean ordinaryRead(TrustedTenantContext claims) {
+    boolean credential =
+        switch (claims.getCredentialKind()) {
+          case CREDENTIAL_KIND_WEB_TENANT ->
+              claims.hasSessionId() && !claims.getSessionId().isBlank();
+          case CREDENTIAL_KIND_USER_PAT, CREDENTIAL_KIND_USER_OAUTH ->
+              claims.hasCredentialId() && !claims.getCredentialId().isBlank();
+          default -> false;
+        };
+    return credential
+        && claims.hasMembershipGeneration()
+        && positiveGeneration(claims.getMembershipGeneration());
+  }
+
+  private static boolean administrativeRead(TrustedTenantContext claims, UUID tenant) {
+    boolean credential =
+        switch (claims.getCredentialKind()) {
+          case CREDENTIAL_KIND_WEB_GLOBAL ->
+              claims.hasSessionId() && !claims.getSessionId().isBlank();
+          case CREDENTIAL_KIND_ADMIN_PAT, CREDENTIAL_KIND_ADMIN_OAUTH ->
+              claims.hasCredentialId()
+                  && !claims.getCredentialId().isBlank()
+                  && claims.hasGrantId()
+                  && !claims.getGrantId().isBlank()
+                  && claims.hasGrantGeneration()
+                  && positiveGeneration(claims.getGrantGeneration());
+          default -> false;
+        };
+    AdminScope scope = claims.getAdministrativeScope();
+    boolean target =
+        scope.getKind() == AdminScope.KindValue.KIND_PLATFORM
+            || (scope.getKind() == AdminScope.KindValue.KIND_TENANT_SET
+                && scope.getTenantIdsList().contains(tenant.toString()));
+    boolean readLevel =
+        claims.getAdministrativeLevel() == AdminGrant.LevelValue.LEVEL_READ
+            || claims.getAdministrativeLevel() == AdminGrant.LevelValue.LEVEL_MODIFY;
+    return credential && target && readLevel;
   }
 
   public Mono<Tenant> cancelCreation(ru.taska.api.b2b.v1.CancelTenantCreationRpcRequest request) {
@@ -398,7 +499,11 @@ public final class TenantRegistryService {
       result.setCreationClosedAt(closed.toInstant().toString());
     if (row.get("creation_deadline_at") instanceof OffsetDateTime d)
       result.setCreationDeadline(d.toInstant().toString());
-    if (row.get("creation_kind").equals("PAID") && row.get("first_payment_fact_id") == null)
+    boolean pendingFirstPayment =
+        row.containsKey("pending_first_payment")
+            ? Boolean.TRUE.equals(row.get("pending_first_payment"))
+            : row.get("creation_kind").equals("PAID") && row.get("first_payment_fact_id") == null;
+    if (pendingFirstPayment)
       result.addRestrictions(RestrictionCode.RESTRICTION_CODE_PENDING_FIRST_PAYMENT);
     return result.build();
   }
