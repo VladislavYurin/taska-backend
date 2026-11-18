@@ -21,10 +21,24 @@ public class GrpcProjectArchiveClient {
     private final ProjectMapper mapper;
 
     public Mono<ProjectResponseDto> archive(UUID project, GatewayContext context) {
-        return ru.taska.security.tenant.RpcContextBridge.outbound(() -> projectServiceStub.withDeadlineAfter(properties.projectService().deadlineDuration().toMillis(), TimeUnit.MILLISECONDS)
-                .archiveProject(ArchiveProjectRequest.newBuilder().setProjectId(project.toString())
-                        .setActorUserId(context.userContext().userId())
-                        .setHeader(ru.taska.mapper.MappingUtils.buildGrpcHeader(context)).build()))
-                .map(mapper::toRestProjectResponse);
+        return lifecycle(project, true, null, null, context);
+    }
+
+    public Mono<ProjectResponseDto> lifecycle(UUID project, boolean archive, Integer version, String key, GatewayContext context) {
+        return ru.taska.security.tenant.RpcContextBridge.outbound(() -> {
+            var stub = projectServiceStub.withDeadlineAfter(properties.projectService().deadlineDuration().toMillis(), TimeUnit.MILLISECONDS);
+            if (archive) {
+                var request = ArchiveProjectRequest.newBuilder().setProjectId(project.toString())
+                        .setActorUserId(context.userContext().userId()).setHeader(ru.taska.mapper.MappingUtils.buildGrpcHeader(context));
+                if (version != null) request.setExpectedVersion(version);
+                if (key != null) request.setIdempotencyKey(key);
+                return stub.archiveProject(request.build());
+            }
+            var request = ru.taska.api.project.v1.RestoreProjectRequest.newBuilder().setProjectId(project.toString())
+                    .setActorUserId(context.userContext().userId()).setHeader(ru.taska.mapper.MappingUtils.buildGrpcHeader(context));
+            if (version != null) request.setExpectedVersion(version);
+            if (key != null) request.setIdempotencyKey(key);
+            return stub.restoreProject(request.build());
+        }).map(mapper::toRestProjectResponse);
     }
 }

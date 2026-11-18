@@ -28,6 +28,7 @@ import static org.mockito.ArgumentMatchers.*;
         BearerTokenExtractor.class,GatewayErrorHandler.class,RestErrorMapper.class})
 class ProjectArchiveControllerTest {
     @Autowired WebTestClient http;
+    @Autowired GatewayErrorHandler errors;
     @MockitoBean GrpcProjectArchiveClient client;
     @MockitoBean GrpcAuthServiceClient auth;
     @MockitoBean ContextMapper contexts;
@@ -62,6 +63,60 @@ class ProjectArchiveControllerTest {
         authenticate();
         http.delete().uri("/api/v1/projects/not-a-uuid").header(HttpHeaders.AUTHORIZATION,"Bearer token").exchange().expectStatus().isBadRequest();
         verifyNoInteractions(client);
+    }
+
+    @Test
+    void lifecycleForwardsVersionAndCanonicalKey() {
+        authenticate();var key=UUID.randomUUID().toString();
+        when(client.lifecycle(eq(project),eq(false),eq(7),eq(key),any()))
+                .thenReturn(Mono.just(new ProjectResponseDto().id(project.toString()).version("8")));
+        http.post().uri(url()+"/restore").header(HttpHeaders.AUTHORIZATION,"Bearer token")
+                .header("If-Match","\"7\"").header("Idempotency-Key",key).exchange()
+                .expectStatus().isOk().expectBody().jsonPath("$.version").isEqualTo("8");
+        verify(client).lifecycle(eq(project),eq(false),eq(7),eq(key),any());
+    }
+
+    @Test
+    void restoreRejectsMissingMalformedAndDuplicatePreconditionsBeforeRpc() {
+        // Exercise native problem mapping while this controller slice keeps its isolated auth fixture.
+        org.springframework.test.util.ReflectionTestUtils.setField(errors,"trustedEnabled",true);
+        authenticate();
+        http.post().uri(url()+"/restore").header(HttpHeaders.AUTHORIZATION,"Bearer token")
+                .header("Idempotency-Key",UUID.randomUUID().toString()).exchange().expectStatus().isEqualTo(428);
+        for(var version:new String[]{"7","W/\"7\"","\"-1\"","\"2147483648\""})
+            http.post().uri(url()+"/restore").header(HttpHeaders.AUTHORIZATION,"Bearer token")
+                    .header("If-Match",version).header("Idempotency-Key",UUID.randomUUID().toString())
+                    .exchange().expectStatus().isBadRequest();
+        http.post().uri(url()+"/restore").header(HttpHeaders.AUTHORIZATION,"Bearer token")
+                .header("If-Match","\"7\"","\"8\"").header("Idempotency-Key",UUID.randomUUID().toString())
+                .exchange().expectStatus().isBadRequest();
+        verifyNoInteractions(client);
+    }
+
+    @Test
+    void nativeArchiveMissingVersionFromBackendReturns428() {
+        org.springframework.test.util.ReflectionTestUtils.setField(errors,"trustedEnabled",true);
+        authenticate();
+        when(client.archive(eq(project),any())).thenReturn(Mono.error(Status.FAILED_PRECONDITION
+                .asRuntimeException(mapper.GrpcErrorDetails.encode(java.util.Map.of("code","VERSION_CONFLICT")))));
+        http.delete().uri(url()).header(HttpHeaders.AUTHORIZATION,"Bearer token").exchange()
+                .expectStatus().isEqualTo(428).expectBody().jsonPath("$.code").isEqualTo("VERSION_CONFLICT");
+    }
+
+    @Test
+    void nativeLifecycleStaleVersionFromBackendReturns412() {
+        org.springframework.test.util.ReflectionTestUtils.setField(errors,"trustedEnabled",true);
+        authenticate();
+        when(client.lifecycle(eq(project),eq(true),eq(7),any(),any())).thenReturn(Mono.error(Status.ABORTED
+                .asRuntimeException(mapper.GrpcErrorDetails.encode(java.util.Map.of("code","VERSION_CONFLICT")))));
+        http.delete().uri(url()).header(HttpHeaders.AUTHORIZATION,"Bearer token")
+                .header("If-Match","\"7\"").header("Idempotency-Key",UUID.randomUUID().toString()).exchange()
+                .expectStatus().isEqualTo(412).expectBody().jsonPath("$.code").isEqualTo("VERSION_CONFLICT");
+    }
+
+    @org.junit.jupiter.api.AfterEach
+    void restoreErrorProfile() {
+        org.springframework.test.util.ReflectionTestUtils.setField(errors,"trustedEnabled",false);
     }
 
     private String url() {return "/api/v1/projects/"+project;}

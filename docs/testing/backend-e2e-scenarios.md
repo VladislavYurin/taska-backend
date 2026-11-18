@@ -789,3 +789,7 @@ Cleanup: закрыть каналы/серверы/pools и удалить со
 ## Контекст проекта и отказ workflow (TAS-533)
 
 `python3 scripts/harness/project_context_e2e.py` создаёт собственный локальный Compose стенд с production mTLS/JWS и primary auth/membership. Проверяет успешный legacy ProjectServiceImpl context через прямой RPC, отказ HTTP context при остановленном workflow, requestId, неизменность project/members/outbox, восстановление того же контекста и ownership cleanup. Не повторяет мутации для readiness. Native task-quota enrichment использует другой профиль; обычный полный REST context с этим enrichment данным сценарием не подтверждается. Ошибки частичного/полного workflow и NOT_FOUND дополнительно проверяются ProjectServiceImplTest.
+
+## Tenant archive/restore проекта (TAS-341)
+
+`python3 scripts/harness/project_lifecycle_e2e.py` создаёт семь native приложений и собственные PostgreSQL/Kafka/storage. Проверяет DELETE archive и POST restore с strong quoted If-Match и Idempotency-Key: implicit company ADMIN без project grant, сохранённый ответ повтора после последующего restore, конфликт ключа/версии и параллельных команд, A/B, viewer/revoked membership denial, последний project ADMIN и verified web administrative MFA с аудитом. Квота проекта и issue/history сравниваются до/после. Cleanup использует signed owner state; общий стенд не затрагивается. Unit/SQL regression отдельно проверяет rollback state/outbox/receipt при ошибке записи квитанции и app LOGIN/RLS.

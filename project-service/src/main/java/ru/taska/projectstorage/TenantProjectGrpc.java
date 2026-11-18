@@ -34,6 +34,20 @@ public class TenantProjectGrpc extends ReactorProjectServiceGrpc.ProjectServiceI
   }
 
   @Override
+  public Mono<ProjectResponse> archiveProject(Mono<ArchiveProjectRequest> q) {
+    return call(q.flatMap(v -> api.lifecycle(v.getProjectId(), v.getActorUserId(), true,
+        v.hasExpectedVersion() ? v.getExpectedVersion() : null,
+        v.hasIdempotencyKey() ? v.getIdempotencyKey() : null)));
+  }
+
+  @Override
+  public Mono<ProjectResponse> restoreProject(Mono<RestoreProjectRequest> q) {
+    return call(q.flatMap(v -> api.lifecycle(v.getProjectId(), v.getActorUserId(), false,
+        v.hasExpectedVersion() ? v.getExpectedVersion() : null,
+        v.hasIdempotencyKey() ? v.getIdempotencyKey() : null)));
+  }
+
+  @Override
   public Mono<ProjectResponse> updateProject(Mono<UpdateProjectRequest> q) {
     return call(q.flatMap(v -> api.update(v.getBody())));
   }

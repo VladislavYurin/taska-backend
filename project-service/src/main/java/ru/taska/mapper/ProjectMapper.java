@@ -56,6 +56,7 @@ public interface ProjectMapper {
     @Mapping(target = "archivedAt", source = "archivedAt", nullValueCheckStrategy = NullValueCheckStrategy.ALWAYS)
     @Mapping(target = "description", source = "description", nullValueCheckStrategy = NullValueCheckStrategy.ALWAYS)
     @Mapping(target = "color", source = "color", nullValueCheckStrategy = NullValueCheckStrategy.ALWAYS)
+    @Mapping(target = "version", source = "version", nullValueCheckStrategy = NullValueCheckStrategy.ALWAYS)
     ProjectResponse toProjectResponse(Project project);
 
     /**
@@ -80,6 +81,7 @@ public interface ProjectMapper {
     @Mapping(target = "description", source = "project.description", nullValueCheckStrategy = NullValueCheckStrategy.ALWAYS)
     @Mapping(target = "color", source = "project.color", nullValueCheckStrategy = NullValueCheckStrategy.ALWAYS)
     @Mapping(target = "currentUserRole", source = "role", nullValueCheckStrategy = NullValueCheckStrategy.ALWAYS)
+    @Mapping(target = "version", source = "project.version", nullValueCheckStrategy = NullValueCheckStrategy.ALWAYS)
     ProjectResponse toProjectResponse(Project project, ProjectRole role);
 
     /**

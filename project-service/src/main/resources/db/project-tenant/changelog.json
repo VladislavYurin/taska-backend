@@ -356,6 +356,43 @@
           }
         ]
       }
+    },
+    {
+      "changeSet": {
+        "id": "project-lifecycle-0011",
+        "author": "taska",
+        "changes": [
+          {
+            "sqlFile": {
+              "path": "0011-project-lifecycle.sql",
+              "relativeToChangelogFile": true,
+              "splitStatements": false
+            }
+          },
+          {
+            "sql": {
+              "sql": "SELECT set_config('taska.guard_service','project',true),set_config('taska.guard_schema','taska',true),set_config('taska.guard_table','project_lifecycle_commands',true),set_config('taska.guard_column','tenant_id',true),set_config('taska.guard_app_access','append_only',true);"
+            }
+          },
+          {
+            "sqlFile": {
+              "path": "db/tenant/protect-table.sql",
+              "splitStatements": false
+            }
+          },
+          {
+            "sql": {
+              "sql": "SELECT set_config('taska.audit_service','project',true),set_config('taska.audit_schema','taska',true),set_config('taska.audit_table','project_lifecycle_commands',true),set_config('taska.audit_column','tenant_id',true),set_config('taska.audit_app_access','append_only',true);"
+            }
+          },
+          {
+            "sqlFile": {
+              "path": "db/tenant/audit.sql",
+              "splitStatements": false
+            }
+          }
+        ]
+      }
     }
   ]
 }

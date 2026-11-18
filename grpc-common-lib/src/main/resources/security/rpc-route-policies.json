@@ -713,6 +713,15 @@
       "requestClass": "ru.taska.api.project.v1.ArchiveProjectRequest"
     },
     {
+      "rpc": "ru.taska.project.v1.ProjectService/RestoreProject",
+      "audience": "project-service",
+      "scope": "TENANT_PROJECT_ACL_CAPABILITY",
+      "tenantRequired": true,
+      "mutation": true,
+      "action": "restoreProject",
+      "requestClass": "ru.taska.api.project.v1.RestoreProjectRequest"
+    },
+    {
       "rpc": "ru.taska.project.v1.ProjectService/ChangeProjectMemberRole",
       "audience": "project-service",
       "scope": "TENANT_PROJECT_ACL_CAPABILITY",

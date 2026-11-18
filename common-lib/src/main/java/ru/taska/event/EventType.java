@@ -24,6 +24,7 @@ public enum EventType {
     USER_SIGNUP_EXISTING_ACCOUNT("UserSignupExistingAccount"),
     PROJECT_CREATED("ProjectCreated"),
     PROJECT_ARCHIVED("ProjectArchived"),
+    PROJECT_RESTORED("ProjectRestored"),
     MEMBER_ADDED("MemberAdded"),
     MEMBER_REMOVED("MemberRemoved"),
     MEMBER_UPDATED("MemberUpdated"),

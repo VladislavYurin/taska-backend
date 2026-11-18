@@ -1209,11 +1209,49 @@ paths:
         default:
           $ref: '#/components/responses/ErrorResponse'
 
+  /api/v1/projects/{projectId}/restore:
+    post:
+      x-pat-scope: write
+      operationId: restoreProject
+      summary: Восстановить архивный проект в native tenant profile
+      description: >
+        Требуются актуальные права ADMIN проекта/компании либо явный административный путь.
+        Версия и ключ обязательны. Повтор с тем же payload возвращает сохранённый ответ после
+        текущей авторизации. UUID, история и использованная квота сохраняются; новая квота не резервируется.
+        Новый ключ с текущей версией для уже восстановленного проекта не создаёт событие и не увеличивает версию.
+      tags: [project-archive]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+        - name: If-Match
+          in: header
+          required: false
+          description: Semantically required; missing returns 428 VERSION_CONFLICT, stale returns 412. Strong quoted ProjectResponseDto.version.
+          schema: {type: string}
+        - name: Idempotency-Key
+          in: header
+          required: false
+          description: Semantically required canonical lowercase UUID; conflicting payload returns 409 IDEMPOTENCY_CONFLICT.
+          schema: {type: string}
+      responses:
+        '200':
+          description: Проект восстановлен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectResponseDto'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
   /api/v1/projects/{projectId}:
     delete:
       x-pat-scope: write
       operationId: archiveProject
-      summary: Архивировать проект — только ADMIN проекта, идемпотентно
+      summary: Архивировать проект — ADMIN проекта или компании, идемпотентно
       description: >
         Проект и его данные сохраняются. Архивный проект скрыт из списка проектов, но доступен
         участникам по прямой ссылке для чтения. Запись отклоняется с FAILED_PRECONDITION и
@@ -1228,6 +1266,16 @@ paths:
           schema:
             type: string
             format: uuid
+        - name: If-Match
+          in: header
+          required: false
+          description: Required in native tenant profile; strong quoted ProjectResponseDto.version. Missing returns 428, stale returns 412 VERSION_CONFLICT.
+          schema: {type: string}
+        - name: Idempotency-Key
+          in: header
+          required: false
+          description: Required in native tenant profile; canonical lowercase UUID. Replay returns the saved response after current authorization; changed payload returns 409.
+          schema: {type: string}
       responses:
         '200':
           description: Проект в архиве
@@ -7020,6 +7068,10 @@ components:
     ProjectResponseDto:
       type: object
       properties:
+        version:
+          type: string
+          pattern: '^(0|[1-9][0-9]*)$'
+          description: Current project version as decimal string; native archive/restore use a strong quoted If-Match. Existing projects start at zero.
         id:
           type: string
           description: Уникальный идентификатор проекта

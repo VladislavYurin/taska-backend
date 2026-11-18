@@ -178,6 +178,8 @@ public class TenantStorageConfiguration {
             "CreateProject",
             "GetProject",
             "UpdateProject",
+            "ArchiveProject",
+            "RestoreProject",
             "GetProjectContext",
             "ListMyProjects",
             "AddProjectMember",

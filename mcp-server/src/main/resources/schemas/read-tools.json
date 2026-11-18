@@ -1442,6 +1442,11 @@
               }, {
                 "type" : "null"
               } ]
+            },
+            "version" : {
+              "type" : "string",
+              "pattern" : "^(0|[1-9][0-9]*)$",
+              "description" : "Current project version as decimal string; native archive/restore use a strong quoted If-Match. Existing projects start at zero."
             }
           }
         },
@@ -2453,6 +2458,11 @@
               }, {
                 "type" : "null"
               } ]
+            },
+            "version" : {
+              "type" : "string",
+              "pattern" : "^(0|[1-9][0-9]*)$",
+              "description" : "Current project version as decimal string; native archive/restore use a strong quoted If-Match. Existing projects start at zero."
             }
           }
         }
