@@ -50,24 +50,20 @@ class AttachmentUploadLocal(IssueAclLocal):
         for tenant, client in clients:
             client.timeout = 60
             self.sql('billing_db', "INSERT INTO taska.subscriptions(tenant_id,selected_plan_version_id,selected_terms_snapshot,mode) SELECT '%s',id,to_jsonb(p),'FREE' FROM taska.catalog_plan_versions p WHERE id='00000000-0000-8000-8000-000000000001';" % tenant)
-            self.sql('workflow_db', "INSERT INTO taska.tenant_workflow_templates(tenant_id,template_id,code,version,name,graph_schema_version,graph) SELECT '%s',id,code,version,name,graph_schema_version,graph FROM taska.workflow_templates WHERE code='DEFAULT';" % tenant)
+            # Существующий проект и issue — собственные fixtures; создание workflow не входит в upload scope.
+            project, issue = str(uuid.uuid4()), str(uuid.uuid4())
+            self.sql('project_db', "INSERT INTO taska.projects(tenant_id,id,project_key,name,created_by) VALUES('%s','%s','UPL','Owned attachment fixture','%s');" % (tenant, project, actor))
+            self.sql('issue_db', "INSERT INTO taska.project_counters(tenant_id,project_id,next_issue_number,lifetime_created) VALUES('%s','%s',2,1);INSERT INTO taska.issues(tenant_id,id,project_id,issue_number,issue_key,issue_type,summary,status_key,priority,reporter_id) VALUES('%s','%s','%s',1,'UPL-1','TASK','Owned attachment issue','TODO','MEDIUM','%s');" % (tenant, project, tenant, issue, project, actor))
             deadline = time.monotonic() + 180
-            probe_path = '/api/v1/projects/' + str(uuid.uuid4())
+            probe_path = '/api/v1/projects/' + project
             while time.monotonic() < deadline:
                 response = client.request('GET', probe_path)
-                if response.status == 404:
+                if response.status == 200:
                     break
                 e.require(response.status == 503, 'Protected readiness returned unexpected status')
                 time.sleep(1)
             else:
                 raise e.Blocked('Attachment primary readiness deadline exceeded')
-            project = client.expect('POST', '/api/v1/projects', 201,
-                                    {'projectKey': 'UPL', 'name': 'Owned attachment fixture'},
-                                    {'Idempotency-Key': str(uuid.uuid4())}).json()['id']
-            self.ready_workflow(client, project)
-            issue = client.expect('POST', '/api/v1/projects/' + project + '/issues', 201,
-                                  {'issueType': 'TASK', 'summary': 'Owned attachment issue', 'priority': 'MEDIUM'},
-                                  {'Idempotency-Key': str(uuid.uuid4())}).json()['id']
             fixtures.append((tenant, client, project, issue))
         tenant, owner, project, issue = fixtures[0]
         _, foreign, foreign_project, foreign_issue = fixtures[1]

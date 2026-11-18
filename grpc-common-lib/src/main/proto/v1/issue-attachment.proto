@@ -325,7 +325,7 @@ service AttachmentAdmissionService {
   rpc ReconcileUploads(ReconcileAttachmentUploadsRequest) returns (ReconcileAttachmentUploadsResponse);
 }
 message AttachmentAdmissionRequest {
-  ru.taska.b2b.v1.RequestContext context = 1;
+  ru.taska.b2b.v1.RequestContext context = 100;
   string operation_id = 2;
   string resource_id = 3;
   string project_id = 4;
@@ -342,7 +342,7 @@ message AttachmentAdmissionGrant {
 }
 
 message ReconcileAttachmentUploadsRequest {
-  ru.taska.b2b.v1.RequestContext context = 1;
+  ru.taska.b2b.v1.RequestContext context = 100;
   string after_id = 2;
   int32 limit = 3;
 }

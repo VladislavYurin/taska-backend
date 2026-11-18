@@ -286,6 +286,10 @@ class AttachmentUploadIntegrationTest {
                     uploads.confirm(q.toBuilder().setObjectKey("foreign/key").build()))
                 .block(WAIT));
     assertEquals(0, rows("issue_attachments"));
+    assertTrue(
+        !as(A, ACTOR, "confirmAttachmentUpload", store.staging(u.getObjectKey()))
+            .block(WAIT)
+            .confirmRequested());
     assertEquals("0", StorageQuotaIntegrationTest.usage(A).getUsed());
   }
 

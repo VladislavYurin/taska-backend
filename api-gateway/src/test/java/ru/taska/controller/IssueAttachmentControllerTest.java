@@ -200,6 +200,40 @@ class IssueAttachmentControllerTest {
     }
 
     @Test
+    @DisplayName("Явный ключ повтора передаётся из заголовка без изменения")
+    void uploadForwardsExplicitIdempotencyKey() {
+        mockAuthenticatedUser();
+        var response = new CreateAttachmentUploadUrlResponseDto();
+        response.setUploadUrl(URI.create("https://storage.invalid/owned"));
+        response.setObjectKey("owned/key");
+        Mockito.when(attachmentClient.createAttachmentUploadUrl(
+                Mockito.eq(PROJECT_ID.toString()), Mockito.eq(ISSUE_ID.toString()),
+                Mockito.any(Mono.class), Mockito.any(GatewayContext.class), Mockito.eq("owned-repeat")))
+                .thenReturn(Mono.just(response));
+        webTestClient.post()
+                .uri("/api/v1/projects/{projectId}/issues/{issueId}/attachments/upload-url", PROJECT_ID, ISSUE_ID)
+                .header(HttpHeaders.AUTHORIZATION, TOKEN)
+                .header("Idempotency-Key", "owned-repeat")
+                .contentType(MediaType.APPLICATION_JSON).bodyValue(createUploadUrlRequest())
+                .exchange().expectStatus().isOk();
+        Mockito.verify(attachmentClient).createAttachmentUploadUrl(
+                Mockito.eq(PROJECT_ID.toString()), Mockito.eq(ISSUE_ID.toString()),
+                Mockito.any(Mono.class), Mockito.any(GatewayContext.class), Mockito.eq("owned-repeat"));
+    }
+
+    @Test
+    @DisplayName("Несколько ключей повтора отклоняются до вызова загрузки")
+    void uploadRejectsDuplicateIdempotencyHeaders() {
+        webTestClient.post()
+                .uri("/api/v1/projects/{projectId}/issues/{issueId}/attachments/upload-url", PROJECT_ID, ISSUE_ID)
+                .header(HttpHeaders.AUTHORIZATION, TOKEN)
+                .header("Idempotency-Key", "one", "two")
+                .contentType(MediaType.APPLICATION_JSON).bodyValue(createUploadUrlRequest())
+                .exchange().expectStatus().isBadRequest();
+        Mockito.verifyNoInteractions(attachmentClient);
+    }
+
+    @Test
     @DisplayName("createAttachmentUploadUrl: должен вернуть 400 Bad Request при отсутствующем теле запроса")
     void createAttachmentUploadUrl_shouldReturn400_whenBodyIsMissing() {
         mockAuthenticatedUser();

@@ -83,7 +83,7 @@ public class GrpcIssueAttachmentServiceClient {
         log.info("[{}] Calling createAttachmentUploadUrl", context.requestId());
 
         return request.flatMap(requestDto ->
-                ru.taska.security.tenant.RpcContextBridge.outbound(() -> dynamicStub().createAttachmentUploadUrl(
+                ru.taska.security.tenant.RpcContextBridge.outbound(() -> uploadStub().createAttachmentUploadUrl(
                                 CreateAttachmentUploadUrlRequest.newBuilder()
                                         .setHeader(buildGrpcHeader(context))
                                         .setBody(CreateAttachmentUploadUrlRequestBody.newBuilder()
@@ -123,7 +123,7 @@ public class GrpcIssueAttachmentServiceClient {
         log.info("[{}] Calling confirmAttachmentUpload", context.requestId());
 
         return request.flatMap(requestDto ->
-                ru.taska.security.tenant.RpcContextBridge.outbound(() -> dynamicStub().confirmAttachmentUpload(
+                ru.taska.security.tenant.RpcContextBridge.outbound(() -> uploadStub().confirmAttachmentUpload(
                                 ConfirmAttachmentUploadRequest.newBuilder()
                                         .setHeader(buildGrpcHeader(context))
                                         .setBody(ConfirmAttachmentUploadRequestBody.newBuilder()
@@ -189,7 +189,14 @@ public class GrpcIssueAttachmentServiceClient {
      * Возвращает gRPC stub с динамически настроенным временем ожидания (deadline).
      */
     private ReactorIssueAttachmentServiceGrpc.ReactorIssueAttachmentServiceStub dynamicStub() {
-        return attachmentServiceStub.withDeadlineAfter(nativeContext?Math.max(20000,properties.issueService().deadlineDuration().toMillis()):properties.issueService().deadlineDuration().toMillis(), TimeUnit.MILLISECONDS);
+        return attachmentServiceStub.withDeadlineAfter(
+                properties.issueService().deadlineDuration().toMillis(), TimeUnit.MILLISECONDS);
+    }
+
+    private ReactorIssueAttachmentServiceGrpc.ReactorIssueAttachmentServiceStub uploadStub() {
+        long deadline = properties.issueService().deadlineDuration().toMillis();
+        return attachmentServiceStub.withDeadlineAfter(
+                nativeContext ? Math.max(20000, deadline) : deadline, TimeUnit.MILLISECONDS);
     }
 
     @org.springframework.beans.factory.annotation.Value("${taska.rpc.context.enabled:false}")
