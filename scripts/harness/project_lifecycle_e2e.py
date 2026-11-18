@@ -46,6 +46,8 @@ class ProjectLifecycleLocal(IssueAclLocal):
             return (self.sql('tenant_db', "SELECT used||'/'||reserved FROM taska.quota_counters WHERE tenant_id='%s' AND resource='PROJECT';" % tenant).strip(),
                 self.sql('issue_db', "SELECT jsonb_build_array((SELECT to_jsonb(i) FROM taska.issues i WHERE id='%s'),(SELECT jsonb_agg(to_jsonb(h) ORDER BY id) FROM taska.issue_history h WHERE issue_id='%s'));" % (issue, issue)).strip())
         baseline = retained()
+        owner.expect('DELETE', path, 428, headers={'Idempotency-Key': str(uuid.uuid4())})
+        owner.expect('DELETE', path, 428)
         key = str(uuid.uuid4())
         original = headers(initial['version'], key)
         archived = owner.expect('DELETE', path, 200, headers=original).json()

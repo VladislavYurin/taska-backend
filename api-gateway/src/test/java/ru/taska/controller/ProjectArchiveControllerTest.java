@@ -93,6 +93,27 @@ class ProjectArchiveControllerTest {
         verifyNoInteractions(client);
     }
 
+    @Test
+    void nativeArchiveMissingVersionFromBackendReturns428() {
+        org.springframework.test.util.ReflectionTestUtils.setField(errors,"trustedEnabled",true);
+        authenticate();
+        when(client.archive(eq(project),any())).thenReturn(Mono.error(Status.FAILED_PRECONDITION
+                .asRuntimeException(mapper.GrpcErrorDetails.encode(java.util.Map.of("code","VERSION_CONFLICT")))));
+        http.delete().uri(url()).header(HttpHeaders.AUTHORIZATION,"Bearer token").exchange()
+                .expectStatus().isEqualTo(428).expectBody().jsonPath("$.code").isEqualTo("VERSION_CONFLICT");
+    }
+
+    @Test
+    void nativeLifecycleStaleVersionFromBackendReturns412() {
+        org.springframework.test.util.ReflectionTestUtils.setField(errors,"trustedEnabled",true);
+        authenticate();
+        when(client.lifecycle(eq(project),eq(true),eq(7),any(),any())).thenReturn(Mono.error(Status.ABORTED
+                .asRuntimeException(mapper.GrpcErrorDetails.encode(java.util.Map.of("code","VERSION_CONFLICT")))));
+        http.delete().uri(url()).header(HttpHeaders.AUTHORIZATION,"Bearer token")
+                .header("If-Match","\"7\"").header("Idempotency-Key",UUID.randomUUID().toString()).exchange()
+                .expectStatus().isEqualTo(412).expectBody().jsonPath("$.code").isEqualTo("VERSION_CONFLICT");
+    }
+
     @org.junit.jupiter.api.AfterEach
     void restoreErrorProfile() {
         org.springframework.test.util.ReflectionTestUtils.setField(errors,"trustedEnabled",false);
