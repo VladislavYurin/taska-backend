@@ -23,6 +23,7 @@ public class OAuthBackendController {
   private final JdbcTemplate jdbc;
   private final HttpSessionCsrfTokenRepository csrf;
   private final TaskaIdentityClient identity;
+  private final TenantOAuthGrants tenants;
   private long registrationWindow;
   private int registrations;
 
@@ -32,7 +33,7 @@ public class OAuthBackendController {
       OAuth2AuthorizationConsentService consents,
       OAuthServerProperties policy,
       JdbcTemplate jdbc,
-      HttpSessionCsrfTokenRepository csrf, TaskaIdentityClient identity) {
+      HttpSessionCsrfTokenRepository csrf, TaskaIdentityClient identity, TenantOAuthGrants tenants) {
     this.clients = clients;
     this.grants = grants;
     this.consents = consents;
@@ -40,6 +41,7 @@ public class OAuthBackendController {
     this.jdbc = jdbc;
     this.csrf = csrf;
     this.identity = identity;
+    this.tenants = tenants;
   }
 
   @GetMapping("/oauth/consent")
@@ -78,6 +80,8 @@ public class OAuthBackendController {
     values.put("granted_scopes", consent == null ? Set.of() : new TreeSet<>(consent.getScopes()));
     values.put("account", Map.of("email", user.getEmail(), "display_name", user.getDisplayName()));
     values.put("state", state);
+    // TAS-498: approval must post tenant_grant, approved for this state by a tenant web session.
+    values.put("tenant_required", tenants.enabled());
     values.put("submit_uri", "/oauth2/authorize");
     values.put("csrf_parameter", token.getParameterName());
     values.put("csrf_token", token.getToken());
@@ -88,7 +92,7 @@ public class OAuthBackendController {
   @GetMapping("/oauth/grants")
   public List<Map<String, Object>> grants(Authentication actor) {
     return jdbc.query(
-        "SELECT id,registered_client_id,authorized_scopes FROM oauth2_authorization WHERE"
+        "SELECT id,registered_client_id,authorized_scopes,tenant_id FROM oauth2_authorization WHERE"
             + " principal_name=? AND access_token_value IS NOT NULL AND"
             + " ((access_token_expires_at>now() AND"
             + " COALESCE(access_token_metadata::jsonb->>'metadata.token.invalidated','false')='false')"
@@ -97,15 +101,14 @@ public class OAuthBackendController {
             + " ORDER BY id",
         (row, n) -> {
           var client = clients.findById(row.getString(2));
-          return Map.<String, Object>of(
-              "grant_id",
-              row.getString(1),
-              "client_id",
-              client.getClientId(),
-              "client_name",
-              client.getClientName(),
-              "scopes",
-              Arrays.asList(row.getString(3).split(",")));
+          var grant = new LinkedHashMap<String, Object>();
+          grant.put("grant_id", row.getString(1));
+          grant.put("client_id", client.getClientId());
+          grant.put("client_name", client.getClientName());
+          grant.put("scopes", Arrays.asList(row.getString(3).split(",")));
+          // TAS-498: the one company the connection was approved for; null for legacy grants.
+          grant.put("tenant_id", row.getString(4));
+          return grant;
         },
         actor.getName());
   }
@@ -133,23 +136,26 @@ public class OAuthBackendController {
     Map<String, Object> claims = access.getClaims();
     if (claims == null || !request.token_id.equals(claims.get("jti")))
       return Map.of("active", false);
-    return Map.of(
-        "active",
-        true,
-        "sub",
-        grant.getPrincipalName(),
-        "iss",
-        policy.issuer().toString(),
-        "aud",
-        List.of(policy.resource().toString()),
-        "exp",
-        access.getToken().getExpiresAt().getEpochSecond(),
-        "scope",
-        String.join(" ", access.getToken().getScopes()),
-        "grant_id",
-        grant.getId(),
-        "jti",
-        request.token_id);
+    var parent = new LinkedHashMap<String, Object>();
+    parent.put("active", true);
+    parent.put("sub", grant.getPrincipalName());
+    parent.put("iss", policy.issuer().toString());
+    parent.put("aud", List.of(policy.resource().toString()));
+    parent.put("exp", access.getToken().getExpiresAt().getEpochSecond());
+    parent.put("scope", String.join(" ", access.getToken().getScopes()));
+    parent.put("grant_id", grant.getId());
+    parent.put("jti", request.token_id);
+    // TAS-498: a tenant-bound parent must never back an unbound delegation credential.
+    var binding = TenantOAuthGrants.binding(grant);
+    if (binding != null) {
+      var client = clients.findById(grant.getRegisteredClientId());
+      if (client == null) return Map.of("active", false);
+      parent.put("integration_grant_id", binding.grant().toString());
+      parent.put("tenant_id", binding.tenant().toString());
+      parent.put("grant_version", Long.toString(binding.version()));
+      parent.put("client_id", client.getClientId());
+    }
+    return parent;
   }
 
   public record ParentRequest(String grant_id, String token_id) {}

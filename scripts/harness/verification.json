@@ -281,6 +281,8 @@
           "AuthSessionBoundaryTest",
           "TenantPersonalTokenStoreIntegrationTest",
           "TenantPersonalTokenBoundaryTest",
+          "TenantOAuthGrantStoreIntegrationTest",
+          "TenantOAuthGrantBoundaryTest",
           "GatewayCredentialResolverIntegrationTest",
           "AuthRpcTrustIntegrationTest",
           "RpcTrustControlBoundaryTest"
@@ -569,7 +571,8 @@
       "reports": {
         "directory": "oauth-server/target/surefire-reports",
         "selectors": [
-          "*"
+          "*",
+          "TenantOAuthGrantProtocolIntegrationTest"
         ],
         "noTestsReason": null
       },

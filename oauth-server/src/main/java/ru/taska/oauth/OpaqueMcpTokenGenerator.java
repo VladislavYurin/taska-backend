@@ -15,11 +15,21 @@ public class OpaqueMcpTokenGenerator implements OAuth2TokenGenerator<OAuth2Token
 
   public OpaqueMcpTokenGenerator(OAuthServerProperties policy) {
     access.setAccessTokenCustomizer(
-        context ->
+        context -> {
+          context
+              .getClaims()
+              .audience(new ArrayList<>(List.of(policy.resource().toString())))
+              .claim("grant_id", context.getAuthorization().getId());
+          // TAS-498: introspection carries the immutable tenant binding of the authorization.
+          var binding = TenantOAuthGrants.binding(context.getAuthorization());
+          if (binding != null)
             context
                 .getClaims()
-                .audience(new ArrayList<>(List.of(policy.resource().toString())))
-                .claim("grant_id", context.getAuthorization().getId()));
+                .claim("integration_grant_id", binding.grant().toString())
+                .claim("tenant_id", binding.tenant().toString())
+                // String: persisted token metadata only round-trips allowlisted claim types.
+                .claim("grant_version", Long.toString(binding.version()));
+        });
   }
 
   @Override

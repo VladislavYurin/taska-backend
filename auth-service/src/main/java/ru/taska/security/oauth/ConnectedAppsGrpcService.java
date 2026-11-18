@@ -64,11 +64,26 @@ public class ConnectedAppsGrpcService
                                     req.getAppId(), "appId")
                                 .flatMap(
                                     appId ->
-                                        client.enabled()
-                                            ? client.revokeConnectedApp(id, appId.toString())
-                                            : Mono.empty())))
+                                        tenant(req)
+                                            .map(java.util.Optional::of)
+                                            .defaultIfEmpty(java.util.Optional.empty())
+                                            .flatMap(
+                                                tenant ->
+                                                    client.enabled()
+                                                        ? client.revokeConnectedApp(
+                                                            id,
+                                                            appId.toString(),
+                                                            tenant.orElse(null))
+                                                        : Mono.empty()))))
         .thenReturn(Empty.getDefaultInstance())
         .transform(GrpcExceptionHandler.withErrorHandling("RevokeConnectedApp"));
+  }
+
+  /** TAS-498: an explicit company narrows the revocation to that tenant's connection. */
+  private static Mono<UUID> tenant(RevokeConnectedAppRequest request) {
+    return request.hasTenantId()
+        ? GrpcRequestValidators.parseUuidOrInvalidArgument(request.getTenantId(), "tenantId")
+        : Mono.empty();
   }
 
   private Mono<UUID> owner(Header header, String session, String requestedOwner) {
@@ -112,6 +127,7 @@ public class ConnectedAppsGrpcService
     if (node.hasNonNull("lastUsedAt"))
       app.setLastUsedAt(timestamp(node.path("lastUsedAt").asText()));
     if (node.hasNonNull("expiresAt")) app.setExpiresAt(timestamp(node.path("expiresAt").asText()));
+    if (node.hasNonNull("tenantId")) app.setTenantId(node.path("tenantId").asText());
     return app.build();
   }
 
