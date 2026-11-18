@@ -401,6 +401,68 @@ class TenantCapabilitiesIntegrationTest {
   }
 
   @Test
+  void resumeRestoresOnlyRemainingPaidAccessAndNeverExtendsExpiredCoverage() {
+    var commands = new TenantRestrictionService(tx, clock);
+    java.util.function.LongFunction<Tenant> pause =
+        version ->
+            RegistryTestContext.withClaims(
+                    claims(OWNER, A, "1").toBuilder().setAction("pauseTenant").build(),
+                    commands.pause(
+                        PauseTenantRpcRequest.newBuilder()
+                            .setTenantId(A.toString())
+                            .setPayload(ConfirmedAction.newBuilder().setConfirmed(true))
+                            .setMutation(
+                                MutationOptions.newBuilder()
+                                    .setExpectedVersion(Long.toString(version))
+                                    .setIdempotencyKey(UUID.randomUUID().toString()))
+                            .build()))
+                .block(WAIT);
+    java.util.function.Function<Tenant, Tenant> resume =
+        current ->
+            RegistryTestContext.withClaims(
+                    claims(OWNER, A, "1").toBuilder().setAction("resumeTenant").build(),
+                    commands.resume(
+                        ResumeTenantRpcRequest.newBuilder()
+                            .setTenantId(A.toString())
+                            .setMutation(
+                                MutationOptions.newBuilder()
+                                    .setExpectedVersion(current.getVersion())
+                                    .setIdempotencyKey(UUID.randomUUID().toString()))
+                            .build()))
+                .block(WAIT);
+    var paid = commercial.get(A);
+    var paused = pause.apply(1L);
+    assertFalse(item(get(OWNER, A), Action.INVITATION_CREATE).getAllowed());
+    var resumed = resume.apply(paused);
+    assertTrue(item(get(OWNER, A), Action.INVITATION_CREATE).getAllowed());
+    assertEquals(paid, commercial.get(A));
+
+    paused = pause.apply(Long.parseLong(resumed.getVersion()));
+    var expired = entitlement(A, "2", true);
+    commercial.put(A, expired);
+    resume.apply(paused);
+    var afterExpiry = get(OWNER, A);
+    assertFalse(item(afterExpiry, Action.INVITATION_CREATE).getAllowed());
+    assertTrue(
+        item(afterExpiry, Action.INVITATION_CREATE)
+            .getRestrictionsList()
+            .contains(RestrictionCode.RESTRICTION_CODE_PAYMENT_EXPIRED));
+    assertFalse(
+        item(afterExpiry, Action.INVITATION_CREATE)
+            .getRestrictionsList()
+            .contains(RestrictionCode.RESTRICTION_CODE_OWNER_PAUSE));
+    assertTrue(item(afterExpiry, Action.BILLING_READ).getAllowed());
+    assertEquals(expired, commercial.get(A));
+    assertEquals(
+        4L,
+        operator
+            .sql("SELECT count(*) n FROM taska.outbox_events")
+            .map((r, m) -> r.get("n", Long.class))
+            .one()
+            .block(WAIT));
+  }
+
+  @Test
   void primaryPauseAndBlockRefreshWithoutHidingControlOrFinancialRecovery() {
     assertTrue(item(get(OWNER, A), Action.TENANT_RESUME).getAllowed());
     sql(

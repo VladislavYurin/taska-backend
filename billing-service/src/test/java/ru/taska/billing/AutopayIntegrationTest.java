@@ -1227,12 +1227,13 @@ class AutopayIntegrationTest {
   }
 
   @Test
-  void currentRootPauseAndBlockStopNewChargesButAcceptedReplayStillReconciles() {
+  void currentRootPauseBlockAndDisputeStopNewChargesButAcceptedReplayStillReconciles() {
     renewal();
     for (var restriction :
         java.util.List.of(
             ru.taska.api.b2b.v1.RestrictionCode.RESTRICTION_CODE_OWNER_PAUSE,
-            ru.taska.api.b2b.v1.RestrictionCode.RESTRICTION_CODE_PLATFORM_BLOCK)) {
+            ru.taska.api.b2b.v1.RestrictionCode.RESTRICTION_CODE_PLATFORM_BLOCK,
+            ru.taska.api.b2b.v1.RestrictionCode.RESTRICTION_CODE_PAYMENT_DISPUTE)) {
       rootRestrictions.set(java.util.Set.of(restriction));
       refusesDispatch();
     }

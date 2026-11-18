@@ -1,3 +1,7 @@
+## Purpose
+
+Сохранять независимые причины ограничений компании, проверять текущие полномочия и версии команд и применять эти причины к доступу и новым автосписаниям без изменения оплаченного периода.
+
 ## ADDED Requirements
 
 ### Requirement: Independent versioned tenant restrictions
@@ -39,3 +43,19 @@ Pause/resume SHALL NOT списывать деньги, продлевать п�
 #### Scenario: Pause before a new autopay attempt
 - **WHEN** company pause/block установлена перед новым dispatch
 - **THEN** новый внешний charge не допускается, а существующая accepted/UNKNOWN попытка остаётся в reconciliation
+
+### Requirement: Versioned command contracts
+
+REST-команды pauseTenant/resumeTenant/setPlatformBlock и одноимённые RPC SHALL проверять tenant target, UUID ключ повтора и ожидаемую версию; pause и platform block SHALL требовать подтверждение. Публичные ответы SHALL исключать свободный административный reason.
+
+#### Scenario: Missing or stale REST version
+- **WHEN** авторизованная команда не передаёт If-Match либо передаёт устаревшую версию
+- **THEN** ответ имеет соответственно 428 либо 412 без изменения tenant state; другой payload под прежним ключом даёт 409
+
+### Requirement: Fresh primary restriction authority
+
+MembershipSnapshot, MembershipValidationBatch и TenantPaymentState SHALL возвращать текущие independent restrictions и положительную canonical restriction_version. Потребители доступа и новых autopay admissions SHALL отклонять неполный или несовместимый primary ответ вместо разрешения по старому пустому набору причин.
+
+#### Scenario: Old or invalid root response
+- **WHEN** обязательная версия отсутствует, причина неизвестна либо membership snapshots не согласованы с tenant и batch
+- **THEN** потребитель возвращает UNAVAILABLE и не выполняет разрешаемую запись или новое списание

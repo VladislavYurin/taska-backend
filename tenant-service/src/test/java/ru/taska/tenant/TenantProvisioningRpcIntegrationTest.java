@@ -3,6 +3,7 @@ package ru.taska.tenant;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.google.protobuf.Message;
 import io.grpc.BindableService;
@@ -1325,7 +1326,24 @@ class TenantProvisioningRpcIntegrationTest {
     var rootAuthority =
         new GrpcTenantPaymentState(
             ReactorTenantPaymentStateServiceGrpc.newReactorStub(rootChannel), billingSigner, CLOCK);
-    var initialRoot = rootAuthority.current(t).block(WAIT);
+    java.util.function.Supplier<TenantPaymentState> readRoot =
+        () -> {
+          var caller =
+              ProvisioningAuthority.context(t, "billing-service", "applyVerifiedPayment", CLOCK)
+                  .toBuilder();
+          caller.setContext(caller.getContext().toBuilder().setIssuerService("billing-service"));
+          return billingSigner
+              .authorize(
+                  caller.build(),
+                  PaymentSettlementServiceGrpc.getApplyVerifiedPaymentMethod().getFullMethodName(),
+                  new RpcContextSecurity.Policy(true, true))
+              .flatMap(
+                  parent ->
+                      ru.taska.security.tenant.RpcContextBridge.install(
+                          rootAuthority.current(t), parent))
+              .block(WAIT);
+        };
+    var initialRoot = readRoot.get();
     assertEquals("1", initialRoot.getRestrictionVersion());
     assertEquals(List.of(), initialRoot.getIndependentRestrictionsList());
     // Independent root reasons survive a verified payment and Root activation.
@@ -1342,7 +1360,7 @@ class TenantProvisioningRpcIntegrationTest {
         .bind("t", t)
         .then()
         .block(WAIT);
-    var restrictedRoot = rootAuthority.current(t).block(WAIT);
+    var restrictedRoot = readRoot.get();
     assertEquals("2", restrictedRoot.getRestrictionVersion());
     assertEquals(
         List.of(RestrictionCode.RESTRICTION_CODE_OWNER_PAUSE),
@@ -1443,10 +1461,14 @@ class TenantProvisioningRpcIntegrationTest {
               .block(WAIT),
           table);
     assertEquals(1, deliveries.get());
-    assertEquals("2", rootAuthority.current(t).block(WAIT).getRestrictionVersion());
+    var activatedRoot = readRoot.get();
+    assertEquals(Tenant.LifecycleValue.LIFECYCLE_ACTIVE, activatedRoot.getLifecycle());
+    assertTrue(
+        Long.parseLong(activatedRoot.getRestrictionVersion())
+            > Long.parseLong(restrictedRoot.getRestrictionVersion()));
     assertEquals(
         restrictedRoot.getIndependentRestrictionsList(),
-        rootAuthority.current(t).block(WAIT).getIndependentRestrictionsList());
+        activatedRoot.getIndependentRestrictionsList());
     assertEquals(
         occurred,
         billingDb
