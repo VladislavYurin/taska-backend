@@ -1,5 +1,6 @@
 """TAS-365: собственные REST/mTLS/PostgreSQL/S3 fixtures, без общей среды."""
 import json
+from concurrent.futures import ThreadPoolExecutor
 import time
 import urllib.request
 import uuid
@@ -79,7 +80,10 @@ class AttachmentUploadLocal(IssueAclLocal):
         with urllib.request.urlopen(request, timeout=20) as response:
             e.require(response.status // 100 == 2, 'Owned signed PUT failed')
         confirm = {'objectKey': uploaded['objectKey'], 'fileName': 'owned.txt', 'contentType': 'text/plain'}
-        result = owner.expect('POST', path + 'confirm', 201, confirm).json()
+        with ThreadPoolExecutor(max_workers=3) as workers:
+            confirmations = list(workers.map(lambda _: owner.expect('POST', path + 'confirm', 201, confirm).json(), range(3)))
+        result = confirmations[0]
+        e.require(all(item == result for item in confirmations), 'Concurrent confirm changed metadata')
         replay = owner.expect('POST', path + 'confirm', 201, confirm).json()
         e.require(result == replay and result['sizeBytes'] == 10, 'Confirm replay changed metadata')
         e.require(self.sql('issue_db', "SELECT count(*) FROM taska.issue_attachments WHERE tenant_id='%s';" % tenant).strip() == '1', 'Attachment duplicated')
@@ -87,9 +91,14 @@ class AttachmentUploadLocal(IssueAclLocal):
         foreign_path = '/api/v1/projects/' + foreign_project + '/issues/' + foreign_issue + '/attachments/'
         foreign.expect('POST', foreign_path + 'confirm', 404, confirm)
         owner.expect('POST', '/api/v1/projects/' + foreign_project + '/issues/' + issue + '/attachments/confirm', 404, confirm)
+        owner.expect('POST', foreign_path + 'confirm', 404, confirm)
         owner.expect('POST', path + 'upload-url', 409, dict(payload, sizeBytes=11), {'Idempotency-Key': key})
         # Дополнительный собственный intent для проверки отзыва membership.
-        late = owner.expect('POST', path + 'upload-url', 200, payload, {'Idempotency-Key': str(uuid.uuid4())}).json()
+        fallback_key = str(uuid.uuid4())
+        late = owner.expect('POST', path + 'upload-url', 200, payload, {'X-Request-Id': fallback_key}).json()
+        fallback_replay = owner.expect('POST', path + 'upload-url', 200, payload, {'X-Request-Id': fallback_key}).json()
+        e.require(late['objectKey'] == fallback_replay['objectKey'], 'Request ID fallback lost idempotency')
+        e.require(self.sql('issue_db', "SELECT count(*) FROM taska.attachment_uploads WHERE tenant_id='%s' AND request_key='%s';" % (tenant, fallback_key)).strip() == '1', 'Request ID fallback was not persisted')
         # Заполняем квоту разрешёнными reservations без больших объектов и подмены counters.
         for size in [20000000] * 4 + [19999980]:
             owner.expect('POST', path + 'upload-url', 200, dict(payload, sizeBytes=size),
@@ -109,7 +118,7 @@ class AttachmentUploadLocal(IssueAclLocal):
         response = owner.request('POST', path + 'confirm', body=dict(confirm, objectKey=late['objectKey']))
         e.require(response.status in (401, 403), 'Revoked membership retained confirm access')
         return {'publicRestSignedPutConfirm': 'PASS', 'tenantAndProjectIsolation': 'PASS',
-                'retryAndAccountingOnce': 'PASS', 'payloadConflict': 'PASS', 'membershipRevocation': 'PASS', 'primaryAdminBypassAccounting': 'PASS'}
+                'retryAndAccountingOnce': 'PASS', 'payloadConflict': 'PASS', 'membershipRevocation': 'PASS', 'primaryAdminBypassAccounting': 'PASS', 'requestIdFallback': 'PASS'}
 
 
 def main():

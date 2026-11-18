@@ -20,7 +20,7 @@ import software.amazon.awssdk.services.s3.model.S3Exception;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
 import software.amazon.awssdk.services.s3.presigner.model.PutObjectPresignRequest;
 
-/** Bounded PUT и копирование конкретной версии; ошибки не удаляют файлы. */
+/** PUT с ограниченным сроком и копирование конкретной версии; ошибки не удаляют файлы. */
 public final class S3UploadObjects implements UploadObjects {
   private final S3AsyncClient s3;
   private final S3Presigner presigner;
@@ -120,6 +120,18 @@ public final class S3UploadObjects implements UploadObjects {
                                                     + "?versionId="
                                                     + URLEncoder.encode(
                                                         sourceVersion, StandardCharsets.UTF_8))
+                                            // Повтор SDK тоже создаёт новую версию: после claim
+                                            // допустима одна попытка.
+                                            .overrideConfiguration(
+                                                o ->
+                                                    o.addPlugin(
+                                                        configuration ->
+                                                            configuration.overrideConfiguration(
+                                                                client ->
+                                                                    client.retryPolicy(
+                                                                        software.amazon.awssdk.core
+                                                                            .retry.RetryPolicy
+                                                                            .none()))))
                                             .metadataDirective(MetadataDirective.REPLACE)
                                             .contentType(mime)
                                             .metadata(

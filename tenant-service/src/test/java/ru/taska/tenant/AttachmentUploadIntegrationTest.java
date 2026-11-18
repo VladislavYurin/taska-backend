@@ -597,4 +597,42 @@ class AttachmentUploadIntegrationTest {
         attachment.getChecksum());
     assertEquals("10", StorageQuotaIntegrationTest.usage(A).getUsed());
   }
+
+  @Test
+  void mimeMismatchCannotConfirmOrDeleteStaging() throws Exception {
+    var capability = begin("wrong-mime");
+    StorageQuotaIntegrationTest.s3
+        .putObject(
+            b -> b.bucket(BUCKET).key(capability.getObjectKey()).contentType("image/png"),
+            software.amazon.awssdk.core.async.AsyncRequestBody.fromBytes(new byte[10]))
+        .get();
+    assertThrows(
+        DomainException.class,
+        () ->
+            as(A, ACTOR, "confirmAttachmentUpload", uploads.confirm(confirmation(capability)))
+                .block(WAIT));
+    assertEquals(
+        "image/png",
+        StorageQuotaIntegrationTest.s3
+            .headObject(b -> b.bucket(BUCKET).key(capability.getObjectKey()))
+            .get()
+            .contentType());
+    assertEquals(0, rows("issue_attachments"));
+    assertEquals("0", StorageQuotaIntegrationTest.usage(A).getUsed());
+  }
+
+  @Test
+  void administrativeBypassCannotConfirmMissingObject() {
+    StorageQuotaIntegrationTest.limit.set(1);
+    StorageQuotaIntegrationTest.bypass.set(true);
+    var capability = begin("admin-missing");
+    assertThrows(
+        RuntimeException.class,
+        () ->
+            as(A, ACTOR, "confirmAttachmentUpload", uploads.confirm(confirmation(capability)))
+                .block(WAIT));
+    assertEquals(0, rows("issue_attachments"));
+    assertEquals("0", StorageQuotaIntegrationTest.usage(A).getUsed());
+    assertEquals("10", StorageQuotaIntegrationTest.usage(A).getReserved());
+  }
 }
