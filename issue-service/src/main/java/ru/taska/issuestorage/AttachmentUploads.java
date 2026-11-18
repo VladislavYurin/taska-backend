@@ -29,7 +29,8 @@ public final class AttachmentUploads {
   private final AttachmentUploadPolicy policy;
   private final Clock clock;
 
-  private record Flight(UUID operation, TrustedTenantContext principal) {}
+  private record Flight(
+      UUID operation, TrustedTenantContext principal, ru.taska.api.common.v1.Header attribution) {}
 
   private final java.util.concurrent.ConcurrentHashMap<Flight, Mono<AttachmentResponse>>
       confirmations = new java.util.concurrent.ConcurrentHashMap<>();
@@ -138,7 +139,11 @@ public final class AttachmentUploads {
                       .clearExpiresAt()
                       .clearAssertionId()
                       .build();
-              var key = new Flight(u.operation(), principal);
+              var key =
+                  new Flight(
+                      u.operation(),
+                      principal,
+                      RpcContextBridge.details(c).getHeader().toBuilder().clearRequestId().build());
               // Проверка policy каждого запроса уже завершилась; сохраняется только выполняемая
               // сага.
               synchronized (confirmations) {
