@@ -116,6 +116,8 @@ public final class TenantProjectApi {
                                     new CapabilityFacts.Target(tenant(f), id, null, null),
                                     role,
                                     lock && p.getArchivedAt() != null
+                                            && action != Action.PROJECT_ARCHIVE
+                                            && action != Action.PROJECT_RESTORE
                                         ? Set.of(ErrorCode.ERROR_CODE_INVALID_STATE)
                                         : Set.of())
                                 .flatMap(
@@ -353,6 +355,74 @@ public final class TenantProjectApi {
                                                     response(new Authorized(saved, a.role()))));
                               }));
             });
+  }
+
+  /** Authorize every replay before reading its immutable response. No remote waits under SQL locks. */
+  public Mono<ProjectResponse> lifecycle(
+      String project, String actor, boolean archive, Integer expected, String key) {
+    UUID id = uuid(project);
+    var action = archive ? Action.PROJECT_ARCHIVE : Action.PROJECT_RESTORE;
+    return frame("write").flatMap(f -> {
+      actor(f, actor);
+      if (expected == null) return Mono.error(versionProblem(true));
+      if (expected < 0 || key == null)
+        return Mono.error(new DomainException(DomainStatus.INVALID_ARGUMENT, "Version and idempotency key required"));
+      UUID command = uuid(key);
+      var claims = RpcContextBridge.details(f.context()).getContext();
+      String authority = claims.hasGrantId()
+          ? claims.getCredentialKind().name() + "/" + claims.getGrantId() + "/" + claims.getGrantGeneration()
+          : "ACTOR";
+      return store.execute(s -> s.database().sql(
+              "SELECT pg_advisory_xact_lock(hashtextextended(:key,0))")
+          .bind("key", tenant(f) + "/lifecycle/" + user(f) + "/" + authority + "/" + command)
+          .fetch().rowsUpdated()
+          .then(authorize(s, f, id, action, true))
+          .flatMap(a -> s.database().sql("""
+              SELECT project_id,action,expected_version,response FROM taska.project_lifecycle_commands
+              WHERE tenant_id=:t AND actor_id=:u AND authority=:g AND command_key=:k
+              """).bind("t",tenant(f)).bind("u",user(f)).bind("g",authority).bind("k",command)
+              .map((r,m) -> {
+                if (!id.equals(r.get("project_id",UUID.class)) || !action.wire().equals(r.get("action",String.class))
+                    || expected.intValue() != r.get("expected_version",Integer.class))
+                  throw new DomainException(DomainStatus.ABORTED,"Idempotency conflict",Map.of("code","IDEMPOTENCY_CONFLICT"));
+                try { return ProjectResponse.parseFrom(r.get("response",byte[].class)); }
+                catch (com.google.protobuf.InvalidProtocolBufferException error) { throw new IllegalStateException("Invalid lifecycle receipt",error); }
+              }).one().switchIfEmpty(Mono.defer(() -> {
+                var current = a.project();
+                if (!expected.equals(current.getVersion())) return Mono.error(versionProblem(false));
+                Mono<Project> update;
+                if ((current.getArchivedAt() != null) == archive) update = Mono.just(current);
+                else update = s.database().sql("UPDATE taska.projects SET archived_at="
+                        + (archive ? "now()" : "NULL") + ",updated_at=now(),version=version+1"
+                        + " WHERE tenant_id=:t AND id=:p AND version=:v RETURNING *")
+                    .bind("t",tenant(f)).bind("p",id).bind("v",expected)
+                    .map((r,m) -> TenantProjectStore.project(r)).one()
+                    .switchIfEmpty(Mono.error(versionProblem(false)))
+                    .flatMap(saved -> {
+                      Mono<Void> event;
+                      if (archive) event = s.members(id).collectList().flatMap(all -> s.appendEvent(id,"ProjectArchived",
+                          json.writeValueAsString(new ru.taska.event.payload.projectService.ProjectArchivedPayload(
+                              id,saved.getProjectKey(),saved.getName(),user(f),saved.getArchivedAt(),
+                              all.stream().map(ru.taska.domain.ProjectMember::getUserId).toList()))));
+                      else event = s.appendEvent(id,"ProjectRestored",json.writeValueAsString(
+                          Map.of("projectId",id,"restoredBy",user(f),"restoredAt",saved.getUpdatedAt())));
+                      return event.thenReturn(saved);
+                    });
+                return update.map(saved -> response(new Authorized(saved,a.role())))
+                    .flatMap(result -> s.database().sql("""
+                        INSERT INTO taska.project_lifecycle_commands
+                          (tenant_id,actor_id,authority,command_key,project_id,action,expected_version,response)
+                        VALUES(:t,:u,:g,:k,:p,:a,:v,:r)
+                        """).bind("t",tenant(f)).bind("u",user(f)).bind("g",authority).bind("k",command)
+                        .bind("p",id).bind("a",action.wire()).bind("v",expected).bind("r",result.toByteArray())
+                        .then().thenReturn(result));
+              }))));
+    });
+  }
+
+  private static DomainException versionProblem(boolean missing) {
+    return new DomainException(missing ? DomainStatus.FAILED_PRECONDITION : DomainStatus.ABORTED,
+        missing ? "Project version required" : "Project version changed",Map.of("code","VERSION_CONFLICT"));
   }
 
   private Mono<List<Grant>> grants(TenantProjectStore.Session s, Frame f, UUID project) {

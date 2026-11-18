@@ -22,6 +22,7 @@ service ProjectService {
   // Auth directory gate; internal only, no project details or HTTP route.
   rpc HasProjectMembershipInternal(HasProjectMembershipInternalRequest) returns (HasProjectMembershipInternalResponse);
   rpc ArchiveProject(ArchiveProjectRequest) returns (ProjectResponse);
+  rpc RestoreProject(RestoreProjectRequest) returns (ProjectResponse);
   rpc ListProjectIssueTypes(ProjectIssueTypesRequest) returns (ListProjectIssueTypesResponse);
   rpc CreateProjectIssueType(ChangeProjectIssueTypeRequest) returns (ProjectIssueTypeResponse);
   rpc CreateProjectIssueTypeWithWorkflow(ChangeProjectIssueTypeRequest) returns (CreateProjectIssueTypeWithWorkflowResult);
@@ -197,6 +198,7 @@ message ProjectResponse {
   optional ProjectRole current_user_role = 8;
   optional string description = 9;
   optional string color = 10;
+  optional int32 version = 11;
 }
 
 message ProjectContextResponse {
@@ -541,6 +543,17 @@ message ArchiveProjectRequest {
   ru.taska.common.v1.Header header = 1;
   string project_id = 2;
   string actor_user_id = 3;
+  optional int32 expected_version = 4;
+  optional string idempotency_key = 5;
+}
+
+message RestoreProjectRequest {
+  ru.taska.b2b.v1.RequestContext context = 100;
+  ru.taska.common.v1.Header header = 1;
+  string project_id = 2;
+  string actor_user_id = 3;
+  optional int32 expected_version = 4;
+  optional string idempotency_key = 5;
 }
 
 message HasProjectMembershipInternalRequest {
