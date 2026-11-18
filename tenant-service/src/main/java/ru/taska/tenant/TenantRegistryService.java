@@ -18,7 +18,6 @@ import reactor.core.publisher.Mono;
 import ru.taska.api.b2b.v1.AdminGrant;
 import ru.taska.api.b2b.v1.AdminScope;
 import ru.taska.api.b2b.v1.CallerMembership;
-import ru.taska.api.b2b.v1.CredentialKind;
 import ru.taska.api.b2b.v1.CreateTenantResponse;
 import ru.taska.api.b2b.v1.CreateTenantRpcRequest;
 import ru.taska.api.b2b.v1.GetTenantRpcRequest;
@@ -125,6 +124,14 @@ public final class TenantRegistryService {
           DomainStatus.INVALID_ARGUMENT,
           "VALIDATION_FAILED",
           Map.of("code", "VALIDATION_FAILED", "field", "name", "reason", "INVALID_NAME"));
+  }
+
+  public Mono<Tenant> pause(ru.taska.api.b2b.v1.PauseTenantRpcRequest request) {
+    return new TenantRestrictionService(transactions, clock).pause(request);
+  }
+
+  public Mono<Tenant> resume(ru.taska.api.b2b.v1.ResumeTenantRpcRequest request) {
+    return new TenantRestrictionService(transactions, clock).resume(request);
   }
 
   public Mono<Tenant> rename(ru.taska.api.b2b.v1.RenameTenantRpcRequest request) {
@@ -398,7 +405,9 @@ public final class TenantRegistryService {
                     return transactions.execute(
                         db ->
                             db.sql(
-                                    "SELECT t.*,m.role AS actor_membership_role,m.status AS"
+                                    "SELECT t.*,"
+                                        + TenantRestrictions.SELECT
+                                        + ",m.role AS actor_membership_role,m.status AS"
                                         + " actor_membership_status,m.version AS"
                                         + " actor_membership_version FROM taska.tenants t LEFT JOIN"
                                         + " taska.tenant_memberships m ON m.tenant_id=t.id AND"
@@ -418,8 +427,7 @@ public final class TenantRegistryService {
                                               fail(DomainStatus.NOT_FOUND, "TENANT_NOT_FOUND"));
                                         if (!claims
                                             .getMembershipGeneration()
-                                            .equals(
-                                                row.get("actor_membership_version").toString()))
+                                            .equals(row.get("actor_membership_version").toString()))
                                           return Mono.error(
                                               fail(DomainStatus.UNAUTHENTICATED, "TOKEN_REVOKED"));
                                       }
@@ -512,6 +520,7 @@ public final class TenantRegistryService {
             : row.get("creation_kind").equals("PAID") && row.get("first_payment_fact_id") == null;
     if (pendingFirstPayment)
       result.addRestrictions(RestrictionCode.RESTRICTION_CODE_PENDING_FIRST_PAYMENT);
+    result.addAllRestrictions(TenantRestrictions.codes(row.get("independent_restrictions")));
     return result.build();
   }
 

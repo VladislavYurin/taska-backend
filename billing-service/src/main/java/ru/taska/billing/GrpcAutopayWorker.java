@@ -51,6 +51,8 @@ public final class GrpcAutopayWorker {
                           .setTenantId(tenant.toString())
                           .setActorGeneration(generation)
                           .setCredentialKind(CredentialKind.CREDENTIAL_KIND_SERVICE)
+                          .setServicePurpose("billing")
+                          .setServiceIdentity("billing-service")
                           .setIssuerService("billing-service")
                           .setAudienceService("billing-service")
                           .setAction("dispatchAutopay")

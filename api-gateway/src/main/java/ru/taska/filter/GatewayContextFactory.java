@@ -101,6 +101,12 @@ public class GatewayContextFactory {
   }
 
   private static TenantTarget tenantTarget(String path,String method){
+    if("PUT".equals(method)||"DELETE".equals(method)) {
+      var pause=java.util.regex.Pattern.compile("^/api/v1/tenants/([^/]+)/pause$").matcher(path);
+      if(pause.matches()) return new TenantTarget(canonicalTenantId(pause.group(1)),"PUT".equals(method)?"pauseTenant":"resumeTenant");
+      var block=java.util.regex.Pattern.compile("^/api/v1/admin/tenants/([^/]+)/platform-block$").matcher(path);
+      if("PUT".equals(method)&&block.matches()) return new TenantTarget(canonicalTenantId(block.group(1)),"setPlatformBlock");
+    }
     if(!"GET".equals(method)&&!"HEAD".equals(method)&&!"PATCH".equals(method))return null;
     var matcher=java.util.regex.Pattern.compile("^/api/v1/tenants/([^/]+)$").matcher(path);
     if(!matcher.matches())return null;
@@ -141,7 +147,7 @@ public class GatewayContextFactory {
               || binding.getCredentialKind()!=ru.taska.api.b2b.v1.CredentialKind.CREDENTIAL_KIND_WEB_GLOBAL
               || !binding.getScopesList().contains("tenants:select")))return Mono.error(Status.PERMISSION_DENIED.asRuntimeException());
           if(target!=null && (!binding.hasTenantId() || !sameTenant(binding.getTenantId(),target.id())))return Mono.error(Status.PERMISSION_DENIED.asRuntimeException());
-          if(target!=null && !binding.getScopesList().contains("renameTenant".equals(target.action())?"write":"read"))return Mono.error(Status.PERMISSION_DENIED.asRuntimeException());
+          if(target!=null && !binding.getScopesList().contains("getTenant".equals(target.action())?"read":"write"))return Mono.error(Status.PERMISSION_DENIED.asRuntimeException());
           var suppliedTenants=exchange.getRequest().getHeaders().getOrEmpty("X-Tenant-Id");
           if(suppliedTenants.size()>1)return Mono.error(Status.PERMISSION_DENIED.asRuntimeException());
           String selected=exchange.getRequest().getHeaders().getFirst("X-Tenant-Id");

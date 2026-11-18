@@ -182,6 +182,18 @@ message CancelTenantCreationRpcRequest {
   MutationOptions mutation = 4;
 }
 
+message PauseTenantRpcRequest {
+  RequestContext context = 1;
+  string tenant_id = 2;
+  ConfirmedAction payload = 3;
+  MutationOptions mutation = 4;
+}
+message ResumeTenantRpcRequest {
+  RequestContext context = 1;
+  string tenant_id = 2;
+  MutationOptions mutation = 3;
+}
+
 message GetTenantOperationRpcRequest {
   RequestContext context = 1;
   string tenant_id = 2;
@@ -237,6 +249,8 @@ service TenantService {
   // Current owner or trusted GLOBAL_ADMIN only. With the current version,
   // the same name returns the current Tenant without advancing its version.
   rpc RenameTenant(RenameTenantRpcRequest) returns (Tenant);
+  rpc PauseTenant(PauseTenantRpcRequest) returns (Tenant);
+  rpc ResumeTenant(ResumeTenantRpcRequest) returns (Tenant);
   rpc ListTenantMembers(ListTenantMembersRpcRequest) returns (MembershipPage);
 }
 
@@ -250,6 +264,8 @@ message MembershipSnapshot {
   string tenant_membership_version = 6;
   bool is_owner = 7;
   string joined_at = 8;
+  repeated RestrictionCode independent_restrictions = 9;
+  string restriction_version = 10;
 }
 message GetMembershipRpcRequest {
   RequestContext context = 1;
@@ -271,6 +287,8 @@ message MembershipValidationBatch {
   string tenant_membership_version = 2;
   repeated MembershipValidation items = 3; // Same order as requested user_ids.
   Tenant.LifecycleValue tenant_lifecycle = 4;
+  repeated RestrictionCode independent_restrictions = 5;
+  string restriction_version = 6;
 }
 service TenantMembershipService {
   rpc GetMembership(GetMembershipRpcRequest) returns (MembershipSnapshot);

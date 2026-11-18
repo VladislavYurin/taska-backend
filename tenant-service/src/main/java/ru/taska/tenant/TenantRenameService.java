@@ -108,7 +108,7 @@ public final class TenantRenameService {
     }
   }
 
-  private static boolean ordinary(TrustedTenantContext claims) {
+  static boolean ordinary(TrustedTenantContext claims) {
     boolean credential =
         switch (claims.getCredentialKind()) {
           case CREDENTIAL_KIND_WEB_TENANT ->
@@ -122,7 +122,7 @@ public final class TenantRenameService {
         && !claims.getMembershipGeneration().isBlank();
   }
 
-  private static boolean administrative(TrustedTenantContext claims, UUID tenant) {
+  static boolean administrative(TrustedTenantContext claims, UUID tenant) {
     boolean credential =
         switch (claims.getCredentialKind()) {
           case CREDENTIAL_KIND_WEB_GLOBAL ->
@@ -147,7 +147,7 @@ public final class TenantRenameService {
         && claims.getAdministrativeLevel() == AdminGrant.LevelValue.LEVEL_MODIFY;
   }
 
-  private Mono<Void> authorize(
+  static Mono<Void> authorize(
       DatabaseClient db,
       Map<String, Object> row,
       UUID actor,
@@ -238,7 +238,7 @@ public final class TenantRenameService {
                 .one()
                 .switchIfEmpty(Mono.error(fail(DomainStatus.ABORTED, "VERSION_CONFLICT")))
             : Mono.just(row);
-    return updated.flatMap(
+    return updated.flatMap(current -> TenantRestrictions.decorate(db,current)).flatMap(
         current -> {
           Tenant result = TenantRegistryService.tenant(current);
           Mono<Void> event =

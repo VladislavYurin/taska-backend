@@ -241,7 +241,9 @@ public final class TenantMembershipService {
         db ->
             db.sql(
                     "SELECT t.id AS tenant_id,t.owner_id,t.membership_version AS"
-                        + " generation,t.lifecycle,requested.user_id AS"
+                        + " generation,t.lifecycle,t.restriction_version,"
+                        + TenantRestrictions.SELECT
+                        + ",requested.user_id AS"
                         + " requested_user_id,m.user_id,m.role,m.status,m.version,m.joined_at FROM"
                         + " taska.tenants t CROSS JOIN unnest(:users::uuid[]) WITH ORDINALITY AS"
                         + " requested(user_id,n) LEFT JOIN taska.tenant_memberships m ON"
@@ -265,6 +267,12 @@ public final class TenantMembershipService {
                               .setTenantLifecycle(
                                   Tenant.LifecycleValue.valueOf(
                                       "LIFECYCLE_" + rows.getFirst().get("lifecycle")));
+                      result
+                          .addAllIndependentRestrictions(
+                              TenantRestrictions.codes(
+                                  rows.getFirst().get("independent_restrictions")))
+                          .setRestrictionVersion(
+                              rows.getFirst().get("restriction_version").toString());
                       for (var row : rows) {
                         var item =
                             MembershipValidation.newBuilder()
@@ -279,6 +287,9 @@ public final class TenantMembershipService {
                                   .setState(state(row))
                                   .setVersion(row.get("version").toString())
                                   .setTenantMembershipVersion(generation)
+                                  .addAllIndependentRestrictions(
+                                      TenantRestrictions.codes(row.get("independent_restrictions")))
+                                  .setRestrictionVersion(row.get("restriction_version").toString())
                                   .setIsOwner(row.get("user_id").equals(row.get("owner_id")))
                                   .setJoinedAt(
                                       ((OffsetDateTime) row.get("joined_at"))

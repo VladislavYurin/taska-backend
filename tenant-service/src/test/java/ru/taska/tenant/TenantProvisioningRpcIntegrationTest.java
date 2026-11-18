@@ -1322,15 +1322,37 @@ class TenantProvisioningRpcIntegrationTest {
             ReactorTenantCreationLifecycleServiceGrpc.newReactorStub(rootChannel),
             billingSigner,
             CLOCK);
+    var rootAuthority =
+        new GrpcTenantPaymentState(
+            ReactorTenantPaymentStateServiceGrpc.newReactorStub(rootChannel), billingSigner, CLOCK);
+    var initialRoot = rootAuthority.current(t).block(WAIT);
+    assertEquals("1", initialRoot.getRestrictionVersion());
+    assertEquals(List.of(), initialRoot.getIndependentRestrictionsList());
+    // Independent root reasons survive a verified payment and Root activation.
+    tenantDb
+        .sql(
+            "INSERT INTO taska.tenant_restrictions"
+                + " (tenant_id,kind,source_id,active,version,reason_code,created_at)"
+                + " VALUES(:t,'OWNER_PAUSE',:t,true,2,'OWNER_PAUSE',now())")
+        .bind("t", t)
+        .then()
+        .block(WAIT);
+    tenantDb
+        .sql("UPDATE taska.tenants SET restriction_version=2 WHERE id=:t")
+        .bind("t", t)
+        .then()
+        .block(WAIT);
+    var restrictedRoot = rootAuthority.current(t).block(WAIT);
+    assertEquals("2", restrictedRoot.getRestrictionVersion());
+    assertEquals(
+        List.of(RestrictionCode.RESTRICTION_CODE_OWNER_PAUSE),
+        restrictedRoot.getIndependentRestrictionsList());
     var settlement =
         new PaymentSettlement(
             subscriptions,
             ledger,
             (db, tenantId, proof) -> Mono.justOrEmpty(proof.equals(evidenceId) ? verified : null),
-            new GrpcTenantPaymentState(
-                ReactorTenantPaymentStateServiceGrpc.newReactorStub(rootChannel),
-                billingSigner,
-                CLOCK),
+            rootAuthority,
             (tenantId, decision) -> {
               deliveries.incrementAndGet();
               return actualDelivery.deliver(tenantId, decision);
@@ -1421,6 +1443,10 @@ class TenantProvisioningRpcIntegrationTest {
               .block(WAIT),
           table);
     assertEquals(1, deliveries.get());
+    assertEquals("2", rootAuthority.current(t).block(WAIT).getRestrictionVersion());
+    assertEquals(
+        restrictedRoot.getIndependentRestrictionsList(),
+        rootAuthority.current(t).block(WAIT).getIndependentRestrictionsList());
     assertEquals(
         occurred,
         billingDb

@@ -99,7 +99,7 @@ final class TenantListService {
                     + "plan_version_id,creation_operation_id,creation_kind,"
                     + "creation_closure_reason,creation_closed_at,creation_deadline_at,"
                     + "pending_first_payment,actor_membership_role,actor_membership_status,"
-                    + "actor_membership_version FROM taska.list_tenants_for_actor("
+                    + "actor_membership_version,independent_restrictions,restriction_version FROM taska.list_tenants_for_actor("
                     + ":actor,:after_created_at,:after_tenant_id,:fetch_limit)")
             .bind("actor", actor)
             .bind("fetch_limit", limit + 1);

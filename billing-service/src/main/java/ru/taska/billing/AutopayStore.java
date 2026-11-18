@@ -44,13 +44,16 @@ public final class AutopayStore {
   final PaymentProviderRegistry providers;
   final Clock clock;
   private final FinancialAccess access;
+  private final PaymentSettlementDependencies.TenantAuthority root;
   private final JsonMapper json = JsonMapper.builder().build();
 
   public AutopayStore(
       SubscriptionStore subscriptions,
       Policy policy,
       PaymentProviderRegistry providers,
-      Clock clock) {
+      Clock clock,
+      PaymentSettlementDependencies.TenantAuthority root) {
+    this.root = java.util.Objects.requireNonNull(root);
     this.subscriptions = subscriptions;
     this.transactions = subscriptions.transactions();
     this.access = new FinancialAccess(subscriptions.readers());
@@ -178,8 +181,55 @@ public final class AutopayStore {
   }
 
   Mono<Grant> current(VerifiedTenantContext c, Use use, UUID method) {
-    return policy
-        .require(c, use, method)
+    Mono<Void> restrictions =
+        use == Use.DISPATCH
+            ? root.current(UUID.fromString(c.tenantId()))
+                .timeout(Duration.ofSeconds(5))
+                .switchIfEmpty(
+                    Mono.error(fail(DomainStatus.UNAVAILABLE, "AUTOPAY_ROOT_UNAVAILABLE")))
+                .flatMap(
+                    state -> {
+                      boolean version;
+                      try {
+                        long value = Long.parseLong(state.getRestrictionVersion());
+                        version =
+                            value > 0 && Long.toString(value).equals(state.getRestrictionVersion());
+                      } catch (NumberFormatException error) {
+                        version = false;
+                      }
+                      if (!c.tenantId().equals(state.getTenantId())
+                          || !version
+                          || state.getIndependentRestrictionsList().stream()
+                              .anyMatch(
+                                  reason ->
+                                      reason
+                                              == ru.taska.api.b2b.v1.RestrictionCode
+                                                  .RESTRICTION_CODE_UNSPECIFIED
+                                          || reason
+                                              == ru.taska.api.b2b.v1.RestrictionCode.UNRECOGNIZED))
+                        return Mono.error(
+                            fail(DomainStatus.UNAVAILABLE, "AUTOPAY_ROOT_UNAVAILABLE"));
+                      if (state.getLifecycle()
+                              != ru.taska.api.b2b.v1.Tenant.LifecycleValue.LIFECYCLE_ACTIVE
+                          || state.getIndependentRestrictionsList().stream()
+                              .anyMatch(
+                                  reason ->
+                                      reason
+                                              == ru.taska.api.b2b.v1.RestrictionCode
+                                                  .RESTRICTION_CODE_OWNER_PAUSE
+                                          || reason
+                                              == ru.taska.api.b2b.v1.RestrictionCode
+                                                  .RESTRICTION_CODE_PLATFORM_BLOCK
+                                          || reason
+                                              == ru.taska.api.b2b.v1.RestrictionCode
+                                                  .RESTRICTION_CODE_PAYMENT_DISPUTE))
+                        return Mono.error(
+                            fail(DomainStatus.FAILED_PRECONDITION, "AUTOPAY_UNAVAILABLE"));
+                      return Mono.<Void>empty();
+                    })
+            : Mono.empty();
+    return restrictions
+        .then(Mono.defer(() -> policy.require(c, use, method)))
         .timeout(Duration.ofSeconds(5))
         .switchIfEmpty(Mono.error(fail(DomainStatus.UNAVAILABLE, "AUTOPAY_POLICY_UNAVAILABLE")));
   }
@@ -290,7 +340,7 @@ public final class AutopayStore {
                         return revoke(db, tenant, "REPLACED")
                             .then(
                                 db.sql(
-                                        """
+"""
 INSERT INTO taska.autopay_mandates(id,tenant_id,owner_id,owner_version,payment_method_id,state,consent_version,
  consented_at,created_subscription_version,revocation_barrier,consent_terms_version,consent_channel,consent_snapshot,
  provider,merchant_account,provider_environment,merchant_profile_version,consent_text,configuration_version)
@@ -385,7 +435,7 @@ RETURNING *,consent_snapshot::text AS snapshot_document
                                   changed == 0
                                       ? Mono.empty()
                                       : db.sql(
-                                              """
+"""
 INSERT INTO taska.outbox_events(id,tenant_id,aggregate_type,aggregate_id,aggregate_version,event_type,schema_version,payload,operation_id,status,created_at,attempts)
 VALUES(:id,:t,'SUBSCRIPTION',:t,:v,'AUTOPAY_INVALIDATED',1,jsonb_build_object('mandateId',CAST(:m AS text)),:op,'NEW',:now,0)
 """)
@@ -455,7 +505,7 @@ VALUES(:id,:t,'SUBSCRIPTION',:t,:v,'AUTOPAY_INVALIDATED',1,jsonb_build_object('m
     return audit(db, c, grant, result, false)
         .then(
             db.sql(
-                    """
+"""
 INSERT INTO taska.idempotency_records(tenant_id,actor_id,operation_code,key,request_hash,operation_id,state,response,created_at,expires_at)
 VALUES(:t,:a,'setAutopayConsent',:k,:hash,:op,'SUCCEEDED',jsonb_build_object('proto',CAST(:response AS text)),:now,:expires)
 """)
@@ -471,7 +521,7 @@ VALUES(:t,:a,'setAutopayConsent',:k,:hash,:op,'SUCCEEDED',jsonb_build_object('pr
                 .rowsUpdated()
                 .then(
                     db.sql(
-                            """
+"""
 INSERT INTO taska.outbox_events(id,tenant_id,aggregate_type,aggregate_id,aggregate_version,event_type,schema_version,payload,operation_id,status,created_at,attempts)
 VALUES(:id,:t,'SUBSCRIPTION',:t,:v,'AUTOPAY_CONSENT_CHANGED',1,jsonb_build_object('mandateId',CAST(:mandate AS text),'state',CAST(:state AS text)),:op,'NEW',:now,0)
 """)
@@ -497,7 +547,7 @@ VALUES(:id,:t,'SUBSCRIPTION',:t,:v,'AUTOPAY_CONSENT_CHANGED',1,jsonb_build_objec
     var claims = RpcContextBridge.details(c).getContext();
     var query =
         db.sql(
-                """
+"""
 INSERT INTO taska.autopay_authorization_audit(id,tenant_id,actor_id,owner_id,credential_kind,grant_id,scope_kind,action,request_id,decision,occurred_at)
 VALUES(:id,:t,:a,:o,:kind,:grant,:scope,:action,:request,CAST(:decision AS jsonb),:now)
 """)

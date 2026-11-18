@@ -5107,6 +5107,128 @@ paths:
         '503': {$ref: '#/components/responses/ErrorResponse'}
         default: {$ref: '#/components/responses/ErrorResponse'}
 
+  /api/v1/tenants/{tenantId}/pause:
+    put:
+      operationId: pauseTenant
+      tags: [tenant-restrictions]
+      x-pat-scope: write
+      summary: pauseTenant
+      description: >
+        Versioned tenant command. Requires current owner or explicit administrative authority;
+        platform-block requires administrative authority. Independent reasons and paid coverage remain unchanged.
+        Strong quoted If-Match and canonical UUID Idempotency-Key are required. Missing version returns 428,
+        stale version 412, conflicting key 409. Authorized replay returns its saved response before new business gates.
+        Resume removes only owner pause and does not charge or extend the paid period.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: tenantId
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+        - name: Idempotency-Key
+          in: header
+          required: false
+          schema: {type: string}
+        - name: If-Match
+          in: header
+          required: false
+          schema: {type: string}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConfirmedActionDto'
+      responses:
+        '200':
+          description: Текущее состояние компании или сохранённый ответ повтора
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantDto'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+    delete:
+      operationId: resumeTenant
+      tags: [tenant-restrictions]
+      x-pat-scope: write
+      summary: resumeTenant
+      description: >
+        Versioned tenant command. Requires current owner or explicit administrative authority;
+        platform-block requires administrative authority. Independent reasons and paid coverage remain unchanged.
+        Strong quoted If-Match and canonical UUID Idempotency-Key are required. Missing version returns 428,
+        stale version 412, conflicting key 409. Authorized replay returns its saved response before new business gates.
+        Resume removes only owner pause and does not charge or extend the paid period.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: tenantId
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+        - name: Idempotency-Key
+          in: header
+          required: false
+          schema: {type: string}
+        - name: If-Match
+          in: header
+          required: false
+          schema: {type: string}
+      responses:
+        '200':
+          description: Текущее состояние компании или сохранённый ответ повтора
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantDto'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /api/v1/admin/tenants/{tenantId}/platform-block:
+    put:
+      operationId: setPlatformBlock
+      tags: [tenant-restrictions]
+      x-pat-scope: write
+      summary: setPlatformBlock
+      description: >
+        Versioned tenant command. Requires current owner or explicit administrative authority;
+        platform-block requires administrative authority. Independent reasons and paid coverage remain unchanged.
+        Strong quoted If-Match and canonical UUID Idempotency-Key are required. Missing version returns 428,
+        stale version 412, conflicting key 409. Authorized replay returns its saved response before new business gates.
+        Resume removes only owner pause and does not charge or extend the paid period.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: tenantId
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+        - name: Idempotency-Key
+          in: header
+          required: false
+          schema: {type: string}
+        - name: If-Match
+          in: header
+          required: false
+          schema: {type: string}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminRestrictionRequestDto'
+      responses:
+        '200':
+          description: Текущее состояние компании или сохранённый ответ повтора
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantDto'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
   /api/v1/tenants/{tenantId}:
     get:
       operationId: getTenant
@@ -5461,6 +5583,24 @@ components:
     TenantCreationClosureReason:
       type: string
       enum: [AUTO_EXPIRED, OWNER_CANCELLED]
+    ConfirmedActionDto:
+      type: object
+      required: [confirmed]
+      properties:
+        confirmed: {type: boolean}
+
+    AdminRestrictionRequestDto:
+      type: object
+      required: [enabled, reason, confirmed]
+      properties:
+        enabled: {type: boolean}
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 2000
+          description: Private administrative audit reason; never included in public events or errors.
+        confirmed: {type: boolean}
+
     TenantDto:
       type: object
       x-class-extra-annotation: '@com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)'

@@ -1224,6 +1224,33 @@
       "mutation": false,
       "action": "getProjectTaskQuotas",
       "requestClass": "ru.taska.api.issue.v1.GetProjectTaskQuotasRequest"
+    },
+    {
+      "rpc": "ru.taska.b2b.v1.TenantService/PauseTenant",
+      "audience": "tenant-service",
+      "scope": "TENANT_OWNER_OR_ADMIN",
+      "tenantRequired": true,
+      "mutation": true,
+      "action": "pauseTenant",
+      "requestClass": "ru.taska.api.b2b.v1.PauseTenantRpcRequest"
+    },
+    {
+      "rpc": "ru.taska.b2b.v1.TenantService/ResumeTenant",
+      "audience": "tenant-service",
+      "scope": "TENANT_OWNER_OR_ADMIN",
+      "tenantRequired": true,
+      "mutation": true,
+      "action": "resumeTenant",
+      "requestClass": "ru.taska.api.b2b.v1.ResumeTenantRpcRequest"
+    },
+    {
+      "rpc": "ru.taska.b2b.v1.PlatformService/SetPlatformBlock",
+      "audience": "tenant-service",
+      "scope": "TENANT_OWNER_OR_ADMIN",
+      "tenantRequired": true,
+      "mutation": true,
+      "action": "setPlatformBlock",
+      "requestClass": "ru.taska.api.b2b.v1.SetPlatformBlockRpcRequest"
     }
   ]
 }

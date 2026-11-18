@@ -191,6 +191,45 @@ public class TenantRegistryClient implements AutoCloseable {
         .subscribeOn(reactor.core.scheduler.Schedulers.boundedElastic());
   }
 
+  public Mono<TenantDto> pauseTenant(UUID tenant,String key,long version,boolean confirmed,GatewayContext context) {
+    return restriction(tenant,context,"pauseTenant",
+        ru.taska.api.b2b.v1.TenantServiceGrpc.getPauseTenantMethod().getFullMethodName(),
+        c -> ru.taska.api.b2b.v1.PauseTenantRpcRequest.newBuilder().setContext(c).setTenantId(tenant.toString())
+            .setMutation(mutation(key,version)).setPayload(ru.taska.api.b2b.v1.ConfirmedAction.newBuilder().setConfirmed(confirmed)).build(),
+        (q,h)->stub(h).pauseTenant(q));
+  }
+  public Mono<TenantDto> resumeTenant(UUID tenant,String key,long version,GatewayContext context) {
+    return restriction(tenant,context,"resumeTenant",
+        ru.taska.api.b2b.v1.TenantServiceGrpc.getResumeTenantMethod().getFullMethodName(),
+        c -> ru.taska.api.b2b.v1.ResumeTenantRpcRequest.newBuilder().setContext(c).setTenantId(tenant.toString())
+            .setMutation(mutation(key,version)).build(),(q,h)->stub(h).resumeTenant(q));
+  }
+  public Mono<TenantDto> setPlatformBlock(UUID tenant,String key,long version,boolean enabled,String reason,boolean confirmed,GatewayContext context) {
+    return restriction(tenant,context,"setPlatformBlock",
+        ru.taska.api.b2b.v1.PlatformServiceGrpc.getSetPlatformBlockMethod().getFullMethodName(),
+        c -> ru.taska.api.b2b.v1.SetPlatformBlockRpcRequest.newBuilder().setContext(c).setTenantId(tenant.toString())
+            .setMutation(mutation(key,version)).setPayload(ru.taska.api.b2b.v1.AdminRestrictionRequest.newBuilder()
+                .setEnabled(enabled).setReason(reason).setConfirmed(confirmed)).build(),
+        (q,h)->ru.taska.api.b2b.v1.ReactorPlatformServiceGrpc.newReactorStub(channel())
+            .withDeadlineAfter(5,TimeUnit.SECONDS).withInterceptors(MetadataUtils.newAttachHeadersInterceptor(h)).setPlatformBlock(q));
+  }
+  private static MutationOptions mutation(String key,long version) {
+    return MutationOptions.newBuilder().setIdempotencyKey(key).setExpectedVersion(Long.toString(version)).build();
+  }
+  private <Q extends Message> Mono<TenantDto> restriction(UUID tenant,GatewayContext context,String action,String rpc,
+      Function<ru.taska.api.b2b.v1.RequestContext,Q> build,java.util.function.BiFunction<Q,Metadata,Mono<Tenant>> send) {
+    return Mono.defer(()->{
+      var guard=security.getIfAvailable();var parent=context.verified();
+      if(guard==null||parent==null) return Mono.error(Status.UNAVAILABLE.asRuntimeException());
+      if(!tenant.toString().equals(parent.tenantId())||!parent.scopes().contains("write"))
+        return Mono.error(Status.PERMISSION_DENIED.asRuntimeException());
+      var scopes=parent.scopes().containsAll(RENAME_SCOPES)?RENAME_SCOPES:WRITE_SCOPES;
+      var q=build.apply(guard.delegate(parent,"tenant-service",action,scopes));
+      return signedCall(guard,parent,q,rpc,new RpcContextSecurity.Policy(true,true),h->send.apply(q,h))
+          .map(result->toRestTenant(result,tenant));
+    }).subscribeOn(reactor.core.scheduler.Schedulers.boundedElastic());
+  }
+
   private ReactorTenantServiceGrpc.ReactorTenantServiceStub stub(Metadata headers) {
     return ReactorTenantServiceGrpc.newReactorStub(channel())
         .withDeadlineAfter(5, TimeUnit.SECONDS)

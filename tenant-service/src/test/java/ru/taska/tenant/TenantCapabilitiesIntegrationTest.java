@@ -399,4 +399,47 @@ class TenantCapabilitiesIntegrationTest {
             .one()
             .block(WAIT));
   }
+
+  @Test
+  void primaryPauseAndBlockRefreshWithoutHidingControlOrFinancialRecovery() {
+    assertTrue(item(get(OWNER, A), Action.TENANT_RESUME).getAllowed());
+    sql(
+        "INSERT INTO"
+            + " taska.tenant_restrictions(tenant_id,kind,source_id,active,version,reason_code,created_at)"
+            + " VALUES('"
+            + A
+            + "','OWNER_PAUSE','"
+            + UUID.randomUUID()
+            + "',true,1,'OWNER_PAUSE',now())");
+    var paused = get(OWNER, A);
+    assertTrue(item(paused, Action.TENANT_RESUME).getAllowed());
+    assertFalse(item(paused, Action.INVITATION_CREATE).getAllowed());
+    assertTrue(item(paused, Action.BILLING_READ).getAllowed());
+    configuration.set(
+        configuration.get().stream()
+            .map(
+                f ->
+                    f.getKey().equals("READ_WHILE_RESTRICTED")
+                        ? f.toBuilder().setVersion("2").setBooleanValue(false).build()
+                        : f)
+            .toList());
+    var closed = get(OWNER, A);
+    assertTrue(item(closed, Action.TENANT_READ).getAllowed());
+    assertTrue(item(closed, Action.BILLING_READ).getAllowed());
+    sql(
+        "INSERT INTO"
+            + " taska.tenant_restrictions(tenant_id,kind,source_id,active,version,reason_code,created_at)"
+            + " VALUES('"
+            + A
+            + "','PLATFORM_BLOCK','"
+            + UUID.randomUUID()
+            + "',true,2,'PLATFORM_BLOCK',now())");
+    var blocked = get(OWNER, A);
+    assertFalse(item(blocked, Action.TENANT_RESUME).getAllowed());
+    assertTrue(
+        item(blocked, Action.TENANT_RESUME)
+            .getRestrictionsList()
+            .contains(RestrictionCode.RESTRICTION_CODE_PLATFORM_BLOCK));
+    assertTrue(item(get(OWNER, B), Action.TENANT_RESUME).getAllowed());
+  }
 }

@@ -14,9 +14,19 @@ import ru.taska.security.tenant.RpcContextBridge;
 @Service
 public final class PlatformGrpcService extends ReactorPlatformServiceGrpc.PlatformServiceImplBase {
   private final PlatformFlags flags;
+  private final TenantRestrictionService restrictions;
 
-  public PlatformGrpcService(PlatformFlags flags) {
+  public PlatformGrpcService(PlatformFlags flags, TenantRestrictionService restrictions) {
     this.flags = flags;
+    this.restrictions = restrictions;
+  }
+
+  @Override
+  public Mono<ru.taska.api.b2b.v1.Tenant> setPlatformBlock(
+      Mono<ru.taska.api.b2b.v1.SetPlatformBlockRpcRequest> request) {
+    return RpcContextBridge.inbound(request.flatMap(restrictions::block))
+        .onErrorMap(DomainException.class, GrpcExceptionMapper::toStatusRuntimeException)
+        .onErrorMap(GrpcExceptionMapper::toGrpcStatus);
   }
 
   @Override
