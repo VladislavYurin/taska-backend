@@ -120,6 +120,9 @@ message CreateAttachmentUploadUrlRequestBody {
    * Идентификатор задачи, к которой прикрепляется вложение.
    */
   string issue_id = 4;
+  string file_name = 5;
+  string project_id = 6;
+  string idempotency_key = 7;
 }
 
 /**
@@ -169,6 +172,7 @@ message ConfirmAttachmentUploadRequestBody {
    * Идентификатор задачи, к которой прикрепляется вложение.
    */
   string issue_id = 6;
+  string project_id = 7;
 }
 
 /**
@@ -313,4 +317,37 @@ message DeleteAttachmentRequestBody {
    * Идентификатор вложения.
    */
   string attachment_id = 2;
+}
+
+// Приватная проверка исходных actor/credential и локального upload intent для quota owner.
+service AttachmentAdmissionService {
+  rpc CheckAdmission(AttachmentAdmissionRequest) returns (AttachmentAdmissionGrant);
+  rpc ReconcileUploads(ReconcileAttachmentUploadsRequest) returns (ReconcileAttachmentUploadsResponse);
+}
+message AttachmentAdmissionRequest {
+  ru.taska.b2b.v1.RequestContext context = 1;
+  string operation_id = 2;
+  string resource_id = 3;
+  string project_id = 4;
+  string issue_id = 5;
+  int64 bytes = 6;
+  string expires_at = 7;
+  string phase = 8;
+}
+message AttachmentAdmissionGrant {
+  bool bypass_limit = 1;
+  int64 maximum_attachment_bytes = 2;
+  int64 policy_version = 3;
+  int64 maximum_ttl_seconds = 4;
+}
+
+message ReconcileAttachmentUploadsRequest {
+  ru.taska.b2b.v1.RequestContext context = 1;
+  string after_id = 2;
+  int32 limit = 3;
+}
+message ReconcileAttachmentUploadsResponse {
+  int32 processed = 1;
+  int32 failed = 2;
+  string next_cursor = 3;
 }

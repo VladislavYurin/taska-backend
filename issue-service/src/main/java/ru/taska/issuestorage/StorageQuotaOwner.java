@@ -1,15 +1,31 @@
 package ru.taska.issuestorage;
 
-import static ru.taska.quota.StorageQuotaProtocol.*;
+import static ru.taska.quota.StorageQuotaProtocol.Authority;
+import static ru.taska.quota.StorageQuotaProtocol.ManifestPage;
+import static ru.taska.quota.StorageQuotaProtocol.Owner;
+import static ru.taska.quota.StorageQuotaProtocol.OwnerState;
+import static ru.taska.quota.StorageQuotaProtocol.Receipt;
+import static ru.taska.quota.StorageQuotaProtocol.Request;
+import static ru.taska.quota.StorageQuotaProtocol.Reservation;
 
-import java.time.*;
-import java.util.*;
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
+import java.util.HexFormat;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.UUID;
 import org.springframework.r2dbc.core.DatabaseClient;
-import reactor.core.publisher.*;
-import ru.taska.exception.*;
+import reactor.core.publisher.Mono;
+import ru.taska.exception.DomainException;
+import ru.taska.exception.DomainStatus;
 import ru.taska.quota.ProjectQuotaProtocol.State;
 import ru.taska.r2dbc.TenantTransactionExecutor;
-import ru.taska.security.tenant.*;
+import ru.taska.security.tenant.RpcContextBridge;
+import ru.taska.security.tenant.VerifiedTenantContext;
 import ru.taska.storage.versioned.VersionedObjects;
 
 /**
@@ -116,9 +132,9 @@ public final class StorageQuotaOwner implements Owner {
                                                                   () ->
                                                                       db.sql(
                                                                               """
-                                                                              INSERT INTO taska.attachment_object_manifest(id,tenant_id,project_id,issue_id,actor_id,object_key,staging_object_key,reservation_id,operation_id,generation,state,expected_bytes,content_type,expires_at,created_at,maximum_attachment_bytes,policy_version,request_hash,reservation_version)
-                                                                              VALUES(:id,:t,:p,:i,:a,:key,:staging,:reservation,:op,:f,'RESERVED',:bytes,:mime,:expires,:now,:max,:policy,:hash,:version)
-                                                                              """)
+INSERT INTO taska.attachment_object_manifest(id,tenant_id,project_id,issue_id,actor_id,object_key,staging_object_key,reservation_id,operation_id,generation,state,expected_bytes,content_type,expires_at,created_at,maximum_attachment_bytes,policy_version,request_hash,reservation_version)
+VALUES(:id,:t,:p,:i,:a,:key,:staging,:reservation,:op,:f,'RESERVED',:bytes,:mime,:expires,:now,:max,:policy,:hash,:version)
+""")
                                                                           .bind("id", r.resource())
                                                                           .bind("t", r.tenant())
                                                                           .bind("p", r.project())
@@ -323,6 +339,11 @@ public final class StorageQuotaOwner implements Owner {
 
   @Override
   public Mono<Receipt> activate(Reservation r) {
+    return activate(r, db -> Mono.empty());
+  }
+
+  public Mono<Receipt> activate(
+      Reservation r, java.util.function.Function<DatabaseClient, Mono<Void>> committed) {
     return authorized(r, Use.ACTIVATE, null)
         .flatMap(
             c ->
@@ -346,7 +367,8 @@ public final class StorageQuotaOwner implements Owner {
                                                       DomainStatus.DATA_LOSS,
                                                       "ACTUAL_BYTES_CONFLICT"));
                                             if (Set.of("CONFIRMED", "DELETE_PENDING", "DELETED")
-                                                .contains(row.get("state"))) return receipt(db, r);
+                                                .contains(row.get("state")))
+                                              return committed.apply(db).then(receipt(db, r));
                                             if (!"UPLOADED".equals(row.get("state")))
                                               return Mono.error(
                                                   fail(
@@ -362,6 +384,7 @@ public final class StorageQuotaOwner implements Owner {
                                                 .rowsUpdated()
                                                 .then(bump(db, r.tenant()))
                                                 .then(event(db, r, c, "AttachmentConfirmed"))
+                                                .then(Mono.defer(() -> committed.apply(db)))
                                                 .then(receipt(db, r));
                                           }));
                         }));
@@ -385,6 +408,26 @@ public final class StorageQuotaOwner implements Owner {
                           return tx.execute(
                                   db ->
                                       lock(db, r)
+                                          .then(
+                                              db.sql(
+                                                      "SELECT EXISTS(SELECT 1 FROM"
+                                                          + " taska.attachment_uploads WHERE"
+                                                          + " tenant_id=:t AND operation_id=:op AND"
+                                                          + " copy_started AND final_version IS"
+                                                          + " NULL) AS unknown")
+                                                  .bind("t", r.tenant())
+                                                  .bind("op", r.operation())
+                                                  .map(
+                                                      (row, m) -> row.get("unknown", Boolean.class))
+                                                  .one()
+                                                  .flatMap(
+                                                      unknown ->
+                                                          unknown
+                                                              ? Mono.error(
+                                                                  fail(
+                                                                      DomainStatus.UNAVAILABLE,
+                                                                      "COPY_OUTCOME_UNKNOWN"))
+                                                              : Mono.empty()))
                                           .then(manifest(db, r))
                                           .flatMap(
                                               row -> {

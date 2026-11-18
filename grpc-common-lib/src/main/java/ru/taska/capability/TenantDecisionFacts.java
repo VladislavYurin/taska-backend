@@ -1,15 +1,43 @@
 package ru.taska.capability;
 
-import java.time.*;
-import java.util.*;
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.Collections;
+import java.util.EnumMap;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.UUID;
 import reactor.core.publisher.Mono;
-import ru.taska.api.b2b.v1.*;
-import ru.taska.capability.CapabilityFacts.*;
+import ru.taska.api.b2b.v1.CredentialKind;
+import ru.taska.api.b2b.v1.Entitlement;
+import ru.taska.api.b2b.v1.ErrorCode;
+import ru.taska.api.b2b.v1.Membership;
+import ru.taska.api.b2b.v1.MembershipSnapshot;
+import ru.taska.api.b2b.v1.RestrictionCode;
+import ru.taska.api.b2b.v1.RpcActorFacts;
+import ru.taska.api.b2b.v1.Tenant;
+import ru.taska.capability.CapabilityFacts.Accepted;
+import ru.taska.capability.CapabilityFacts.Channel;
+import ru.taska.capability.CapabilityFacts.Flag;
+import ru.taska.capability.CapabilityFacts.Identity;
+import ru.taska.capability.CapabilityFacts.PaymentChannel;
+import ru.taska.capability.CapabilityFacts.PlanKind;
+import ru.taska.capability.CapabilityFacts.ProjectRole;
+import ru.taska.capability.CapabilityFacts.Target;
 import ru.taska.configuration.PlatformConfigurationSnapshotCache;
 import ru.taska.entitlement.EntitlementProjection;
-import ru.taska.exception.*;
+import ru.taska.exception.DomainException;
+import ru.taska.exception.DomainStatus;
 import ru.taska.r2dbc.TenantTransactionExecutor;
-import ru.taska.security.tenant.*;
+import ru.taska.security.tenant.RpcContextBridge;
+import ru.taska.security.tenant.RpcContextSecurity;
+import ru.taska.security.tenant.RpcRoutePolicies;
+import ru.taska.security.tenant.RpcTrustBackend;
+import ru.taska.security.tenant.VerifiedTenantContext;
 
 /** Primary facts for one admitted API invocation. No actor/role decision is cached across calls. */
 public final class TenantDecisionFacts {
@@ -104,6 +132,7 @@ public final class TenantDecisionFacts {
   private final Map<String, Binding> nativeBindings;
   private final PlatformConfigurationSnapshotCache flags;
   private final EntitlementProjection commercial;
+  private final EntitlementProjection administrativeCommercial;
   private final Clock clock;
 
   public TenantDecisionFacts(
@@ -125,6 +154,25 @@ public final class TenantDecisionFacts {
             reads::entitlement,
             (c, use) ->
                 reads.actorMembership(c).map(m -> Set.copyOf(m.getIndependentRestrictionsList())),
+            (c, e) -> Mono.just(false),
+            clock,
+            Duration.ofSeconds(30),
+            1024);
+    administrativeCommercial =
+        new EntitlementProjection(
+            transactions,
+            reads::entitlement,
+            (c, use) ->
+                actor(c)
+                    .flatMap(
+                        a ->
+                            webAdministrative(a, c)
+                                ? reads
+                                    .memberships(
+                                        UUID.fromString(c.tenantId()),
+                                        List.of(UUID.fromString(c.actorId())))
+                                    .map(m -> Set.<RestrictionCode>of())
+                                : Mono.error(denied("CURRENT_ADMIN_REQUIRED"))),
             (c, e) -> Mono.just(false),
             clock,
             Duration.ofSeconds(30),
@@ -176,6 +224,22 @@ public final class TenantDecisionFacts {
   }
 
   public Mono<Frame> current(String scope) {
+    return current(scope, false);
+  }
+
+  /** Явный административный ресурсный путь: текущий GLOBAL_ADMIN/MFA проверяется primary. */
+  public Mono<Frame> currentAdministrative(String scope) {
+    return current(scope, true);
+  }
+
+  private static boolean webAdministrative(RpcActorFacts actor, VerifiedTenantContext c) {
+    return actor.getGlobalAdmin()
+        && actor.getWebMfa()
+        && RpcContextBridge.details(c).getContext().getCredentialKind()
+            == CredentialKind.CREDENTIAL_KIND_WEB_GLOBAL;
+  }
+
+  private Mono<Frame> current(String scope, boolean administrative) {
     return VerifiedTenantContext.current()
         .flatMap(
             c -> {
@@ -184,15 +248,21 @@ public final class TenantDecisionFacts {
               return actor(c)
                   .flatMap(
                       actor ->
-                          reads
-                              .actorMembership(c)
+                          (administrative && webAdministrative(actor, c)
+                                  ? reads.memberships(
+                                      UUID.fromString(c.tenantId()),
+                                      List.of(UUID.fromString(c.actorId())))
+                                  : reads.actorMembership(c))
                               .flatMap(
                                   members ->
                                       Mono.zip(
                                               flags.resolve(
                                                   PlatformConfigurationSnapshotCache.Use.ADMISSION),
-                                              commercial.resolveLease(
-                                                  EntitlementProjection.Use.NEW_RESOURCE))
+                                              (administrative && webAdministrative(actor, c)
+                                                      ? administrativeCommercial
+                                                      : commercial)
+                                                  .resolveLease(
+                                                      EntitlementProjection.Use.NEW_RESOURCE))
                                           .flatMap(
                                               values ->
                                                   reads
@@ -276,6 +346,38 @@ public final class TenantDecisionFacts {
               return true;
             })
         .then();
+  }
+
+  public Mono<CapabilityEvaluator.Decision> acceptedAttachment(
+      Frame frame, Target target, ProjectRole role, Set<ErrorCode> integrity) {
+    return decide(
+        frame,
+        Action.ATTACHMENT_CONFIRM,
+        target,
+        role,
+        integrity,
+        new Accepted(
+            target.operation(),
+            target,
+            Set.of(Action.ATTACHMENT_CONFIRM),
+            Set.of(Flag.ATTACHMENT_UPLOAD)));
+  }
+
+  /** Только повтор/поиск сохранённого намерения: бизнес-отказ не становится новым admission. */
+  public Mono<CapabilityEvaluator.Decision> attachmentPrincipal(
+      Frame frame, Target target, ProjectRole role, Set<ErrorCode> integrity) {
+    return evaluate(frame, Action.ATTACHMENT_CONFIRM, target, role, integrity, null)
+        .map(
+            d -> {
+              var business =
+                  Set.of(
+                      ErrorCode.ERROR_CODE_READ_ONLY,
+                      ErrorCode.ERROR_CODE_CAPABILITY_DISABLED,
+                      ErrorCode.ERROR_CODE_QUOTA_EXCEEDED);
+              if (!d.capability().getAllowed()
+                  && !business.containsAll(d.capability().getDenialCodesList())) requireAllowed(d);
+              return d;
+            });
   }
 
   private Mono<CapabilityEvaluator.Decision> decide(
