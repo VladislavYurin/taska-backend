@@ -165,6 +165,16 @@ class HarnessTest(unittest.TestCase):
         self.assertIn('sibling', result['modules'])
         self.assertIn('event consumer', [r['reason'] for r in result['reasons']])
 
+    def test_openspec_metadata_is_documentation_but_unknown_code_is_not(self):
+        m = self.repo()
+        self.write('.openspec-version', '2.1.0\n')
+        self.write('openspec/config.yaml', 'schema: spec-driven\n')
+        self.write('.agents/skills/.openspec-target', 'codex\n')
+        self.write('openspec/changes/task/.openspec.yaml', 'schema: spec-driven\n')
+        self.assertEqual(h.plan(self.root, m, 'HEAD')['modules'], [])
+        self.write('openspec/changes/task/runner.py', 'print("executable")\n')
+        self.assertEqual(set(h.plan(self.root, m, 'HEAD')['modules']), set(m['modules']))
+
     def test_plan_invalid_or_missing_refs(self):
         m = self.repo()
         for ref in ['--output=bad', 'HEAD;touch bad', '$(id)', 'refs/heads/absent', '']:

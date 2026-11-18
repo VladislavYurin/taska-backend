@@ -356,6 +356,9 @@ def plan(root, m, base):
         module = path.split('/')[0]
         if path.endswith('.md'):
             pass
+        elif (path in ('.openspec-version', 'openspec/config.yaml', '.agents/skills/.openspec-target') or
+              (path.startswith('openspec/changes/') and path.endswith('/.openspec.yaml'))):
+            pass  # OpenSpec workflow metadata; executable/unknown files still use full impact.
         elif module in m['modules']:
             direct.add(module)
             reasons.append({'path': path, 'modules': [module], 'reason': 'Module changed'})
