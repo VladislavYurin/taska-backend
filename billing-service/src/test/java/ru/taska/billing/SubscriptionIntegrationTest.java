@@ -40,18 +40,32 @@ import org.testcontainers.utility.MountableFile;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
-import ru.taska.api.b2b.v1.*;
 import ru.taska.api.b2b.v1.AdminGrant;
 import ru.taska.api.b2b.v1.AdminScope;
+import ru.taska.api.b2b.v1.BillingServiceGrpc;
+import ru.taska.api.b2b.v1.CancelSubscriptionRenewalRpcRequest;
+import ru.taska.api.b2b.v1.ChangePlanRequest;
+import ru.taska.api.b2b.v1.ChangeSubscriptionPlanRpcRequest;
+import ru.taska.api.b2b.v1.ConfirmedAction;
+import ru.taska.api.b2b.v1.CreateInvoiceRequest;
 import ru.taska.api.b2b.v1.CredentialKind;
+import ru.taska.api.b2b.v1.Entitlement;
+import ru.taska.api.b2b.v1.GetEntitlementRpcRequest;
 import ru.taska.api.b2b.v1.GetSubscriptionRpcRequest;
 import ru.taska.api.b2b.v1.ListSubscriptionPeriodsRpcRequest;
+import ru.taska.api.b2b.v1.MutationOptions;
 import ru.taska.api.b2b.v1.PageRequest;
+import ru.taska.api.b2b.v1.PlanChange;
+import ru.taska.api.b2b.v1.RestrictionCode;
+import ru.taska.api.b2b.v1.ResumeSubscriptionRenewalRpcRequest;
 import ru.taska.api.b2b.v1.Subscription;
 import ru.taska.api.b2b.v1.SubscriptionPeriod;
 import ru.taska.api.b2b.v1.SubscriptionPeriodPage;
 import ru.taska.api.b2b.v1.TrustedTenantContext;
-import ru.taska.billing.PlanChangeDependencies.*;
+import ru.taska.billing.PlanChangeDependencies.Command;
+import ru.taska.billing.PlanChangeDependencies.FreeAuthority;
+import ru.taska.billing.PlanChangeDependencies.FreeProof;
+import ru.taska.billing.PlanChangeDependencies.Grant;
 import ru.taska.billing.SubscriptionDependencies.CoverageEvidence;
 import ru.taska.billing.SubscriptionDependencies.FinancialReadAuthority;
 import ru.taska.billing.SubscriptionDependencies.PaymentSource;
@@ -354,7 +368,7 @@ class SubscriptionIntegrationTest {
   void reset() {
     sql(
         "TRUNCATE"
-            + " taska.payment_reconciliation,taska.payment_attempts,taska.billing_operations,taska.payment_methods,taska.provider_inbox,taska.provider_payment_proofs,taska.provider_pay_routes,taska.provider_ingress_limits,taska.initial_payment_deliveries,taska.payment_settlements,taska.renewal_calendar_assignments,taska.entitlement_snapshots,taska.payment_facts,taska.payment_allocations,taska.invoice_payment_matches,taska.financial_command_receipts,taska.invoices,taska.invoice_lines,taska.invoice_command_receipts,taska.subscription_plan_changes,taska.subscriptions,taska.subscription_periods,taska.subscription_command_receipts,taska.outbox_events,taska.idempotency_records,taska.processed_events");
+            + " taska.autopay_authorization_audit,taska.autopay_dispatches,taska.autopay_mandates,taska.payment_reconciliation,taska.payment_attempts,taska.billing_operations,taska.payment_methods,taska.provider_inbox,taska.provider_payment_proofs,taska.provider_pay_routes,taska.provider_ingress_limits,taska.initial_payment_deliveries,taska.payment_settlements,taska.renewal_calendar_assignments,taska.entitlement_snapshots,taska.payment_facts,taska.payment_allocations,taska.invoice_payment_matches,taska.financial_command_receipts,taska.invoices,taska.invoice_lines,taska.invoice_command_receipts,taska.subscription_plan_changes,taska.subscriptions,taska.subscription_periods,taska.subscription_command_receipts,taska.outbox_events,taska.idempotency_records,taska.processed_events");
     sql("ALTER TABLE taska.catalog_plan_versions DISABLE TRIGGER immutable_plan");
     sql("DELETE FROM taska.catalog_plan_versions WHERE version>1");
     sql("ALTER TABLE taska.catalog_plan_versions ENABLE TRIGGER immutable_plan");

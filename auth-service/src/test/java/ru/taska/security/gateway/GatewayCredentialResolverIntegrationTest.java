@@ -263,6 +263,72 @@ class GatewayCredentialResolverIntegrationTest {
   }
 
   @Test
+  void globalTargetBindingRequiresSelectionScopeCurrentAdminAndEmailMfa() {
+    String token = issuer.issue(global);
+    var nonAdmin = denied(resolver.resolve(token, b.toString(), "getTenant"));
+    assertEquals(DomainStatus.PERMISSION_DENIED, nonAdmin.getStatus());
+    assertEquals("ADMIN_GRANT_REQUIRED", nonAdmin.getMessage());
+
+    sql("UPDATE taska.users SET global_role='GLOBAL_ADMIN' WHERE id='" + user + "'");
+    var noMfa = denied(resolver.resolve(token, b.toString(), "getTenant"));
+    assertEquals(DomainStatus.PERMISSION_DENIED, noMfa.getStatus());
+    assertEquals("MFA_REQUIRED", noMfa.getMessage());
+
+    sql(
+        "UPDATE taska.web_sessions SET assurance='ADMIN_EMAIL_MFA' WHERE id='"
+            + global.webSessionId()
+            + "'");
+    sql("DELETE FROM fixture_memberships WHERE tenant_id='" + b + "' AND user_id='" + user + "'");
+    var read = resolver.resolve(token, b.toString(), "getTenant").block(WAIT).getBinding();
+    assertEquals(CredentialKind.CREDENTIAL_KIND_WEB_GLOBAL, read.getCredentialKind());
+    assertEquals(b.toString(), read.getTenantId());
+    assertFalse(read.hasMembershipGeneration());
+    assertFalse(read.hasGrantId());
+    assertEquals(List.of("read"), read.getScopesList());
+    assertEquals(AdminScope.KindValue.KIND_TENANT_SET, read.getAdministrativeScope().getKind());
+    assertEquals(List.of(b.toString()), read.getAdministrativeScope().getTenantIdsList());
+    assertEquals(AdminGrant.LevelValue.LEVEL_READ, read.getAdministrativeLevel());
+
+    var rename = resolver.resolve(token, b.toString(), "renameTenant").block(WAIT).getBinding();
+    assertEquals(List.of("read", "write"), rename.getScopesList());
+    assertEquals(AdminGrant.LevelValue.LEVEL_MODIFY, rename.getAdministrativeLevel());
+  }
+
+  @Test
+  void globalTargetBindingRequiresTenantSelectionScopeAndBoundCredentialCannotRetarget() {
+    String globalToken = issuer.issue(global);
+    var claims =
+        new HashMap<String, Object>(
+            io.jsonwebtoken.Jwts.parser()
+                .verifyWith(pair.getPublic())
+                .build()
+                .parseSignedClaims(globalToken)
+                .getPayload());
+    claims.put("scopes", List.of("account:read"));
+    String withoutSelection =
+        io.jsonwebtoken.Jwts.builder()
+            .header()
+            .keyId("test-key")
+            .and()
+            .claims(claims)
+            .signWith(pair.getPrivate(), io.jsonwebtoken.Jwts.SIG.EdDSA)
+            .compact();
+    sql("UPDATE taska.users SET global_role='GLOBAL_ADMIN' WHERE id='" + user + "'");
+    sql(
+        "UPDATE taska.web_sessions SET assurance='ADMIN_EMAIL_MFA' WHERE id='"
+            + global.webSessionId()
+            + "'");
+    var missingScope =
+        denied(resolver.resolve(withoutSelection, a.toString(), "getTenant"));
+    assertEquals(DomainStatus.PERMISSION_DENIED, missingScope.getStatus());
+    assertEquals("SCOPE_DENIED", missingScope.getMessage());
+    var mismatch =
+        denied(resolver.resolve(issuer.issue(sessionA), b.toString(), "getTenant"));
+    assertEquals(DomainStatus.PERMISSION_DENIED, mismatch.getStatus());
+    assertEquals("TENANT_MISMATCH", mismatch.getMessage());
+  }
+
+  @Test
   void authoritativeMembershipChangesDenyImmediatelyAndKeepOtherCompany() {
     resolve(sessionA);
     db.sql("UPDATE fixture_memberships SET generation=3,active=false WHERE tenant_id=:id")

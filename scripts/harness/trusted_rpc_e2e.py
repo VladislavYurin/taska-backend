@@ -258,16 +258,19 @@ class TrustedLocal(e.Local):
         for name in self.modules:
             self.compose('cp', str(install), name + ':/run/trust')
         self.runtime_trust = True
-        self.compose('up', '-d', *self.modules, timeout=180)
         self.refresh()
         self.refresh_thread = threading.Thread(target=self.refresh_loop, daemon=True)
         self.refresh_thread.start()
+        self.start_applications()
         for name in self.modules:
             endpoint = 'http://' + self.compose('port', name, '8080').strip()
             self.wait_ready(endpoint)
             if name == 'api-gateway':
                 self.state['origin'] = endpoint
         self.store.save(self.state)
+
+    def start_applications(self):
+        self.compose('up', '-d', *self.modules, timeout=180)
 
     def sql(self, database, sql):
         return self.compose('exec', '-T', 'database', 'psql', '-X', '-qAt', '-U', 'taska', '-d', database,

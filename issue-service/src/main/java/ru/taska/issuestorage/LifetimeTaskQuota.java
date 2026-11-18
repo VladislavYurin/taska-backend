@@ -1,19 +1,30 @@
 package ru.taska.issuestorage;
 
-import java.time.*;
-import java.util.*;
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.util.Map;
+import java.util.Objects;
+import java.util.UUID;
 import org.springframework.r2dbc.core.DatabaseClient;
 import reactor.core.publisher.Mono;
-import ru.taska.api.b2b.v1.*;
+import ru.taska.api.b2b.v1.Entitlement;
+import ru.taska.api.b2b.v1.GetProjectTaskQuotaRpcRequest;
+import ru.taska.api.b2b.v1.GetTenantTaskQuotaSummaryRequest;
+import ru.taska.api.b2b.v1.QuotaLimit;
+import ru.taska.api.b2b.v1.QuotaUsage;
+import ru.taska.api.b2b.v1.TenantTaskQuotaSummary;
 import ru.taska.entitlement.EntitlementProjection;
-import ru.taska.exception.*;
+import ru.taska.exception.DomainException;
+import ru.taska.exception.DomainStatus;
 import ru.taska.r2dbc.TenantTransactionExecutor;
 import ru.taska.security.tenant.VerifiedTenantContext;
 
 /**
- * Issue-owned lifetime admission. Authority must check current membership/project ACL and
- * lifecycle. RETIRE additionally requires the project owner's durable, confirmed physical deletion
- * receipt. Neither a global role string nor request DTO can supply a bypass/deletion grant.
+ * Выделение пожизненной квоты в сервисе задач. Проверяются актуальные членство, ACL проекта и
+ * жизненный цикл. RETIRE дополнительно требует сохранённое подтверждение физического удаления от
+ * сервиса-владельца проекта. Глобальная роль и DTO запроса не дают права обхода или удаления.
  */
 public final class LifetimeTaskQuota {
   public enum Use {
@@ -74,8 +85,13 @@ public final class LifetimeTaskQuota {
             });
   }
 
-  /** Must join the create transaction after its idempotency claim. */
+  /** Выполняется в транзакции создания после резервирования записи идемпотентности. */
   Mono<Integer> allocate(DatabaseClient db, UUID project) {
+    return allocate(db, project, true);
+  }
+
+  // Повторная проверка может сузить обход, но не расширить исходное аудируемое разрешение.
+  Mono<Integer> allocate(DatabaseClient db, UUID project, boolean allowBusinessBypass) {
     return VerifiedTenantContext.current()
         .flatMap(
             c -> {
@@ -85,7 +101,8 @@ public final class LifetimeTaskQuota {
                   .flatMap(
                       pair -> {
                         var state = pair.getT1();
-                        var grant = pair.getT2();
+                        var grant =
+                            new Grant(pair.getT2().bypassBusinessRules() && allowBusinessBypass);
                         return terms(tenant, state.entitlement())
                             .flatMap(
                                 terms ->
@@ -97,9 +114,20 @@ public final class LifetimeTaskQuota {
                                                 if (!terms.limit().getUnlimited()
                                                     && max > limit(terms))
                                                   return Mono.error(
-                                                      fail(
+                                                      new DomainException(
                                                           DomainStatus.FAILED_PRECONDITION,
-                                                          "TENANT_READ_ONLY_OVER_QUOTA"));
+                                                          "TENANT_READ_ONLY_OVER_QUOTA",
+                                                          Map.of(
+                                                              "code",
+                                                              "READ_ONLY",
+                                                              "reason",
+                                                              "OVER_QUOTA",
+                                                              "quotaKind",
+                                                              "TASK_LIFETIME",
+                                                              "quotaLimit",
+                                                              Long.toString(limit(terms)),
+                                                              "quotaUsed",
+                                                              Long.toString(max))));
                                               }
                                               return db.sql(
                                                       "INSERT INTO"
@@ -113,12 +141,12 @@ public final class LifetimeTaskQuota {
                                                   .then(
                                                       db.sql(
                                                               """
-                                                              UPDATE taska.project_counters SET next_issue_number=next_issue_number+1,lifetime_created=lifetime_created+1,version=version+1
-                                                              WHERE tenant_id=:t AND project_id=:p AND retired_at IS NULL
-                                                                AND next_issue_number<2147483647 AND version<9223372036854775807 AND lifetime_created<9223372036854775807
-                                                                AND (:bypass OR :unlimited OR lifetime_created<:lim)
-                                                              RETURNING next_issue_number-1 AS allocated
-                                                              """)
+UPDATE taska.project_counters SET next_issue_number=next_issue_number+1,lifetime_created=lifetime_created+1,version=version+1
+WHERE tenant_id=:t AND project_id=:p AND retired_at IS NULL
+  AND next_issue_number<2147483647 AND version<9223372036854775807 AND lifetime_created<9223372036854775807
+  AND (:bypass OR :unlimited OR lifetime_created<:lim)
+RETURNING next_issue_number-1 AS allocated
+""")
                                                           .bind("t", tenant)
                                                           .bind("p", project)
                                                           .bind(
@@ -165,7 +193,19 @@ public final class LifetimeTaskQuota {
               if (!grant.bypassBusinessRules()
                   && !terms.limit().getUnlimited()
                   && ((Long) row.get("lifetime_created")) >= limit(terms))
-                return Mono.error(fail(DomainStatus.FAILED_PRECONDITION, "QUOTA_EXCEEDED"));
+                return Mono.error(
+                    new DomainException(
+                        DomainStatus.FAILED_PRECONDITION,
+                        "QUOTA_EXCEEDED",
+                        Map.of(
+                            "code",
+                            "QUOTA_EXCEEDED",
+                            "quotaKind",
+                            "TASK_LIFETIME",
+                            "quotaLimit",
+                            Long.toString(limit(terms)),
+                            "quotaUsed",
+                            row.get("lifetime_created").toString())));
               return Mono.error(fail(DomainStatus.RESOURCE_EXHAUSTED, "Issue numbering exhausted"));
             });
   }
@@ -199,8 +239,9 @@ public final class LifetimeTaskQuota {
                                                                     "PROJECT_NOT_FOUND"))
                                                             : Mono.just(
                                                                 (Long) row.get("lifetime_created")))
-                                                // Authority already established a live accessible
-                                                // project, including one with no issues yet.
+                                                // Проверка полномочий уже подтвердила доступный
+                                                // действующий проект,
+                                                // в том числе проект без задач.
                                                 .defaultIfEmpty(0L)
                                                 .flatMap(
                                                     used ->
@@ -270,7 +311,8 @@ public final class LifetimeTaskQuota {
   }
 
   /**
-   * TAS-459 joins its owner-confirmed project deletion transaction; archiving must never call this.
+   * TAS-459 вызывает это в транзакции подтверждённого удаления проекта; архивация не должна
+   * вызывать этот метод.
    */
   public Mono<Void> retire(DatabaseClient db, UUID project) {
     Objects.requireNonNull(project);
@@ -330,8 +372,9 @@ public final class LifetimeTaskQuota {
                                                       .bind("e", state.entitlement())
                                                       .bind("max", max)
                                                       .bind("request", c.requestId());
-                                              // Cleanup is allowed during billing outage. Unknown
-                                              // commercial facts stay unknown.
+                                              // Очистка разрешена при недоступности биллинга.
+                                              // Неизвестные коммерческие условия не подменяются
+                                              // значениями по умолчанию.
                                               event =
                                                   state.entitlement() == 0
                                                       ? event.bindNull("over", Boolean.class)
@@ -430,7 +473,7 @@ public final class LifetimeTaskQuota {
                       .bind("u", next.unlimited());
               update =
                   value == null ? update.bindNull("lim", Long.class) : update.bind("lim", value);
-              // Separate transactional outbox: issue outbox deliberately requires an existing ISSUE
+              // Отдельный транзакционный outbox: outbox задач требует существующую задачу ISSUE
               // FK.
               return update
                   .fetch()
@@ -438,9 +481,9 @@ public final class LifetimeTaskQuota {
                   .then(
                       db.sql(
                               """
-                              INSERT INTO taska.task_quota_outbox(tenant_id,version,entitlement_version,maximum_created,over_limit,request_id)
-                              VALUES(:t,:v,:e,:max,:over,:request)
-                              """)
+INSERT INTO taska.task_quota_outbox(tenant_id,version,entitlement_version,maximum_created,over_limit,request_id)
+VALUES(:t,:v,:e,:max,:over,:request)
+""")
                           .bind("t", tenant)
                           .bind("v", next.version())
                           .bind("e", next.entitlement())
@@ -465,8 +508,8 @@ public final class LifetimeTaskQuota {
                 throw fail(DomainStatus.PERMISSION_DENIED, "TENANT_MISMATCH");
               long version = Long.parseLong(e.getVersion());
               if (version < minimum) throw fail(DomainStatus.UNAVAILABLE, "ENTITLEMENT_STALE");
-              // Read endpoints may report restrictions, but never treat an expired snapshot as
-              // current.
+              // Методы чтения могут сообщать ограничения, но не должны считать просроченный снимок
+              // актуальным.
               Instant now = clock.instant();
               if (now.isBefore(Instant.parse(e.getValidFrom()))
                   || (e.hasValidUntil() && !now.isBefore(Instant.parse(e.getValidUntil())))

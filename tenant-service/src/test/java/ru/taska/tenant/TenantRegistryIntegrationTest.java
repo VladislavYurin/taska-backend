@@ -260,12 +260,21 @@ class TenantRegistryIntegrationTest {
   }
 
   Mono<Tenant> get(UUID actor, UUID tenant) {
-    return RegistryTestContext.as(
-        actor,
-        tenant,
-        "getTenant",
-        CREDENTIAL_KIND_WEB_TENANT,
-        true,
+    var claims =
+        TrustedTenantContext.newBuilder()
+            .setActorUserId(actor.toString())
+            .setTenantId(tenant.toString())
+            .setActorGeneration("1")
+            .setMembershipGeneration("1")
+            .setCredentialKind(CREDENTIAL_KIND_WEB_TENANT)
+            .setSessionId(UUID.randomUUID().toString())
+            .setIssuerService("api-gateway")
+            .setAudienceService("tenant-service")
+            .addScopes("read")
+            .setAction("getTenant")
+            .build();
+    return RegistryTestContext.withClaims(
+        claims,
         service.get(GetTenantRpcRequest.newBuilder().setTenantId(tenant.toString()).build()));
   }
 
@@ -408,7 +417,9 @@ class TenantRegistryIntegrationTest {
   void getChecksMembershipAndDoesNotGrantWorkAccessToPaid() {
     var created = create(OWNER, "read", PAID).block(WAIT);
     UUID id = UUID.fromString(created.getTenant().getId());
-    assertEquals(created.getTenant(), get(OWNER, id).block(WAIT));
+    var read = get(OWNER, id).block(WAIT);
+    assertEquals(created.getTenant(), read.toBuilder().clearMembership().build());
+    assertTrue(read.getMembership().getIsOwner());
     rejects(DomainStatus.NOT_FOUND, get(OTHER, id));
     operator
         .sql(
@@ -520,7 +531,12 @@ class TenantRegistryIntegrationTest {
         .expectError()
         .verify(WAIT);
     assertEquals(
-        created.getTenant(), get(OWNER, UUID.fromString(created.getTenant().getId())).block(WAIT));
+        created.getTenant(),
+        get(OWNER, UUID.fromString(created.getTenant().getId()))
+            .block(WAIT)
+            .toBuilder()
+            .clearMembership()
+            .build());
     assertEquals(1, count("tenant_memberships"));
   }
 
@@ -901,8 +917,18 @@ class TenantRegistryIntegrationTest {
             plain.withInterceptors(
                 io.grpc.stub.MetadataUtils.newAttachHeadersInterceptor(
                     signed(sender, read, policies.get(rpc), rpc)));
-        if (actor.equals(OWNER)) assertEquals(result.getTenant(), readStub.getTenant(read));
-        else
+        if (actor.equals(OWNER)) {
+          var current = readStub.getTenant(read);
+          assertEquals(result.getTenant(), current.toBuilder().clearMembership().build());
+          assertEquals(
+              ru.taska.api.b2b.v1.CallerMembership.newBuilder()
+                  .setRole(ru.taska.api.b2b.v1.Membership.RoleValue.ROLE_TENANT_ADMIN)
+                  .setState(ru.taska.api.b2b.v1.Membership.StateValue.STATE_ACTIVE)
+                  .setIsOwner(true)
+                  .setVersion("1")
+                  .build(),
+              current.getMembership());
+        } else
           assertEquals(
               io.grpc.Status.Code.NOT_FOUND,
               assertThrows(io.grpc.StatusRuntimeException.class, () -> readStub.getTenant(read))

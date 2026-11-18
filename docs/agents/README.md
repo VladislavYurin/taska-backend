@@ -29,7 +29,7 @@ Harness объединяет инструкции, доступные инстр
 | Пользователь и доступ | `auth-service` | сессии, refresh rotation, статус пользователя, PAT scopes; [приглашения](../tas-204-invitations-and-directory.md) |
 | Проекты и роли | `project-service` | ADMIN/MEMBER/VIEWER, последний ADMIN, собственность типов задач |
 | Workflow | `workflow-service` | граф, типы, версии, резервирования; [привязки](../tas-436-workflow-type-bindings.md), [native RPC/ACL](../../workflow-service/TENANT-API.md) |
-| Задачи | `issue-service` | If-Match, идемпотентность, поиск/доска, история, связи, worklogs; [удаление типа](../tas-433-issue-type-deletion.md) |
+| Задачи | `issue-service` | [Native CRUD/ACL](../../issue-service/TENANT-API.md), If-Match, идемпотентность, поиск/доска, история, связи, worklogs; [удаление типа](../tas-433-issue-type-deletion.md) |
 | События и уведомления | `common-lib`, `kafka-lib`, `notification-service` | атомарность outbox, дедупликация, каналы; [Telegram](../tas-387-telegram-notifications.md) |
 | Файлы | `storage-lib`, `auth-service`, `issue-service` | presigned URL, confirm, размер/MIME, доступ и очистка объектов |
 | Администрирование | [admin-service](../../admin-service/README.md) | session-only guards, безопасное чтение, аудит, повтор outbox |
@@ -38,6 +38,7 @@ Harness объединяет инструкции, доступные инстр
 | Социальный вход | `oauth-server`, `auth-service`, `api-gateway` | [provider flow](../tas-424-oauth.md), [сценарии](../tas-447-social-sign-in-scenarios.md) |
 | Создание компании | `tenant-service`, `billing-service`, `workflow-service` | [Durable provisioning TAS-337](../../tenant-service/PROVISIONING.md), [отмена и deadline TAS-478](../../tenant-service/CREATION-CLOSURE.md), lease/fence, remote receipts, атомарность activation/operation/outbox |
 | Каталог тарифов | `billing-service` | [Каталог и границы TAS-313](../../billing-service/README.md), неизменяемость, global receipts/outbox, реальная PostgreSQL/RLS и mTLS |
+| Автопродление | `billing-service` | [Согласие и dispatch TAS-355](../../billing-service/AUTOPAY.md), subscription version, owner/consent fence, UNKNOWN и self-mTLS |
 | Метрики и эксплуатация | `metrics-starter`, `infra/`, Compose, `.github/workflows/` | конфигурационные тесты, секреты, health и revision каждого сервиса |
 
 Точные имена классов, маршруты и правила брать из текущего checkout. Таблица определяет границы поиска и не заменяет код. Целевая схема БД определяется последовательностью миграций каждого сервиса.

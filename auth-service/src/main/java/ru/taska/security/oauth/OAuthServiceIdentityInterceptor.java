@@ -24,7 +24,12 @@ public class OAuthServiceIdentityInterceptor implements ServerInterceptor {
     if (!method.startsWith(prefix)) return next.startCall(call, headers);
     String expected =
         switch (method.substring(prefix.length())) {
-          case "AuthenticateCredentials", "ValidateSubject", "ClaimSignIn", "ListSignInProviders" ->
+          case "AuthenticateCredentials",
+                  "ValidateSubject",
+                  "ClaimSignIn",
+                  "ListSignInProviders",
+                  "ClaimTenantOAuthGrant",
+                  "ValidateTenantOAuthGrant" ->
               properties.identityServiceCredential();
           case "ExchangeToken" -> properties.mcpExchangeCredential();
           default -> "";

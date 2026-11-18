@@ -192,6 +192,8 @@ TAS-359: `grpc-common-lib.verify` requires fresh `EntitlementProjectionIntegrati
 
 TAS-322: `tenant-service.verify` requires `SeatQuotaIntegrationTest` (real PostgreSQL/Liquibase/RLS, last-seat concurrency, unique ACTIVE/SUSPENDED usage, reserve/commit/release/expiry replay, atomic membership/outbox rollback, scoped admin bypass and billing failure guards). `TenantMembershipIntegrationTest` additionally tests GetTenantQuotas through production mTLS/JWS policy and current primary membership revocation. See [SEAT quota contracts and activation](../../tenant-service/SEAT-QUOTAS.md). External invitation/PSP/public REST/stage coverage remains separate.
 
+TAS-338: `tenant-service.verify` через `TenantMembershipIntegrationTest` и `TenantRegistryIntegrationTest` проверяет собственное membership вызывающего в ListTenants и member GetTenant (в том числе через production mTLS/JWS), правило списка по lifecycle и SUSPENDED/REMOVED, независимость компаний, смену роли и выход на следующем вызове, устаревшую прямую ссылку и отсутствие membership в административном чтении. `api-gateway.verify` включает `TenantRegistryClientMappingTest`: membership переносится в REST без изменений, некорректный ответ отклоняется как UNAVAILABLE.
+
 TAS-360: `grpc-common-lib.verify` requires `CapabilityEvaluatorTest` and `CapabilityEvaluatorTransportTest`: current-source decisions, READ_ONLY recovery/D244, independent reasons, exact admin grant/scope/level/MFA, user PAT/MCP flags, explicit quota bypass with integrity/audit, and real mTLS/JWS negative trust paths. [Policy/source contracts and activation](../security/capabilities.md). Domain API wiring and shared stage E2E remain TAS-491/493/495/463.
 
 TAS-334: `grpc-common-lib.verify` additionally requires `PlatformConfigurationSnapshotCacheTest`
@@ -231,3 +233,9 @@ TAS-316: `grpc-common-lib.verify`, `auth-service.verify`, `api-gateway.verify` �
 Большой security PR должен получить полный AI review: default `DEEPSEEK_MAX_DIFF_LINES=12000` в workflow и shell runner. При превышении предела runner сокращает окружающий контекст 40 → 10 → 3 строки, сохраняя изменённые строки. Если diff всё же обрезан, зелёный job не закрывает непроверенные файлы; `publish-review` перечисляет пропуски. Настройка repository variable может переопределить предел.
 
 TAS-317: `python3 scripts/harness/trusted_rpc_e2e.py` — отдельный изолированный local REST/auth/RPC/RLS/outbox/Kafka acceptance на production providers; prerequisites, signed cleanup и scope описаны в [контракте service identity](../security/rpc-service-identity.md). Это не stage activation. Required selectors дополнены ManagedRpcTrustTest и AuthRpcTrustIntegrationTest.
+
+TAS-343: native issue CRUD/ACL and lifetime project reads require `issue-service`, `api-gateway`
+and `billing-service` checks plus affected shared-proto consumers. The owned local tier
+`python3 scripts/harness/issue_acl_e2e.py` exercises real primaries/mTLS/JWS and signed cleanup;
+see [native issue API](../../issue-service/TENANT-API.md). Test doubles alone do not establish
+this transport path or shared-stage activation.

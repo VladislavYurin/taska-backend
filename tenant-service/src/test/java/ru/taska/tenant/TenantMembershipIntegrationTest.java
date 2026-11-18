@@ -63,6 +63,7 @@ import ru.taska.api.b2b.v1.GetMembershipRpcRequest;
 import ru.taska.api.b2b.v1.GetTenantQuotasRpcRequest;
 import ru.taska.api.b2b.v1.LeaveTenantRpcRequest;
 import ru.taska.api.b2b.v1.ListTenantMembersRpcRequest;
+import ru.taska.api.b2b.v1.ListTenantsRpcRequest;
 import ru.taska.api.b2b.v1.Membership;
 import ru.taska.api.b2b.v1.MembershipPage;
 import ru.taska.api.b2b.v1.MembershipSnapshot;
@@ -179,7 +180,7 @@ class TenantMembershipIntegrationTest {
     operator
         .sql(
             "TRUNCATE"
-                + " taska.quota_effects,taska.quota_reservations,taska.quota_counters,taska.tenant_creation_receipts,taska.tenant_provisioning_dispatch,taska.tenant_operations,taska.free_admission_subjects,taska.free_plan_admissions,taska.tenants,taska.tenant_memberships,taska.outbox_events,taska.idempotency_records,taska.membership_audit")
+                + " taska.tenant_rename_audit,taska.quota_effects,taska.quota_reservations,taska.quota_counters,taska.tenant_creation_receipts,taska.tenant_provisioning_dispatch,taska.tenant_operations,taska.free_admission_subjects,taska.free_plan_admissions,taska.tenants,taska.tenant_memberships,taska.outbox_events,taska.idempotency_records,taska.membership_audit")
         .fetch()
         .rowsUpdated()
         .block(WAIT);
@@ -288,6 +289,56 @@ class TenantMembershipIntegrationTest {
 
   static <T> Mono<T> as(TrustedTenantContext c, Mono<T> work) {
     return RegistryTestContext.withClaims(c, work);
+  }
+
+  TrustedTenantContext globalList(UUID actor, String session) {
+    return TrustedTenantContext.newBuilder()
+        .setActorUserId(actor.toString())
+        .setActorGeneration("3")
+        .setCredentialKind(CREDENTIAL_KIND_WEB_GLOBAL)
+        .setSessionId(session)
+        .setCredentialId(session)
+        .setIssuerService("api-gateway")
+        .setAudienceService("tenant-service")
+        .addScopes("tenants:select")
+        .setAction("listTenants")
+        .build();
+  }
+
+  TenantRegistryService registryWithList() {
+    var tenantLists =
+        new TenantListService(
+            raw, TransactionalOperator.create(new R2dbcTransactionManager(pool)), cursor);
+    return new TenantRegistryService(
+        transactions,
+        null,
+        null,
+        clock,
+        db -> Mono.just(Duration.ofDays(30)),
+        tenantLists);
+  }
+
+  Mono<ru.taska.api.b2b.v1.TenantPage> tenantList(
+      TenantRegistryService registry,
+      TrustedTenantContext claims,
+      int limit,
+      String token) {
+    var page = PageRequest.newBuilder().setLimit(limit);
+    if (token != null) page.setCursor(token);
+    return as(
+        claims,
+        registry.listTenants(
+            ListTenantsRpcRequest.newBuilder().setPage(page).build()));
+  }
+
+  Mono<Tenant> tenantRead(
+      TenantRegistryService registry, TrustedTenantContext claims, UUID tenant) {
+    return as(
+        claims,
+        registry.get(
+            ru.taska.api.b2b.v1.GetTenantRpcRequest.newBuilder()
+                .setTenantId(tenant.toString())
+                .build()));
   }
 
   static ListTenantMembersRpcRequest listRequest(UUID tenant, int limit, String token) {
@@ -856,6 +907,713 @@ class TenantMembershipIntegrationTest {
     assertEquals(2L, count("SELECT count(*) n FROM taska.outbox_events"));
   }
 
+  static ru.taska.api.b2b.v1.RenameTenantRpcRequest renameRequest(
+      UUID tenant, String name, String version, String key) {
+    var mutation = MutationOptions.newBuilder().setIdempotencyKey(key);
+    if (version != null) mutation.setExpectedVersion(version);
+    return ru.taska.api.b2b.v1.RenameTenantRpcRequest.newBuilder()
+        .setTenantId(tenant.toString())
+        .setPayload(ru.taska.api.b2b.v1.RenameTenantRequest.newBuilder().setName(name))
+        .setMutation(mutation)
+        .build();
+  }
+
+  Mono<Tenant> rename(TrustedTenantContext claims, String name, String version, String key) {
+    return as(
+        claims,
+        new TenantRenameService(transactions, clock)
+            .rename(renameRequest(UUID.fromString(claims.getTenantId()), name, version, key)));
+  }
+
+  @Test
+  void ownerRenameIsAtomicAndPreservesOtherCompanyAndMemberships() {
+    var claims = writer(OWNER, A, "1", "renameTenant");
+    var result = rename(claims, "Company renamed", "1", UUID.randomUUID().toString()).block(WAIT);
+    assertEquals("Company renamed", result.getName());
+    assertEquals("2", result.getVersion());
+    assertEquals(OWNER.toString(), result.getOwnerId());
+    assertEquals("1", result.getOwnerVersion());
+    assertEquals(8L, count("SELECT count(*) n FROM taska.tenant_memberships"));
+    assertEquals(1L, count("SELECT count(*) n FROM taska.tenants WHERE name='fixture'"));
+    assertEquals(
+        1L, count("SELECT count(*) n FROM taska.outbox_events WHERE event_type='TenantRenamed'"));
+    assertEquals(
+        1L,
+        count(
+            "SELECT count(*) n FROM taska.tenant_rename_audit WHERE result='SUCCEEDED'"
+                + " AND actor_id='"
+                + OWNER
+                + "' AND NOT administrative"));
+    var registry = new TenantRegistryService(transactions, null, null, clock, Duration.ofDays(30));
+    var read =
+        as(
+                claims.toBuilder().setAction("getTenant").build(),
+                registry.get(
+                    ru.taska.api.b2b.v1.GetTenantRpcRequest.newBuilder()
+                        .setTenantId(A.toString())
+                        .build()))
+            .block(WAIT);
+    assertEquals(result, read.toBuilder().clearMembership().build());
+    assertEquals(member(Membership.RoleValue.ROLE_TENANT_ADMIN, true, "1"), read.getMembership());
+    assertEquals(
+        0L,
+        as(
+                claims,
+                transactions.execute(
+                    db ->
+                        db.sql(
+                                "SELECT count(*) n FROM taska.tenant_rename_audit WHERE"
+                                    + " tenant_id=:tenant")
+                            .bind("tenant", B)
+                            .map((r, m) -> r.get("n", Long.class))
+                            .one()))
+            .block(WAIT));
+  }
+
+  @Test
+  void listTenantsIsActorScopedKeysetPagedAndImmediatelyReflectsRename() {
+    UUID listActor = UUID.randomUUID();
+    assertEquals(
+        2L,
+        operator
+            .sql(
+                "INSERT INTO taska.tenant_memberships (tenant_id,user_id,role,status)"
+                    + " VALUES (:a,:actor,'MEMBER','ACTIVE'),(:b,:actor,'MEMBER','ACTIVE')")
+            .bind("a", A)
+            .bind("b", B)
+            .bind("actor", listActor)
+            .fetch()
+            .rowsUpdated()
+            .block(WAIT));
+    var registry = registryWithList();
+    String session = id(777).toString();
+    var claims = globalList(listActor, session);
+
+    var first = tenantList(registry, claims, 1, null).block(WAIT);
+    assertEquals(1, first.getItemsCount());
+    assertTrue(first.hasNextCursor());
+    var second = tenantList(registry, claims, 1, first.getNextCursor()).block(WAIT);
+    assertEquals(1, second.getItemsCount());
+    assertFalse(second.hasNextCursor());
+    assertEquals(
+        Set.of(A.toString(), B.toString()),
+        Set.of(first.getItems(0).getId(), second.getItems(0).getId()));
+
+    rejects(
+        DomainStatus.INVALID_ARGUMENT,
+        tenantList(registry, globalList(OWNER, session), 1, first.getNextCursor()));
+    rejects(
+        DomainStatus.INVALID_ARGUMENT,
+        tenantList(registry, claims, 2, first.getNextCursor()));
+    rejects(
+        DomainStatus.PERMISSION_DENIED,
+        tenantList(
+            registry,
+            claims.toBuilder()
+                .setCredentialKind(CREDENTIAL_KIND_USER_PAT)
+                .setCredentialId(id(778).toString())
+                .build(),
+            1,
+            null));
+
+    assertEquals(
+        "List fresh",
+        rename(writer(OWNER, A, "1", "renameTenant"), "List fresh", "1", id(779).toString())
+            .block(WAIT)
+            .getName());
+    var fresh = tenantList(registry, claims, 50, null).block(WAIT);
+    var currentA =
+        fresh.getItemsList().stream().filter(t -> t.getId().equals(A.toString())).findFirst();
+    assertTrue(currentA.isPresent());
+    assertEquals("List fresh", currentA.get().getName());
+    assertEquals("2", currentA.get().getVersion());
+
+    var ownerOnly = tenantList(registry, globalList(OWNER, id(780).toString()), 50, null).block(WAIT);
+    assertEquals(List.of(A.toString()), ownerOnly.getItemsList().stream().map(Tenant::getId).toList());
+    var foreignOnly =
+        tenantList(registry, globalList(FOREIGN, id(781).toString()), 50, null).block(WAIT);
+    assertEquals(
+        List.of(B.toString()), foreignOnly.getItemsList().stream().map(Tenant::getId).toList());
+    assertEquals(
+        0L,
+        raw.sql("SELECT count(*) n FROM taska.tenants")
+            .map((r, m) -> r.get("n", Long.class))
+            .one()
+            .block(WAIT));
+  }
+
+  @Test
+  void getTenantUsesCurrentMembershipSnapshotAndAllowsOnlyTargetScopedAdminRead() {
+    var registry = new TenantRegistryService(transactions, null, null, clock, Duration.ofDays(30));
+    var active = human(SHARED, A, "3", "get-shared").toBuilder().setAction("getTenant").build();
+    assertEquals(A.toString(), tenantRead(registry, active, A).block(WAIT).getId());
+    var stale = human(OWNER, A, "2", "get-stale").toBuilder().setAction("getTenant").build();
+    rejects(DomainStatus.UNAUTHENTICATED, tenantRead(registry, stale, A));
+    var suspended =
+        human(SUSPENDED, A, "5", "get-suspended").toBuilder().setAction("getTenant").build();
+    rejects(DomainStatus.NOT_FOUND, tenantRead(registry, suspended, A));
+
+    var adminRead =
+        human(FOREIGN, A, "99", "admin-read")
+            .toBuilder()
+                .setAction("getTenant")
+                .setCredentialKind(CREDENTIAL_KIND_WEB_GLOBAL)
+                .clearMembershipGeneration()
+                .setAdministrativeLevel(
+                    ru.taska.api.b2b.v1.AdminGrant.LevelValue.LEVEL_READ)
+                .setAdministrativeScope(
+                    ru.taska.api.b2b.v1.AdminScope.newBuilder()
+                        .setKind(ru.taska.api.b2b.v1.AdminScope.KindValue.KIND_TENANT_SET)
+                        .addTenantIds(A.toString()))
+                .build();
+    assertEquals(A.toString(), tenantRead(registry, adminRead, A).block(WAIT).getId());
+    var wrongTarget = adminRead.toBuilder().setTenantId(B.toString()).build();
+    rejects(DomainStatus.PERMISSION_DENIED, tenantRead(registry, wrongTarget, B));
+  }
+
+  static ru.taska.api.b2b.v1.CallerMembership member(
+      Membership.RoleValue role, boolean owner, String version) {
+    return ru.taska.api.b2b.v1.CallerMembership.newBuilder()
+        .setRole(role)
+        .setState(Membership.StateValue.STATE_ACTIVE)
+        .setIsOwner(owner)
+        .setVersion(version)
+        .build();
+  }
+
+  /** Paid tenant created after the seed; FK owner→membership is checked at commit. */
+  void paidTenant(UUID tenant, UUID owner, String lifecycle, String closure, int minutes) {
+    var insert =
+        operator
+            .sql(
+                "INSERT INTO"
+                    + " taska.tenants(id,name,owner_id,lifecycle,creation_kind,creation_deadline_at,created_at,plan_version_id,creation_actor_id,creation_request_hash,creation_operation_id,creation_closure_reason,creation_closed_at)"
+                    + " VALUES (:id,'paid',:owner,:lifecycle,'PAID',now()+interval '30"
+                    + " days',now()+make_interval(mins=>:minutes),:plan,:owner,decode(repeat('00',32),'hex'),:operation,:closure,CASE"
+                    + " WHEN :closure::text IS NULL THEN NULL ELSE now() END)")
+            .bind("id", tenant)
+            .bind("owner", owner)
+            .bind("lifecycle", lifecycle)
+            .bind("minutes", minutes)
+            .bind("plan", id(501))
+            .bind("operation", UUID.randomUUID());
+    insert = closure == null ? insert.bindNull("closure", String.class) : insert.bind("closure", closure);
+    TransactionalOperator.create(new R2dbcTransactionManager(operatorFactory))
+        .transactional(
+            insert
+                .fetch()
+                .rowsUpdated()
+                .then(
+                    operator
+                        .sql(
+                            "INSERT INTO taska.tenant_memberships(tenant_id,user_id,role,status)"
+                                + " VALUES (:t,:u,'TENANT_ADMIN','ACTIVE')")
+                        .bind("t", tenant)
+                        .bind("u", owner)
+                        .fetch()
+                        .rowsUpdated()))
+        .block(WAIT);
+  }
+
+  @Test
+  void listTenantsCarriesOwnMembershipPerCompanyWithIndependentStates() {
+    UUID awaiting = id(3), closed = id(4), deleted = id(5);
+    paidTenant(awaiting, SHARED, "AWAITING_PAYMENT", null, 1);
+    paidTenant(closed, OWNER, "AUTO_CLOSED", "AUTO_EXPIRED", 2);
+    paidTenant(deleted, OWNER, "DELETED", null, 3);
+    operator
+        .sql(
+            "INSERT INTO taska.tenant_memberships(tenant_id,user_id,role,status,version) VALUES"
+                + " (:closed,:u,'MEMBER','ACTIVE',6),(:deleted,:u,'MEMBER','ACTIVE',8)")
+        .bind("closed", closed)
+        .bind("deleted", deleted)
+        .bind("u", SHARED)
+        .fetch()
+        .rowsUpdated()
+        .block(WAIT);
+
+    // SHARED: ACTIVE MEMBER in A, SUSPENDED in B, owner of the unpaid company, member of the
+    // closed one and of a DELETED one.
+    var page =
+        tenantList(registryWithList(), globalList(SHARED, id(790).toString()), 50, null)
+            .block(WAIT);
+    assertFalse(page.hasNextCursor());
+    assertEquals(
+        List.of(A.toString(), awaiting.toString(), closed.toString()),
+        page.getItemsList().stream().map(Tenant::getId).toList());
+
+    var active = page.getItems(0);
+    assertEquals(Tenant.LifecycleValue.LIFECYCLE_ACTIVE, active.getLifecycle());
+    assertEquals(0, active.getRestrictionsCount());
+    assertEquals(member(Membership.RoleValue.ROLE_MEMBER, false, "3"), active.getMembership());
+
+    var unpaid = page.getItems(1);
+    assertEquals(Tenant.LifecycleValue.LIFECYCLE_AWAITING_PAYMENT, unpaid.getLifecycle());
+    assertEquals(
+        List.of(ru.taska.api.b2b.v1.RestrictionCode.RESTRICTION_CODE_PENDING_FIRST_PAYMENT),
+        unpaid.getRestrictionsList());
+    assertTrue(unpaid.hasCreationDeadline());
+    assertEquals(
+        member(Membership.RoleValue.ROLE_TENANT_ADMIN, true, "1"), unpaid.getMembership());
+
+    var closure = page.getItems(2);
+    assertEquals(Tenant.LifecycleValue.LIFECYCLE_AUTO_CLOSED, closure.getLifecycle());
+    assertEquals(
+        Tenant.CreationClosureReason.CREATION_CLOSURE_REASON_AUTO_EXPIRED,
+        closure.getCreationClosureReason());
+    assertTrue(closure.hasCreationClosedAt());
+    assertEquals(member(Membership.RoleValue.ROLE_MEMBER, false, "6"), closure.getMembership());
+
+    // The same companies seen by another member keep that member's own role and owner flag.
+    var owner =
+        tenantList(registryWithList(), globalList(OWNER, id(791).toString()), 50, null)
+            .block(WAIT);
+    assertEquals(
+        List.of(A.toString(), closed.toString()),
+        owner.getItemsList().stream().map(Tenant::getId).toList());
+    assertEquals(
+        List.of(
+            member(Membership.RoleValue.ROLE_TENANT_ADMIN, true, "1"),
+            member(Membership.RoleValue.ROLE_TENANT_ADMIN, true, "1")),
+        owner.getItemsList().stream().map(Tenant::getMembership).toList());
+  }
+
+  @Test
+  void listTenantsAndDeepLinkFollowCurrentMembershipOnNextCall() {
+    var registry = registryWithList();
+    var claims = globalList(SHARED, id(792).toString());
+    assertEquals(
+        List.of(member(Membership.RoleValue.ROLE_MEMBER, false, "3")),
+        tenantList(registry, claims, 50, null).block(WAIT).getItemsList().stream()
+            .map(Tenant::getMembership)
+            .toList());
+
+    var promoted =
+        role(
+                writer(OWNER, A, "1", "setTenantMemberRole"),
+                SHARED,
+                "ROLE_TENANT_ADMIN",
+                "3",
+                UUID.randomUUID().toString())
+            .block(WAIT);
+    assertEquals("4", promoted.getVersion());
+    assertEquals(
+        List.of(member(Membership.RoleValue.ROLE_TENANT_ADMIN, false, "4")),
+        tenantList(registry, claims, 50, null).block(WAIT).getItemsList().stream()
+            .map(Tenant::getMembership)
+            .toList());
+    var staleLink = human(SHARED, A, "3", "deep-link").toBuilder().setAction("getTenant").build();
+    rejects(DomainStatus.UNAUTHENTICATED, tenantRead(registry, staleLink, A));
+    assertEquals(
+        member(Membership.RoleValue.ROLE_TENANT_ADMIN, false, "4"),
+        tenantRead(registry, staleLink.toBuilder().setMembershipGeneration("4").build(), A)
+            .block(WAIT)
+            .getMembership());
+
+    leave(writer(SHARED, A, "4", "leaveTenant"), null, UUID.randomUUID().toString()).block(WAIT);
+    var afterLeave = tenantList(registry, claims, 50, null).block(WAIT);
+    assertEquals(0, afterLeave.getItemsCount());
+    assertFalse(afterLeave.hasNextCursor());
+    for (String generation : List.of("4", "5"))
+      rejects(
+          DomainStatus.NOT_FOUND,
+          tenantRead(registry, staleLink.toBuilder().setMembershipGeneration(generation).build(), A));
+  }
+
+  @Test
+  void getTenantCarriesCallerMembershipOnlyForMemberReads() {
+    var registry = new TenantRegistryService(transactions, null, null, clock, Duration.ofDays(30));
+    var shared = human(SHARED, A, "3", "member-read").toBuilder().setAction("getTenant").build();
+    assertEquals(
+        member(Membership.RoleValue.ROLE_MEMBER, false, "3"),
+        tenantRead(registry, shared, A).block(WAIT).getMembership());
+    var owner = human(OWNER, A, "1", "owner-read").toBuilder().setAction("getTenant").build();
+    assertEquals(
+        member(Membership.RoleValue.ROLE_TENANT_ADMIN, true, "1"),
+        tenantRead(registry, owner, A).block(WAIT).getMembership());
+    var foreign = human(FOREIGN, A, "99", "foreign-read").toBuilder().setAction("getTenant").build();
+    rejects(DomainStatus.NOT_FOUND, tenantRead(registry, foreign, A));
+
+    // OWNER is also an ACTIVE member of A; an administrative read still is not a membership view.
+    var adminRead =
+        owner.toBuilder()
+            .setCredentialKind(CREDENTIAL_KIND_WEB_GLOBAL)
+            .clearMembershipGeneration()
+            .setAdministrativeLevel(ru.taska.api.b2b.v1.AdminGrant.LevelValue.LEVEL_READ)
+            .setAdministrativeScope(
+                ru.taska.api.b2b.v1.AdminScope.newBuilder()
+                    .setKind(ru.taska.api.b2b.v1.AdminScope.KindValue.KIND_TENANT_SET)
+                    .addTenantIds(A.toString()))
+            .build();
+    var administrative = tenantRead(registry, adminRead, A).block(WAIT);
+    assertEquals(A.toString(), administrative.getId());
+    assertFalse(administrative.hasMembership());
+  }
+
+  @Test
+  void renameSameNameHasReceiptAndAuditWithoutEventOrVersionChange() {
+    var claims = writer(OWNER, A, "1", "renameTenant");
+    String key = UUID.randomUUID().toString();
+    var first = rename(claims, "fixture", "1", key).block(WAIT);
+    assertEquals("1", first.getVersion());
+    var conflict =
+        assertThrows(
+            DomainException.class, () -> rename(claims, "New name", "1", key).block(WAIT));
+    assertEquals(DomainStatus.ABORTED, conflict.getStatus());
+    assertEquals("IDEMPOTENCY_CONFLICT", conflict.getDetails().get("code"));
+
+    assertEquals(first, rename(claims, "fixture", "1", key).block(WAIT));
+    var current =
+        tenantRead(registryWithList(), claims.toBuilder().setAction("getTenant").build(), A)
+            .block(WAIT);
+    assertEquals(first, current.toBuilder().clearMembership().build());
+    assertEquals(0L, count("SELECT count(*) n FROM taska.outbox_events"));
+    assertEquals(
+        1L, count("SELECT count(*) n FROM taska.tenant_rename_audit WHERE result='NO_CHANGE'"));
+    assertEquals(1L, count("SELECT count(*) n FROM taska.idempotency_records"));
+
+    String newKey = UUID.randomUUID().toString();
+    var updated = rename(claims, "New name", "1", newKey).block(WAIT);
+    assertEquals("2", updated.getVersion());
+    assertEquals(first, rename(claims, "fixture", "1", key).block(WAIT));
+
+    var changedVersion =
+        assertThrows(DomainException.class, () -> rename(claims, "fixture", "2", key).block(WAIT));
+    assertEquals("IDEMPOTENCY_CONFLICT", changedVersion.getDetails().get("code"));
+    var staleVersion =
+        assertThrows(
+            DomainException.class,
+            () -> rename(claims, "fixture", "1", UUID.randomUUID().toString()).block(WAIT));
+    assertEquals("VERSION_CONFLICT", staleVersion.getDetails().get("code"));
+    assertEquals(
+        updated,
+        tenantRead(registryWithList(), claims.toBuilder().setAction("getTenant").build(), A)
+            .block(WAIT)
+            .toBuilder()
+            .clearMembership()
+            .build());
+    assertEquals(1L, count("SELECT count(*) n FROM taska.outbox_events"));
+    assertEquals(2L, count("SELECT count(*) n FROM taska.tenant_rename_audit"));
+    assertEquals(2L, count("SELECT count(*) n FROM taska.idempotency_records"));
+  }
+
+  @Test
+  void renameReplayReturnsSavedResultAndRechecksCurrentOwnership() {
+    var claims = writer(OWNER, A, "1", "renameTenant");
+    String key = UUID.randomUUID().toString();
+    var first = rename(claims, "First", "1", key).block(WAIT);
+    rename(claims, "Second", "2", UUID.randomUUID().toString()).block(WAIT);
+    assertEquals(first, rename(claims, "First", "1", key).block(WAIT));
+    rejects(DomainStatus.ABORTED, rename(claims, "Changed payload", "1", key));
+    assertEquals(2L, count("SELECT count(*) n FROM taska.outbox_events"));
+    operator
+        .sql("UPDATE taska.tenants SET owner_id=:owner WHERE id=:tenant")
+        .bind("owner", ADMIN)
+        .bind("tenant", A)
+        .fetch()
+        .rowsUpdated()
+        .block(WAIT);
+    rejects(DomainStatus.PERMISSION_DENIED, rename(claims, "First", "1", key));
+  }
+
+  @Test
+  void renameRejectsNonOwnersInactiveMembersAndWrongTenant() {
+    for (var claims :
+        List.of(
+            writer(ADMIN, A, "11", "renameTenant"),
+            writer(SHARED, A, "3", "renameTenant"),
+            writer(SUSPENDED, A, "5", "renameTenant"))) {
+      rejects(
+          DomainStatus.PERMISSION_DENIED,
+          rename(claims, "Denied", "1", UUID.randomUUID().toString()));
+    }
+    rejects(
+        DomainStatus.NOT_FOUND,
+        rename(
+            writer(OWNER_B, A, "2", "renameTenant"), "Foreign", "1", UUID.randomUUID().toString()));
+    rejects(
+        DomainStatus.UNAUTHENTICATED,
+        rename(
+            writer(OWNER, A, "999", "renameTenant"), "Revoked", "1", UUID.randomUUID().toString()));
+    var request = renameRequest(B, "Foreign", "1", UUID.randomUUID().toString());
+    rejects(
+        DomainStatus.PERMISSION_DENIED,
+        as(
+            writer(OWNER, A, "1", "renameTenant"),
+            new TenantRenameService(transactions, clock).rename(request)));
+    rejects(
+        DomainStatus.UNAUTHENTICATED, new TenantRenameService(transactions, clock).rename(request));
+    assertEquals(0L, count("SELECT count(*) n FROM taska.tenant_rename_audit"));
+    assertEquals(0L, count("SELECT count(*) n FROM taska.outbox_events"));
+  }
+
+  @Test
+  void renameValidatesUnicodeNamesAndPreconditions() {
+    var claims = writer(OWNER, A, "1", "renameTenant");
+    for (String name :
+        List.of(
+            "",
+            " ",
+            " Leading",
+            "Trailing ",
+            "A\nB",
+            "A\u0085B",
+            "\u2003Company",
+            "Company\u3000",
+            "\ud83d\ude80".repeat(121))) {
+      var error =
+          assertThrows(
+              DomainException.class,
+              () -> rename(claims, name, "1", UUID.randomUUID().toString()).block(WAIT));
+      assertEquals(DomainStatus.INVALID_ARGUMENT, error.getStatus());
+      assertEquals("name", error.getDetails().get("field"));
+    }
+    rejects(
+        DomainStatus.FAILED_PRECONDITION,
+        rename(claims, "Valid", null, UUID.randomUUID().toString()));
+    for (String version : List.of("0", "-1", "01", "+1", " 1", "\"1\"", "9223372036854775808")) {
+      rejects(
+          DomainStatus.INVALID_ARGUMENT,
+          rename(claims, "Valid", version, UUID.randomUUID().toString()));
+    }
+    rejects(DomainStatus.INVALID_ARGUMENT, rename(claims, "Valid", "1", "bad-key"));
+    var result =
+        rename(claims, "\ud83d\ude80".repeat(120), "1", UUID.randomUUID().toString()).block(WAIT);
+    assertEquals(120, result.getName().codePointCount(0, result.getName().length()));
+  }
+
+  @Test
+  void concurrentRenamesHaveOneWinnerAndOneVersionConflict() {
+    var claims = writer(OWNER, A, "1", "renameTenant");
+    var outcomes =
+        Flux.merge(
+                rename(claims, "First", "1", UUID.randomUUID().toString()).materialize(),
+                rename(claims, "Second", "1", UUID.randomUUID().toString()).materialize())
+            .collectList()
+            .block(WAIT);
+    assertEquals(1, outcomes.stream().filter(reactor.core.publisher.Signal::isOnNext).count());
+    var error =
+        outcomes.stream()
+            .filter(reactor.core.publisher.Signal::isOnError)
+            .findFirst()
+            .orElseThrow()
+            .getThrowable();
+    assertEquals(DomainStatus.ABORTED, assertInstanceOf(DomainException.class, error).getStatus());
+    assertEquals(1L, count("SELECT count(*) n FROM taska.outbox_events"));
+    assertEquals(1L, count("SELECT count(*) n FROM taska.idempotency_records"));
+  }
+
+  @Test
+  void concurrentIdenticalRenameRetriesHaveOneEffect() {
+    var claims = writer(OWNER, A, "1", "renameTenant");
+    String key = UUID.randomUUID().toString();
+    var results =
+        Flux.merge(rename(claims, "One effect", "1", key), rename(claims, "One effect", "1", key))
+            .collectList()
+            .block(WAIT);
+    assertEquals(2, results.size());
+    assertEquals(results.get(0), results.get(1));
+    assertEquals(1L, count("SELECT count(*) n FROM taska.outbox_events"));
+    assertEquals(1L, count("SELECT count(*) n FROM taska.tenant_rename_audit"));
+  }
+
+  @Test
+  void renameRollsBackNameVersionReceiptAndEventWhenAuditFails() {
+    var claims = writer(OWNER, A, "1", "renameTenant");
+    operator
+        .sql(
+            "ALTER TABLE taska.tenant_rename_audit ADD CONSTRAINT rename_test_failure"
+                + " CHECK (result <> 'SUCCEEDED')")
+        .then()
+        .block(WAIT);
+    try {
+      StepVerifier.create(rename(claims, "Rolled back", "1", UUID.randomUUID().toString()))
+          .expectError()
+          .verify(WAIT);
+    } finally {
+      operator
+          .sql("ALTER TABLE taska.tenant_rename_audit DROP CONSTRAINT rename_test_failure")
+          .then()
+          .block(WAIT);
+    }
+    assertEquals(
+        2L, count("SELECT count(*) n FROM taska.tenants WHERE name='fixture' AND version=1"));
+    assertEquals(0L, count("SELECT count(*) n FROM taska.outbox_events"));
+    assertEquals(0L, count("SELECT count(*) n FROM taska.idempotency_records"));
+    assertEquals(0L, count("SELECT count(*) n FROM taska.tenant_rename_audit"));
+  }
+
+  @Test
+  void administrativeRenameRequiresModifyAuthorityForTargetTenant() {
+    var claims =
+        writer(FOREIGN, A, "99", "renameTenant").toBuilder()
+            .setCredentialKind(CREDENTIAL_KIND_ADMIN_PAT)
+            .setCredentialId(id(900).toString())
+            .setGrantId(id(901).toString())
+            .setGrantGeneration("1")
+            .clearMembershipGeneration()
+            .setAdministrativeLevel(ru.taska.api.b2b.v1.AdminGrant.LevelValue.LEVEL_MODIFY)
+            .setAdministrativeScope(
+                ru.taska.api.b2b.v1.AdminScope.newBuilder()
+                    .setKind(ru.taska.api.b2b.v1.AdminScope.KindValue.KIND_TENANT_SET)
+                    .addTenantIds(A.toString()))
+            .build();
+    var readOnly =
+        claims.toBuilder()
+            .setAdministrativeLevel(ru.taska.api.b2b.v1.AdminGrant.LevelValue.LEVEL_READ)
+            .build();
+    rejects(
+        DomainStatus.PERMISSION_DENIED,
+        rename(readOnly, "Denied", "1", UUID.randomUUID().toString()));
+    rejects(
+        DomainStatus.PERMISSION_DENIED,
+        rename(
+            claims.toBuilder()
+                .setAdministrativeScope(
+                    claims.getAdministrativeScope().toBuilder()
+                        .clearTenantIds()
+                        .addTenantIds(B.toString()))
+                .build(),
+            "Denied",
+            "1",
+            UUID.randomUUID().toString()));
+    operator
+        .sql("UPDATE taska.tenants SET lifecycle='AWAITING_PAYMENT' WHERE id=:tenant")
+        .bind("tenant", A)
+        .then()
+        .block(WAIT);
+    assertEquals(
+        "Admin rename",
+        rename(claims, "Admin rename", "1", UUID.randomUUID().toString()).block(WAIT).getName());
+    assertEquals(
+        1L,
+        count(
+            "SELECT count(*) n FROM taska.tenant_rename_audit"
+                + " WHERE administrative AND actor_id='"
+                + FOREIGN
+                + "'"));
+  }
+
+  @Test
+  void renameRejectsUnknownFieldsAndCredentialScopeDowngrades() {
+    var claims = writer(OWNER, A, "1", "renameTenant");
+    var request = renameRequest(A, "Valid", "1", UUID.randomUUID().toString());
+    var unknown =
+        com.google.protobuf.UnknownFieldSet.newBuilder()
+            .addField(
+                99, com.google.protobuf.UnknownFieldSet.Field.newBuilder().addVarint(1).build())
+            .build();
+    var renameService = new TenantRenameService(transactions, clock);
+    rejects(
+        DomainStatus.INVALID_ARGUMENT,
+        as(claims, renameService.rename(request.toBuilder().setUnknownFields(unknown).build())));
+    rejects(
+        DomainStatus.INVALID_ARGUMENT,
+        as(
+            claims,
+            renameService.rename(
+                request.toBuilder()
+                    .setPayload(request.getPayload().toBuilder().setUnknownFields(unknown))
+                    .build())));
+    for (var denied :
+        List.of(
+            claims.toBuilder().setAction("getTenant").build(),
+            claims.toBuilder().clearScopes().addScopes("read").build(),
+            claims.toBuilder().setCredentialKind(CREDENTIAL_KIND_SERVICE).build(),
+            claims.toBuilder().clearMembershipGeneration().build())) {
+      rejects(
+          DomainStatus.PERMISSION_DENIED,
+          rename(denied, "Denied", "1", UUID.randomUUID().toString()));
+    }
+    String key = UUID.randomUUID().toString();
+    rename(claims, "First session", "1", key).block(WAIT);
+    rejects(
+        DomainStatus.ABORTED,
+        rename(
+            claims.toBuilder().setSessionId(UUID.randomUUID().toString()).build(),
+            "First session",
+            "1",
+            key));
+    assertEquals(1L, count("SELECT count(*) n FROM taska.idempotency_records"));
+  }
+
+  @Test
+  void administrativeWebRenameSkipsMembershipAndRespectsDeletionState() {
+    var claims =
+        writer(FOREIGN, A, "99", "renameTenant").toBuilder()
+            .setCredentialKind(CREDENTIAL_KIND_WEB_GLOBAL)
+            .clearMembershipGeneration()
+            .setAdministrativeLevel(ru.taska.api.b2b.v1.AdminGrant.LevelValue.LEVEL_MODIFY)
+            .setAdministrativeScope(
+                ru.taska.api.b2b.v1.AdminScope.newBuilder()
+                    .setKind(ru.taska.api.b2b.v1.AdminScope.KindValue.KIND_PLATFORM))
+            .build();
+    operator
+        .sql("UPDATE taska.tenants SET lifecycle='DELETING' WHERE id=:tenant")
+        .bind("tenant", A)
+        .then()
+        .block(WAIT);
+    String key = UUID.randomUUID().toString();
+    var error =
+        assertThrows(
+            DomainException.class, () -> rename(claims, "Admin web", "1", key).block(WAIT));
+    assertEquals(DomainStatus.FAILED_PRECONDITION, error.getStatus());
+    assertEquals("INVALID_STATE", error.getDetails().get("code"));
+    assertEquals(
+        2L, count("SELECT count(*) n FROM taska.tenants WHERE name='fixture' AND version=1"));
+    assertEquals(0L, count("SELECT count(*) n FROM taska.tenant_rename_audit"));
+    assertEquals(0L, count("SELECT count(*) n FROM taska.outbox_events"));
+    assertEquals(0L, count("SELECT count(*) n FROM taska.idempotency_records"));
+
+    operator
+        .sql("UPDATE taska.tenants SET lifecycle='ACTIVE' WHERE id=:tenant")
+        .bind("tenant", A)
+        .then()
+        .block(WAIT);
+    assertEquals("Admin web", rename(claims, "Admin web", "1", key).block(WAIT).getName());
+    assertEquals(
+        1L, count("SELECT count(*) n FROM taska.tenant_rename_audit WHERE administrative"));
+  }
+
+  @Test
+  void renameChecksLifecycleAndRollsBackOnFailedEventInsertion() {
+    var claims = writer(OWNER, A, "1", "renameTenant");
+    operator
+        .sql("UPDATE taska.tenants SET lifecycle='PROVISIONING' WHERE id=:tenant")
+        .bind("tenant", A)
+        .then()
+        .block(WAIT);
+    rejects(
+        DomainStatus.FAILED_PRECONDITION,
+        rename(claims, "Not active", "1", UUID.randomUUID().toString()));
+    operator
+        .sql("UPDATE taska.tenants SET lifecycle='ACTIVE' WHERE id=:tenant")
+        .bind("tenant", A)
+        .then()
+        .block(WAIT);
+    operator
+        .sql(
+            "ALTER TABLE taska.outbox_events ADD CONSTRAINT rename_test_failure"
+                + " CHECK (event_type <> 'TenantRenamed')")
+        .then()
+        .block(WAIT);
+    try {
+      StepVerifier.create(rename(claims, "Rolled back", "1", UUID.randomUUID().toString()))
+          .expectError()
+          .verify(WAIT);
+    } finally {
+      operator
+          .sql("ALTER TABLE taska.outbox_events DROP CONSTRAINT rename_test_failure")
+          .then()
+          .block(WAIT);
+    }
+    assertEquals(
+        2L, count("SELECT count(*) n FROM taska.tenants WHERE name='fixture' AND version=1"));
+    assertEquals(0L, count("SELECT count(*) n FROM taska.outbox_events"));
+    assertEquals(0L, count("SELECT count(*) n FROM taska.idempotency_records"));
+    assertEquals(0L, count("SELECT count(*) n FROM taska.tenant_rename_audit"));
+  }
+
   static void rejects(DomainStatus status, Mono<?> work) {
     StepVerifier.create(work)
         .expectErrorSatisfies(
@@ -868,13 +1626,15 @@ class TenantMembershipIntegrationTest {
     var state =
         raw.sql(
                 "SELECT current_user::text role,NULLIF(current_setting('app.tenant_id',true),'')"
-                    + " tenant,NULLIF(current_setting('app.actor_id',true),'') actor")
+                    + " tenant,NULLIF(current_setting('app.actor_id',true),'') actor,"
+                    + " NULLIF(current_setting('app.tenant_list_actor_id',true),'') list_actor")
             .fetch()
             .one()
             .block(WAIT);
     assertEquals("taska_tenant_app", state.get("role"));
     assertNull(state.get("tenant"));
     assertNull(state.get("actor"));
+    assertNull(state.get("list_actor"));
     assertEquals(
         0L,
         raw.sql("SELECT count(*) n FROM taska.tenant_memberships")
@@ -1469,6 +2229,15 @@ class TenantMembershipIntegrationTest {
                         .setReserved("0")
                         .setVersion("1")
                         .build()));
+    var tenantRegistry =
+        new TenantRegistryService(
+            transactions,
+            null,
+            null,
+            clock,
+            db -> Mono.just(Duration.ofDays(30)),
+            new TenantListService(
+                raw, TransactionalOperator.create(new R2dbcTransactionManager(pool)), cursor));
     var server =
         io.grpc.netty.shaded.io.grpc.netty.NettyServerBuilder.forAddress(
                 new java.net.InetSocketAddress("127.0.0.1", 0))
@@ -1476,7 +2245,7 @@ class TenantMembershipIntegrationTest {
             .addService(
                 io.grpc.ServerInterceptors.intercept(
                     new TenantGrpcService(
-                        org.mockito.Mockito.mock(TenantRegistryService.class),
+                        tenantRegistry,
                         service,
                         quotaStore,
                         mutations),
@@ -1541,6 +2310,69 @@ class TenantMembershipIntegrationTest {
                   .listTenantMembers(next)
                   .getItems(0)
                   .getUserId());
+          var globalClaims = globalList(OWNER, id(880).toString());
+          var tenantListRequest =
+              ListTenantsRpcRequest.newBuilder()
+                  .setContext(wire(globalClaims))
+                  .setPage(PageRequest.newBuilder().setLimit(10))
+                  .build();
+          String tenantListRpc = TenantServiceGrpc.getListTenantsMethod().getFullMethodName();
+          var tenantListPolicy = new RpcContextSecurity.Policy(false, false);
+          assertEquals(
+              io.grpc.Status.Code.UNAUTHENTICATED,
+              assertThrows(
+                      io.grpc.StatusRuntimeException.class,
+                      () -> plain.listTenants(tenantListRequest))
+                  .getStatus()
+                  .getCode());
+          var signedTenantList =
+              plain.withInterceptors(
+                  io.grpc.stub.MetadataUtils.newAttachHeadersInterceptor(
+                      TenantRegistryIntegrationTest.signed(
+                          sender, tenantListRequest, tenantListPolicy, tenantListRpc)));
+          var listed = signedTenantList.listTenants(tenantListRequest);
+          assertEquals(List.of(A.toString()), listed.getItemsList().stream().map(Tenant::getId).toList());
+          assertEquals(
+              io.grpc.Status.Code.UNAUTHENTICATED,
+              assertThrows(
+                      io.grpc.StatusRuntimeException.class,
+                      () ->
+                          signedTenantList.listTenants(
+                              tenantListRequest.toBuilder()
+                                  .setPage(PageRequest.newBuilder().setLimit(101))
+                                  .build()))
+                  .getStatus()
+                  .getCode());
+          var rename =
+              renameRequest(A, "Renamed over mTLS", "1", UUID.randomUUID().toString()).toBuilder()
+                  .setContext(wire(writer(OWNER, A, "1", "renameTenant")))
+                  .build();
+          String renameRpc = TenantServiceGrpc.getRenameTenantMethod().getFullMethodName();
+          var renamePolicy = new RpcContextSecurity.Policy(true, true);
+          assertEquals(
+              io.grpc.Status.Code.UNAUTHENTICATED,
+              assertThrows(io.grpc.StatusRuntimeException.class, () -> plain.renameTenant(rename))
+                  .getStatus()
+                  .getCode());
+          var renameStub =
+              plain.withInterceptors(
+                  io.grpc.stub.MetadataUtils.newAttachHeadersInterceptor(
+                      TenantRegistryIntegrationTest.signed(
+                          sender, rename, renamePolicy, renameRpc)));
+          assertEquals("Renamed over mTLS", renameStub.renameTenant(rename).getName());
+          assertEquals(
+              io.grpc.Status.Code.UNAUTHENTICATED,
+              assertThrows(
+                      io.grpc.StatusRuntimeException.class,
+                      () ->
+                          renameStub.renameTenant(
+                              rename.toBuilder()
+                                  .setPayload(
+                                      ru.taska.api.b2b.v1.RenameTenantRequest.newBuilder()
+                                          .setName("Tampered"))
+                                  .build()))
+                  .getStatus()
+                  .getCode());
           var change =
               SetTenantMemberRoleRpcRequest.newBuilder()
                   .setTenantId(A.toString())

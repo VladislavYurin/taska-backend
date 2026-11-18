@@ -13,6 +13,20 @@ public interface PaymentProvider {
     Mono<Checkout> createCheckout(
             Merchant merchant, Invoice invoice, UUID operationId, String providerIdempotencyKey);
 
+    /** Автосписание использует только сохранённый метод и не переключается на hosted checkout. */
+    default Mono<Checkout> chargeRecurring(Merchant merchant, Invoice invoice, SavedMethod method,
+            UUID operationId, String providerIdempotencyKey) {
+        return Mono.error(new ProviderException(ProviderException.Reason.UNSUPPORTED_CAPABILITY));
+    }
+
+    record SavedMethod(String customerReference, String methodReference) {
+        public SavedMethod {
+            require(customerReference, "customerReference");
+            require(methodReference, "methodReference");
+        }
+        @Override public String toString() { return "SavedMethod[redacted]"; }
+    }
+
     Mono<Payment> fetchPayment(Merchant merchant, String providerPaymentId);
 
     Mono<Refund> refund(

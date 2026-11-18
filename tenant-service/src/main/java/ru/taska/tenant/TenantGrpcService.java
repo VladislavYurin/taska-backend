@@ -8,6 +8,7 @@ import ru.taska.api.b2b.v1.CreateTenantRpcRequest;
 import ru.taska.api.b2b.v1.GetTenantOperationRpcRequest;
 import ru.taska.api.b2b.v1.GetTenantRpcRequest;
 import ru.taska.api.b2b.v1.LeaveTenantRpcRequest;
+import ru.taska.api.b2b.v1.ListTenantsRpcRequest;
 import ru.taska.api.b2b.v1.ListTenantMembersRpcRequest;
 import ru.taska.api.b2b.v1.Membership;
 import ru.taska.api.b2b.v1.MembershipPage;
@@ -17,6 +18,7 @@ import ru.taska.api.b2b.v1.RemoveTenantMemberRpcRequest;
 import ru.taska.api.b2b.v1.SetTenantMemberRoleRpcRequest;
 import ru.taska.api.b2b.v1.SetTenantMemberStateRpcRequest;
 import ru.taska.api.b2b.v1.Tenant;
+import ru.taska.api.b2b.v1.TenantPage;
 import ru.taska.security.tenant.RpcContextBridge;
 
 @Service
@@ -55,6 +57,14 @@ public final class TenantGrpcService extends ReactorTenantServiceGrpc.TenantServ
   }
 
   @Override
+  public Mono<TenantPage> listTenants(Mono<ListTenantsRpcRequest> request) {
+    return RpcContextBridge.inbound(request.flatMap(registry::listTenants))
+        .onErrorMap(
+            ru.taska.exception.DomainException.class, GrpcExceptionMapper::toStatusRuntimeException)
+        .onErrorMap(GrpcExceptionMapper::toGrpcStatus);
+  }
+
+  @Override
   public Mono<Operation> getTenantOperation(Mono<GetTenantOperationRpcRequest> request) {
     return RpcContextBridge.inbound(request.flatMap(registry::getOperation))
         .onErrorMap(
@@ -66,6 +76,14 @@ public final class TenantGrpcService extends ReactorTenantServiceGrpc.TenantServ
   public Mono<Tenant> cancelTenantCreation(
       Mono<ru.taska.api.b2b.v1.CancelTenantCreationRpcRequest> request) {
     return RpcContextBridge.inbound(request.flatMap(registry::cancelCreation))
+        .onErrorMap(
+            ru.taska.exception.DomainException.class, GrpcExceptionMapper::toStatusRuntimeException)
+        .onErrorMap(GrpcExceptionMapper::toGrpcStatus);
+  }
+
+  @Override
+  public Mono<Tenant> renameTenant(Mono<ru.taska.api.b2b.v1.RenameTenantRpcRequest> request) {
+    return RpcContextBridge.inbound(request.flatMap(registry::rename))
         .onErrorMap(
             ru.taska.exception.DomainException.class, GrpcExceptionMapper::toStatusRuntimeException)
         .onErrorMap(GrpcExceptionMapper::toGrpcStatus);

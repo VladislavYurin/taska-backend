@@ -1,9 +1,23 @@
 package ru.taska.service.impl;
 
+import ru.taska.api.issue.v1.CountProjectIssuesBatchInternalRequest;
+import ru.taska.api.issue.v1.CountProjectIssuesBatchInternalResponse;
+import ru.taska.api.issue.v1.ProjectIssueCount;
+import ru.taska.api.project.v1.GetProjectMemberStatsBatchRequest;
+import ru.taska.api.project.v1.GetProjectMemberStatsBatchResponse;
+import ru.taska.api.project.v1.ProjectMemberDetailsResponse;
+import ru.taska.api.project.v1.ProjectMemberStats;
+import ru.taska.domain.dto.ListMyProjectResponseDto;
+import ru.taska.domain.dto.ProjectResponseDto;
+import ru.taska.domain.dto.ProjectStatsDto;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 
 import io.grpc.Status;
 import java.time.Duration;
@@ -14,12 +28,12 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
-import ru.taska.api.issue.v1.*;
-import ru.taska.api.project.v1.*;
+import ru.taska.api.issue.v1.ReactorIssueServiceGrpc;
+import ru.taska.api.project.v1.ProjectRole;
+import ru.taska.api.project.v1.ReactorProjectServiceGrpc;
 import ru.taska.config.props.GrpcClientProperties;
 import ru.taska.domain.GatewayContext;
 import ru.taska.domain.GatewayUserContext;
-import ru.taska.domain.dto.*;
 import ru.taska.mapper.ProjectMapper;
 import ru.taska.transport.grpc.GrpcProjectServiceClient;
 
@@ -37,7 +51,8 @@ class ProjectStatsServiceTest {
     void setUp() {
         var props = new GrpcClientProperties.Service("localhost", 1, Duration.ofSeconds(2));
         service = new ProjectStatsService(projects, projectStub, issueStub,
-                new GrpcClientProperties(props, props, props, props, props, props), new ProjectMapper());
+                new GrpcClientProperties(props, props, props, props, props, props), new ProjectMapper(),
+                new ru.taska.transport.grpc.TaskQuotaClient(issueStub, false));
         lenient().when(projectStub.withDeadlineAfter(anyLong(), any())).thenReturn(projectStub);
         lenient().when(issueStub.withDeadlineAfter(anyLong(), any())).thenReturn(issueStub);
     }

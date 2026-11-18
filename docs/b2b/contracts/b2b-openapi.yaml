@@ -56,6 +56,14 @@ paths:
     get:
       operationId: listTenants
       summary: listTenants
+      description: |
+        WEB_GLOBAL account session only. Lists every company where the caller's
+        membership is ACTIVE, in any lifecycle except DELETED: PROVISIONING,
+        AWAITING_PAYMENT, ACTIVE, AUTO_CLOSED, OWNER_CANCELLED and DELETING.
+        SUSPENDED and REMOVED memberships are not listed. Order is (createdAt,id)
+        ascending. Each item carries the caller's membership and restriction codes.
+        Available actions come from getTenantCapabilities; entering a company is
+        decided by createTenantSession. Every call reads current memberships.
       tags:
       - Tenant
       x-policy: WEB_ACCOUNT
@@ -124,7 +132,26 @@ paths:
           format: uuid
     patch:
       operationId: renameTenant
-      summary: renameTenant
+      summary: Rename a company
+      description: |
+        Only the current owner or a trusted GLOBAL_ADMIN may rename the company.
+        TENANT_ADMIN without ownership has no rename permission. A company outside
+        the caller's authorized scope is concealed.
+        DELETING returns 409 INVALID_STATE for both owners and administrators. DELETED returns 404.
+        Send the current Tenant.version from getTenant as a quoted If-Match, for example '"17"'.
+        A malformed version or invalid request body returns 400 VALIDATION_FAILED
+        (field name for an invalid name). A missing If-Match returns 428 VERSION_CONFLICT
+        and a stale version on a new key returns 412 VERSION_CONFLICT.
+        After authorization, replaying the original name and If-Match with the same
+        Idempotency-Key returns the saved response even if the current version advanced.
+        Reusing the key with a different name or If-Match returns 409 IDEMPOTENCY_CONFLICT.
+        With a current version, submitting the same name returns 200 without changing
+        the company, advancing its version or emitting a rename event. An actual rename
+        atomically updates the name and advances the version.
+      x-version-source:
+        operationId: getTenant
+        schema: Tenant
+        property: version
       tags:
       - Tenant
       x-policy: OWNER_OR_ADMIN_WRITE
@@ -132,7 +159,7 @@ paths:
       - TAS-333
       responses:
         '200':
-          description: Success
+          description: Company after the rename, or the current company if the name was unchanged.
           content:
             application/json:
               schema:
@@ -4212,7 +4239,8 @@ components:
         name:
           type: string
           minLength: 1
-          maxLength: 120
+          maxLength: 128
+          description: Existing company names may occupy up to 128 code points.
         ownerId:
           type: string
           format: uuid
@@ -4247,11 +4275,16 @@ components:
           type: string
           minLength: 1
           maxLength: 19
-          pattern: ^(0|[1-9][0-9]{0,18})$
+          pattern: ^[1-9][0-9]{0,18}$
+          description: |
+            Positive int64 encoded as a decimal string. Advances on changes to the
+            company's name, owner, restrictions or lifecycle.
         ownerVersion:
           type: string
           pattern: ^[1-9][0-9]{0,18}$
           maxLength: 19
+        membership:
+          $ref: '#/components/schemas/CallerMembership'
       required:
       - id
       - name
@@ -4261,6 +4294,36 @@ components:
       - createdAt
       - version
       - ownerVersion
+    CallerMembership:
+      type: object
+      additionalProperties: false
+      description: |
+        TAS-338: the caller's own membership. Returned by listTenants and by getTenant
+        for a member; absent on administrative reads and on create/cancel/rename responses.
+      properties:
+        role:
+          type: string
+          enum:
+          - MEMBER
+          - TENANT_ADMIN
+        state:
+          type: string
+          enum:
+          - ACTIVE
+          - SUSPENDED
+          - REMOVED
+        isOwner:
+          type: boolean
+        version:
+          type: string
+          minLength: 1
+          maxLength: 19
+          pattern: ^[1-9][0-9]{0,18}$
+      required:
+      - role
+      - state
+      - isOwner
+      - version
     TenantPage:
       type: object
       additionalProperties: false
@@ -4276,14 +4339,19 @@ components:
           maxLength: 2048
       required:
       - items
+    TenantName:
+      type: string
+      minLength: 1
+      maxLength: 120
+      description: 1 to 120 Unicode code points. No leading or trailing whitespace or ISO control characters.
+      not:
+        pattern: '[\u0000-\u001F\u007F-\u009F]|^[\u0020\u1680\u2000-\u2006\u2008-\u200A\u2028\u2029\u205F\u3000]|[\u0020\u1680\u2000-\u2006\u2008-\u200A\u2028\u2029\u205F\u3000]$'
     CreateTenantRequest:
       type: object
       additionalProperties: false
       properties:
         name:
-          type: string
-          minLength: 1
-          maxLength: 120
+          $ref: '#/components/schemas/TenantName'
         planVersionId:
           type: string
           format: uuid
@@ -4306,9 +4374,7 @@ components:
       additionalProperties: false
       properties:
         name:
-          type: string
-          minLength: 1
-          maxLength: 120
+          $ref: '#/components/schemas/TenantName'
       required:
       - name
     TenantSelectionRequest:

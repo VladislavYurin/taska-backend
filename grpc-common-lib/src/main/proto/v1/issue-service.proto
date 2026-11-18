@@ -63,6 +63,9 @@ enum IssueLinkViewType {
 }
 
 service IssueService {
+  // Ограниченное нативное чтение: права на каждый проект проверяются заново; учитываются все создания за всё время.
+  rpc GetProjectTaskQuotas(GetProjectTaskQuotasRequest) returns (GetProjectTaskQuotasResponse);
+
   // Controlled workflow administration: refuses unmapped issues or moves them atomically
   // with history and outbox before workflow-service removes the configuration.
   rpc MigrateWorkflowIssues(MigrateWorkflowIssuesRequest) returns (MigrateWorkflowIssuesResponse);
@@ -2714,3 +2717,16 @@ message MigrateWorkflowIssuesRequest {
 message MigrateWorkflowIssuesResponse {
   int64 moved_count = 1;
 }
+
+message GetProjectTaskQuotasRequest {
+  ru.taska.b2b.v1.RequestContext context = 100;
+  ru.taska.common.v1.Header header = 1;
+  repeated string project_ids = 2;
+}
+message ProjectTaskQuota {
+  string project_id = 1;
+  int64 used = 2;
+  optional int64 limit = 3;
+  bool unlimited = 4;
+}
+message GetProjectTaskQuotasResponse { repeated ProjectTaskQuota items = 1; }

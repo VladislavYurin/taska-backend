@@ -29,14 +29,14 @@ WITH active AS (
   OR (refresh_token_value IS NOT NULL AND refresh_token_expires_at>now() AND
     COALESCE(refresh_token_metadata::jsonb->>'metadata.token.invalidated','false')='false'))
 ), apps AS (
-  SELECT registered_client_id, min(authorization_code_issued_at) connected_at,
+  SELECT registered_client_id, tenant_id, min(authorization_code_issued_at) connected_at,
     max(access_token_issued_at) last_used_at,
     max(greatest(access_token_expires_at,refresh_token_expires_at)) expires_at,
-    string_agg(authorized_scopes, ',') scopes FROM active GROUP BY registered_client_id
+    string_agg(authorized_scopes, ',') scopes FROM active GROUP BY registered_client_id, tenant_id
 )
 SELECT a.*,c.client_name,c.client_id,c.redirect_uris FROM apps a
 JOIN oauth2_registered_client c ON c.id=a.registered_client_id
-ORDER BY a.connected_at DESC, a.registered_client_id DESC
+ORDER BY a.connected_at DESC, a.registered_client_id DESC, a.tenant_id NULLS FIRST
 """,
         (row, n) -> {
           String clientId = row.getString("client_id");
@@ -61,13 +61,24 @@ ORDER BY a.connected_at DESC, a.registered_client_id DESC
                       .toList(),
               instant(row.getTimestamp("connected_at")),
               instant(row.getTimestamp("last_used_at")),
-              instant(row.getTimestamp("expires_at")));
+              instant(row.getTimestamp("expires_at")),
+              row.getObject("tenant_id", UUID.class));
         },
         userId);
   }
 
+  /** TAS-498: with a tenant, revoke only that company's connection of the app. */
   @Transactional
-  public void revoke(String userId, String appId) {
+  public void revoke(String userId, String appId, UUID tenantId) {
+    if (tenantId != null) {
+      jdbc.update(
+          "DELETE FROM oauth2_authorization WHERE principal_name=? AND registered_client_id=? AND"
+              + " tenant_id=?",
+          userId,
+          appId,
+          tenantId);
+      return;
+    }
     jdbc.update(
         "DELETE FROM oauth2_authorization WHERE principal_name=? AND registered_client_id=?",
         userId,

@@ -244,7 +244,10 @@ class NoRedirect(HTTPRedirectHandler):
 
 
 class Http:
-    def __init__(self, origin, token=None):
+    def __init__(self, origin, token=None, timeout=10):
+        if not 0 < timeout <= 120:
+            raise Invalid("HTTP timeout must be between 0 and 120 seconds")
+        self.timeout = timeout
         self.origin, self.token = origin, token
         self.operations = set()
         self.request_ids = []
@@ -262,7 +265,7 @@ class Http:
         req = Request(self.origin + path, data=None if body is None else canonical(body), headers=hdr, method=method)
         try:
             try:
-                response = self.opener.open(req, timeout=10)
+                response = self.opener.open(req, timeout=self.timeout)
             except HTTPError as exc:
                 response = exc
             with response:
@@ -279,7 +282,7 @@ class Http:
         return response
 
 
-def run_command(argv, cwd, timeout=600, input_text=None):
+def run_command(argv, cwd, timeout=600, input_text=None, diagnostic_path=None):
     # A process group bounds Maven/Docker descendants, including interrupted runs.
     try:
         child = subprocess.Popen(argv, cwd=cwd, stdin=subprocess.PIPE if input_text is not None else subprocess.DEVNULL,
@@ -287,7 +290,7 @@ def run_command(argv, cwd, timeout=600, input_text=None):
     except FileNotFoundError as exc:
         raise Blocked('Required executable unavailable') from exc
     try:
-        output, _ = child.communicate(input_text, timeout=timeout)
+        output, error_output = child.communicate(input_text, timeout=timeout)
     except (subprocess.TimeoutExpired, KeyboardInterrupt) as interrupted:
         termination_error = False
         try:
@@ -307,6 +310,8 @@ def run_command(argv, cwd, timeout=600, input_text=None):
             raise
         raise Failure('Local command timed out') from None
     if child.returncode:
+        if diagnostic_path is not None:
+            private_json(Path(diagnostic_path), {'stdout': output, 'stderr': error_output})
         raise Failure('Local command failed (%s)' % child.returncode)
     return output
 

@@ -99,6 +99,36 @@ business transactions. Отказ auth не обходится локально�
 Планировщик не запускает следующий cleanup до завершения предыдущего; timeout освобождает
 локальный guard для следующей попытки. Очистка не меняет срок приёма assertion.
 
+## Реестр компаний — TAS-333
+
+Для списка используется глобальная веб-сессия со scope `tenants:select`. Сервис компаний
+выбирает актуальные записи членства пользователя. Карточка и переименование привязаны к
+компании из проверенного контекста. Шлюз возвращает список и карточку с
+`Cache-Control: private, no-store`, поэтому следующее чтение получает зафиксированное имя
+и версию напрямую из реестра.
+
+Для административной карточки или переименования auth primary выдаёт контекст на одну
+целевую компанию после проверки текущей роли `GLOBAL_ADMIN` и активной веб-сессии с
+`ADMIN_EMAIL_MFA`. Операция чтения получает уровень `READ`, переименование — `MODIFY`.
+Получатель повторно проверяет актуальность этой авторизации по точному RPC и действию.
+
+Добавьте следующие рёбра в управляемый snapshot перед включением маршрутов.
+У всех рёбер issuer — `api-gateway`, purpose — `USER`, `serviceIdentities` пуст.
+
+| Audience | RPC | Action | Credential kinds | Допустимые scopes | Tenant mode |
+| --- | --- | --- | --- | --- | --- |
+| api-gateway | `gatewayRequest` | `gatewayRequest` | `WEB_GLOBAL` | `tenants:select`, `tenants:create`, `account:read` | `NONE` |
+| api-gateway | `gatewayRequest` | `gatewayRequest` | `WEB_GLOBAL` | `read`, `write` | `BOUND` |
+| tenant-service | `ru.taska.b2b.v1.TenantService/ListTenants` | `listTenants` | `WEB_GLOBAL` | `tenants:select` | `NONE` |
+| tenant-service | `ru.taska.b2b.v1.TenantService/GetTenant` | `getTenant` | `WEB_TENANT`, `USER_PAT`, `WEB_GLOBAL` | `read`, `write` | `BOUND` |
+| tenant-service | `ru.taska.b2b.v1.TenantService/RenameTenant` | `renameTenant` | `WEB_TENANT`, `USER_PAT`, `WEB_GLOBAL` | `read`, `write` | `BOUND` |
+
+Команда локальной приёмки на изолированных сервисах и собственных данных.
+
+```bash
+python3 scripts/harness/tenant_rename_e2e.py
+```
+
 ## Ротация и emergency revoke
 
 1. Опубликовать новый public key вместе со старым во всех recipient snapshots; проверить
