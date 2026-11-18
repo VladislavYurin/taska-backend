@@ -24,10 +24,19 @@ public final class BillingCatalogRpc extends ReactorBillingServiceGrpc.BillingSe
   private final SubscriptionStore subscriptions;
   private final InvoiceStore invoices;
   private final SubscriptionPlanChanges changes;
+  private final AutopayStore autopay;
 
   public BillingCatalogRpc(
       BillingCatalog catalog, SubscriptionStore subscriptions, InvoiceStore invoices) {
     this(catalog, subscriptions, invoices, null);
+  }
+
+  public BillingCatalogRpc(
+      BillingCatalog catalog,
+      SubscriptionStore subscriptions,
+      InvoiceStore invoices,
+      SubscriptionPlanChanges changes) {
+    this(catalog, subscriptions, invoices, changes, null);
   }
 
   @org.springframework.beans.factory.annotation.Autowired
@@ -35,11 +44,27 @@ public final class BillingCatalogRpc extends ReactorBillingServiceGrpc.BillingSe
       BillingCatalog catalog,
       SubscriptionStore subscriptions,
       InvoiceStore invoices,
-      SubscriptionPlanChanges changes) {
+      SubscriptionPlanChanges changes,
+      AutopayStore autopay) {
+    this.autopay = autopay;
     this.catalog = catalog;
     this.subscriptions = subscriptions;
     this.invoices = invoices;
     this.changes = changes;
+  }
+
+  @Override
+  public Mono<ru.taska.api.b2b.v1.AutopayMandate> setAutopayConsent(
+      Mono<ru.taska.api.b2b.v1.SetAutopayConsentRpcRequest> request) {
+    return inbound(
+        request.flatMap(
+            q ->
+                autopay == null
+                    ? Mono.error(
+                        CatalogErrors.fail(
+                            ru.taska.exception.DomainStatus.UNAVAILABLE,
+                            "AUTOPAY_POLICY_NOT_CONFIGURED"))
+                    : autopay.consent(q)));
   }
 
   private SubscriptionPlanChanges changes() {
