@@ -678,8 +678,8 @@ class ProjectServiceImplTest {
         @EnumSource(value = Status.Code.class, names = {
                 "PERMISSION_DENIED", "UNAVAILABLE", "DEADLINE_EXCEEDED", "INTERNAL", "FAILED_PRECONDITION"
         })
-        @DisplayName("отказ workflow одного типа сохраняет доступный контекст и остальные типы")
-        void asMember_workflowGrpcFailureKeepsOtherType(Status.Code code) {
+        @DisplayName("отказ чтения workflow одного типа возвращается вместо неполного контекста")
+        void asMember_workflowGrpcFailureRejectsContext(Status.Code code) {
             Mockito.when(projectRepository.findProjectMemberShipDtoByProjectIdAndUserId(projectId, actorUserId))
                     .thenReturn(Mono.just(memberProjectDto));
             Mockito.when(projectMemberService.getProjectMembers(requestId, nodeId, projectId, actorUserId))
@@ -711,19 +711,18 @@ class ProjectServiceImplTest {
 
             StepVerifier.create(projectService.getProjectContext(
                             requestId, nodeId, projectId, actorUserId, GlobalRole.USER))
-                    .assertNext(ctx -> {
-                        Assertions.assertEquals(1, ctx.workflows().size());
-                        Assertions.assertEquals("REQUEST", ctx.workflows().getFirst().issueType());
-                        Assertions.assertEquals(List.of(label), ctx.labels());
-                        Assertions.assertEquals(memberProjectDto, ctx.project());
-                    })
-                    .verifyComplete();
+                    .expectErrorSatisfies(error -> Assertions.assertSame(failure, error))
+                    .verify();
+            Mockito.verify(projectRepository, Mockito.never()).save(ArgumentMatchers.any());
+            Mockito.verify(projectMemberRepository, Mockito.never()).save(ArgumentMatchers.any());
+            Mockito.verify(projectSettingRepository, Mockito.never()).save(ArgumentMatchers.any());
+            Mockito.verifyNoInteractions(outboxEventService);
         }
 
         @ParameterizedTest
         @EnumSource(value = Status.Code.class, names = {"NOT_FOUND", "UNAVAILABLE", "DEADLINE_EXCEEDED"})
-        @DisplayName("полный отказ workflow не скрывает доступный проект и его контекст")
-        void asMember_allWorkflowsFail_contextStillReturned(Status.Code code) {
+        @DisplayName("только NOT_FOUND всех workflow допускает пустой список в контексте")
+        void asMember_allWorkflowsFail_onlyNotFoundReturnsContext(Status.Code code) {
             Mockito.when(projectRepository.findProjectMemberShipDtoByProjectIdAndUserId(projectId, actorUserId))
                     .thenReturn(Mono.just(memberProjectDto));
             Mockito.when(projectMemberService.getProjectMembers(requestId, nodeId, projectId, actorUserId))
@@ -746,15 +745,23 @@ class ProjectServiceImplTest {
                             ArgumentMatchers.eq(nodeId)))
                     .thenReturn(Mono.error(failure));
 
-            StepVerifier.create(projectService.getProjectContext(
-                            requestId, nodeId, projectId, actorUserId, GlobalRole.USER))
-                    .assertNext(ctx -> {
-                        Assertions.assertTrue(ctx.workflows().isEmpty());
-                        Assertions.assertEquals(2, ctx.issueTypes().size());
-                        Assertions.assertEquals(1, ctx.members().size());
-                        Assertions.assertEquals(1, ctx.labels().size());
-                    })
-                    .verifyComplete();
+            var result = StepVerifier.create(projectService.getProjectContext(
+                    requestId, nodeId, projectId, actorUserId, GlobalRole.USER));
+            if (code == Status.Code.NOT_FOUND) {
+                result.assertNext(ctx -> {
+                            Assertions.assertTrue(ctx.workflows().isEmpty());
+                            Assertions.assertEquals(2, ctx.issueTypes().size());
+                            Assertions.assertEquals(1, ctx.members().size());
+                            Assertions.assertEquals(1, ctx.labels().size());
+                        })
+                        .verifyComplete();
+            } else {
+                result.expectErrorSatisfies(error -> Assertions.assertSame(failure, error)).verify();
+            }
+            Mockito.verify(projectRepository, Mockito.never()).save(ArgumentMatchers.any());
+            Mockito.verify(projectMemberRepository, Mockito.never()).save(ArgumentMatchers.any());
+            Mockito.verify(projectSettingRepository, Mockito.never()).save(ArgumentMatchers.any());
+            Mockito.verifyNoInteractions(outboxEventService);
         }
 
         @Test

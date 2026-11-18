@@ -243,3 +243,5 @@ this transport path or shared-stage activation.
 ## OpenSpec
 
 CLI закреплён в `.openspec-version`; настройка — [openspec.md](openspec.md). Перед PR выполнить `OPENSPEC_TELEMETRY=0 openspec validate --all --strict --no-interactive && openspec validate --archived --no-interactive`. CI повторяет эту проверку закреплённым CLI. Для config/skills/specs и impact mapping также выполнить `python3 scripts/harness.py check --group harness` и `docs-check`. Известные metadata не требуют Java сами по себе; неизвестный executable внутри openspec сохраняет полный impact.
+
+Для изменения ошибок legacy project context выполнить `python3 scripts/harness/project_context_e2e.py` в собственном локальном Docker. Scope: context RPC и HTTP mapping отказа workflow, восстановление и сохранность состояния; полный native context с task quota проверяется отдельным native сценарием. Повторить на финальном PR head после review.
