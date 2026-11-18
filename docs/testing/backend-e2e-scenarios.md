@@ -785,3 +785,7 @@ This proves the named subset, not full product E2E, Kafka delivery or stand roll
 5. Рабочее чтение до оплаты даёт `PAYMENT_PENDING` / `PENDING_FIRST_PAYMENT`; PROVISIONING — `INVALID_STATE`; metadata и cancel доступны. Проверено в `TenantMembershipIntegrationTest`.
 
 Cleanup: закрыть каналы/серверы/pools и удалить собственные контейнеры в `AfterAll`. Общий стенд, PSP, refunds и retention не затрагиваются. Контракт и границы: [creation closure](../../tenant-service/CREATION-CLOSURE.md).
+
+## Контекст проекта и отказ workflow (TAS-533)
+
+`python3 scripts/harness/project_context_e2e.py` создаёт собственный локальный Compose стенд с production mTLS/JWS и primary auth/membership. Проверяет успешный legacy ProjectServiceImpl context через прямой RPC, отказ HTTP context при остановленном workflow, requestId, неизменность project/members/outbox, восстановление того же контекста и ownership cleanup. Не повторяет мутации для readiness. Native task-quota enrichment использует другой профиль; обычный полный REST context с этим enrichment данным сценарием не подтверждается. Ошибки частичного/полного workflow и NOT_FOUND дополнительно проверяются ProjectServiceImplTest.
