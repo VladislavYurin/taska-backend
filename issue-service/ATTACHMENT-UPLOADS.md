@@ -82,5 +82,7 @@ service trust и transport action `reconcileAttachmentUploads`. Ответ со�
 app roles/RLS, mTLS quota RPC и versioned S3; policy ports в нём управляемые.
 `python3 scripts/harness/attachment_upload_e2e.py` поднимает отдельные семь приложений,
 PostgreSQL/Kafka/S3 и проверяет REST → текущие primary источники → signed PUT → confirm,
-повторы, учёт, tenant/project isolation и отзыв membership. Оба runner очищают только
+повторы, учёт, tenant/project isolation и отзыв membership. HTTP runner выполняет не более трёх попыток одного intent при 503, сохраняя ключ
+и тело; число таких повторов выводится отдельно. Постоянная ошибка не считается PASS.
+Оба runner очищают только
 свои ресурсы; общая stage среда не используется. Результаты хранятся в ignored target.

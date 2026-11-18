@@ -425,7 +425,11 @@ class AttachmentUploadIntegrationTest {
   @Test
   void adminBypassStillRecordsActualUsageAndDoesNotIgnoreObjectIntegrity() throws Exception {
     StorageQuotaIntegrationTest.limit.set(1);
-    assertThrows(io.grpc.StatusRuntimeException.class, () -> begin("ordinary"));
+    var quotaError = assertThrows(io.grpc.StatusRuntimeException.class, () -> begin("ordinary"));
+    var details = mapper.GrpcErrorDetails.decode(quotaError.getTrailers());
+    assertEquals("QUOTA_EXCEEDED", details.get("code"));
+    assertEquals("STORAGE_BYTES", details.get("quota.kind"));
+    assertEquals("1", details.get("quota.limit"));
     StorageQuotaIntegrationTest.bypass.set(true);
     var u = begin("admin");
     put(u);

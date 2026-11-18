@@ -152,7 +152,7 @@ SELECT current_user='taska_issue_app' AND NOT
       org.springframework.beans.factory.ObjectProvider<ru.taska.issuestorage.AttachmentUploadPolicy> policies) {
     return (c,use,r,mime) -> {
       var store=stores.getIfAvailable();var policy=policies.getIfAvailable();
-      if(store!=null && policy!=null) return store.operation(r.operation()).flatMap(u -> {
+      if(store!=null && policy!=null && r!=null) return store.operation(r.operation()).flatMap(u -> {
         if(!u.request().equals(r.request()) || !u.tenant().equals(r.tenant()) || !u.actor().equals(r.actor()))
           return reactor.core.publisher.Mono.error(new ru.taska.exception.DomainException(ru.taska.exception.DomainStatus.PERMISSION_DENIED,"UPLOAD_INTENT_MISMATCH"));
         return policy.check(r.project(),r.issue(),u,use.name()).then();

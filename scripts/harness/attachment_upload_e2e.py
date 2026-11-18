@@ -2,6 +2,7 @@
 import json
 from concurrent.futures import ThreadPoolExecutor
 import time
+import threading
 import urllib.request
 import uuid
 import zipfile
@@ -54,6 +55,22 @@ class AttachmentUploadLocal(IssueAclLocal):
 
     def scenarios(self):
         actor, clients = self.seed()
+        transients, counter_lock = {'upload': 0, 'confirm': 0}, threading.Lock()
+
+        def positive(client, path, expected, body, headers=None):
+            # Проверяем bounded retry того же intent, а не создаём новую команду после тайм-аута.
+            headers = dict(headers or {})
+            headers.setdefault('X-Request-Id', str(uuid.uuid4()))
+            for attempt in range(3):
+                response = client.request('POST', path, body=body, headers=headers)
+                if response.status == expected:
+                    return response.json()
+                e.require(response.status == 503 and attempt < 2,
+                          'Upload intent did not recover: expected %s, got %s' % (expected, response.status))
+                with counter_lock:
+                    transients['confirm' if path.endswith('/confirm') else 'upload'] += 1
+                time.sleep(0.2 * (attempt + 1))
+
         fixtures = []
         for tenant, client in clients:
             client.timeout = 60
@@ -88,8 +105,8 @@ class AttachmentUploadLocal(IssueAclLocal):
         path = '/api/v1/projects/' + project + '/issues/' + issue + '/attachments/'
         payload = {'fileName': 'owned.txt', 'contentType': 'text/plain', 'sizeBytes': 10}
         key = str(uuid.uuid4())
-        uploaded = owner.expect('POST', path + 'upload-url', 200, payload, {'Idempotency-Key': key}).json()
-        repeated = owner.expect('POST', path + 'upload-url', 200, payload, {'Idempotency-Key': key}).json()
+        uploaded = positive(owner, path + 'upload-url', 200, payload, {'Idempotency-Key': key})
+        repeated = positive(owner, path + 'upload-url', 200, payload, {'Idempotency-Key': key})
         e.require(uploaded['objectKey'] == repeated['objectKey'], 'Upload retry allocated another resource')
         # URL не попадает в report/state/log; это только собственная capability.
         request = urllib.request.Request(uploaded['uploadUrl'], data=b'0123456789', method='PUT',
@@ -97,11 +114,21 @@ class AttachmentUploadLocal(IssueAclLocal):
         with urllib.request.urlopen(request, timeout=20) as response:
             e.require(response.status // 100 == 2, 'Owned signed PUT failed')
         confirm = {'objectKey': uploaded['objectKey'], 'fileName': 'owned.txt', 'contentType': 'text/plain'}
+        alternate_actor = str(uuid.uuid4())
+        self.sql('auth_db', "INSERT INTO taska.users(id,email,display_name,status,global_role) VALUES('%s','alternate-upload@harness.invalid','Alternate owner','ACTIVE','USER');" % alternate_actor)
+        self.sql('tenant_db', "INSERT INTO taska.tenant_memberships(tenant_id,user_id,role,status) VALUES('%s','%s','MEMBER','ACTIVE');" % (tenant, alternate_actor))
+        self.sql('project_db', "INSERT INTO taska.project_members(tenant_id,project_id,user_id,role,added_by,root_membership_version) VALUES('%s','%s','%s','ADMIN','%s',1);" % (tenant, project, alternate_actor, actor))
+        alternate, _ = self.member_client(tenant, alternate_actor, 1)
+        alternate.timeout = 60
+        alternate.expect('GET', '/api/v1/issues/' + issue, 200)
+        alternate.expect('POST', path + 'confirm', 403, confirm)
+        e.require(self.sql('issue_db', "SELECT NOT confirm_requested FROM taska.attachment_uploads WHERE tenant_id='%s' AND actor_id='%s' AND request_key='%s';" % (tenant, actor, key)).strip() == 't', 'Foreign actor changed confirm intent')
+
         with ThreadPoolExecutor(max_workers=3) as workers:
-            confirmations = list(workers.map(lambda _: owner.expect('POST', path + 'confirm', 201, confirm).json(), range(3)))
+            confirmations = list(workers.map(lambda _: positive(owner, path + 'confirm', 201, confirm), range(3)))
         result = confirmations[0]
         e.require(all(item == result for item in confirmations), 'Concurrent confirm changed metadata')
-        replay = owner.expect('POST', path + 'confirm', 201, confirm).json()
+        replay = positive(owner, path + 'confirm', 201, confirm)
         e.require(result == replay and result['sizeBytes'] == 10, 'Confirm replay changed metadata')
         e.require(self.sql('issue_db', "SELECT count(*) FROM taska.issue_attachments WHERE tenant_id='%s';" % tenant).strip() == '1', 'Attachment duplicated')
         e.require(self.sql('tenant_db', "SELECT count(*) FROM taska.quota_effects WHERE tenant_id='%s' AND resource='STORAGE_BYTES';" % tenant).strip() == '1', 'Byte effect duplicated')
@@ -112,22 +139,24 @@ class AttachmentUploadLocal(IssueAclLocal):
         owner.expect('POST', path + 'upload-url', 409, dict(payload, sizeBytes=11), {'Idempotency-Key': key})
         # Дополнительный собственный intent для проверки отзыва membership.
         fallback_key = str(uuid.uuid4())
-        late = owner.expect('POST', path + 'upload-url', 200, payload, {'X-Request-Id': fallback_key}).json()
-        fallback_replay = owner.expect('POST', path + 'upload-url', 200, payload, {'X-Request-Id': fallback_key}).json()
+        late = positive(owner, path + 'upload-url', 200, payload, {'X-Request-Id': fallback_key})
+        fallback_replay = positive(owner, path + 'upload-url', 200, payload, {'X-Request-Id': fallback_key})
         e.require(late['objectKey'] == fallback_replay['objectKey'], 'Request ID fallback lost idempotency')
         e.require(self.sql('issue_db', "SELECT count(*) FROM taska.attachment_uploads WHERE tenant_id='%s' AND request_key='%s';" % (tenant, fallback_key)).strip() == '1', 'Request ID fallback was not persisted')
         # Заполняем квоту разрешёнными reservations без больших объектов и подмены counters.
         for size in [20000000] * 4 + [19999980]:
-            owner.expect('POST', path + 'upload-url', 200, dict(payload, sizeBytes=size),
-                         {'Idempotency-Key': str(uuid.uuid4())})
-        owner.expect('POST', path + 'upload-url', 422, payload, {'Idempotency-Key': str(uuid.uuid4())})
+            positive(owner, path + 'upload-url', 200, dict(payload, sizeBytes=size),
+                     {'Idempotency-Key': str(uuid.uuid4())})
+        quota_problem = positive(owner, path + 'upload-url', 422, payload, {'Idempotency-Key': str(uuid.uuid4())})
+        e.require(quota_problem['code'] == 'QUOTA_EXCEEDED'
+                  and quota_problem['details']['quota.kind'] == 'STORAGE_BYTES', 'Storage quota problem lost its machine code')
         self.sql('auth_db', "UPDATE taska.users SET global_role='GLOBAL_ADMIN' WHERE id='%s';UPDATE taska.web_sessions SET assurance='ADMIN_EMAIL_MFA' WHERE user_id='%s';" % (actor, actor))
-        administrative = owner.expect('POST', path + 'upload-url', 200, payload,
-                                       {'Idempotency-Key': str(uuid.uuid4())}).json()
+        administrative = positive(owner, path + 'upload-url', 200, payload,
+                                  {'Idempotency-Key': str(uuid.uuid4())})
         with urllib.request.urlopen(urllib.request.Request(administrative['uploadUrl'], data=b'abcdefghij',
                                     method='PUT', headers={'Content-Type': 'text/plain'}), timeout=20) as response:
             e.require(response.status // 100 == 2, 'Administrative signed PUT failed')
-        owner.expect('POST', path + 'confirm', 201, dict(confirm, objectKey=administrative['objectKey']))
+        positive(owner, path + 'confirm', 201, dict(confirm, objectKey=administrative['objectKey']))
         e.require(self.sql('tenant_db', "SELECT count(*) FROM taska.quota_reservations WHERE tenant_id='%s' AND resource='STORAGE_BYTES' AND storage_bypassed_limit AND state='COMMITTED' AND storage_actual_bytes=10;" % tenant).strip() == '1', 'Administrative usage was not recorded')
         self.sql('auth_db', "UPDATE taska.users SET global_role='USER' WHERE id='%s';UPDATE taska.web_sessions SET assurance='PASSWORD' WHERE user_id='%s';" % (actor, actor))
         # Отзыв реального membership закрывает даже тёплый confirm без нового расхода.
@@ -135,7 +164,7 @@ class AttachmentUploadLocal(IssueAclLocal):
         response = owner.request('POST', path + 'confirm', body=dict(confirm, objectKey=late['objectKey']))
         e.require(response.status in (401, 403), 'Revoked membership retained confirm access')
         return {'publicRestSignedPutConfirm': 'PASS', 'tenantAndProjectIsolation': 'PASS',
-                'retryAndAccountingOnce': 'PASS', 'payloadConflict': 'PASS', 'membershipRevocation': 'PASS', 'primaryAdminBypassAccounting': 'PASS', 'requestIdFallback': 'PASS'}
+                'retryAndAccountingOnce': 'PASS', 'payloadConflict': 'PASS', 'membershipRevocation': 'PASS', 'primaryAdminBypassAccounting': 'PASS', 'requestIdFallback': 'PASS', 'actorOwnership': 'PASS', 'transient503Retries': transients}
 
 
 def main():
