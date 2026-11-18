@@ -171,6 +171,7 @@ public final class PrimaryAttachmentPolicy implements AttachmentUploadPolicy {
     var claim = RpcContextBridge.details(c).getContext();
     if (u == null
         || !Set.of("issue-service", "tenant-service").contains(claim.getIssuerService())
+        || !claim.getServiceIdentity().equals("issue-service")
         || !claim.hasServicePurpose()
         || !claim.getServicePurpose().equals("STORAGE_CLEANUP")
         || !c.scopes().contains("storage:recover")

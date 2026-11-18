@@ -208,6 +208,7 @@ public final class AttachmentUploads {
               if (claims.getCredentialKind()
                       != ru.taska.api.b2b.v1.CredentialKind.CREDENTIAL_KIND_SERVICE
                   || !claims.getIssuerService().equals("issue-service")
+                  || !claims.getServiceIdentity().equals("issue-service")
                   || !claims.getServicePurpose().equals("STORAGE_CLEANUP")
                   || !c.action().equals("reconcileAttachmentUploads")
                   || !c.scopes().contains("storage:recover")

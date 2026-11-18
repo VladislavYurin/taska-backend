@@ -23,7 +23,11 @@ import ru.taska.security.tenant.RpcTrustBackend;
 @Profile("tenant-storage")
 @ConditionalOnExpression(
     "${taska.rpc.context.enabled:false} && '${taska.rpc.trust.snapshot:}' != ''")
-@Import({TenantIssueGrpc.class,ru.taska.issuestorage.TenantAttachmentGrpc.class,ru.taska.issuestorage.AttachmentAdmissionGrpc.class})
+@Import({
+  TenantIssueGrpc.class,
+  ru.taska.issuestorage.TenantAttachmentGrpc.class,
+  ru.taska.issuestorage.AttachmentAdmissionGrpc.class
+})
 public class IssueApiConfiguration {
   @Bean
   TenantDecisionFacts issueDecisionFacts(
@@ -40,23 +44,38 @@ public class IssueApiConfiguration {
 
   @Bean
   ru.taska.issuestorage.AttachmentUploadStore attachmentUploadStore(ConnectionFactory factory) {
-    return new ru.taska.issuestorage.AttachmentUploadStore(new TenantTransactionExecutor(factory),Clock.systemUTC());
+    return new ru.taska.issuestorage.AttachmentUploadStore(
+        new TenantTransactionExecutor(factory), Clock.systemUTC());
   }
+
   @Bean
-  ru.taska.issuestorage.AttachmentUploadPolicy attachmentUploadPolicy(TenantDecisionFacts facts,ManagedDomainReads reads,RpcContextSecurity security,TenantIssueStore issues) {
-    return new ru.taska.issuestorage.PrimaryAttachmentPolicy(facts,reads,security,issues);
+  ru.taska.issuestorage.AttachmentUploadPolicy attachmentUploadPolicy(
+      TenantDecisionFacts facts,
+      ManagedDomainReads reads,
+      RpcContextSecurity security,
+      TenantIssueStore issues) {
+    return new ru.taska.issuestorage.PrimaryAttachmentPolicy(facts, reads, security, issues);
   }
+
   @Bean
-  ru.taska.storage.versioned.UploadObjects attachmentUploadObjects(software.amazon.awssdk.services.s3.S3AsyncClient s3,
-      software.amazon.awssdk.services.s3.presigner.S3Presigner signer,ru.taska.storage.versioned.VersionedObjects objects,
+  ru.taska.storage.versioned.UploadObjects attachmentUploadObjects(
+      software.amazon.awssdk.services.s3.S3AsyncClient s3,
+      software.amazon.awssdk.services.s3.presigner.S3Presigner signer,
+      ru.taska.storage.versioned.VersionedObjects objects,
       ru.taska.storage.config.StorageProperties properties) {
-    return new ru.taska.storage.versioned.S3UploadObjects(s3,signer,objects,properties.getBucket(),Clock.systemUTC());
+    return new ru.taska.storage.versioned.S3UploadObjects(
+        s3, signer, objects, properties.getBucket(), Clock.systemUTC());
   }
+
   @Bean
-  ru.taska.issuestorage.AttachmentUploads attachmentUploads(ru.taska.issuestorage.AttachmentUploadStore store,
-      ru.taska.issuestorage.StorageQuotaOwner owner,ru.taska.quota.StorageQuotaProtocol.Authority authority,
-      ru.taska.storage.versioned.UploadObjects objects,ru.taska.issuestorage.AttachmentUploadPolicy policy) {
-    return new ru.taska.issuestorage.AttachmentUploads(store,owner,authority,objects,policy,Clock.systemUTC());
+  ru.taska.issuestorage.AttachmentUploads attachmentUploads(
+      ru.taska.issuestorage.AttachmentUploadStore store,
+      ru.taska.issuestorage.StorageQuotaOwner owner,
+      ru.taska.quota.StorageQuotaProtocol.Authority authority,
+      ru.taska.storage.versioned.UploadObjects objects,
+      ru.taska.issuestorage.AttachmentUploadPolicy policy) {
+    return new ru.taska.issuestorage.AttachmentUploads(
+        store, owner, authority, objects, policy, Clock.systemUTC());
   }
 
   @Bean

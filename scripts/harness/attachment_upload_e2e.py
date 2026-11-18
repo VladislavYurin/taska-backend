@@ -1,5 +1,6 @@
 """TAS-365: собственные REST/mTLS/PostgreSQL/S3 fixtures, без общей среды."""
 import json
+import time
 import urllib.request
 import uuid
 import zipfile
@@ -50,7 +51,16 @@ class AttachmentUploadLocal(IssueAclLocal):
             client.timeout = 60
             self.sql('billing_db', "INSERT INTO taska.subscriptions(tenant_id,selected_plan_version_id,selected_terms_snapshot,mode) SELECT '%s',id,to_jsonb(p),'FREE' FROM taska.catalog_plan_versions p WHERE id='00000000-0000-8000-8000-000000000001';" % tenant)
             self.sql('workflow_db', "INSERT INTO taska.tenant_workflow_templates(tenant_id,template_id,code,version,name,graph_schema_version,graph) SELECT '%s',id,code,version,name,graph_schema_version,graph FROM taska.workflow_templates WHERE code='DEFAULT';" % tenant)
-            t.wait_protected_read(client, '/api/v1/projects/' + str(uuid.uuid4()), 404)
+            deadline = time.monotonic() + 180
+            probe_path = '/api/v1/projects/' + str(uuid.uuid4())
+            while time.monotonic() < deadline:
+                response = client.request('GET', probe_path)
+                if response.status == 404:
+                    break
+                e.require(response.status == 503, 'Protected readiness returned unexpected status')
+                time.sleep(1)
+            else:
+                raise e.Blocked('Attachment primary readiness deadline exceeded')
             project = client.expect('POST', '/api/v1/projects', 201,
                                     {'projectKey': 'UPL', 'name': 'Owned attachment fixture'},
                                     {'Idempotency-Key': str(uuid.uuid4())}).json()['id']
@@ -84,12 +94,26 @@ class AttachmentUploadLocal(IssueAclLocal):
         owner.expect('POST', path + 'upload-url', 409, dict(payload, sizeBytes=11), {'Idempotency-Key': key})
         # Дополнительный собственный intent для проверки отзыва membership.
         late = owner.expect('POST', path + 'upload-url', 200, payload, {'Idempotency-Key': str(uuid.uuid4())}).json()
+        # Заполняем квоту разрешёнными reservations без больших объектов и подмены counters.
+        for size in [20000000] * 4 + [19999980]:
+            owner.expect('POST', path + 'upload-url', 200, dict(payload, sizeBytes=size),
+                         {'Idempotency-Key': str(uuid.uuid4())})
+        owner.expect('POST', path + 'upload-url', 422, payload, {'Idempotency-Key': str(uuid.uuid4())})
+        self.sql('auth_db', "UPDATE taska.users SET global_role='GLOBAL_ADMIN' WHERE id='%s';UPDATE taska.web_sessions SET assurance='ADMIN_EMAIL_MFA' WHERE user_id='%s';" % (actor, actor))
+        administrative = owner.expect('POST', path + 'upload-url', 200, payload,
+                                       {'Idempotency-Key': str(uuid.uuid4())}).json()
+        with urllib.request.urlopen(urllib.request.Request(administrative['uploadUrl'], data=b'abcdefghij',
+                                    method='PUT', headers={'Content-Type': 'text/plain'}), timeout=20) as response:
+            e.require(response.status // 100 == 2, 'Administrative signed PUT failed')
+        owner.expect('POST', path + 'confirm', 201, dict(confirm, objectKey=administrative['objectKey']))
+        e.require(self.sql('tenant_db', "SELECT count(*) FROM taska.quota_reservations WHERE tenant_id='%s' AND resource='STORAGE_BYTES' AND storage_bypassed_limit AND state='COMMITTED' AND storage_actual_bytes=10;" % tenant).strip() == '1', 'Administrative usage was not recorded')
+        self.sql('auth_db', "UPDATE taska.users SET global_role='USER' WHERE id='%s';UPDATE taska.web_sessions SET assurance='PASSWORD' WHERE user_id='%s';" % (actor, actor))
         # Отзыв реального membership закрывает даже тёплый confirm без нового расхода.
         self.sql('tenant_db', "UPDATE taska.tenant_memberships SET status='SUSPENDED',version=version+1 WHERE tenant_id='%s' AND user_id='%s';" % (tenant, actor))
         response = owner.request('POST', path + 'confirm', body=dict(confirm, objectKey=late['objectKey']))
         e.require(response.status in (401, 403), 'Revoked membership retained confirm access')
         return {'publicRestSignedPutConfirm': 'PASS', 'tenantAndProjectIsolation': 'PASS',
-                'retryAndAccountingOnce': 'PASS', 'payloadConflict': 'PASS', 'membershipRevocation': 'PASS'}
+                'retryAndAccountingOnce': 'PASS', 'payloadConflict': 'PASS', 'membershipRevocation': 'PASS', 'primaryAdminBypassAccounting': 'PASS'}
 
 
 def main():

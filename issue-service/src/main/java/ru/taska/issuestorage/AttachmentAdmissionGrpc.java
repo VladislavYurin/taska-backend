@@ -35,8 +35,7 @@ public final class AttachmentAdmissionGrpc
             q.flatMap(
                     r ->
                         uploads.reconcile(
-                            r.getAfterId().isEmpty() ? null : UUID.fromString(r.getAfterId()),
-                            r.getLimit()))
+                            r.getAfterId().isEmpty() ? null : id(r.getAfterId()), r.getLimit()))
                 .map(
                     r ->
                         ru.taska.api.issue.attachment.v1.ReconcileAttachmentUploadsResponse
@@ -86,7 +85,7 @@ public final class AttachmentAdmissionGrpc
                                                 .setMaximumTtlSeconds(g.ttl().toSeconds())
                                                 .build());
                               return store
-                                  .operation(UUID.fromString(q.getOperationId()))
+                                  .operation(id(q.getOperationId()))
                                   .flatMap(
                                       u -> {
                                         if (!u.id().toString().equals(q.getResourceId())
@@ -114,5 +113,15 @@ public final class AttachmentAdmissionGrpc
                             })))
         .onErrorMap(DomainException.class, GrpcExceptionMapper::toStatusRuntimeException)
         .onErrorMap(GrpcExceptionMapper::toGrpcStatus);
+  }
+
+  private static UUID id(String value) {
+    try {
+      var result = UUID.fromString(value);
+      if (!result.toString().equals(value)) throw new IllegalArgumentException();
+      return result;
+    } catch (IllegalArgumentException e) {
+      throw new DomainException(DomainStatus.INVALID_ARGUMENT, "INVALID_UPLOAD_CURSOR_OR_ID");
+    }
   }
 }
