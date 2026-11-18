@@ -14,7 +14,9 @@ import ru.taska.api.b2b.v1.Membership;
 import ru.taska.api.b2b.v1.MembershipPage;
 import ru.taska.api.b2b.v1.Operation;
 import ru.taska.api.b2b.v1.ReactorTenantServiceGrpc;
+import ru.taska.api.b2b.v1.RemoveTenantMemberRpcRequest;
 import ru.taska.api.b2b.v1.SetTenantMemberRoleRpcRequest;
+import ru.taska.api.b2b.v1.SetTenantMemberStateRpcRequest;
 import ru.taska.api.b2b.v1.Tenant;
 import ru.taska.api.b2b.v1.TenantPage;
 import ru.taska.security.tenant.RpcContextBridge;
@@ -106,6 +108,22 @@ public final class TenantGrpcService extends ReactorTenantServiceGrpc.TenantServ
   @Override
   public Mono<Membership> setTenantMemberRole(Mono<SetTenantMemberRoleRpcRequest> request) {
     return RpcContextBridge.inbound(request.flatMap(mutations::setRole))
+        .onErrorMap(
+            ru.taska.exception.DomainException.class, GrpcExceptionMapper::toStatusRuntimeException)
+        .onErrorMap(GrpcExceptionMapper::toGrpcStatus);
+  }
+
+  @Override
+  public Mono<Membership> setTenantMemberState(Mono<SetTenantMemberStateRpcRequest> request) {
+    return RpcContextBridge.inbound(request.flatMap(mutations::setState))
+        .onErrorMap(
+            ru.taska.exception.DomainException.class, GrpcExceptionMapper::toStatusRuntimeException)
+        .onErrorMap(GrpcExceptionMapper::toGrpcStatus);
+  }
+
+  @Override
+  public Mono<Operation> removeTenantMember(Mono<RemoveTenantMemberRpcRequest> request) {
+    return RpcContextBridge.inbound(request.flatMap(mutations::remove))
         .onErrorMap(
             ru.taska.exception.DomainException.class, GrpcExceptionMapper::toStatusRuntimeException)
         .onErrorMap(GrpcExceptionMapper::toGrpcStatus);
