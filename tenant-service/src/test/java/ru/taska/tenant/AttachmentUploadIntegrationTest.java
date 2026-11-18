@@ -63,6 +63,7 @@ class AttachmentUploadIntegrationTest {
   final StorageQuotaIntegrationTest fixture = new StorageQuotaIntegrationTest();
   AttachmentUploadStore store;
   AttachmentUploads uploads;
+  AttachmentUploadPolicy policy;
 
   @BeforeAll
   static void setup() throws Exception {
@@ -91,7 +92,7 @@ class AttachmentUploadIntegrationTest {
     store =
         new AttachmentUploadStore(
             StorageQuotaIntegrationTest.ownerTx, StorageQuotaIntegrationTest.clock);
-    AttachmentUploadPolicy policy =
+    policy =
         (project, issue, u, phase) ->
             VerifiedTenantContext.current()
                 .flatMap(
@@ -784,5 +785,37 @@ class AttachmentUploadIntegrationTest {
     assertEquals(0, temporary.dataLoss());
     assertEquals("10", StorageQuotaIntegrationTest.usage(A).getReserved());
     assertEquals(0, rows("issue_attachments"));
+  }
+
+  @Test
+  void sameCredentialSharesOngoingSagaButEveryCallRequiresCurrentAccess() throws Exception {
+    var capability = begin("shared-confirm");
+    put(capability);
+    var authority = org.mockito.Mockito.spy(StorageQuotaIntegrationTest.authorityClient);
+    var shared =
+        new AttachmentUploads(
+            store,
+            StorageQuotaIntegrationTest.owner,
+            authority,
+            new S3UploadObjects(
+                StorageQuotaIntegrationTest.s3,
+                signer,
+                StorageQuotaIntegrationTest.objectStore,
+                BUCKET,
+                StorageQuotaIntegrationTest.clock),
+            policy,
+            StorageQuotaIntegrationTest.clock);
+    var invocation =
+        as(A, ACTOR, "confirmAttachmentUpload", shared.confirm(confirmation(capability)));
+    var results = Flux.range(0, 6).flatMap(i -> invocation, 6).collectList().block(WAIT);
+    assertEquals(1, results.stream().map(r -> r.getId()).distinct().count());
+    org.mockito.Mockito.verify(authority, org.mockito.Mockito.times(1))
+        .commit(org.mockito.ArgumentMatchers.any());
+    assertEquals(1, rows("issue_attachments"));
+    assertEquals("10", StorageQuotaIntegrationTest.usage(A).getUsed());
+    StorageQuotaIntegrationTest.permitted.set(false);
+    assertThrows(DomainException.class, () -> invocation.block(WAIT));
+    org.mockito.Mockito.verify(authority, org.mockito.Mockito.times(1))
+        .commit(org.mockito.ArgumentMatchers.any());
   }
 }

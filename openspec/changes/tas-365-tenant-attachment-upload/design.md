@@ -18,6 +18,7 @@ Issue DB владеет задачами, attachment manifest и metadata; tenan
 - Перед capability вызываются prepare и recordUploadWindow. HEAD выбирает staging version, затем короткая транзакция фиксирует её. Сетевые эффекты не выполняются внутри DB transactions.
 - COPY разрешён единственному durable claim. Claim и owner cancel используют один advisory lock. Неизвестный COPY не повторяется; positive final proof проверяет metadata operation/source version. Это предпочитает удержанный резерв риску позднего неучтённого объекта.
 - Owner materialize измеряет точные версии через HEAD/GET SHA-256. Root COMMIT опирается на primary receipt. Owner activate сохраняет attachment из durable upload intent в той же transaction, что CONFIRMED/outbox, включая внутренний Activate от quota root; повтор идемпотентен.
+- Одинаковый проверенный principal может разделять только выполняемую confirm-сагу своего intent. Policy проверяется до присоединения каждого запроса; завершённые результаты не кэшируются, число выполняемых саг ограничено. Межпроцессная корректность остаётся в DB/receipts.
 - ReconcileUploads ограничен tenant/cursor/100 intent и техническим SERVICE purpose. Он не выдаёт новые capabilities, не превращает PAT в SERVICE и не сканирует общий bucket.
 
 ## Risks / Trade-offs

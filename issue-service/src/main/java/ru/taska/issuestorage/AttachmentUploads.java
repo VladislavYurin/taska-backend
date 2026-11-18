@@ -3,6 +3,7 @@ package ru.taska.issuestorage;
 import java.time.Clock;
 import java.util.UUID;
 import reactor.core.publisher.Mono;
+import ru.taska.api.b2b.v1.TrustedTenantContext;
 import ru.taska.api.issue.attachment.v1.AttachmentResponse;
 import ru.taska.api.issue.attachment.v1.ConfirmAttachmentUploadRequestBody;
 import ru.taska.api.issue.attachment.v1.CreateAttachmentUploadUrlRequestBody;
@@ -12,6 +13,7 @@ import ru.taska.exception.DomainStatus;
 import ru.taska.quota.ProjectQuotaProtocol.State;
 import ru.taska.quota.StorageQuotaProtocol.Authority;
 import ru.taska.quota.StorageQuotaProtocol.Reservation;
+import ru.taska.security.tenant.RpcContextBridge;
 import ru.taska.security.tenant.VerifiedTenantContext;
 import ru.taska.storage.versioned.UploadObjects;
 
@@ -26,6 +28,11 @@ public final class AttachmentUploads {
   private final UploadObjects objects;
   private final AttachmentUploadPolicy policy;
   private final Clock clock;
+
+  private record Flight(UUID operation, TrustedTenantContext principal) {}
+
+  private final java.util.concurrent.ConcurrentHashMap<Flight, Mono<AttachmentResponse>>
+      confirmations = new java.util.concurrent.ConcurrentHashMap<>();
 
   public AttachmentUploads(
       AttachmentUploadStore store,
@@ -117,7 +124,41 @@ public final class AttachmentUploads {
               return policy
                   .check(u.project(), u.issue(), u, "CONFIRM")
                   .then(store.requestConfirm(u))
-                  .then(finish(u));
+                  .then(sharedFinish(u));
+            });
+  }
+
+  private Mono<AttachmentResponse> sharedFinish(AttachmentUploadStore.Upload u) {
+    return VerifiedTenantContext.current()
+        .flatMap(
+            c -> {
+              var principal =
+                  RpcContextBridge.details(c).getContext().toBuilder()
+                      .clearIssuedAt()
+                      .clearExpiresAt()
+                      .clearAssertionId()
+                      .build();
+              var key = new Flight(u.operation(), principal);
+              // Проверка policy каждого запроса уже завершилась; сохраняется только выполняемая
+              // сага.
+              synchronized (confirmations) {
+                var running = confirmations.get(key);
+                if (running != null) return running;
+                if (confirmations.size() >= 256)
+                  return Mono.error(
+                      new DomainException(DomainStatus.RESOURCE_EXHAUSTED, "CONFIRM_CAPACITY"));
+                running =
+                    Mono.defer(() -> finish(u))
+                        .timeout(
+                            java.time.Duration.ofSeconds(30),
+                            Mono.error(
+                                new DomainException(
+                                    DomainStatus.UNAVAILABLE, "CONFIRM_IN_PROGRESS")))
+                        .doFinally(signal -> confirmations.remove(key))
+                        .cache();
+                confirmations.put(key, running);
+                return running;
+              }
             });
   }
 
@@ -143,11 +184,8 @@ public final class AttachmentUploads {
                       current ->
                           (current.stagingVersion() != null
                                   ? Mono.just(current.stagingVersion())
-                                  : policy
-                                      .check(u.project(), u.issue(), current, "CONFIRM")
-                                      .then(
-                                          objects.stagingVersion(
-                                              u.stagingKey(), u.mime(), u.bytes()))
+                                  : objects
+                                      .stagingVersion(u.stagingKey(), u.mime(), u.bytes())
                                       .flatMap(v -> store.pin(u, true, v)))
                               .flatMap(
                                   stage ->
