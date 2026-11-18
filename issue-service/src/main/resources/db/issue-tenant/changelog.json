@@ -386,6 +386,43 @@
           }
         ]
       }
+    },
+    {
+      "changeSet": {
+        "id": "issue-authorization-audit-0022",
+        "author": "taska",
+        "changes": [
+          {
+            "sqlFile": {
+              "path": "issue-authorization-audit.sql",
+              "relativeToChangelogFile": true,
+              "splitStatements": false
+            }
+          },
+          {
+            "sql": {
+              "sql": "SELECT set_config('taska.guard_service','issue',true),set_config('taska.guard_schema','taska',true),set_config('taska.guard_table','issue_authorization_audit',true),set_config('taska.guard_column','tenant_id',true),set_config('taska.guard_app_access','append_only',true);"
+            }
+          },
+          {
+            "sqlFile": {
+              "path": "db/tenant/v2/protect-table.sql",
+              "splitStatements": false
+            }
+          },
+          {
+            "sql": {
+              "sql": "SELECT set_config('taska.audit_service','issue',true),set_config('taska.audit_schema','taska',true),set_config('taska.audit_table','issue_authorization_audit',true),set_config('taska.audit_column','tenant_id',true),set_config('taska.audit_app_access','append_only',true);"
+            }
+          },
+          {
+            "sqlFile": {
+              "path": "db/tenant/v2/audit.sql",
+              "splitStatements": false
+            }
+          }
+        ]
+      }
     }
   ]
 }

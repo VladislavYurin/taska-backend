@@ -62,12 +62,12 @@ public class TenantStorageConfiguration {
             DatabaseClient.create(factory)
                 .sql(
                     """
-                    SELECT current_user='taska_issue_app' AND NOT
-                      (rolsuper OR rolinherit OR rolbypassrls OR rolcreatedb OR rolcreaterole OR rolreplication)
-                      AND NOT EXISTS (SELECT 1 FROM pg_auth_members WHERE member=r.oid OR roleid=r.oid)
-                      AND NOT EXISTS (SELECT 1 FROM pg_class WHERE relowner=r.oid AND relnamespace='taska'::regnamespace)
-                      AS safe FROM pg_roles r WHERE rolname=current_user
-                    """)
+SELECT current_user='taska_issue_app' AND NOT
+  (rolsuper OR rolinherit OR rolbypassrls OR rolcreatedb OR rolcreaterole OR rolreplication)
+  AND NOT EXISTS (SELECT 1 FROM pg_auth_members WHERE member=r.oid OR roleid=r.oid)
+  AND NOT EXISTS (SELECT 1 FROM pg_class WHERE relowner=r.oid AND relnamespace='taska'::regnamespace)
+  AS safe FROM pg_roles r WHERE rolname=current_user
+""")
                 .map((r, m) -> r.get("safe", Boolean.class))
                 .one()
                 .block(Duration.ofSeconds(10));
@@ -82,21 +82,39 @@ public class TenantStorageConfiguration {
 
   @Bean
   @org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
-  ru.taska.issuestorage.LifetimeTaskQuota.Authority taskQuotaAuthority() {
-    return (c, u, p) ->
-        reactor.core.publisher.Mono.error(
+  ru.taska.issuestorage.LifetimeTaskQuota.Authority taskQuotaAuthority(
+      org.springframework.beans.factory.ObjectProvider<ru.taska.issuestorage.TenantIssueAccess>
+          policies) {
+    return (c, use, project) -> {
+      var policy = policies.getIfAvailable();
+      if (policy == null
+          || project == null
+          || use == ru.taska.issuestorage.LifetimeTaskQuota.Use.RETIRE)
+        return reactor.core.publisher.Mono.error(
             new ru.taska.exception.DomainException(
                 ru.taska.exception.DomainStatus.UNAVAILABLE, "POLICY_NOT_CONFIGURED"));
+      var action =
+          use == ru.taska.issuestorage.LifetimeTaskQuota.Use.CREATE
+              ? ru.taska.capability.Action.ISSUE_CREATE
+              : ru.taska.capability.Action.ISSUE_SEARCH;
+      return policy
+          .authorize(action, project, null)
+          .map(p -> new ru.taska.issuestorage.LifetimeTaskQuota.Grant(p.bypassBusinessRules()));
+    };
   }
 
   @Bean
   @org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
   ru.taska.entitlement.EntitlementProjection.Source taskQuotaEntitlements(
+      org.springframework.beans.factory.ObjectProvider<ru.taska.capability.ManagedDomainReads>
+          managed,
       org.springframework.beans.factory.ObjectProvider<
               ru.taska.api.b2b.v1.ReactorEntitlementServiceGrpc.ReactorEntitlementServiceStub>
           stubs,
       org.springframework.beans.factory.ObjectProvider<ru.taska.security.tenant.RpcContextSecurity>
           security) {
+    var nativeReads = managed.getIfAvailable();
+    if (nativeReads != null) return nativeReads::entitlement;
     var stub = stubs.getIfAvailable();
     var trust = security.getIfAvailable();
     if (stub != null && trust != null)
@@ -201,7 +219,10 @@ public class TenantStorageConfiguration {
         java.time.Clock.systemUTC());
   }
 
-  /** TAS-343 supplies verified transport and ACL. Old RPC headers cannot mint tenant authority. */
+  /**
+   * TAS-343 использует проверенный транспорт и ACL. Старые заголовки RPC не дают полномочий
+   * арендатора.
+   */
   @Bean
   @GlobalServerInterceptor
   ServerInterceptor issueTenantTransportClosed(
@@ -224,7 +245,28 @@ public class TenantStorageConfiguration {
             ru.taska.api.b2b.v1.ProjectQuotaReadServiceGrpc.getGetTenantTaskQuotaSummaryMethod()
                 .getFullMethodName()))
       policies.put(method, new ru.taska.security.tenant.RpcContextSecurity.Policy(true, false));
-    policies.put(ru.taska.api.b2b.v1.ProjectLabelsServiceGrpc.getReadMethod().getFullMethodName(),new ru.taska.security.tenant.RpcContextSecurity.Policy(true,false));
+    // Разрешены только реализованные нативные CRUD-методы; поиск, доска и вложенные домены закрыты.
+    ru.taska.security.tenant.RpcRoutePolicies.policies("issue-service")
+        .forEach(
+            (rpc, policy) -> {
+              String method = rpc.substring(rpc.lastIndexOf('/') + 1);
+              if (java.util.Set.of(
+                      "CountProjectIssuesBatchInternal",
+                      "GetProjectTaskQuotas",
+                      "CreateIssue",
+                      "GetIssue",
+                      "GetIssueDetails",
+                      "GetIssueByKey",
+                      "PatchIssue",
+                      "UpdateIssue",
+                      "AssignIssue",
+                      "TransitionIssue",
+                      "DeleteIssue")
+                  .contains(method)) policies.put(rpc, policy);
+            });
+    policies.put(
+        ru.taska.api.b2b.v1.ProjectLabelsServiceGrpc.getReadMethod().getFullMethodName(),
+        new ru.taska.security.tenant.RpcContextSecurity.Policy(true, false));
     ServerInterceptor quotaSecurity =
         trust == null
             ? null

@@ -29,7 +29,7 @@ Harness объединяет инструкции, доступные инстр
 | Пользователь и доступ | `auth-service` | сессии, refresh rotation, статус пользователя, PAT scopes; [приглашения](../tas-204-invitations-and-directory.md) |
 | Проекты и роли | `project-service` | ADMIN/MEMBER/VIEWER, последний ADMIN, собственность типов задач |
 | Workflow | `workflow-service` | граф, типы, версии, резервирования; [привязки](../tas-436-workflow-type-bindings.md), [native RPC/ACL](../../workflow-service/TENANT-API.md) |
-| Задачи | `issue-service` | If-Match, идемпотентность, поиск/доска, история, связи, worklogs; [удаление типа](../tas-433-issue-type-deletion.md) |
+| Задачи | `issue-service` | [Native CRUD/ACL](../../issue-service/TENANT-API.md), If-Match, идемпотентность, поиск/доска, история, связи, worklogs; [удаление типа](../tas-433-issue-type-deletion.md) |
 | События и уведомления | `common-lib`, `kafka-lib`, `notification-service` | атомарность outbox, дедупликация, каналы; [Telegram](../tas-387-telegram-notifications.md) |
 | Файлы | `storage-lib`, `auth-service`, `issue-service` | presigned URL, confirm, размер/MIME, доступ и очистка объектов |
 | Администрирование | [admin-service](../../admin-service/README.md) | session-only guards, безопасное чтение, аудит, повтор outbox |

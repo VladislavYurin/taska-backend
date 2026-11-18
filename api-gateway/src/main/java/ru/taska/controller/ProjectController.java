@@ -44,6 +44,8 @@ import java.util.UUID;
 @RestController
 @RequiredArgsConstructor
 public class ProjectController implements ProjectApi {
+    private final ru.taska.transport.grpc.TaskQuotaClient taskQuotas;
+
 
     private final GatewayRequestExecutor executor;
     private final GrpcProjectServiceClient projectClient;
@@ -112,7 +114,12 @@ public class ProjectController implements ProjectApi {
             ServerWebExchange exchange
     ) {
         return executor.execute(exchange, EndpointSecurity.PROTECTED, context ->
-                        projectClient.getProjectContext(String.valueOf(projectId), context))
+                        projectClient.getProjectContext(String.valueOf(projectId), context)
+                            .flatMap(dto -> taskQuotas.read(java.util.List.of(projectId.toString()), context)
+                                    .map(quotas -> {
+                                        dto.setTaskQuota(quotas.get(projectId.toString()));
+                                        return dto;
+                                    })))
                 .map(ResponseEntity::ok);
     }
 

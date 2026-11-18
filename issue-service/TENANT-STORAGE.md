@@ -1,6 +1,6 @@
 # Tenant issue storage — TAS-332
 
-Delivered storage foundation, available only through the optional `tenant-storage` Spring profile. The default profile continues to serve the legacy API against its existing schema. TAS-343 supplies business CRUD, current project ACL, workflow/status/assignee checks and verified project metadata. TAS-460 supplies lifetime quota admission and limits. This profile does not expose tenant issue RPCs or publish Kafka events.
+Delivered storage foundation, available only through the optional `tenant-storage` Spring profile. The default profile continues to serve the legacy API against its existing schema. [TAS-343 native API](TENANT-API.md) supplies business CRUD, current project ACL, workflow/status/assignee checks and verified project metadata. TAS-460 supplies lifetime quota admission and limits. This profile does not expose tenant issue RPCs or publish Kafka events.
 
 ## Database and activation
 
@@ -8,7 +8,7 @@ Use a fresh, isolated issue-service PostgreSQL database. Run the shipped [role b
 
 `spring.liquibase.url/user/password` connects as `taska_issue_deployer`, explicitly assumes the NOLOGIN migrator role and owns the private Liquibase journal. `spring.r2dbc.*` connects as `taska_issue_app`. Startup rejects privileged, inheriting, owning or member runtime roles. The versioned migration [changelog](src/main/resources/db/issue-tenant/changelog.json) refuses any existing business table, creates five tables atomically, and applies/audits the shipped RLS v2 templates. Repeat Liquibase is a no-op. No reset, inferred tenant assignment, fixture backfill or editing of applied changesets occurs.
 
-`tenant-storage` excludes legacy repositories, services, jobs, dispatchers and transport. The tenant transport interceptor refuses calls until business API activation. The default profile still loads scheduling and all legacy components. Profile activation on shared stage requires its own coordinated rollout; this change does not activate it.
+`tenant-storage` excludes legacy repositories, services, jobs, dispatchers and transport. The tenant transport interceptor admits only implemented native methods when managed trust is configured; other methods remain closed. The default profile still loads scheduling and all legacy components. Profile activation on shared stage requires its own coordinated rollout; this change does not activate it.
 
 ## Storage contract
 

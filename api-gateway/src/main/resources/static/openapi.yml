@@ -7067,10 +7067,28 @@ components:
           items:
             $ref: '#/components/schemas/ProjectStatsDto'
 
+    TaskQuotaDto:
+      type: object
+      required: [used, unlimited]
+      properties:
+        used:
+          type: integer
+          format: int64
+          minimum: 0
+          description: Lifetime-число успешных созданий задач в проекте, включая удалённые.
+        limit:
+          type: integer
+          format: int64
+          minimum: 0
+        unlimited:
+          type: boolean
+
     ProjectStatsDto:
       type: object
       required: [projectId, issueCount, memberCount, members]
       properties:
+        taskQuota:
+          $ref: '#/components/schemas/TaskQuotaDto'
         projectId:
           type: string
         issueCount:
@@ -7336,6 +7354,8 @@ components:
       type: object
       required: [ project, members, labels, workflows, issueTypes ]
       properties:
+        taskQuota:
+          $ref: '#/components/schemas/TaskQuotaDto'
         project:
           $ref: '#/components/schemas/ProjectResponseDto'
         members:
@@ -7367,11 +7387,29 @@ components:
         workflow:
           $ref: '#/components/schemas/WorkflowResponseDto'
 
+    QuotaErrorDto:
+      type: object
+      required: [kind, limit, used]
+      properties:
+        kind:
+          type: string
+          pattern: '^TASK_LIFETIME$'
+        limit:
+          type: integer
+          format: int64
+          minimum: 0
+        used:
+          type: integer
+          format: int64
+          minimum: 0
+
     RestErrorResponse:
       description: Ошибка API; details содержит необязательные машиночитаемые параметры ошибки.
       type: object
       required: [code, message]
       properties:
+        quota:
+          $ref: '#/components/schemas/QuotaErrorDto'
         code:
           type: string
         message:
