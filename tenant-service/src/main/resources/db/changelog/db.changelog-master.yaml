@@ -465,6 +465,21 @@
           }
         ]
       }
+    },
+    {
+      "changeSet": {
+        "id": "tenant-list-membership-0016",
+        "author": "taska",
+        "changes": [
+          {
+            "sqlFile": {
+              "path": "0016-tenant-list-membership.sql",
+              "relativeToChangelogFile": true,
+              "splitStatements": false
+            }
+          }
+        ]
+      }
     }
   ]
 }

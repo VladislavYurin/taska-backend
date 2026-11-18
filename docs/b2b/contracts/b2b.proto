@@ -171,6 +171,15 @@ message Tenant {
   enum CreationClosureReason { CREATION_CLOSURE_REASON_UNSPECIFIED = 0; CREATION_CLOSURE_REASON_AUTO_EXPIRED = 1; CREATION_CLOSURE_REASON_OWNER_CANCELLED = 2; }
   optional CreationClosureReason creation_closure_reason = 13;
   optional string creation_closed_at = 14;
+  CallerMembership membership = 15;
+}
+
+// TAS-338: the caller's own membership in Tenant; never another member's.
+message CallerMembership {
+  Membership.RoleValue role = 1;
+  Membership.StateValue state = 2;
+  bool is_owner = 3;
+  string version = 4;
 }
 
 message TenantPage {

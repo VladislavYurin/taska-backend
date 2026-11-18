@@ -33,6 +33,13 @@ Internal proto добавлен к blueprint без изменения стар�
 
 
 Для replay успешного self-leave mutation service читает только собственный сохранённый receipt до проверки уже отозванной membership generation. Gateway/trust adapters TAS-316/317 должны предоставить узкий путь receipt-only replay; обычная проверка актуального членства для остальных действий остаётся обязательной. Эта реализация native RPC сама не подтверждает публичный REST replay после отзыва tenant access.
+
+## Список компаний — TAS-338
+
+`TenantService.ListTenants` (основа — TAS-333) принимает только `WEB_GLOBAL` session со scope `tenants:select`. В список входит каждая компания, где membership вызывающего ACTIVE, в любом lifecycle, кроме DELETED: PROVISIONING, AWAITING_PAYMENT, ACTIVE, AUTO_CLOSED, OWNER_CANCELLED, DELETING. Компании с SUSPENDED/REMOVED membership в список не попадают. Порядок `(created_at,id)`, default50/max100, HMAC cursor. Каждый вызов читает текущие memberships через `taska.list_tenants_for_actor`: смена роли, выход или приостановка видны на следующем вызове, кеша нет.
+
+Каждый элемент несёт собственное членство вызывающего `Tenant.membership` (`CallerMembership`: role, state, is_owner, version) — без данных других участников и directory. Member `GetTenant` возвращает то же поле; административное чтение, create, cancel и rename его не заполняют. Restrictions и lifecycle берутся из строки той же компании, поэтому состояние A не переносится на B: неоплаченная paid-компания приходит как AWAITING_PAYMENT с `PENDING_FIRST_PAYMENT` и `creationDeadline`, закрытое создание — как AUTO_CLOSED/OWNER_CANCELLED с `creationClosureReason`. Доступные действия список не вычисляет: их отдаёт `GetTenantCapabilities`, вход решает tenant session. Прямая ссылка проверяется заново: `GetTenant` с устаревшей membership generation даёт `TOKEN_REVOKED`, без ACTIVE membership — скрытый `TENANT_NOT_FOUND`. Финансовый READ_ONLY (billing), pause и platform block (TAS-480) сейчас в restrictions списка не попадают: registry их не хранит, они видны через capabilities. Миграция0016 пересоздаёт функцию списка с колонками membership, RLS policies 0015 не меняются.
+
 ## Создание и повторы
 
 Create принимает только проверенный контекст `WEB_GLOBAL` с actor/session, без tenant и с action `createTenant`. Body не задаёт владельца, lifecycle, стоимость или deadline. `PublishedPlans` возвращает только опубликованную публичную immutable версию тарифа (adapter — TAS-313); client planVersion UUID сам по себе не доказывает его доступность. `FreeAdmission.reserve` — локальная атомарная операция TAS-472 на переданном DatabaseClient, не удалённая проверка. Без этих providers создание отклоняется до commit; paid никогда не вызывает FREE admission.

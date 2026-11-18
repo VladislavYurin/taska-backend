@@ -17,10 +17,12 @@ import org.springframework.r2dbc.core.DatabaseClient;
 import reactor.core.publisher.Mono;
 import ru.taska.api.b2b.v1.AdminGrant;
 import ru.taska.api.b2b.v1.AdminScope;
+import ru.taska.api.b2b.v1.CallerMembership;
 import ru.taska.api.b2b.v1.CredentialKind;
 import ru.taska.api.b2b.v1.CreateTenantResponse;
 import ru.taska.api.b2b.v1.CreateTenantRpcRequest;
 import ru.taska.api.b2b.v1.GetTenantRpcRequest;
+import ru.taska.api.b2b.v1.Membership;
 import ru.taska.api.b2b.v1.Operation;
 import ru.taska.api.b2b.v1.RestrictionCode;
 import ru.taska.api.b2b.v1.Tenant;
@@ -396,7 +398,8 @@ public final class TenantRegistryService {
                     return transactions.execute(
                         db ->
                             db.sql(
-                                    "SELECT t.*,m.status AS actor_membership_status,m.version AS"
+                                    "SELECT t.*,m.role AS actor_membership_role,m.status AS"
+                                        + " actor_membership_status,m.version AS"
                                         + " actor_membership_version FROM taska.tenants t LEFT JOIN"
                                         + " taska.tenant_memberships m ON m.tenant_id=t.id AND"
                                         + " m.user_id=:actor WHERE t.id=:id AND"
@@ -420,7 +423,11 @@ public final class TenantRegistryService {
                                           return Mono.error(
                                               fail(DomainStatus.UNAUTHENTICATED, "TOKEN_REVOKED"));
                                       }
-                                      return Mono.just(tenant(row));
+                                      // An administrative read is not a membership view.
+                                      return Mono.just(
+                                          admin
+                                              ? tenant(row)
+                                              : withCaller(row, uuid(identity.actorId())));
                                     }));
                   });
         });
@@ -506,6 +513,19 @@ public final class TenantRegistryService {
     if (pendingFirstPayment)
       result.addRestrictions(RestrictionCode.RESTRICTION_CODE_PENDING_FIRST_PAYMENT);
     return result.build();
+  }
+
+  /** Tenant row joined with the actor's own membership as actor_membership_* columns. */
+  static Tenant withCaller(Map<String, Object> row, UUID actor) {
+    return tenant(row).toBuilder()
+        .setMembership(
+            CallerMembership.newBuilder()
+                .setRole(Membership.RoleValue.valueOf("ROLE_" + row.get("actor_membership_role")))
+                .setState(
+                    Membership.StateValue.valueOf("STATE_" + row.get("actor_membership_status")))
+                .setIsOwner(actor.equals(row.get("owner_id")))
+                .setVersion(row.get("actor_membership_version").toString()))
+        .build();
   }
 
   public Mono<Operation> getOperation(ru.taska.api.b2b.v1.GetTenantOperationRpcRequest request) {

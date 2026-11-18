@@ -26,9 +26,12 @@ import ru.taska.api.b2b.v1.RenameTenantRpcRequest;
 import ru.taska.api.b2b.v1.Tenant;
 import ru.taska.api.b2b.v1.TenantPage;
 import ru.taska.domain.GatewayContext;
+import ru.taska.domain.dto.TenantCallerMembershipDto;
 import ru.taska.domain.dto.TenantCreationClosureReason;
 import ru.taska.domain.dto.TenantDto;
 import ru.taska.domain.dto.TenantLifecycle;
+import ru.taska.domain.dto.TenantMembershipRole;
+import ru.taska.domain.dto.TenantMembershipState;
 import ru.taska.domain.dto.TenantPageDto;
 import ru.taska.domain.dto.TenantRestrictionCode;
 import ru.taska.security.tenant.FileMtlsRpcChannels;
@@ -212,7 +215,7 @@ public class TenantRegistryClient implements AutoCloseable {
             });
   }
 
-  private static TenantPageDto toRestPage(TenantPage page, int requestedLimit) {
+  static TenantPageDto toRestPage(TenantPage page, int requestedLimit) {
     try {
       if (page.getItemsCount() > requestedLimit || page.getItemsCount() > 100) {
         throw new IllegalArgumentException();
@@ -260,6 +263,17 @@ public class TenantRegistryClient implements AutoCloseable {
       }
       if (tenant.hasCreationClosedAt()) {
         result.creationClosedAt(OffsetDateTime.parse(tenant.getCreationClosedAt()));
+      }
+      if (tenant.hasMembership()) {
+        var membership = tenant.getMembership();
+        result.membership(
+            new TenantCallerMembershipDto()
+                .role(TenantMembershipRole.fromValue(enumSuffix(membership.getRole().name(), "ROLE_")))
+                .state(
+                    TenantMembershipState.fromValue(
+                        enumSuffix(membership.getState().name(), "STATE_")))
+                .isOwner(membership.getIsOwner())
+                .version(positiveInt64(membership.getVersion())));
       }
       return result;
     } catch (RuntimeException invalid) {

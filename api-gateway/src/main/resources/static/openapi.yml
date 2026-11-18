@@ -5023,7 +5023,13 @@ paths:
       operationId: listTenants
       tags: [tenant]
       summary: List companies available to the current account
-      description: WEB_GLOBAL account session only. Returns the actor's active tenant memberships and is never cached.
+      description: >-
+        WEB_GLOBAL account session only. Lists every company where the caller's membership is ACTIVE,
+        in any lifecycle except DELETED: PROVISIONING, AWAITING_PAYMENT, ACTIVE, AUTO_CLOSED,
+        OWNER_CANCELLED and DELETING. SUSPENDED and REMOVED memberships are not listed.
+        Order is (createdAt,id) ascending. Each item carries the caller's membership and restriction codes.
+        Available actions come from getTenantCapabilities; entering a company is decided by the tenant session.
+        Every call reads current memberships and the response is never cached.
       x-pat-scope: session
       security:
         - bearerAuth: []
@@ -5058,7 +5064,9 @@ paths:
       operationId: getTenant
       tags: [tenant]
       summary: Get company details
-      description: Tenant access is checked against the current credential binding and membership. Response is never cached.
+      description: >-
+        Tenant access is checked against the current credential binding and membership.
+        A member read includes the caller's membership; an administrative read omits it. Response is never cached.
       x-pat-scope: read
       security:
         - bearerAuth: []
@@ -5437,7 +5445,31 @@ components:
           minLength: 1
           maxLength: 19
           pattern: '^[1-9][0-9]{0,18}$'
+        membership: {$ref: '#/components/schemas/TenantCallerMembershipDto'}
       required: [id, name, ownerId, lifecycle, restrictions, createdAt, version, ownerVersion]
+    TenantMembershipRole:
+      type: string
+      enum: [MEMBER, TENANT_ADMIN]
+    TenantMembershipState:
+      type: string
+      enum: [ACTIVE, SUSPENDED, REMOVED]
+    TenantCallerMembershipDto:
+      type: object
+      additionalProperties: false
+      description: >-
+        The caller's own membership. Returned by listTenants and by getTenant for a member;
+        absent on administrative reads and on rename responses.
+      properties:
+        role: {$ref: '#/components/schemas/TenantMembershipRole'}
+        state: {$ref: '#/components/schemas/TenantMembershipState'}
+        isOwner: {type: boolean}
+        version:
+          type: string
+          minLength: 1
+          maxLength: 19
+          pattern: '^[1-9][0-9]{0,18}$'
+          description: Positive int64 membership version, returned as a decimal string.
+      required: [role, state, isOwner, version]
     TenantPageDto:
       type: object
       x-class-extra-annotation: '@com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)'

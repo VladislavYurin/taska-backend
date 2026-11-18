@@ -675,7 +675,8 @@ class TenantMembershipIntegrationTest {
                         .setTenantId(A.toString())
                         .build()))
             .block(WAIT);
-    assertEquals(result, read);
+    assertEquals(result, read.toBuilder().clearMembership().build());
+    assertEquals(member(Membership.RoleValue.ROLE_TENANT_ADMIN, true, "1"), read.getMembership());
     assertEquals(
         0L,
         as(
@@ -792,6 +793,185 @@ class TenantMembershipIntegrationTest {
     rejects(DomainStatus.PERMISSION_DENIED, tenantRead(registry, wrongTarget, B));
   }
 
+  static ru.taska.api.b2b.v1.CallerMembership member(
+      Membership.RoleValue role, boolean owner, String version) {
+    return ru.taska.api.b2b.v1.CallerMembership.newBuilder()
+        .setRole(role)
+        .setState(Membership.StateValue.STATE_ACTIVE)
+        .setIsOwner(owner)
+        .setVersion(version)
+        .build();
+  }
+
+  /** Paid tenant created after the seed; FK owner→membership is checked at commit. */
+  void paidTenant(UUID tenant, UUID owner, String lifecycle, String closure, int minutes) {
+    var insert =
+        operator
+            .sql(
+                "INSERT INTO"
+                    + " taska.tenants(id,name,owner_id,lifecycle,creation_kind,creation_deadline_at,created_at,plan_version_id,creation_actor_id,creation_request_hash,creation_operation_id,creation_closure_reason,creation_closed_at)"
+                    + " VALUES (:id,'paid',:owner,:lifecycle,'PAID',now()+interval '30"
+                    + " days',now()+make_interval(mins=>:minutes),:plan,:owner,decode(repeat('00',32),'hex'),:operation,:closure,CASE"
+                    + " WHEN :closure::text IS NULL THEN NULL ELSE now() END)")
+            .bind("id", tenant)
+            .bind("owner", owner)
+            .bind("lifecycle", lifecycle)
+            .bind("minutes", minutes)
+            .bind("plan", id(501))
+            .bind("operation", UUID.randomUUID());
+    insert = closure == null ? insert.bindNull("closure", String.class) : insert.bind("closure", closure);
+    TransactionalOperator.create(new R2dbcTransactionManager(operatorFactory))
+        .transactional(
+            insert
+                .fetch()
+                .rowsUpdated()
+                .then(
+                    operator
+                        .sql(
+                            "INSERT INTO taska.tenant_memberships(tenant_id,user_id,role,status)"
+                                + " VALUES (:t,:u,'TENANT_ADMIN','ACTIVE')")
+                        .bind("t", tenant)
+                        .bind("u", owner)
+                        .fetch()
+                        .rowsUpdated()))
+        .block(WAIT);
+  }
+
+  @Test
+  void listTenantsCarriesOwnMembershipPerCompanyWithIndependentStates() {
+    UUID awaiting = id(3), closed = id(4), deleted = id(5);
+    paidTenant(awaiting, SHARED, "AWAITING_PAYMENT", null, 1);
+    paidTenant(closed, OWNER, "AUTO_CLOSED", "AUTO_EXPIRED", 2);
+    paidTenant(deleted, OWNER, "DELETED", null, 3);
+    operator
+        .sql(
+            "INSERT INTO taska.tenant_memberships(tenant_id,user_id,role,status,version) VALUES"
+                + " (:closed,:u,'MEMBER','ACTIVE',6),(:deleted,:u,'MEMBER','ACTIVE',8)")
+        .bind("closed", closed)
+        .bind("deleted", deleted)
+        .bind("u", SHARED)
+        .fetch()
+        .rowsUpdated()
+        .block(WAIT);
+
+    // SHARED: ACTIVE MEMBER in A, SUSPENDED in B, owner of the unpaid company, member of the
+    // closed one and of a DELETED one.
+    var page =
+        tenantList(registryWithList(), globalList(SHARED, id(790).toString()), 50, null)
+            .block(WAIT);
+    assertFalse(page.hasNextCursor());
+    assertEquals(
+        List.of(A.toString(), awaiting.toString(), closed.toString()),
+        page.getItemsList().stream().map(Tenant::getId).toList());
+
+    var active = page.getItems(0);
+    assertEquals(Tenant.LifecycleValue.LIFECYCLE_ACTIVE, active.getLifecycle());
+    assertEquals(0, active.getRestrictionsCount());
+    assertEquals(member(Membership.RoleValue.ROLE_MEMBER, false, "3"), active.getMembership());
+
+    var unpaid = page.getItems(1);
+    assertEquals(Tenant.LifecycleValue.LIFECYCLE_AWAITING_PAYMENT, unpaid.getLifecycle());
+    assertEquals(
+        List.of(ru.taska.api.b2b.v1.RestrictionCode.RESTRICTION_CODE_PENDING_FIRST_PAYMENT),
+        unpaid.getRestrictionsList());
+    assertTrue(unpaid.hasCreationDeadline());
+    assertEquals(
+        member(Membership.RoleValue.ROLE_TENANT_ADMIN, true, "1"), unpaid.getMembership());
+
+    var closure = page.getItems(2);
+    assertEquals(Tenant.LifecycleValue.LIFECYCLE_AUTO_CLOSED, closure.getLifecycle());
+    assertEquals(
+        Tenant.CreationClosureReason.CREATION_CLOSURE_REASON_AUTO_EXPIRED,
+        closure.getCreationClosureReason());
+    assertTrue(closure.hasCreationClosedAt());
+    assertEquals(member(Membership.RoleValue.ROLE_MEMBER, false, "6"), closure.getMembership());
+
+    // The same companies seen by another member keep that member's own role and owner flag.
+    var owner =
+        tenantList(registryWithList(), globalList(OWNER, id(791).toString()), 50, null)
+            .block(WAIT);
+    assertEquals(
+        List.of(A.toString(), closed.toString()),
+        owner.getItemsList().stream().map(Tenant::getId).toList());
+    assertEquals(
+        List.of(
+            member(Membership.RoleValue.ROLE_TENANT_ADMIN, true, "1"),
+            member(Membership.RoleValue.ROLE_TENANT_ADMIN, true, "1")),
+        owner.getItemsList().stream().map(Tenant::getMembership).toList());
+  }
+
+  @Test
+  void listTenantsAndDeepLinkFollowCurrentMembershipOnNextCall() {
+    var registry = registryWithList();
+    var claims = globalList(SHARED, id(792).toString());
+    assertEquals(
+        List.of(member(Membership.RoleValue.ROLE_MEMBER, false, "3")),
+        tenantList(registry, claims, 50, null).block(WAIT).getItemsList().stream()
+            .map(Tenant::getMembership)
+            .toList());
+
+    var promoted =
+        role(
+                writer(OWNER, A, "1", "setTenantMemberRole"),
+                SHARED,
+                "ROLE_TENANT_ADMIN",
+                "3",
+                UUID.randomUUID().toString())
+            .block(WAIT);
+    assertEquals("4", promoted.getVersion());
+    assertEquals(
+        List.of(member(Membership.RoleValue.ROLE_TENANT_ADMIN, false, "4")),
+        tenantList(registry, claims, 50, null).block(WAIT).getItemsList().stream()
+            .map(Tenant::getMembership)
+            .toList());
+    var staleLink = human(SHARED, A, "3", "deep-link").toBuilder().setAction("getTenant").build();
+    rejects(DomainStatus.UNAUTHENTICATED, tenantRead(registry, staleLink, A));
+    assertEquals(
+        member(Membership.RoleValue.ROLE_TENANT_ADMIN, false, "4"),
+        tenantRead(registry, staleLink.toBuilder().setMembershipGeneration("4").build(), A)
+            .block(WAIT)
+            .getMembership());
+
+    leave(writer(SHARED, A, "4", "leaveTenant"), null, UUID.randomUUID().toString()).block(WAIT);
+    var afterLeave = tenantList(registry, claims, 50, null).block(WAIT);
+    assertEquals(0, afterLeave.getItemsCount());
+    assertFalse(afterLeave.hasNextCursor());
+    for (String generation : List.of("4", "5"))
+      rejects(
+          DomainStatus.NOT_FOUND,
+          tenantRead(registry, staleLink.toBuilder().setMembershipGeneration(generation).build(), A));
+  }
+
+  @Test
+  void getTenantCarriesCallerMembershipOnlyForMemberReads() {
+    var registry = new TenantRegistryService(transactions, null, null, clock, Duration.ofDays(30));
+    var shared = human(SHARED, A, "3", "member-read").toBuilder().setAction("getTenant").build();
+    assertEquals(
+        member(Membership.RoleValue.ROLE_MEMBER, false, "3"),
+        tenantRead(registry, shared, A).block(WAIT).getMembership());
+    var owner = human(OWNER, A, "1", "owner-read").toBuilder().setAction("getTenant").build();
+    assertEquals(
+        member(Membership.RoleValue.ROLE_TENANT_ADMIN, true, "1"),
+        tenantRead(registry, owner, A).block(WAIT).getMembership());
+    var foreign = human(FOREIGN, A, "99", "foreign-read").toBuilder().setAction("getTenant").build();
+    rejects(DomainStatus.NOT_FOUND, tenantRead(registry, foreign, A));
+
+    // OWNER is also an ACTIVE member of A; an administrative read still is not a membership view.
+    var adminRead =
+        owner.toBuilder()
+            .setCredentialKind(CREDENTIAL_KIND_WEB_GLOBAL)
+            .clearMembershipGeneration()
+            .setAdministrativeLevel(ru.taska.api.b2b.v1.AdminGrant.LevelValue.LEVEL_READ)
+            .setAdministrativeScope(
+                ru.taska.api.b2b.v1.AdminScope.newBuilder()
+                    .setKind(ru.taska.api.b2b.v1.AdminScope.KindValue.KIND_TENANT_SET)
+                    .addTenantIds(A.toString()))
+            .build();
+    var administrative = tenantRead(registry, adminRead, A).block(WAIT);
+    assertEquals(A.toString(), administrative.getId());
+    assertFalse(administrative.hasMembership());
+  }
+
   @Test
   void renameSameNameHasReceiptAndAuditWithoutEventOrVersionChange() {
     var claims = writer(OWNER, A, "1", "renameTenant");
@@ -808,7 +988,7 @@ class TenantMembershipIntegrationTest {
     var current =
         tenantRead(registryWithList(), claims.toBuilder().setAction("getTenant").build(), A)
             .block(WAIT);
-    assertEquals(first, current);
+    assertEquals(first, current.toBuilder().clearMembership().build());
     assertEquals(0L, count("SELECT count(*) n FROM taska.outbox_events"));
     assertEquals(
         1L, count("SELECT count(*) n FROM taska.tenant_rename_audit WHERE result='NO_CHANGE'"));
@@ -830,7 +1010,10 @@ class TenantMembershipIntegrationTest {
     assertEquals(
         updated,
         tenantRead(registryWithList(), claims.toBuilder().setAction("getTenant").build(), A)
-            .block(WAIT));
+            .block(WAIT)
+            .toBuilder()
+            .clearMembership()
+            .build());
     assertEquals(1L, count("SELECT count(*) n FROM taska.outbox_events"));
     assertEquals(2L, count("SELECT count(*) n FROM taska.tenant_rename_audit"));
     assertEquals(2L, count("SELECT count(*) n FROM taska.idempotency_records"));
