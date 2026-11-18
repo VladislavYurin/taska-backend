@@ -471,6 +471,23 @@ class TenantMembershipIntegrationTest {
   }
 
   @Test
+  void roleChangeReplaysReceiptWrittenBeforeLifecycleCommandsWereAdded() {
+    var admin = writer(OWNER, A, "1", "setTenantMemberRole");
+    String key = UUID.randomUUID().toString();
+    var original = role(admin, SHARED, "ROLE_TENANT_ADMIN", "3", key).block(WAIT);
+    // An upgrade fixture: the published TAS-312 request digest had no state argument.
+    byte[] legacy = TenantRegistryService.digest(
+        "taska:membership-mutation:v1", "setTenantMemberRole", A.toString(), SHARED.toString(),
+        "ROLE_TENANT_ADMIN", "3");
+    operator.sql("UPDATE taska.idempotency_records SET request_hash=:hash WHERE key=:key")
+        .bind("hash", legacy).bind("key", key).fetch().rowsUpdated().block(WAIT);
+    assertEquals(original, role(admin, SHARED, "ROLE_TENANT_ADMIN", "3", key).block(WAIT));
+    assertEquals("4", get(A, SHARED).block(WAIT).getVersion());
+    assertEquals(1L, count("SELECT count(*) n FROM taska.membership_audit"));
+    assertEquals(1L, count("SELECT count(*) n FROM taska.outbox_events"));
+  }
+
+  @Test
   void roleChangeIsAtomicAuditedAndIdempotent() {
     var admin = writer(OWNER, A, "1", "setTenantMemberRole");
     String key = UUID.randomUUID().toString();

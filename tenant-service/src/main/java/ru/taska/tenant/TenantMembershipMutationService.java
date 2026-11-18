@@ -198,15 +198,25 @@ public final class TenantMembershipMutationService {
                     }
                     UUID actor = TenantRegistryService.uuid(verified.actorId());
                     UUID target = leave ? actor : TenantRegistryService.uuid(targetValue);
+                    // TAS-312 receipts remain replayable after the lifecycle rollout. Do not add
+                    // new digest fields to already published commands under the v1 namespace.
                     byte[] hash =
-                        TenantRegistryService.digest(
-                            "taska:membership-mutation:v1",
-                            action,
-                            tenant.toString(),
-                            target.toString(),
-                            Objects.toString(roleValue, ""),
-                            Objects.toString(stateValue, ""),
-                            Long.toString(expected));
+                        leave || "setTenantMemberRole".equals(action)
+                            ? TenantRegistryService.digest(
+                                "taska:membership-mutation:v1",
+                                action,
+                                tenant.toString(),
+                                target.toString(),
+                                leave ? "REMOVED" : roleValue,
+                                Long.toString(expected))
+                            : TenantRegistryService.digest(
+                                "taska:membership-mutation:v2",
+                                action,
+                                tenant.toString(),
+                                target.toString(),
+                                Objects.toString(roleValue, ""),
+                                Objects.toString(stateValue, ""),
+                                Long.toString(expected));
                     return new Command(
                         tenant,
                         actor,
