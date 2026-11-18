@@ -39,6 +39,7 @@ import ru.taska.domain.Project;
 import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
 import ru.taska.mapper.ProjectMapper;
+import ru.taska.security.tenant.RpcContextBridge;
 import ru.taska.service.ProjectInputValidator;
 import tools.jackson.databind.ObjectMapper;
 
