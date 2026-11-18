@@ -266,7 +266,7 @@ public final class AttachmentUploads {
   }
 
   private Mono<AttachmentResponse> activate(AttachmentUploadStore.Upload u, Reservation r) {
-    return owner.activate(r, db -> store.attach(db, u)).then(store.result(u));
+    return owner.activate(r).then(store.result(u));
   }
 
   private Mono<VerifiedTenantContext> context(String actor, String action) {

@@ -40,7 +40,8 @@ primary GLOBAL_ADMIN и web MFA; административный WEB_GLOBAL т�
 
 Confirm фиксирует конкретную staging version, копирует её в собственный final key
 и проверяет обе версии через HEAD и потоковый GET/SHA-256. Metadata вложения и
-owner CONFIRMED/outbox сохраняются в одной транзакции; root COMMIT учитывает actual
+owner CONFIRMED/outbox сохраняются в одной транзакции, в том числе при внутреннем
+Activate от quota root или его reconciler; root COMMIT учитывает actual
 bytes один раз. Потеря ответа или ошибка metadata после root COMMIT восстанавливается
 повторным confirm либо техническим reconcile.
 

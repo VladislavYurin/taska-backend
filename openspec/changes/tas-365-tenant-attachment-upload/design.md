@@ -17,7 +17,7 @@ Issue DB владеет задачами, attachment manifest и metadata; tenan
 - Primary issue policy проверяет auth/tenant/billing/project/issue. Приватный CheckAdmission сохраняет исходный credential через подписанный hop; отсутствие источника закрыто. Реальный primary GA/MFA проверяется отдельно от project membership.
 - Перед capability вызываются prepare и recordUploadWindow. HEAD выбирает staging version, затем короткая транзакция фиксирует её. Сетевые эффекты не выполняются внутри DB transactions.
 - COPY разрешён единственному durable claim. Claim и owner cancel используют один advisory lock. Неизвестный COPY не повторяется; positive final proof проверяет metadata operation/source version. Это предпочитает удержанный резерв риску позднего неучтённого объекта.
-- Owner materialize измеряет точные версии через HEAD/GET SHA-256. Root COMMIT опирается на primary receipt. Hook в owner activate сохраняет attachment в той же transaction, что CONFIRMED/outbox; повтор hook идемпотентен.
+- Owner materialize измеряет точные версии через HEAD/GET SHA-256. Root COMMIT опирается на primary receipt. Owner activate сохраняет attachment из durable upload intent в той же transaction, что CONFIRMED/outbox, включая внутренний Activate от quota root; повтор идемпотентен.
 - ReconcileUploads ограничен tenant/cursor/100 intent и техническим SERVICE purpose. Он не выдаёт новые capabilities, не превращает PAT в SERVICE и не сканирует общий bucket.
 
 ## Risks / Trade-offs

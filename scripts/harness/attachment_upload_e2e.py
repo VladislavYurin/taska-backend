@@ -12,6 +12,11 @@ from issue_acl_e2e import IssueAclLocal
 
 
 class AttachmentUploadLocal(IssueAclLocal):
+    def compose(self, *args, timeout=600, input_text=None):
+        return e.run_command(['docker', 'compose', '--env-file', '/dev/null', '-p', self.project,
+                              '-f', str(self.compose_file), *args], self.root, timeout, input_text,
+                             diagnostic_path=self.dir / 'attachment-compose-diagnostic.json')
+
     def prepare_extra_databases(self):
         super().prepare_extra_databases()
         kinds, scopes = ['WEB_TENANT', 'USER_PAT'], ['read', 'write']
@@ -65,6 +70,16 @@ class AttachmentUploadLocal(IssueAclLocal):
                 time.sleep(1)
             else:
                 raise e.Blocked('Attachment primary readiness deadline exceeded')
+            # Прогреваем только чтение issue и его primary facts до первой команды upload.
+            deadline = time.monotonic() + 180
+            while time.monotonic() < deadline:
+                response = client.request('GET', '/api/v1/issues/' + issue)
+                if response.status == 200:
+                    break
+                e.require(response.status == 503, 'Issue readiness returned unexpected status')
+                time.sleep(1)
+            else:
+                raise e.Blocked('Attachment issue readiness deadline exceeded')
             fixtures.append((tenant, client, project, issue))
         tenant, owner, project, issue = fixtures[0]
         _, foreign, foreign_project, foreign_issue = fixtures[1]

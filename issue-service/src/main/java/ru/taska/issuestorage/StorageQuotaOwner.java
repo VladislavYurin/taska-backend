@@ -339,11 +339,6 @@ VALUES(:id,:t,:p,:i,:a,:key,:staging,:reservation,:op,:f,'RESERVED',:bytes,:mime
 
   @Override
   public Mono<Receipt> activate(Reservation r) {
-    return activate(r, db -> Mono.empty());
-  }
-
-  public Mono<Receipt> activate(
-      Reservation r, java.util.function.Function<DatabaseClient, Mono<Void>> committed) {
     return authorized(r, Use.ACTIVATE, null)
         .flatMap(
             c ->
@@ -366,9 +361,10 @@ VALUES(:id,:t,:p,:i,:a,:key,:staging,:reservation,:op,:f,'RESERVED',:bytes,:mime
                                                   fail(
                                                       DomainStatus.DATA_LOSS,
                                                       "ACTUAL_BYTES_CONFLICT"));
-                                            if (Set.of("CONFIRMED", "DELETE_PENDING", "DELETED")
-                                                .contains(row.get("state")))
-                                              return committed.apply(db).then(receipt(db, r));
+                                            if ("CONFIRMED".equals(row.get("state")))
+                                              return attachUpload(db, r).then(receipt(db, r));
+                                            if (Set.of("DELETE_PENDING", "DELETED")
+                                                .contains(row.get("state"))) return receipt(db, r);
                                             if (!"UPLOADED".equals(row.get("state")))
                                               return Mono.error(
                                                   fail(
@@ -384,10 +380,43 @@ VALUES(:id,:t,:p,:i,:a,:key,:staging,:reservation,:op,:f,'RESERVED',:bytes,:mime
                                                 .rowsUpdated()
                                                 .then(bump(db, r.tenant()))
                                                 .then(event(db, r, c, "AttachmentConfirmed"))
-                                                .then(Mono.defer(() -> committed.apply(db)))
+                                                .then(Mono.defer(() -> attachUpload(db, r)))
                                                 .then(receipt(db, r));
                                           }));
                         }));
+  }
+
+  private Mono<Void> attachUpload(DatabaseClient db, Reservation r) {
+    return db.sql(
+            """
+INSERT INTO taska.issue_attachments(id,tenant_id,project_id,issue_id,uploaded_by,file_name,content_type,size_bytes,checksum,created_at,object_key,object_version)
+SELECT m.id,m.tenant_id,m.project_id,m.issue_id,m.actor_id,u.file_name,m.content_type,m.confirmed_bytes,m.checksum_sha256,m.created_at,m.object_key,m.final_object_version
+FROM taska.attachment_object_manifest m JOIN taska.attachment_uploads u
+  ON u.tenant_id=m.tenant_id AND u.id=m.id AND u.operation_id=m.operation_id
+  AND u.actor_id=m.actor_id AND u.project_id=m.project_id AND u.issue_id=m.issue_id AND u.accepted
+WHERE m.tenant_id=:t AND m.operation_id=:op AND m.state='CONFIRMED'
+ON CONFLICT(tenant_id,id) DO NOTHING
+""")
+        .bind("t", r.tenant())
+        .bind("op", r.operation())
+        .fetch()
+        .rowsUpdated()
+        .then(
+            db.sql(
+                    """
+SELECT NOT EXISTS(SELECT 1 FROM taska.attachment_uploads WHERE tenant_id=:t AND operation_id=:op)
+  OR EXISTS(SELECT 1 FROM taska.issue_attachments WHERE tenant_id=:t AND id=:id) AS complete
+""")
+                .bind("t", r.tenant())
+                .bind("op", r.operation())
+                .bind("id", r.resource())
+                .map((row, metadata) -> row.get("complete", Boolean.class))
+                .one())
+        .flatMap(
+            complete ->
+                complete
+                    ? Mono.empty()
+                    : Mono.error(fail(DomainStatus.DATA_LOSS, "UPLOAD_METADATA_MISMATCH")));
   }
 
   @Override

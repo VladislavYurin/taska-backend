@@ -258,22 +258,6 @@ public final class AttachmentUploadStore {
                     }));
   }
 
-  public Mono<Void> attach(DatabaseClient db, Upload u) {
-    return db.sql(
-            "INSERT INTO"
-                + " taska.issue_attachments(id,tenant_id,project_id,issue_id,uploaded_by,file_name,content_type,size_bytes,checksum,created_at,object_key,object_version)"
-                + " SELECT"
-                + " m.id,m.tenant_id,m.project_id,m.issue_id,m.actor_id,:file,m.content_type,m.confirmed_bytes,m.checksum_sha256,m.created_at,m.object_key,m.final_object_version"
-                + " FROM taska.attachment_object_manifest m WHERE m.tenant_id=:t AND m.id=:id AND"
-                + " m.state='CONFIRMED' ON CONFLICT(tenant_id,id) DO NOTHING")
-        .bind("file", u.fileName())
-        .bind("t", u.tenant())
-        .bind("id", u.id())
-        .fetch()
-        .rowsUpdated()
-        .then();
-  }
-
   public Mono<ru.taska.api.issue.attachment.v1.AttachmentResponse> result(Upload u) {
     return tx.execute(
             db ->

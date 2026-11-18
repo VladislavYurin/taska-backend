@@ -310,6 +310,15 @@ class AttachmentUploadIntegrationTest {
       sql("ALTER TABLE taska.issue_attachments DROP CONSTRAINT reject_attachment");
     }
     assertEquals(0, rows("issue_attachments"));
+    assertEquals(
+        0L,
+        StorageQuotaIntegrationTest.ownerAdmin
+            .sql(
+                "SELECT count(*) FROM taska.storage_quota_outbox WHERE"
+                    + " event_type='AttachmentConfirmed'")
+            .map((r, m) -> r.get(0, Long.class))
+            .one()
+            .block(WAIT));
     assertEquals("10", StorageQuotaIntegrationTest.usage(A).getUsed());
     as(A, ACTOR, "confirmAttachmentUpload", uploads.confirm(confirmation(u))).block(WAIT);
     assertEquals(1, rows("issue_attachments"));
@@ -634,5 +643,61 @@ class AttachmentUploadIntegrationTest {
     assertEquals(0, rows("issue_attachments"));
     assertEquals("0", StorageQuotaIntegrationTest.usage(A).getUsed());
     assertEquals("10", StorageQuotaIntegrationTest.usage(A).getReserved());
+  }
+
+  @Test
+  void quotaRootActivationPersistsAttachmentWithoutPublicFallback() throws Exception {
+    var capability = begin("root-activation");
+    put(capability);
+    var u =
+        as(A, ACTOR, "confirmAttachmentUpload", store.staging(capability.getObjectKey()))
+            .block(WAIT);
+    var reservation =
+        as(
+                A,
+                ACTOR,
+                "confirmAttachmentUpload",
+                StorageQuotaIntegrationTest.authorityClient.get(u.operation()))
+            .block(WAIT);
+    var storage =
+        new S3UploadObjects(
+            StorageQuotaIntegrationTest.s3,
+            signer,
+            StorageQuotaIntegrationTest.objectStore,
+            BUCKET,
+            StorageQuotaIntegrationTest.clock);
+    var stage = storage.stagingVersion(u.stagingKey(), u.mime(), u.bytes()).block(WAIT);
+    as(A, ACTOR, "confirmAttachmentUpload", store.pin(u, true, stage)).block(WAIT);
+    assertTrue(as(A, ACTOR, "confirmAttachmentUpload", store.claimCopy(u)).block(WAIT));
+    var finalVersion =
+        storage
+            .copyPinned(u.stagingKey(), stage, u.finalKey(), u.operation().toString(), u.mime())
+            .block(WAIT);
+    as(A, ACTOR, "confirmAttachmentUpload", store.pin(u, false, finalVersion)).block(WAIT);
+    as(
+            A,
+            ACTOR,
+            "confirmAttachmentUpload",
+            StorageQuotaIntegrationTest.owner.materialize(reservation, stage, finalVersion))
+        .block(WAIT);
+    as(
+            A,
+            ACTOR,
+            "confirmAttachmentUpload",
+            StorageQuotaIntegrationTest.authorityClient.commit(reservation))
+        .block(WAIT);
+    assertEquals(1, rows("issue_attachments"));
+    assertEquals("10", StorageQuotaIntegrationTest.usage(A).getUsed());
+    var response = as(A, ACTOR, "confirmAttachmentUpload", store.result(u)).block(WAIT);
+    assertEquals(10, response.getSizeBytes());
+    assertEquals(
+        1L,
+        StorageQuotaIntegrationTest.ownerAdmin
+            .sql(
+                "SELECT count(*) FROM taska.storage_quota_outbox WHERE"
+                    + " event_type='AttachmentConfirmed'")
+            .map((r, m) -> r.get(0, Long.class))
+            .one()
+            .block(WAIT));
   }
 }
