@@ -819,7 +819,7 @@ class PlatformFlagsIntegrationTest {
                 new java.net.InetSocketAddress("127.0.0.1", 0))
             .sslContext(ssl)
             .addService(
-                io.grpc.ServerInterceptors.intercept(new PlatformGrpcService(service), interceptor))
+                io.grpc.ServerInterceptors.intercept(new PlatformGrpcService(service,org.mockito.Mockito.mock(TenantRestrictionService.class)), interceptor))
             .build()
             .start();
     var channel =

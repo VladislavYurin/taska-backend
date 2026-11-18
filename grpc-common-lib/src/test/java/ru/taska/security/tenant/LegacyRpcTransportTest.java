@@ -323,8 +323,12 @@ class LegacyRpcTransportTest {
         var f = message.getDescriptorForType().findFieldByName("context");
         assertNotNull(f, r.path("rpc").asText());
         assertEquals(RequestContext.getDescriptor(), f.getMessageType());
-        // The native TenantService declares context as field 1 in the B2B contract.
-        int expectedContextNumber = TenantServiceGrpc.SERVICE_NAME.equals(fullService) ? 1 : 100;
+        // Native root services use field 1; legacy adapters retain their field 100.
+        int expectedContextNumber =
+            Set.of(TenantServiceGrpc.SERVICE_NAME, PlatformServiceGrpc.SERVICE_NAME)
+                    .contains(fullService)
+                ? 1
+                : 100;
         assertEquals(expectedContextNumber, f.getNumber(), rpc);
       }
     }

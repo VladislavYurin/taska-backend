@@ -33,8 +33,15 @@ public class AutopayConfiguration {
   AutopayStore autopayStore(
       SubscriptionStore subscriptions,
       AutopayDependencies.Policy policy,
-      ObjectProvider<PaymentProviderRegistry> providers) {
-    return new AutopayStore(subscriptions, policy, providers.getIfAvailable(), Clock.systemUTC());
+      ObjectProvider<PaymentProviderRegistry> providers,
+      ObjectProvider<PaymentSettlementDependencies.TenantAuthority> roots) {
+    var root = roots.getIfAvailable();
+    if (root == null)
+      root =
+          tenant ->
+              Mono.error(CatalogErrors.fail(DomainStatus.UNAVAILABLE, "AUTOPAY_ROOT_UNAVAILABLE"));
+    return new AutopayStore(
+        subscriptions, policy, providers.getIfAvailable(), Clock.systemUTC(), root);
   }
 
   @Bean

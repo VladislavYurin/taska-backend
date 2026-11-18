@@ -86,7 +86,7 @@ public final class TenantDecisionFacts {
           null,
           entitlement,
           plan,
-          Set.of(),
+          Set.copyOf(membership.getIndependentRestrictionsList()),
           configuration.flags(),
           configuration.snapshot().getVersion(),
           "MCP".equals(claims.getHeader().getActionChannel()) ? Channel.MCP : Channel.DIRECT,
@@ -123,7 +123,8 @@ public final class TenantDecisionFacts {
         new EntitlementProjection(
             transactions,
             reads::entitlement,
-            (c, use) -> reads.actorMembership(c).map(m -> Set.<RestrictionCode>of()),
+            (c, use) ->
+                reads.actorMembership(c).map(m -> Set.copyOf(m.getIndependentRestrictionsList())),
             (c, e) -> Mono.just(false),
             clock,
             Duration.ofSeconds(30),

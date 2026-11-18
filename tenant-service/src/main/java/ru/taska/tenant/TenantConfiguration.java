@@ -530,6 +530,11 @@ public class TenantConfiguration {
   }
 
   @Bean
+  TenantRestrictionService tenantRestrictions(TenantTransactionExecutor transactions) {
+    return new TenantRestrictionService(transactions, Clock.systemUTC());
+  }
+
+  @Bean
   @GlobalServerInterceptor
   ServerInterceptor registrySecurity(
       ObjectProvider<RpcContextSecurity> provider,
@@ -627,6 +632,15 @@ public class TenantConfiguration {
               java.util.Map.entry(
                   TenantServiceGrpc.getListTenantsMethod().getFullMethodName(),
                   new RpcContextSecurity.Policy(false, false)),
+              java.util.Map.entry(
+                  TenantServiceGrpc.getPauseTenantMethod().getFullMethodName(),
+                  new RpcContextSecurity.Policy(true, true)),
+              java.util.Map.entry(
+                  TenantServiceGrpc.getResumeTenantMethod().getFullMethodName(),
+                  new RpcContextSecurity.Policy(true, true)),
+              java.util.Map.entry(
+                  PlatformServiceGrpc.getSetPlatformBlockMethod().getFullMethodName(),
+                  new RpcContextSecurity.Policy(true, true)),
               java.util.Map.entry(
                   TenantServiceGrpc.getRenameTenantMethod().getFullMethodName(),
                   new RpcContextSecurity.Policy(true, true)),

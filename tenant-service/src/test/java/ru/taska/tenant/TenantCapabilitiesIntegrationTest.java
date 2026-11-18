@@ -399,4 +399,109 @@ class TenantCapabilitiesIntegrationTest {
             .one()
             .block(WAIT));
   }
+
+  @Test
+  void resumeRestoresOnlyRemainingPaidAccessAndNeverExtendsExpiredCoverage() {
+    var commands = new TenantRestrictionService(tx, clock);
+    java.util.function.LongFunction<Tenant> pause =
+        version ->
+            RegistryTestContext.withClaims(
+                    claims(OWNER, A, "1").toBuilder().setAction("pauseTenant").build(),
+                    commands.pause(
+                        PauseTenantRpcRequest.newBuilder()
+                            .setTenantId(A.toString())
+                            .setPayload(ConfirmedAction.newBuilder().setConfirmed(true))
+                            .setMutation(
+                                MutationOptions.newBuilder()
+                                    .setExpectedVersion(Long.toString(version))
+                                    .setIdempotencyKey(UUID.randomUUID().toString()))
+                            .build()))
+                .block(WAIT);
+    java.util.function.Function<Tenant, Tenant> resume =
+        current ->
+            RegistryTestContext.withClaims(
+                    claims(OWNER, A, "1").toBuilder().setAction("resumeTenant").build(),
+                    commands.resume(
+                        ResumeTenantRpcRequest.newBuilder()
+                            .setTenantId(A.toString())
+                            .setMutation(
+                                MutationOptions.newBuilder()
+                                    .setExpectedVersion(current.getVersion())
+                                    .setIdempotencyKey(UUID.randomUUID().toString()))
+                            .build()))
+                .block(WAIT);
+    var paid = commercial.get(A);
+    var paused = pause.apply(1L);
+    assertFalse(item(get(OWNER, A), Action.INVITATION_CREATE).getAllowed());
+    var resumed = resume.apply(paused);
+    assertTrue(item(get(OWNER, A), Action.INVITATION_CREATE).getAllowed());
+    assertEquals(paid, commercial.get(A));
+
+    paused = pause.apply(Long.parseLong(resumed.getVersion()));
+    var expired = entitlement(A, "2", true);
+    commercial.put(A, expired);
+    resume.apply(paused);
+    var afterExpiry = get(OWNER, A);
+    assertFalse(item(afterExpiry, Action.INVITATION_CREATE).getAllowed());
+    assertTrue(
+        item(afterExpiry, Action.INVITATION_CREATE)
+            .getRestrictionsList()
+            .contains(RestrictionCode.RESTRICTION_CODE_PAYMENT_EXPIRED));
+    assertFalse(
+        item(afterExpiry, Action.INVITATION_CREATE)
+            .getRestrictionsList()
+            .contains(RestrictionCode.RESTRICTION_CODE_OWNER_PAUSE));
+    assertTrue(item(afterExpiry, Action.BILLING_READ).getAllowed());
+    assertEquals(expired, commercial.get(A));
+    assertEquals(
+        4L,
+        operator
+            .sql("SELECT count(*) n FROM taska.outbox_events")
+            .map((r, m) -> r.get("n", Long.class))
+            .one()
+            .block(WAIT));
+  }
+
+  @Test
+  void primaryPauseAndBlockRefreshWithoutHidingControlOrFinancialRecovery() {
+    assertTrue(item(get(OWNER, A), Action.TENANT_RESUME).getAllowed());
+    sql(
+        "INSERT INTO"
+            + " taska.tenant_restrictions(tenant_id,kind,source_id,active,version,reason_code,created_at)"
+            + " VALUES('"
+            + A
+            + "','OWNER_PAUSE','"
+            + UUID.randomUUID()
+            + "',true,1,'OWNER_PAUSE',now())");
+    var paused = get(OWNER, A);
+    assertTrue(item(paused, Action.TENANT_RESUME).getAllowed());
+    assertFalse(item(paused, Action.INVITATION_CREATE).getAllowed());
+    assertTrue(item(paused, Action.BILLING_READ).getAllowed());
+    configuration.set(
+        configuration.get().stream()
+            .map(
+                f ->
+                    f.getKey().equals("READ_WHILE_RESTRICTED")
+                        ? f.toBuilder().setVersion("2").setBooleanValue(false).build()
+                        : f)
+            .toList());
+    var closed = get(OWNER, A);
+    assertTrue(item(closed, Action.TENANT_READ).getAllowed());
+    assertTrue(item(closed, Action.BILLING_READ).getAllowed());
+    sql(
+        "INSERT INTO"
+            + " taska.tenant_restrictions(tenant_id,kind,source_id,active,version,reason_code,created_at)"
+            + " VALUES('"
+            + A
+            + "','PLATFORM_BLOCK','"
+            + UUID.randomUUID()
+            + "',true,2,'PLATFORM_BLOCK',now())");
+    var blocked = get(OWNER, A);
+    assertFalse(item(blocked, Action.TENANT_RESUME).getAllowed());
+    assertTrue(
+        item(blocked, Action.TENANT_RESUME)
+            .getRestrictionsList()
+            .contains(RestrictionCode.RESTRICTION_CODE_PLATFORM_BLOCK));
+    assertTrue(item(get(OWNER, B), Action.TENANT_RESUME).getAllowed());
+  }
 }

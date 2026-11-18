@@ -209,10 +209,12 @@ public final class AuthRpcTrustBackend implements RpcTrustBackend {
       return "gatewayRequest".equals(c.getAction()) && policy.mutation() == modify;
     if (TENANT_SERVICE_RPC.concat("GetTenant").equals(rpc))
       return "getTenant".equals(c.getAction()) && !policy.mutation();
-    return TENANT_SERVICE_RPC.concat("RenameTenant").equals(rpc)
-        && "renameTenant".equals(c.getAction())
-        && modify
-        && policy.mutation();
+    var mutations=Map.of(
+        TENANT_SERVICE_RPC.concat("RenameTenant"),"renameTenant",
+        TENANT_SERVICE_RPC.concat("PauseTenant"),"pauseTenant",
+        TENANT_SERVICE_RPC.concat("ResumeTenant"),"resumeTenant",
+        "ru.taska.b2b.v1.PlatformService/SetPlatformBlock","setPlatformBlock");
+    return Objects.equals(mutations.get(rpc),c.getAction()) && modify && policy.mutation();
   }
 
   public Mono<RpcActorFacts> actorFacts(

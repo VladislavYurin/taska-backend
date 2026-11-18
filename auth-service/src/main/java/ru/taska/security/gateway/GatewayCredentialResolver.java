@@ -24,7 +24,7 @@ public final class GatewayCredentialResolver {
   private final PublicKey publicKey;
   private final String kid;
   private final Clock clock;
-  private static final Set<String> TENANT_TARGET_ACTIONS = Set.of("getTenant", "renameTenant");
+  private static final Set<String> TENANT_TARGET_ACTIONS = Set.of("getTenant", "renameTenant", "pauseTenant", "resumeTenant", "setPlatformBlock");
   private static final Set<String> WEB_TENANT_SCOPES = Set.of("read", "write");
   private static final Set<String> WEB_GLOBAL_SCOPES =
       Set.of("tenants:select", "tenants:create", "account:read");
@@ -223,11 +223,11 @@ public final class GatewayCredentialResolver {
                                   .addTenantIds(target.toString())
                                   .build();
                           var level =
-                              "renameTenant".equals(targetAction)
+                              !"getTenant".equals(targetAction)
                                   ? AdminGrant.LevelValue.LEVEL_MODIFY
                                   : AdminGrant.LevelValue.LEVEL_READ;
                           var targetScopes =
-                              "renameTenant".equals(targetAction)
+                              !"getTenant".equals(targetAction)
                                   ? List.of("read", "write")
                                   : List.of("read");
                           return profile(
@@ -284,7 +284,7 @@ public final class GatewayCredentialResolver {
   }
 
   private static String requiredScope(String action) {
-    return "renameTenant".equals(action) ? "write" : "read";
+    return "getTenant".equals(action) ? "read" : "write";
   }
 
   private record SessionFacts(Long membershipGeneration, String globalRole, String assurance) {}

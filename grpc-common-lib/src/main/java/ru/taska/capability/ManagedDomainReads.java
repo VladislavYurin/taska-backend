@@ -85,19 +85,48 @@ public final class ManagedDomainReads implements AutoCloseable {
                     .withDeadlineAfter(5, java.util.concurrent.TimeUnit.SECONDS)
                     .withInterceptors(auth)
                     .batchValidateMemberships(q))
-        .map(
-            result -> {
-              if (!tenant.toString().equals(result.getTenantId())
-                  || result.getItemsCount() != ids.size()
-                  || !new HashSet<>(ids)
-                      .equals(
-                          result.getItemsList().stream()
-                              .map(MembershipValidation::getUserId)
-                              .collect(java.util.stream.Collectors.toSet())))
-                throw new DomainException(
-                    DomainStatus.UNAVAILABLE, "Invalid primary membership result");
-              return result;
-            });
+        .map(result -> membershipSnapshot(tenant, ids, result));
+  }
+
+  static MembershipValidationBatch membershipSnapshot(
+      UUID tenant, List<String> ids, MembershipValidationBatch result) {
+    boolean valid =
+        tenant.toString().equals(result.getTenantId())
+            && result.getItemsCount() == ids.size()
+            && new HashSet<>(ids)
+                .equals(
+                    result.getItemsList().stream()
+                        .map(MembershipValidation::getUserId)
+                        .collect(java.util.stream.Collectors.toSet()))
+            && positive(result.getRestrictionVersion())
+            && result.getIndependentRestrictionsList().stream()
+                .noneMatch(
+                    r ->
+                        r == RestrictionCode.RESTRICTION_CODE_UNSPECIFIED
+                            || r == RestrictionCode.UNRECOGNIZED);
+    for (var row : result.getItemsList()) {
+      valid &= row.getFound() == row.hasMembership();
+      if (row.hasMembership()) {
+        var member = row.getMembership();
+        valid &=
+            result.getTenantId().equals(member.getTenantId())
+                && row.getUserId().equals(member.getUserId())
+                && result.getRestrictionVersion().equals(member.getRestrictionVersion())
+                && Set.copyOf(result.getIndependentRestrictionsList())
+                    .equals(Set.copyOf(member.getIndependentRestrictionsList()));
+      }
+    }
+    if (!valid)
+      throw new DomainException(DomainStatus.UNAVAILABLE, "Invalid primary membership result");
+    return result;
+  }
+
+  private static boolean positive(String version) {
+    try {
+      return Long.parseLong(version) > 0 && Long.toString(Long.parseLong(version)).equals(version);
+    } catch (NumberFormatException error) {
+      return false;
+    }
   }
 
   public Mono<MembershipValidationBatch> actorMembership(VerifiedTenantContext actor) {

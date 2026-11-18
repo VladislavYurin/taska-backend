@@ -36,7 +36,19 @@ message PlatformConfigurationSnapshot {
   int32 cache_max_age_seconds = 3;
 }
 message GetPlatformConfigurationSnapshotRequest { RequestContext context = 1; }
+message AdminRestrictionRequest {
+  bool enabled = 1;
+  string reason = 2;
+  bool confirmed = 3;
+}
+message SetPlatformBlockRpcRequest {
+  RequestContext context = 1;
+  string tenant_id = 2;
+  AdminRestrictionRequest payload = 3;
+  MutationOptions mutation = 4;
+}
 service PlatformService {
+  rpc SetPlatformBlock(SetPlatformBlockRpcRequest) returns (Tenant);
   rpc ListPlatformFlags(ListPlatformFlagsRpcRequest) returns (PlatformFlagPage);
   rpc UpdatePlatformFlag(UpdatePlatformFlagRpcRequest) returns (PlatformFlag);
   rpc GetPlatformConfigurationSnapshot(GetPlatformConfigurationSnapshotRequest) returns (PlatformConfigurationSnapshot);

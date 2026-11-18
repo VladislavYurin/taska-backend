@@ -8,8 +8,8 @@ import ru.taska.api.b2b.v1.CreateTenantRpcRequest;
 import ru.taska.api.b2b.v1.GetTenantOperationRpcRequest;
 import ru.taska.api.b2b.v1.GetTenantRpcRequest;
 import ru.taska.api.b2b.v1.LeaveTenantRpcRequest;
-import ru.taska.api.b2b.v1.ListTenantsRpcRequest;
 import ru.taska.api.b2b.v1.ListTenantMembersRpcRequest;
+import ru.taska.api.b2b.v1.ListTenantsRpcRequest;
 import ru.taska.api.b2b.v1.Membership;
 import ru.taska.api.b2b.v1.MembershipPage;
 import ru.taska.api.b2b.v1.Operation;
@@ -76,6 +76,22 @@ public final class TenantGrpcService extends ReactorTenantServiceGrpc.TenantServ
   public Mono<Tenant> cancelTenantCreation(
       Mono<ru.taska.api.b2b.v1.CancelTenantCreationRpcRequest> request) {
     return RpcContextBridge.inbound(request.flatMap(registry::cancelCreation))
+        .onErrorMap(
+            ru.taska.exception.DomainException.class, GrpcExceptionMapper::toStatusRuntimeException)
+        .onErrorMap(GrpcExceptionMapper::toGrpcStatus);
+  }
+
+  @Override
+  public Mono<Tenant> pauseTenant(Mono<ru.taska.api.b2b.v1.PauseTenantRpcRequest> request) {
+    return RpcContextBridge.inbound(request.flatMap(registry::pause))
+        .onErrorMap(
+            ru.taska.exception.DomainException.class, GrpcExceptionMapper::toStatusRuntimeException)
+        .onErrorMap(GrpcExceptionMapper::toGrpcStatus);
+  }
+
+  @Override
+  public Mono<Tenant> resumeTenant(Mono<ru.taska.api.b2b.v1.ResumeTenantRpcRequest> request) {
+    return RpcContextBridge.inbound(request.flatMap(registry::resume))
         .onErrorMap(
             ru.taska.exception.DomainException.class, GrpcExceptionMapper::toStatusRuntimeException)
         .onErrorMap(GrpcExceptionMapper::toGrpcStatus);

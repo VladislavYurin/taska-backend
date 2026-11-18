@@ -123,7 +123,8 @@ class AutopayIntegrationTest {
                         CONSENT_TEXT,
                         "config-v1")),
             registry,
-            fixture.f.clock);
+            fixture.f.clock,
+            this::restrictionState);
     seedMethod(A, OWNER_A);
   }
 
@@ -728,7 +729,8 @@ class AutopayIntegrationTest {
               return original.policy.require(c, use, id);
             },
             registry,
-            fixture.f.clock);
+            fixture.f.clock,
+            this::restrictionState);
     coordinator = new AutopayCoordinator(store, attempts, operations, a -> Mono.empty());
     refusesDispatch();
     assertEquals(0, count("billing_operations"));
@@ -776,7 +778,8 @@ class AutopayIntegrationTest {
               return original.policy.require(c, use, id);
             },
             registry,
-            fixture.f.clock);
+            fixture.f.clock,
+            this::restrictionState);
     coordinator = new AutopayCoordinator(store, attempts, operations, a -> Mono.empty());
     var cancelling = as(store.consent(request(false, "cancel-winning", version()))).toFuture();
     entered.asMono().block(WAIT);
@@ -902,7 +905,8 @@ class AutopayIntegrationTest {
               return original.policy.require(c, use, id);
             },
             registry,
-            fixture.f.clock);
+            fixture.f.clock,
+            this::restrictionState);
     coordinator = new AutopayCoordinator(store, attempts, operations, a -> Mono.empty());
     refusesDispatch();
     assertEquals(0, count("billing_operations"));
@@ -1021,7 +1025,11 @@ class AutopayIntegrationTest {
   void unregisteredProviderFailsBeforeConsentWithoutInternalError() {
     var closed =
         new AutopayStore(
-            fixture.f.store, store.policy, new PaymentProviderRegistry(Map.of()), fixture.f.clock);
+            fixture.f.store,
+            store.policy,
+            new PaymentProviderRegistry(Map.of()),
+            fixture.f.clock,
+            this::restrictionState);
     denied(closed.consent(request(true, "no-provider", 1)), DomainStatus.FAILED_PRECONDITION);
     assertEquals(1, version());
     assertEquals(0, count("autopay_mandates"));
@@ -1050,7 +1058,8 @@ class AutopayIntegrationTest {
                             g.configurationVersion(),
                             currentProof)),
         registry,
-        fixture.f.clock);
+        fixture.f.clock,
+        this::restrictionState);
   }
 
   ru.taska.api.b2b.v1.TrustedTenantContext administrator(
@@ -1194,5 +1203,82 @@ class AutopayIntegrationTest {
     assertEquals(1, version());
     assertEquals(0, count("autopay_mandates"));
     assertEquals(0, count("idempotency_records"));
+  }
+
+  final java.util.concurrent.atomic.AtomicReference<
+          java.util.Set<ru.taska.api.b2b.v1.RestrictionCode>>
+      rootRestrictions = new java.util.concurrent.atomic.AtomicReference<>(java.util.Set.of());
+  final java.util.concurrent.atomic.AtomicReference<String> rootRestrictionVersion =
+      new java.util.concurrent.atomic.AtomicReference<>("1");
+  final java.util.concurrent.atomic.AtomicBoolean rootOffline =
+      new java.util.concurrent.atomic.AtomicBoolean();
+
+  Mono<ru.taska.api.b2b.v1.TenantPaymentState> restrictionState(UUID tenant) {
+    if (rootOffline.get())
+      return Mono.error(new DomainException(DomainStatus.UNAVAILABLE, "owned root offline"));
+    return Mono.just(
+        ru.taska.api.b2b.v1.TenantPaymentState.newBuilder()
+            .setTenantId(tenant.toString())
+            .setLifecycle(ru.taska.api.b2b.v1.Tenant.LifecycleValue.LIFECYCLE_ACTIVE)
+            .setVersion("1")
+            .setRestrictionVersion(rootRestrictionVersion.get())
+            .addAllIndependentRestrictions(rootRestrictions.get())
+            .build());
+  }
+
+  @Test
+  void currentRootPauseBlockAndDisputeStopNewChargesButAcceptedReplayStillReconciles() {
+    renewal();
+    for (var restriction :
+        java.util.List.of(
+            ru.taska.api.b2b.v1.RestrictionCode.RESTRICTION_CODE_OWNER_PAUSE,
+            ru.taska.api.b2b.v1.RestrictionCode.RESTRICTION_CODE_PLATFORM_BLOCK,
+            ru.taska.api.b2b.v1.RestrictionCode.RESTRICTION_CODE_PAYMENT_DISPUTE)) {
+      rootRestrictions.set(java.util.Set.of(restriction));
+      refusesDispatch();
+    }
+    verify(provider, org.mockito.Mockito.never())
+        .chargeRecurring(any(), any(), any(), any(), any());
+    rootRestrictions.set(java.util.Set.of());
+    var accepted = dispatch();
+    rootRestrictions.set(
+        java.util.Set.of(ru.taska.api.b2b.v1.RestrictionCode.RESTRICTION_CODE_PLATFORM_BLOCK));
+    assertEquals(accepted.id(), dispatch().id());
+    verify(provider, times(1)).chargeRecurring(any(), any(), any(), any(), any());
+    assertEquals(1, count("subscription_periods"));
+  }
+
+  @Test
+  void financialExpiryDoesNotBecomeAnIndependentPauseOrInventPaidCoverage() {
+    renewal();
+    rootRestrictions.set(
+        java.util.Set.of(ru.taska.api.b2b.v1.RestrictionCode.RESTRICTION_CODE_PAYMENT_EXPIRED));
+    assertEquals(PaymentAttemptStore.State.SUCCEEDED, dispatch().state());
+    assertEquals(1, count("subscription_periods"));
+    verify(provider, times(1)).chargeRecurring(any(), any(), any(), any(), any());
+  }
+
+  @Test
+  void missingStaleProtocolAndUnavailableRootCannotAdmitNewCharge() {
+    renewal();
+    for (String version : java.util.List.of("", "0", "9223372036854775808")) {
+      rootRestrictionVersion.set(version);
+      assertEquals(
+          DomainStatus.UNAVAILABLE,
+          assertThrows(DomainException.class, this::dispatch).getStatus());
+    }
+    rootRestrictionVersion.set("1");
+    rootOffline.set(true);
+    assertEquals(
+        DomainStatus.UNAVAILABLE, assertThrows(DomainException.class, this::dispatch).getStatus());
+    rootOffline.set(false);
+    rootRestrictions.set(
+        java.util.Set.of(ru.taska.api.b2b.v1.RestrictionCode.RESTRICTION_CODE_UNSPECIFIED));
+    assertEquals(
+        DomainStatus.UNAVAILABLE, assertThrows(DomainException.class, this::dispatch).getStatus());
+    assertEquals(0, count("payment_attempts"));
+    assertEquals(0, count("autopay_dispatches"));
+    verify(provider, org.mockito.Mockito.never())
+        .chargeRecurring(any(), any(), any(), any(), any());
   }
 }

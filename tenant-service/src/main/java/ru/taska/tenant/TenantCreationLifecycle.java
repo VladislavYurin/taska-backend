@@ -61,8 +61,9 @@ public final class TenantCreationLifecycle {
                 db ->
                     db.sql(
                             "SELECT"
-                                + " id,lifecycle,creation_operation_id,plan_version_id,creation_deadline_at,version"
-                                + " FROM taska.tenants WHERE id=:t")
+                                + " t.id,t.lifecycle,t.creation_operation_id,t.plan_version_id,t.creation_deadline_at,t.version,t.restriction_version,"
+                                + TenantRestrictions.SELECT
+                                + " FROM taska.tenants t WHERE t.id=:t")
                         .bind("t", tenant)
                         .fetch()
                         .one()
@@ -78,7 +79,12 @@ public final class TenantCreationLifecycle {
                                       .setCreationOperationId(
                                           row.get("creation_operation_id").toString())
                                       .setPlanVersionId(row.get("plan_version_id").toString())
-                                      .setVersion(row.get("version").toString());
+                                      .setVersion(row.get("version").toString())
+                                      .setRestrictionVersion(
+                                          row.get("restriction_version").toString())
+                                      .addAllIndependentRestrictions(
+                                          TenantRestrictions.codes(
+                                              row.get("independent_restrictions")));
                               if (row.get("creation_deadline_at") != null)
                                 b.setCreationDeadlineAt(
                                     ((OffsetDateTime) row.get("creation_deadline_at"))

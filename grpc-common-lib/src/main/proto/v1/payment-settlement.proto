@@ -23,6 +23,7 @@ message GetTenantPaymentStateRequest { RequestContext context = 1; string tenant
 message TenantPaymentState {
  string tenant_id = 1; Tenant.LifecycleValue lifecycle = 2; string creation_operation_id = 3;
  string plan_version_id = 4; optional string creation_deadline_at = 5; string version = 6;
+ repeated RestrictionCode independent_restrictions = 7; string restriction_version = 8;
 }
 service PaymentSettlementService {
  rpc ApplyVerifiedPayment(ApplyVerifiedPaymentRequest) returns (PaymentSettlementResult);
