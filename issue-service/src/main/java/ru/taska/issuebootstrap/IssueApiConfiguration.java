@@ -33,7 +33,35 @@ public class IssueApiConfiguration {
   TenantDecisionFacts issueDecisionFacts(
       ConnectionFactory factory, ManagedDomainReads reads, RpcTrustBackend identity) {
     return new TenantDecisionFacts(
-        new TenantTransactionExecutor(factory), reads, identity, Map.of(), Clock.systemUTC());
+        new TenantTransactionExecutor(factory),
+        reads,
+        identity,
+        Map.ofEntries(
+            Map.entry(
+                "storageQuotaInspect",
+                storageBinding(
+                    ru.taska.api.b2b.v1.StorageQuotaOwnerServiceGrpc.getInspectMethod()
+                        .getFullMethodName())),
+            Map.entry(
+                "storageQuotaActivate",
+                storageBinding(
+                    ru.taska.api.b2b.v1.StorageQuotaOwnerServiceGrpc.getActivateMethod()
+                        .getFullMethodName())),
+            Map.entry(
+                "storageQuotaCancel",
+                storageBinding(
+                    ru.taska.api.b2b.v1.StorageQuotaOwnerServiceGrpc.getCancelMethod()
+                        .getFullMethodName())),
+            Map.entry(
+                "storageQuotaManifests",
+                storageBinding(
+                    ru.taska.api.b2b.v1.StorageQuotaOwnerServiceGrpc.getManifestsMethod()
+                        .getFullMethodName()))),
+        Clock.systemUTC());
+  }
+
+  private static TenantDecisionFacts.Binding storageBinding(String rpc) {
+    return new TenantDecisionFacts.Binding(rpc, new RpcContextSecurity.Policy(true, false));
   }
 
   @Bean

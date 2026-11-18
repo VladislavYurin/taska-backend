@@ -20,6 +20,7 @@ import tools.jackson.databind.ObjectMapper;
 
 @Configuration
 @Profile("tenant-storage")
+@org.springframework.context.annotation.Import(ru.taska.issuestorage.StorageQuotaOwnerGrpcService.class)
 public class TenantStorageConfiguration {
   @Bean
   public liquibase.integration.spring.SpringLiquibase issueTenantLiquibase(
