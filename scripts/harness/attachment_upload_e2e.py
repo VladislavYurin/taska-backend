@@ -35,6 +35,8 @@ class AttachmentUploadLocal(IssueAclLocal):
         e.private_json(self.compose_file, compose)
         self.compose('up', '-d', '--no-deps', 'storage', timeout=180)
         endpoint = 'http://' + self.compose('port', 'storage', '9000').strip()
+        compose['services']['issue-service']['environment']['STORAGE_PUBLIC_URL'] = endpoint
+        e.private_json(self.compose_file, compose)
         properties = self.material / 'issue-service/application.properties'
         properties.write_text(properties.read_text() + 'storage.public-url=' + endpoint + '\n')
         libraries = self.material / 'attachment-s3-libs'

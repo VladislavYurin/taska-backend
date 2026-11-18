@@ -54,6 +54,10 @@
 - **WHEN** актуальный SERVICE с purpose STORAGE_CLEANUP и scopes write/storage:recover вызывает tenant-bound reconcile
 - **THEN** обрабатывается не более 100 intent с cursor, а PAT либо иной purpose не получает таких полномочий
 
+#### Scenario: Восстановление обнаружило нарушение целостности
+- **WHEN** primary источник возвращает DATA_LOSS при обработке сохранённого intent
+- **THEN** ответ reconcile увеличивает failed и отдельный data_loss, сохраняет учёт и не маскирует повреждение временной недоступностью
+
 ### Requirement: Административный bypass сохраняет учёт
 
 Система SHALL требовать актуальное primary GLOBAL_ADMIN и web MFA, а для WEB_GLOBAL также MODIFY, и SHALL сохранять проверки существования и целостности объекта.

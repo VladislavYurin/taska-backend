@@ -754,4 +754,35 @@ class AttachmentUploadIntegrationTest {
     assertEquals(0, rows("issue_attachments"));
     assertEquals("7", StorageQuotaIntegrationTest.usage(A).getUsed());
   }
+
+  @Test
+  void recoverySeparatesCorruptionFromTemporaryRootFailure() {
+    begin("recovery-diagnostics");
+    var authority = org.mockito.Mockito.mock(ru.taska.quota.StorageQuotaProtocol.Authority.class);
+    var isolated =
+        new AttachmentUploads(
+            store,
+            StorageQuotaIntegrationTest.owner,
+            authority,
+            null,
+            (p, i, u, phase) -> Mono.error(new IllegalStateException("Unexpected policy call")),
+            StorageQuotaIntegrationTest.clock);
+    org.mockito.Mockito.when(authority.get(org.mockito.ArgumentMatchers.any(UUID.class)))
+        .thenReturn(
+            Mono.error(
+                io.grpc.Status.DATA_LOSS
+                    .withDescription("OWNED_ADMISSION_CORRUPT")
+                    .asRuntimeException()));
+    var corrupt = recover(isolated.reconcile(null, 100), true).block(WAIT);
+    assertEquals(1, corrupt.processed());
+    assertEquals(1, corrupt.failed());
+    assertEquals(1, corrupt.dataLoss());
+    org.mockito.Mockito.when(authority.get(org.mockito.ArgumentMatchers.any(UUID.class)))
+        .thenReturn(Mono.error(io.grpc.Status.UNAVAILABLE.asRuntimeException()));
+    var temporary = recover(isolated.reconcile(null, 100), true).block(WAIT);
+    assertEquals(1, temporary.failed());
+    assertEquals(0, temporary.dataLoss());
+    assertEquals("10", StorageQuotaIntegrationTest.usage(A).getReserved());
+    assertEquals(0, rows("issue_attachments"));
+  }
 }

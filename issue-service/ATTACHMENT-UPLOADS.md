@@ -67,7 +67,9 @@ QuotaAuthority/StorageQuotaOwner clients. Нужны trust edges для этих
 confirm и activation либо отменяет expired/cancel-pending intent после доказанной
 очистки собственных keys. Нужен заранее выданный SERVICE credential с issuer
 issue-service, purpose `STORAGE_CLEANUP`, scopes `write` и `storage:recover`, текущим
-service trust и transport action `reconcileAttachmentUploads`. PAT нельзя преобразовать
+service trust и transport action `reconcileAttachmentUploads`. Ответ содержит `failed` и
+отдельный счётчик `data_loss`: ненулевой `data_loss` требует операторского расследования;
+временная недоступность источника учитывается только в `failed`. PAT нельзя преобразовать
 в SERVICE. Планировщик и автоматический обход всех tenant этим API не создаются.
 
 Проверки: `AttachmentUploadIntegrationTest` использует собственные PostgreSQL,

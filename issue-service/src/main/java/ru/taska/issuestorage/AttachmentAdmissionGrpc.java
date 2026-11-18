@@ -42,6 +42,7 @@ public final class AttachmentAdmissionGrpc
                             .newBuilder()
                             .setProcessed(r.processed())
                             .setFailed(r.failed())
+                            .setDataLoss(r.dataLoss())
                             .setNextCursor(r.next())
                             .build()))
         .onErrorMap(DomainException.class, GrpcExceptionMapper::toStatusRuntimeException)

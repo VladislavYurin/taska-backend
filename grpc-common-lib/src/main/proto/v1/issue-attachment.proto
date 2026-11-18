@@ -350,4 +350,6 @@ message ReconcileAttachmentUploadsResponse {
   int32 processed = 1;
   int32 failed = 2;
   string next_cursor = 3;
+  // Нарушения целостности требуют расследования, а не только повторной попытки.
+  int32 data_loss = 4;
 }

@@ -211,7 +211,7 @@ public final class AttachmentUploads {
         .then(store.operation(u.operation()));
   }
 
-  public record Recovery(int processed, int failed, String next) {}
+  public record Recovery(int processed, int failed, int dataLoss, String next) {}
 
   public Mono<Recovery> reconcile(UUID after, int limit) {
     return VerifiedTenantContext.current()
@@ -234,6 +234,7 @@ public final class AttachmentUploads {
                   .flatMap(
                       rows -> {
                         var failed = new java.util.concurrent.atomic.AtomicInteger();
+                        var dataLoss = new java.util.concurrent.atomic.AtomicInteger();
                         return reactor.core.publisher.Flux.fromIterable(rows)
                             .concatMap(
                                 u ->
@@ -263,6 +264,12 @@ public final class AttachmentUploads {
                                         .onErrorResume(
                                             e -> {
                                               failed.incrementAndGet();
+                                              if (e instanceof DomainException domain
+                                                      && domain.getStatus()
+                                                          == DomainStatus.DATA_LOSS
+                                                  || io.grpc.Status.fromThrowable(e).getCode()
+                                                      == io.grpc.Status.Code.DATA_LOSS)
+                                                dataLoss.incrementAndGet();
                                               return Mono.empty();
                                             }))
                             .then(
@@ -271,6 +278,7 @@ public final class AttachmentUploads {
                                         new Recovery(
                                             rows.size(),
                                             failed.get(),
+                                            dataLoss.get(),
                                             rows.size() == limit
                                                 ? rows.getLast().id().toString()
                                                 : "")));
