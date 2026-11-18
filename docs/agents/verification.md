@@ -239,3 +239,7 @@ and `billing-service` checks plus affected shared-proto consumers. The owned loc
 `python3 scripts/harness/issue_acl_e2e.py` exercises real primaries/mTLS/JWS and signed cleanup;
 see [native issue API](../../issue-service/TENANT-API.md). Test doubles alone do not establish
 this transport path or shared-stage activation.
+
+## OpenSpec
+
+CLI закреплён в `.openspec-version`; настройка — [openspec.md](openspec.md). Перед PR выполнить `OPENSPEC_TELEMETRY=0 openspec validate --all --strict --no-interactive && openspec validate --archived --no-interactive`. CI повторяет эту проверку закреплённым CLI. Для config/skills/specs и impact mapping также выполнить `python3 scripts/harness.py check --group harness` и `docs-check`. Известные metadata не требуют Java сами по себе; неизвестный executable внутри openspec сохраняет полный impact.

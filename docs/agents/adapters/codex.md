@@ -30,3 +30,7 @@ codex exec --sandbox read-only --ephemeral --ignore-user-config \
 | Cursor | специального адаптера нет | не проверено; наличие Markdown не является client smoke |
 
 Не создавать фиктивные CLAUDE/Cursor entry points только ради таблицы. При добавлении клиента отдельно описать discovery, commands, scopes, версию и наблюдаемый smoke; общие процедуры сохранить в одном месте.
+
+## OpenSpec
+
+[Проектное подключение](../openspec.md) добавляет шесть upstream skills закреплённой версии в `.agents/skills`. В CLI/IDE: `$openspec-propose`, `$openspec-apply-change`, `$openspec-archive-change`; в desktop — Skills. Существующие пять Taska skills сохраняют ответственность за intake, проверки, E2E, ревью и документацию. Новая сессия нужна для проверки фактического discovery; CLI validation его не заменяет.

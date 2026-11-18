@@ -1207,6 +1207,19 @@
         "docs"
       ],
       "reason": "Harness/CI/review changes require self-tests and documentation checks."
+    },
+    {
+      "prefixes": [
+        "openspec/",
+        ".openspec-version",
+        ".agents/skills/openspec-",
+        ".agents/skills/.openspec-target"
+      ],
+      "groups": [
+        "harness",
+        "docs"
+      ],
+      "reason": "OpenSpec workflow metadata and vendored skills require harness and documentation checks."
     }
   ]
 }
