@@ -96,6 +96,9 @@ class IssueMetadataLocal(IssueAclLocal):
         foreign.expect('GET', labels_path, 404)
         owner.expect('GET', '/api/v1/projects/' + foreign_project + '/issues/' + issue + '/labels', 404)
         owner.expect('PATCH', path + '/labels/' + label, 200, {'name': 'renamed', 'color': '#445566'})
+        # Нереализованные search/list не читают legacy данные и сохраняют закрытую границу.
+        member.expect('GET', '/api/v1/issues/search?query=Owned&projectId=' + project, 503)
+        member.expect('GET', path + '/issues', 503)
         with ThreadPoolExecutor(max_workers=3) as workers:
             results = list(workers.map(lambda _: member.expect('POST', labels_path, 201, {'labelId': label}).json(), range(3)))
         e.require(len({row['createdAt'] for row in results}) == 1, 'Concurrent attach changed its receipt')
@@ -114,7 +117,7 @@ class IssueMetadataLocal(IssueAclLocal):
         e.require(self.sql('issue_db', "SELECT count(*) FROM taska.outbox_events WHERE tenant_id='%s' AND aggregate_id='%s' AND event_type='WATCHED';" % (tenant, issue)).strip() == '3', 'Concurrent watch duplicated event')
         e.require(self.ready(member, '/api/v1/issues/' + issue)['issue']['isWatching'], 'Panel lost watch state')
         owner.expect('GET', '/api/v1/projects/' + foreign_project + '/issues/' + issue + '/watchers', 404)
-        outside.expect('GET', watchers_path, 403)
+        outside.expect('GET', watchers_path, 404)
 
         self.sql('tenant_db', "UPDATE taska.tenant_memberships SET status='SUSPENDED',version=version+1 WHERE tenant_id='%s' AND user_id='%s';" % (tenant, member_id))
         owner.expect('POST', watchers_path, 400, {'userId': member_id})
@@ -155,7 +158,7 @@ class IssueMetadataLocal(IssueAclLocal):
         self.sql('auth_db', "UPDATE taska.users SET global_role='USER' WHERE id='%s';UPDATE taska.web_sessions SET assurance='PASSWORD' WHERE user_id='%s';" % (actor, actor))
         return {**probe, 'publicLabelsAndWatchers': 'PASS', 'tenantProjectIsolation': 'PASS',
                 'nativeRolePolicy': 'PASS', 'retryAndConcurrentOnce': 'PASS', 'currentTargetAndAccount': 'PASS',
-                'scopedPanelAndPrivacy': 'PASS', 'archivedWriteDenial': 'PASS', 'readOnlyAndAuditedBypass': 'PASS'}
+                'scopedPanelAndPrivacy': 'PASS', 'searchListFailClosed': 'PASS', 'archivedWriteDenial': 'PASS', 'readOnlyAndAuditedBypass': 'PASS'}
 
 
 def main():
