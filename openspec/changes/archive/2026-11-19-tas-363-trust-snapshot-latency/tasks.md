@@ -8,7 +8,7 @@
 
 ## 2. Приёмка
 
-- [ ] 2.1 Пройти harness и security/integration проверки, сравнить allocation/latency с исходной версией.
-- [ ] 2.2 Повторить CI и AI review итогового head, разобрать замечания.
-- [ ] 2.3 Пройти последовательные owned E2E после review без timeout записей; подтвердить cleanup и передачу PASS.
-- [ ] 2.4 Архивировать завершённый change и передать результаты без merge/deploy.
+- [x] 2.1 Пройти harness и security/integration проверки, сравнить allocation/latency с исходной версией.
+- [x] 2.2 Повторить CI и AI review итогового head, разобрать замечания.
+- [x] 2.3 Пройти последовательные owned E2E после review без timeout записей; подтвердить cleanup и передачу PASS.
+- [x] 2.4 Архивировать завершённый change и передать результаты без merge/deploy.
