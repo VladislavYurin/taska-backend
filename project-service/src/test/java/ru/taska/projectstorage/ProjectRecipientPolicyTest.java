@@ -9,6 +9,7 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import ru.taska.api.b2b.v1.Entitlement;
 import ru.taska.api.b2b.v1.Membership;
+import ru.taska.api.b2b.v1.MembershipSnapshot;
 import ru.taska.api.b2b.v1.MembershipValidationBatch;
 import ru.taska.api.b2b.v1.PlatformConfigurationSnapshot;
 import ru.taska.api.b2b.v1.PlatformFlag;
@@ -52,7 +53,7 @@ class ProjectRecipientPolicyTest {
   @Test
   void restoredMembershipDoesNotReviveOldProjectGrant() {
     var member =
-        Membership.newBuilder()
+        MembershipSnapshot.newBuilder()
             .setState(Membership.StateValue.STATE_ACTIVE)
             .setRole(Membership.RoleValue.ROLE_MEMBER)
             .setVersion("2")

@@ -13,6 +13,7 @@ import reactor.core.publisher.Mono;
 import ru.taska.api.b2b.v1.CredentialKind;
 import ru.taska.api.b2b.v1.Entitlement;
 import ru.taska.api.b2b.v1.Membership;
+import ru.taska.api.b2b.v1.MembershipSnapshot;
 import ru.taska.api.b2b.v1.MembershipValidationBatch;
 import ru.taska.api.b2b.v1.ProjectDirectoryServiceGrpc;
 import ru.taska.api.b2b.v1.ProjectProfileRequest;
@@ -199,7 +200,7 @@ public final class ProjectRecipientRpc
 
   private record ProjectGrant(UUID user, Long generation) {}
 
-  static boolean membershipAllowed(Membership member, Long projectGeneration) {
+  static boolean membershipAllowed(MembershipSnapshot member, Long projectGeneration) {
     if (member.getState() != Membership.StateValue.STATE_ACTIVE) return false;
     String version = member.getVersion();
     try {

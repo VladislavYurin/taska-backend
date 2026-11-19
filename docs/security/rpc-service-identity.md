@@ -185,4 +185,4 @@ actor/key/idempotency key, foreign denial, ротация/отзыв, membership
 сохранность consume после rollback и revoke уже открытой mTLS connection. Эти проверки
 не заменяют stage rollout/cutover и downstream feature acceptance будущих B2B задач.
 
-TAS-363 добавляет закрытый purpose `NOTIFICATION_DELIVERY`: прямой notification-service → issue-service `IssueRecipientService.Resolve`, только read/notifications:recipients и bound tenant. Recognized purpose сам по себе не создаёт grant: нужны точный RPC/issuer/service identity/scopes в операторском snapshot и отдельный message-bound guard.
+TAS-363 добавляет закрытый purpose `NOTIFICATION_DELIVERY`: прямой notification-service → issue-service `IssueRecipientService.Resolve`, только read/notifications:recipients и bound tenant. Распознанный purpose сам по себе не создаёт grant: нужны точный RPC/issuer/service identity/scopes в операторском snapshot и отдельный message-bound guard.
