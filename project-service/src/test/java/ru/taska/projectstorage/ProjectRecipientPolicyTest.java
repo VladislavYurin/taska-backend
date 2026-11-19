@@ -8,6 +8,7 @@ import java.time.Instant;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import ru.taska.api.b2b.v1.Entitlement;
+import ru.taska.api.b2b.v1.Membership;
 import ru.taska.api.b2b.v1.MembershipValidationBatch;
 import ru.taska.api.b2b.v1.PlatformConfigurationSnapshot;
 import ru.taska.api.b2b.v1.PlatformFlag;
@@ -46,6 +47,24 @@ class ProjectRecipientPolicyTest {
             .build(),
         now,
         now.plusSeconds(30));
+  }
+
+  @Test
+  void restoredMembershipDoesNotReviveOldProjectGrant() {
+    var member =
+        Membership.newBuilder()
+            .setState(Membership.StateValue.STATE_ACTIVE)
+            .setRole(Membership.RoleValue.ROLE_MEMBER)
+            .setVersion("2")
+            .build();
+    assertFalse(ProjectRecipientRpc.membershipAllowed(member, 1L));
+    assertFalse(ProjectRecipientRpc.membershipAllowed(member, null));
+    assertTrue(ProjectRecipientRpc.membershipAllowed(member, 2L));
+    assertFalse(
+        ProjectRecipientRpc.membershipAllowed(
+            member.toBuilder().setState(Membership.StateValue.STATE_SUSPENDED).build(), 2L));
+    assertTrue(
+        ProjectRecipientRpc.membershipAllowed(member.toBuilder().setIsOwner(true).build(), null));
   }
 
   @Test

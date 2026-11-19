@@ -85,13 +85,17 @@ public final class ProjectRecipientRpc
                               .thenMany(
                                   s.database()
                                       .sql(
-                                          "SELECT user_id FROM taska.project_members WHERE"
-                                              + " tenant_id=:t AND project_id=:p AND user_id IN"
-                                              + " (:ids)")
+                                          "SELECT user_id,root_membership_version FROM"
+                                              + " taska.project_members WHERE tenant_id=:t AND"
+                                              + " project_id=:p AND user_id IN (:ids)")
                                       .bind("t", tenant)
                                       .bind("p", project)
                                       .bind("ids", ids)
-                                      .map((r, m) -> r.get("user_id", UUID.class))
+                                      .map(
+                                          (r, m) ->
+                                              new ProjectGrant(
+                                                  r.get("user_id", UUID.class),
+                                                  r.get("root_membership_version", Long.class)))
                                       .all())
                               .collectList())
                   .flatMap(
@@ -110,14 +114,19 @@ public final class ProjectRecipientRpc
                                                 row ->
                                                     row.getFound()
                                                         && row.hasMembership()
-                                                        && row.getMembership().getState()
-                                                            == Membership.StateValue.STATE_ACTIVE
-                                                        && (row.getMembership().getIsOwner()
-                                                            || row.getMembership().getRole()
-                                                                == Membership.RoleValue
-                                                                    .ROLE_TENANT_ADMIN
-                                                            || grants.contains(
-                                                                id(row.getUserId()))))
+                                                        && membershipAllowed(
+                                                            row.getMembership(),
+                                                            grants.stream()
+                                                                .filter(
+                                                                    g ->
+                                                                        g.user()
+                                                                            .toString()
+                                                                            .equals(
+                                                                                row.getUserId()))
+                                                                .map(ProjectGrant::generation)
+                                                                .filter(java.util.Objects::nonNull)
+                                                                .findFirst()
+                                                                .orElse(null)))
                                             .map(row -> row.getUserId())
                                             .toList();
                                     if (allowed.isEmpty())
@@ -186,6 +195,25 @@ public final class ProjectRecipientRpc
                                         });
                                   }));
             });
+  }
+
+  private record ProjectGrant(UUID user, Long generation) {}
+
+  static boolean membershipAllowed(Membership member, Long projectGeneration) {
+    if (member.getState() != Membership.StateValue.STATE_ACTIVE) return false;
+    String version = member.getVersion();
+    try {
+      if (!version.matches("[1-9][0-9]{0,18}")
+          || Long.parseLong(version) < 1
+          || (member.getRole() != Membership.RoleValue.ROLE_MEMBER
+              && member.getRole() != Membership.RoleValue.ROLE_TENANT_ADMIN))
+        throw new IllegalArgumentException();
+    } catch (RuntimeException e) {
+      throw new DomainException(DomainStatus.UNAVAILABLE, "INVALID_RECIPIENT_MEMBERSHIP");
+    }
+    return member.getIsOwner()
+        || member.getRole() == Membership.RoleValue.ROLE_TENANT_ADMIN
+        || projectGeneration != null && version.equals(projectGeneration.toString());
   }
 
   static boolean contentAllowed(

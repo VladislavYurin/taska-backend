@@ -71,6 +71,11 @@ public final class IssueRecipientsProbe implements AutoCloseable {
   }
 
   private IssueRecipientsResponse resolve(String tenant, String issue, String purpose) {
+    return resolve(tenant, issue, purpose, Set.of("read", "notifications:recipients"));
+  }
+
+  private IssueRecipientsResponse resolve(
+      String tenant, String issue, String purpose, Set<String> scopes) {
     var c =
         contexts
             .authorize(
@@ -79,7 +84,7 @@ public final class IssueRecipientsProbe implements AutoCloseable {
                 rpc,
                 "resolveIssueRecipients",
                 UUID.fromString(tenant),
-                Set.of("read", "notifications:recipients"),
+                scopes,
                 policy)
             .block(Duration.ofSeconds(10));
     var q =
@@ -103,7 +108,10 @@ public final class IssueRecipientsProbe implements AutoCloseable {
     var result = resolve(tenant, issue, "NOTIFICATION_DELIVERY");
     if (!new HashSet<>(result.getUserIdsList()).equals(expected))
       throw new IllegalStateException("Current recipients differ from expected eligible set");
-    denied(() -> resolve(tenant, issue, "STORAGE_CLEANUP"), Status.Code.PERMISSION_DENIED);
+    denied(() -> resolve(tenant, issue, "outbox"), Status.Code.PERMISSION_DENIED);
+    denied(
+        () -> resolve(tenant, issue, "NOTIFICATION_DELIVERY", Set.of("read")),
+        Status.Code.PERMISSION_DENIED);
     denied(
         () -> resolve(input.path("foreignTenant").asString(), issue, "NOTIFICATION_DELIVERY"),
         Status.Code.NOT_FOUND);

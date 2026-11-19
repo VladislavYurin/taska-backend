@@ -1,14 +1,30 @@
 package ru.taska.security.tenant;
 
 import io.grpc.Status;
-import java.nio.file.*;
-import java.security.*;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.security.GeneralSecurityException;
+import java.security.KeyFactory;
+import java.security.MessageDigest;
+import java.security.PublicKey;
+import java.security.Signature;
 import java.security.cert.X509Certificate;
-import java.security.spec.*;
-import java.time.*;
-import java.util.*;
+import java.security.spec.PKCS8EncodedKeySpec;
+import java.security.spec.X509EncodedKeySpec;
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.Arrays;
+import java.util.Base64;
+import java.util.Date;
+import java.util.HashSet;
+import java.util.HexFormat;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
-import ru.taska.api.b2b.v1.*;
+import ru.taska.api.b2b.v1.CredentialKind;
+import ru.taska.api.b2b.v1.RequestContext;
 import tools.jackson.core.StreamReadFeature;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -56,7 +72,7 @@ public final class ManagedRpcTrust implements RpcContextSecurity.Keys {
   private static final JsonMapper JSON =
       JsonMapper.builder().enable(StreamReadFeature.STRICT_DUPLICATE_DETECTION).build();
   private static final Set<String> PURPOSES =
-      Set.of("provisioning", "outbox", "billing", "admin", "membership");
+      Set.of("provisioning", "outbox", "billing", "admin", "membership", "NOTIFICATION_DELIVERY");
   private final Path snapshotFile, privateKeyFile;
   private final String service, environment;
   private final Clock clock;

@@ -468,6 +468,15 @@ class TenantIssueMetadataIntegrationTest {
         service(A, "notification-service", "NOTIFICATION_DELIVERY", api.recipients(q)).block(WAIT);
     assertEquals(0, first.getUserIdsCount());
     assertEquals(zero.toString(), first.getNextCursor());
+    var defaults =
+        service(
+                A,
+                "notification-service",
+                "NOTIFICATION_DELIVERY",
+                api.recipients(q.toBuilder().clearLimit().build()))
+            .block(WAIT);
+    assertEquals(List.of(ACTOR.toString()), defaults.getUserIdsList());
+    assertEquals("", defaults.getNextCursor());
     var second =
         service(
                 A,

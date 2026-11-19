@@ -15,7 +15,7 @@ class IssueMetadataLocal(IssueAclLocal):
         super().prepare_extra_databases()
         self.edge('issue-service', 'project-service', 'ru.taska.b2b.v1.ProjectRecipientService/Check',
                   'checkProjectRecipients', ['SERVICE'], ['memberships:read', 'profiles:read'], 'membership')
-        for purpose in ('NOTIFICATION_DELIVERY', 'STORAGE_CLEANUP'):
+        for purpose in ('NOTIFICATION_DELIVERY', 'outbox'):
             # Второй read-only grant нужен только для отрицательной проверки application purpose.
             self.edge('notification-service', 'issue-service', 'ru.taska.b2b.v1.IssueRecipientService/Resolve',
                       'resolveIssueRecipients', ['SERVICE'], ['read', 'notifications:recipients'], purpose)
@@ -120,6 +120,11 @@ class IssueMetadataLocal(IssueAclLocal):
         e.require(member.request('PUT', watchers_path + '/me').status in (401, 403), 'Old membership grant remained usable')
         current = owner.expect('GET', watchers_path, 200).json()
         e.require(current['totalCount'] == 2 and {row['userId'] for row in current['watchers']} == {actor, viewer_id}, 'Removed target leaked into watchers count/list')
+        # Старый project grant не оживает после восстановления membership с новой generation.
+        self.sql('tenant_db', "UPDATE taska.tenant_memberships SET status='ACTIVE',version=version+1 WHERE tenant_id='%s' AND user_id='%s';" % (tenant, member_id))
+        owner.expect('POST', watchers_path, 400, {'userId': member_id})
+        current = owner.expect('GET', watchers_path, 200).json()
+        e.require(current['totalCount'] == 2, 'Old project grant revived after membership restoration')
         self.sql('auth_db', "UPDATE taska.users SET status='BLOCKED' WHERE id='%s';" % viewer_id)
         owner.expect('POST', watchers_path, 400, {'userId': viewer_id})
         current = owner.expect('GET', watchers_path, 200).json()
@@ -138,9 +143,18 @@ class IssueMetadataLocal(IssueAclLocal):
                   'Outbox disclosed content or profile')
         self.sql('project_db', "UPDATE taska.projects SET archived_at=now() WHERE tenant_id='%s' AND id='%s';" % (tenant, project))
         owner.expect('POST', path + '/labels', 403, {'name': 'archived-denied', 'color': '#112233'})
+        self.sql('project_db', "UPDATE taska.projects SET archived_at=NULL WHERE tenant_id='%s' AND id='%s';" % (tenant, project))
+        pause = str(uuid.uuid4())
+        self.sql('tenant_db', "INSERT INTO taska.tenant_restrictions(tenant_id,kind,source_id,active,version,reason_code,created_by,created_at) VALUES('%s','OWNER_PAUSE','%s',true,1,'OWNER_PAUSE','%s',now());UPDATE taska.tenants SET restriction_version=restriction_version+1,version=version+1 WHERE id='%s';" % (tenant, pause, actor, tenant))
+        owner.expect('POST', path + '/labels', 403, {'name': 'pause-denied', 'color': '#112233'})
+        owner.expect('PUT', watchers_path + '/me', 403)
+        self.sql('auth_db', "UPDATE taska.users SET global_role='GLOBAL_ADMIN' WHERE id='%s';UPDATE taska.web_sessions SET assurance='ADMIN_EMAIL_MFA' WHERE user_id='%s';" % (actor, actor))
+        owner.expect('POST', path + '/labels', 201, {'name': 'audited-admin-bypass', 'color': '#112233'})
+        e.require(int(self.sql('issue_db', "SELECT count(*) FROM taska.issue_authorization_audit WHERE tenant_id='%s' AND actor_id='%s' AND action='createProjectLabel';" % (tenant, actor)).strip()) > 0, 'Administrative metadata bypass was not audited')
+        self.sql('auth_db', "UPDATE taska.users SET global_role='USER' WHERE id='%s';UPDATE taska.web_sessions SET assurance='PASSWORD' WHERE user_id='%s';" % (actor, actor))
         return {**probe, 'publicLabelsAndWatchers': 'PASS', 'tenantProjectIsolation': 'PASS',
                 'nativeRolePolicy': 'PASS', 'retryAndConcurrentOnce': 'PASS', 'currentTargetAndAccount': 'PASS',
-                'scopedPanelAndPrivacy': 'PASS', 'archivedWriteDenial': 'PASS'}
+                'scopedPanelAndPrivacy': 'PASS', 'archivedWriteDenial': 'PASS', 'readOnlyAndAuditedBypass': 'PASS'}
 
 
 def main():
