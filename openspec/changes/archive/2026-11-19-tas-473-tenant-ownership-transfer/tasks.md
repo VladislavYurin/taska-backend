@@ -8,6 +8,8 @@
 
 ## 2. Приёмка
 - [x] 2.1 Пройти PG/RLS/transaction/race/fault tests, consumer checks и явные IT через harness.
-- [ ] 2.2 Пройти owned внешний E2E с current primary, idempotency/financial fencing и cleanup.
-- [ ] 2.3 Открыть русский PR; дождаться CI/AI review актуального head, разобрать замечания и повторить affected E2E после review.
-- [ ] 2.4 Синхронизировать/архивировать OpenSpec и передать проверяемый PASS без merge/deploy.
+- [x] 2.2 Пройти owned внешний E2E с current primary, idempotency/financial fencing и cleanup.
+- [x] 2.3 Открыть русский PR; дождаться CI/AI review актуального head, разобрать замечания и повторить affected E2E после review.
+- [x] 2.4 Подготовить согласованные спецификации и артефакты передачи PR без merge/deploy.
+
+После архивации окончательные CI, AI review и E2E повторяются на итоговом PR head перед финальным handoff.

@@ -176,7 +176,8 @@ class TenantControllerHttpRegressionTest {
         .jsonPath("$.code")
         .isEqualTo("VERSION_CONFLICT");
 
-    verify(tenantClient).renameTenant(eq(TENANT_ID), eq("valid"), eq(IDEMPOTENCY_KEY), eq(7L), any());
+    verify(tenantClient)
+        .renameTenant(eq(TENANT_ID), eq("valid"), eq(IDEMPOTENCY_KEY), eq(7L), any());
   }
 
   @Test
@@ -211,8 +212,10 @@ class TenantControllerHttpRegressionTest {
     var actual =
         assertThrows(
             IllegalStateException.class,
-            () -> controller.renameTenant(TENANT_ID, IDEMPOTENCY_KEY, "\"7\"", Mono.empty(), exchange)
-                .block());
+            () ->
+                controller
+                    .renameTenant(TENANT_ID, IDEMPOTENCY_KEY, "\"7\"", Mono.empty(), exchange)
+                    .block());
     assertSame(failure, actual);
     verify(buffer).release();
     verifyNoInteractions(tenantClient);
@@ -226,5 +229,21 @@ class TenantControllerHttpRegressionTest {
         .contentType(MediaType.APPLICATION_JSON)
         .bodyValue(jsonBody)
         .exchange();
+  }
+
+  @Test
+  void ownershipTransferMissingIfMatchReturns428BeforeCallingRoot() {
+    http.post()
+        .uri("/api/v1/tenants/{tenantId}/ownership-transfer", TENANT_ID)
+        .header("Idempotency-Key", IDEMPOTENCY_KEY)
+        .contentType(MediaType.APPLICATION_JSON)
+        .bodyValue("{\"newOwnerUserId\":\"" + UUID.randomUUID() + "\",\"confirmed\":true}")
+        .exchange()
+        .expectStatus()
+        .isEqualTo(428)
+        .expectBody()
+        .jsonPath("$.code")
+        .isEqualTo("VERSION_CONFLICT");
+    verifyNoInteractions(tenantClient);
   }
 }
