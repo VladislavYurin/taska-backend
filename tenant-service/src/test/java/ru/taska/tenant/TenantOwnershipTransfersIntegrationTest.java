@@ -404,4 +404,82 @@ class TenantOwnershipTransfersIntegrationTest {
     assertEquals("2", results.get(0).getOwnerVersion());
     assertEquals(1, count("tenant_ownership_audit"));
   }
+
+  private void administrativeFence() {
+    doAnswer(
+            invocation ->
+                Mono.just(
+                    OwnershipTransferFence.newBuilder()
+                        .setTenantId(A.toString())
+                        .setOperationId(invocation.<UUID>getArgument(1).toString())
+                        .setOldOwnerId(OWNER.toString())
+                        .setOldOwnerVersion("1")
+                        .setEntitlementVersion("1")
+                        .setAdministrative(true)
+                        .setValidUntil(Instant.now().plusSeconds(20).toString())
+                        .build()))
+        .when(billing)
+        .prepare(any(), any());
+  }
+
+  @Test
+  void tenantWebAdminMfaUsesEvaluatorBypassForFreeCompanyAndAudit() {
+    var base = frame();
+    var flags =
+        base.flags().snapshot().toBuilder()
+            .clearItems()
+            .addAllItems(
+                base.flags().snapshot().getItemsList().stream()
+                    .map(
+                        f ->
+                            "PAID_TENANT_TRANSFER".equals(f.getKey())
+                                ? f.toBuilder().setBooleanValue(false).build()
+                                : f)
+                    .toList())
+            .build();
+    var admin =
+        new OwnershipTransferAuthority.Frame(
+            base.actor().toBuilder().setGlobalAdmin(true).setWebMfa(true).build(),
+            base.entitlement().toBuilder().clearPaidThrough().build(),
+            CapabilityFacts.PlanKind.FREE,
+            new Lease(flags, base.flags().observedAt(), base.flags().validUntil()),
+            base.until());
+    doReturn(Mono.just(admin)).when(authority).current(any());
+    administrativeFence();
+    assertEquals(
+        SHARED.toString(), run(request(SHARED, UUID.randomUUID().toString(), 1)).getOwnerId());
+    assertEquals(
+        Boolean.TRUE,
+        TenantMembershipIntegrationTest.operator
+            .sql("SELECT administrative FROM taska.tenant_ownership_audit WHERE tenant_id=:t")
+            .bind("t", A)
+            .map((r, m) -> r.get("administrative", Boolean.class))
+            .one()
+            .block(WAIT));
+  }
+
+  @Test
+  void administrativeAuthorityCannotBeDowngradedBetweenPrepareAndCommit() {
+    var base = frame();
+    var admin =
+        new OwnershipTransferAuthority.Frame(
+            base.actor().toBuilder().setGlobalAdmin(true).setWebMfa(true).build(),
+            base.entitlement(),
+            base.kind(),
+            base.flags(),
+            base.until());
+    doReturn(Mono.just(admin), Mono.just(base)).when(authority).current(any());
+    administrativeFence();
+    assertThrows(
+        DomainException.class, () -> run(request(SHARED, UUID.randomUUID().toString(), 1)));
+    assertEquals(0, count("tenant_ownership_audit"));
+    assertEquals(
+        OWNER,
+        TenantMembershipIntegrationTest.operator
+            .sql("SELECT owner_id FROM taska.tenants WHERE id=:t")
+            .bind("t", A)
+            .map((r, m) -> r.get("owner_id", UUID.class))
+            .one()
+            .block(WAIT));
+  }
 }

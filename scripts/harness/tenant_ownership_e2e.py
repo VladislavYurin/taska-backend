@@ -131,6 +131,13 @@ class TenantOwnershipLocal(CapabilitiesLocal):
         admin_changed = admin.expect('POST', '/api/v1/tenants/' + free_tenant + '/ownership-transfer', 200,
                                      payload, self.headers('1')).json()
         e.require(admin_changed['ownerId'] == target, 'GLOBAL_ADMIN MFA потерял бизнес-исключение B02')
+        self.sql('tenant_db', "INSERT INTO taska.tenant_memberships(tenant_id,user_id,role,status) VALUES('%s','%s','MEMBER','ACTIVE');" % (free_tenant, admin_id))
+        tenant_admin = self.web_client(admin_id, free_tenant, assurance='ADMIN_EMAIL_MFA')
+        tenant_admin.timeout = 20
+        tenant_admin_changed = tenant_admin.expect('POST', '/api/v1/tenants/' + free_tenant + '/ownership-transfer', 200,
+            {'newOwnerUserId': owner_id, 'confirmed': True}, self.headers(admin_changed['version'])).json()
+        e.require(tenant_admin_changed['ownerId'] == owner_id, 'Tenant web MFA потерял бизнес-исключение B02')
+
         # Ошибка SQL после финансового Prepare: worker отменяет PENDING, не передаёт владение.
         failed_key = str(uuid.uuid4())
         self.sql('tenant_db', "CREATE FUNCTION taska.owned_transfer_failure() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'OWNED_TRANSFER_FAILURE'; END $$;CREATE TRIGGER owned_transfer_failure BEFORE INSERT ON taska.tenant_ownership_audit FOR EACH ROW EXECUTE FUNCTION taska.owned_transfer_failure();")
