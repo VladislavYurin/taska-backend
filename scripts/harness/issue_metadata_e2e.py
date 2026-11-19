@@ -56,6 +56,7 @@ class IssueMetadataLocal(IssueAclLocal):
             project, issue, warm = str(uuid.uuid4()), str(uuid.uuid4()), str(uuid.uuid4())
             self.sql('billing_db', "INSERT INTO taska.subscriptions(tenant_id,selected_plan_version_id,selected_terms_snapshot,mode) SELECT '%s',id,to_jsonb(p),'FREE' FROM taska.catalog_plan_versions p WHERE id='00000000-0000-8000-8000-000000000001';" % tenant)
             self.sql('project_db', "INSERT INTO taska.projects(tenant_id,id,project_key,name,created_by,admission_state) VALUES('%s','%s','META','Owned metadata','%s','OPEN');INSERT INTO taska.project_members(tenant_id,project_id,user_id,role,added_by,root_membership_version) VALUES('%s','%s','%s','ADMIN','%s',1);" % (tenant, project, actor, tenant, project, actor, actor))
+            self.sql('issue_db', "INSERT INTO taska.project_counters(tenant_id,project_id,next_issue_number,lifetime_created) VALUES('%s','%s',3,2);" % (tenant, project))
             for number, item in ((1, issue), (2, warm)):
                 self.sql('issue_db', "INSERT INTO taska.issues(tenant_id,id,project_id,issue_number,issue_key,issue_type,summary,status_key,priority,reporter_id) VALUES('%s','%s','%s',%s,'META-%s','TASK','Owned metadata fixture','TODO','MEDIUM','%s');" % (tenant, item, project, number, number, actor))
             self.sql('issue_db', "INSERT INTO taska.issue_watchers(tenant_id,project_id,issue_id,user_id,created_by) VALUES('%s','%s','%s','%s','%s');" % (tenant, project, warm, actor, actor))
