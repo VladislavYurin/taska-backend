@@ -103,7 +103,7 @@ public final class OwnershipTransferAuthority {
             });
   }
 
-  public Mono<Void> allow(
+  public Mono<Boolean> allow(
       DatabaseClient db, Map<String, Object> row, VerifiedTenantContext v, Frame f) {
     var c = RpcContextBridge.details(v).getContext();
     boolean admin = TenantRenameService.administrative(c, (UUID) row.get("id"));
@@ -173,7 +173,7 @@ public final class OwnershipTransferAuthority {
                   .flatMap(
                       decision ->
                           decision.capability().getAllowed()
-                              ? Mono.empty()
+                              ? Mono.just(decision.businessBypass())
                               : Mono.error(
                                   fail(
                                       DomainStatus.PERMISSION_DENIED,

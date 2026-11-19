@@ -46,7 +46,6 @@ public final class TenantOwnershipTransfers {
   }
 
   private record Command(
-      TransferTenantOwnershipRpcRequest q,
       UUID tenant,
       UUID actor,
       UUID target,
@@ -97,7 +96,6 @@ public final class TenantOwnershipTransfers {
                                     c.getGrantGeneration()));
                     var command =
                         new Command(
-                            q,
                             tenant,
                             id(v.actorId()),
                             target,
@@ -141,17 +139,9 @@ public final class TenantOwnershipTransfers {
                                                         .switchIfEmpty(
                                                             Mono.defer(
                                                                 () ->
-                                                                    authority
-                                                                        .allow(db, row, v, frame)
-                                                                        .then(
-                                                                            target(
-                                                                                db, row, command))
-                                                                        .then(
-                                                                            prepare(
-                                                                                db,
-                                                                                row,
-                                                                                command,
-                                                                                frame.until())))))))
+                                                                    admit(
+                                                                        db, row, command, v,
+                                                                        frame))))))
                         .flatMap(op -> run(command, v, op));
                   });
         });
@@ -222,13 +212,43 @@ public final class TenantOwnershipTransfers {
                                                                 fail(
                                                                     DomainStatus.ABORTED,
                                                                     "VERSION_CONFLICT"));
-                                                          return authority
-                                                              .allow(db, row, v, frame)
-                                                              .then(target(db, row, command))
-                                                              .then(
-                                                                  commit(db, row, current, fence));
+                                                          return commitAuthorized(
+                                                              db, row, current, command, v, frame,
+                                                              fence);
                                                         })))))
         .flatMap(result -> complete(command.tenant(), operation).thenReturn(result));
+  }
+
+  private Mono<Map<String, Object>> admit(
+      DatabaseClient db,
+      Map<String, Object> row,
+      Command command,
+      VerifiedTenantContext v,
+      OwnershipTransferAuthority.Frame frame) {
+    return authority
+        .allow(db, row, v, frame)
+        .flatMap(
+            administrative ->
+                target(db, row, command)
+                    .then(prepare(db, row, command, frame.until(), administrative)));
+  }
+
+  private Mono<Tenant> commitAuthorized(
+      DatabaseClient db,
+      Map<String, Object> row,
+      Map<String, Object> operation,
+      Command command,
+      VerifiedTenantContext v,
+      OwnershipTransferAuthority.Frame frame,
+      OwnershipTransferFence fence) {
+    return authority
+        .allow(db, row, v, frame)
+        .flatMap(
+            administrative -> {
+              if (!Boolean.valueOf(administrative).equals(operation.get("administrative")))
+                return Mono.error(fail(DomainStatus.ABORTED, "OWNERSHIP_AUTHORITY_CHANGED"));
+              return target(db, row, command).then(commit(db, row, operation, fence));
+            });
   }
 
   private Mono<Void> target(DatabaseClient db, Map<String, Object> row, Command c) {
@@ -250,13 +270,16 @@ public final class TenantOwnershipTransfers {
   }
 
   private Mono<Map<String, Object>> prepare(
-      DatabaseClient db, Map<String, Object> row, Command c, Instant authorityUntil) {
+      DatabaseClient db,
+      Map<String, Object> row,
+      Command c,
+      Instant authorityUntil,
+      boolean administrative) {
     Instant now = clock.instant(), expires = now.plusSeconds(30);
     if (authorityUntil.isBefore(expires)) expires = authorityUntil;
     if (!now.plusSeconds(5).isBefore(expires))
       return Mono.error(fail(DomainStatus.UNAVAILABLE, "DEPENDENCY_UNAVAILABLE"));
     UUID operation = UUID.randomUUID();
-    var claims = c.q().getContext().getContext();
     return db.sql(
             "INSERT INTO"
                 + " taska.tenant_ownership_transfers(tenant_id,id,actor_id,authority,request_key,request_hash,old_owner_id,old_owner_version,new_owner_id,expected_tenant_version,administrative,state,created_at,expires_at)"
@@ -272,7 +295,7 @@ public final class TenantOwnershipTransfers {
         .bind("ov", row.get("owner_version"))
         .bind("new", c.target())
         .bind("version", c.expected())
-        .bind("admin", TenantRenameService.administrative(claims, c.tenant()))
+        .bind("admin", administrative)
         .bind("now", now.atOffset(ZoneOffset.UTC))
         .bind("expires", expires.atOffset(ZoneOffset.UTC))
         .fetch()
