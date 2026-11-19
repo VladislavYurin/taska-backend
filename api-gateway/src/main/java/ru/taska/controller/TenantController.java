@@ -119,6 +119,12 @@ public class TenantController implements TenantApi {
               String key = idempotencyKey(exchange);
               long expected = expectedVersion(exchange);
               return DataBufferUtils.join(exchange.getRequest().getBody(), MAX_PATCH_BYTES)
+                  .onErrorMap(
+                      org.springframework.core.io.buffer.DataBufferLimitException.class,
+                      error ->
+                          new ResponseStatusException(
+                              HttpStatus.PAYLOAD_TOO_LARGE,
+                              "Превышен размер запроса передачи владения"))
                   .map(
                       buffer -> {
                         byte[] bytes = new byte[buffer.readableByteCount()];

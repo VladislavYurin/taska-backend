@@ -51,7 +51,7 @@ class OwnershipTransferBillingIntegrationTest {
     sql("TRUNCATE taska.ownership_transfer_fences");
     fixture.reset();
     var f = fixture.fixture.f;
-    Instant now = Instant.now();
+    Instant now = Instant.now().truncatedTo(java.time.temporal.ChronoUnit.MICROS);
     f.time.set(now);
     UUID proof = f.proof(A, now.minusSeconds(10), now.plusSeconds(86400));
     f.grant(A, proof, "owned-paid").block(WAIT);
