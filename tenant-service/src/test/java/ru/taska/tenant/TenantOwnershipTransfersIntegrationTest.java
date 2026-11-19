@@ -318,4 +318,72 @@ class TenantOwnershipTransfersIntegrationTest {
           .block(WAIT);
     }
   }
+
+  @Test
+  void verifiedPatOwnerIsAllowedAndNonOwnerKeepsPermissionDeniedThroughGrpcHandler() {
+    var beans = new org.springframework.beans.factory.support.DefaultListableBeanFactory();
+    beans.registerSingleton("ownership", transfers);
+    var rpc = new TenantGrpcService(null, null, null, null);
+    org.springframework.test.util.ReflectionTestUtils.setField(
+        rpc, "ownershipTransfers", beans.getBeanProvider(TenantOwnershipTransfers.class));
+    var pat =
+        owner.toBuilder()
+            .clearSessionId()
+            .setCredentialKind(ru.taska.api.b2b.v1.CredentialKind.CREDENTIAL_KIND_USER_PAT)
+            .setCredentialId(UUID.randomUUID().toString())
+            .setGrantId(UUID.randomUUID().toString())
+            .setGrantGeneration("1")
+            .build();
+    var base = frame();
+    var actor =
+        base.actor().toBuilder().clearSessionId().setCredentialId(pat.getCredentialId()).build();
+    var nonOwner =
+        pat.toBuilder()
+            .setActorUserId(SHARED.toString())
+            .setMembershipGeneration("3")
+            .setCredentialId(UUID.randomUUID().toString())
+            .setGrantId(UUID.randomUUID().toString())
+            .build();
+    var memberActor =
+        actor.toBuilder()
+            .setActorUserId(SHARED.toString())
+            .setCredentialId(nonOwner.getCredentialId())
+            .build();
+    doReturn(
+            Mono.just(
+                new OwnershipTransferAuthority.Frame(
+                    memberActor, base.entitlement(), base.kind(), base.flags(), base.until())))
+        .when(authority)
+        .current(any());
+    var error =
+        assertThrows(
+            io.grpc.StatusRuntimeException.class,
+            () ->
+                ru.taska.security.tenant.OwnershipRpcFixture.call(
+                        nonOwner,
+                        () ->
+                            rpc.transferTenantOwnership(
+                                Mono.just(
+                                    request(
+                                        TenantMembershipIntegrationTest.ADMIN,
+                                        UUID.randomUUID().toString(),
+                                        1))))
+                    .block(WAIT));
+    assertEquals(io.grpc.Status.Code.PERMISSION_DENIED, error.getStatus().getCode());
+    doReturn(
+            Mono.just(
+                new OwnershipTransferAuthority.Frame(
+                    actor, base.entitlement(), base.kind(), base.flags(), base.until())))
+        .when(authority)
+        .current(any());
+    Tenant result =
+        ru.taska.security.tenant.OwnershipRpcFixture.call(
+                pat,
+                () ->
+                    rpc.transferTenantOwnership(
+                        Mono.just(request(SHARED, UUID.randomUUID().toString(), 1))))
+            .block(WAIT);
+    assertEquals(SHARED.toString(), result.getOwnerId());
+    assertEquals(1, count("tenant_ownership_audit"));
+  }
 }
