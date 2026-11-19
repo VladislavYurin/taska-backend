@@ -386,4 +386,22 @@ class TenantOwnershipTransfersIntegrationTest {
     assertEquals(SHARED.toString(), result.getOwnerId());
     assertEquals(1, count("tenant_ownership_audit"));
   }
+
+  @Test
+  void concurrentSameKeyCommitsOneOwnershipEffect() {
+    var q = request(SHARED, UUID.randomUUID().toString(), 1);
+    var results =
+        reactor.core.publisher.Flux.range(0, 2)
+            .flatMap(
+                index ->
+                    RegistryTestContext.withClaims(owner, transfers.transfer(q))
+                        .subscribeOn(reactor.core.scheduler.Schedulers.parallel()),
+                2)
+            .collectList()
+            .block(WAIT);
+    assertEquals(2, results.size());
+    assertEquals(results.get(0), results.get(1));
+    assertEquals("2", results.get(0).getOwnerVersion());
+    assertEquals(1, count("tenant_ownership_audit"));
+  }
 }

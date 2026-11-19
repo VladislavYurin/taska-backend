@@ -60,3 +60,26 @@ Worker читает ограниченную очередь routing IDs, для 
 gateway, Root и Billing с managed mTLS/JWS. Он проверяет REST, права, подтверждение,
 повтор, отзыв согласия и сохранность финансовой истории. Его синтетические
 invoice/coverage/mandate fixtures не доказывают проведение платежа у PSP.
+
+## Managed trust и развёртывание
+
+Новые RPC требуют точных operator-managed edges. Для private RPC нужен только
+`CREDENTIAL_KIND_SERVICE`, purpose `billing` и service identity вызывающего сервиса.
+
+| Вызывающий → получатель | RPC | action | scopes |
+| --- | --- | --- | --- |
+| tenant-service → billing-service | `BillingOwnershipTransferService/Prepare` | `prepareOwnershipTransfer` | `write`, `ownership:prepare` |
+| tenant-service → billing-service | `BillingOwnershipTransferService/Finish` | `finishOwnershipTransfer` | `write`, `ownership:finish` |
+| billing-service → tenant-service | `TenantOwnershipTransferService/Inspect` | `inspectOwnershipTransfer` | `read`, `ownership:inspect` |
+| tenant-service → tenant-service | `TenantOwnershipTransferService/Recover` | `recoverOwnershipTransfer` | `write`, `ownership:recover` |
+
+Полный префикс RPC — `ru.taska.b2b.v1.`. Публичный gateway edge на
+`TenantService/TransferTenantOwnership` использует action `transferTenantOwnership`,
+tenant binding и пользовательские `read`/`write` scopes. Разрешённые credential
+виды определяет утверждённая общая policy; административный web target требует MFA.
+Существующие primary edges конфигурации, entitlement и referenced plan также нужны.
+
+Сначала применяются добавочные миграции и публикуются Root/Billing с private
+протоколом и recovery, затем включается новый gateway маршрут с нужными trust
+edges. При неполной конфигурации вызов закрыт. Документ не означает, что общий
+стенд уже обновлён: PR сам не выполняет merge или deployment.

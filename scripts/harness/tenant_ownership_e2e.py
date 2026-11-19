@@ -101,6 +101,8 @@ class TenantOwnershipLocal(CapabilitiesLocal):
         ordinary = self.web_client(target, tenant)
         payload = {'newOwnerUserId': target, 'confirmed': True}
         original = self.headers('1')
+        owner.expect('POST', transfer, 428, payload, {'Idempotency-Key': str(uuid.uuid4())})
+        owner.expect('POST', transfer, 412, payload, self.headers('99'))
         ordinary.expect('POST', transfer, 403, payload, original)
         self.pat_client(target, tenant).expect('POST', transfer, 401, payload, original)
         free_owner.expect('POST', '/api/v1/tenants/' + free_tenant + '/ownership-transfer', 403, payload, self.headers('1'))
@@ -110,6 +112,7 @@ class TenantOwnershipLocal(CapabilitiesLocal):
         changed = owner.expect('POST', transfer, 200, payload, original).json()
         e.require(changed['ownerId'] == target and changed['ownerVersion'] == '2', 'Не сменились owner и owner_version')
         e.require(owner.expect('POST', transfer, 200, payload, original).json() == changed, 'Replay изменил receipt')
+        owner.expect('POST', transfer, 409, {'newOwnerUserId': owner_id, 'confirmed': True}, original)
         owner.expect('POST', transfer, 403, {'newOwnerUserId': owner_id, 'confirmed': True}, self.headers(changed['version']))
         current = self.web_client(target, tenant, 2)
         e.require(current.expect('GET', path, 200).json()['membership']['isOwner'], 'Получатель не стал владельцем')
