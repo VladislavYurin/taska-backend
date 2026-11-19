@@ -46,6 +46,15 @@ public class GrpcIssueWatcherServiceClient {
             String issueId,
             GatewayContext context
     ) {
+        return listIssueWatchers("", issueId, context);
+    }
+
+    /** Передаёт projectId исходного REST-пути для проверки владельцем задачи. */
+    public Mono<ListIssueWatchersResponseDto> listIssueWatchers(
+            String projectId,
+            String issueId,
+            GatewayContext context
+    ) {
         log.debug("[{}] Calling listIssueWatchers", context.requestId());
 
         return ru.taska.security.tenant.RpcContextBridge.outbound(() -> dynamicStub().listIssueWatchers(
@@ -53,6 +62,7 @@ public class GrpcIssueWatcherServiceClient {
                         .setHeader(buildGrpcHeader(context))
                         .setBody(
                                 ListIssueWatchersRequestBody.newBuilder()
+                                        .setProjectId(projectId)
                                         .setIssueId(issueId)
                                         .setActorUserId(context.userContext().userId())
                                         .build()
@@ -72,6 +82,15 @@ public class GrpcIssueWatcherServiceClient {
             String issueId,
             GatewayContext context
     ) {
+        return watchIssueMe("", issueId, context);
+    }
+
+    /** Передаёт projectId исходного REST-пути для проверки владельцем задачи. */
+    public Mono<WatchIssueResponseDto> watchIssueMe(
+            String projectId,
+            String issueId,
+            GatewayContext context
+    ) {
         log.debug("[{}] Calling watchIssueMe", context.requestId());
 
         return ru.taska.security.tenant.RpcContextBridge.outbound(() -> dynamicStub().watchIssue(
@@ -79,6 +98,7 @@ public class GrpcIssueWatcherServiceClient {
                         .setHeader(buildGrpcHeader(context))
                         .setBody(
                                 WatchIssueRequestBody.newBuilder()
+                                        .setProjectId(projectId)
                                         .setIssueId(issueId)
                                         .setActorUserId(context.userContext().userId())
                                         .build()
@@ -98,6 +118,15 @@ public class GrpcIssueWatcherServiceClient {
             String issueId,
             GatewayContext context
     ) {
+        return unwatchIssueMe("", issueId, context);
+    }
+
+    /** Передаёт projectId исходного REST-пути для проверки владельцем задачи. */
+    public Mono<UnwatchIssueResponseDto> unwatchIssueMe(
+            String projectId,
+            String issueId,
+            GatewayContext context
+    ) {
         log.debug("[{}] Calling unwatchIssueMe", context.requestId());
 
         return ru.taska.security.tenant.RpcContextBridge.outbound(() -> dynamicStub().unwatchIssue(
@@ -105,6 +134,7 @@ public class GrpcIssueWatcherServiceClient {
                         .setHeader(buildGrpcHeader(context))
                         .setBody(
                                 UnwatchIssueRequestBody.newBuilder()
+                                        .setProjectId(projectId)
                                         .setIssueId(issueId)
                                         .setActorUserId(context.userContext().userId())
                                         .build()
@@ -127,6 +157,16 @@ public class GrpcIssueWatcherServiceClient {
             Mono<AddIssueWatcherRequestDto> request,
             GatewayContext context
     ) {
+        return addIssueWatcher("", issueId, request, context);
+    }
+
+    /** Передаёт projectId исходного REST-пути для проверки владельцем задачи. */
+    public Mono<WatchIssueResponseDto> addIssueWatcher(
+            String projectId,
+            String issueId,
+            Mono<AddIssueWatcherRequestDto> request,
+            GatewayContext context
+    ) {
         log.debug("[{}] Calling addIssueWatcher", context.requestId());
 
         return request.flatMap(requestDto ->
@@ -135,7 +175,8 @@ public class GrpcIssueWatcherServiceClient {
                                 .setHeader(buildGrpcHeader(context))
                                 .setBody(
                                         WatchIssueRequestBody.newBuilder()
-                                                .setIssueId(issueId)
+                                                .setProjectId(projectId)
+                                        .setIssueId(issueId)
                                                 .setActorUserId(context.userContext().userId())
                                                 .setTargetUserId(requestDto.getUserId().toString())
                                                 .build()
@@ -158,6 +199,16 @@ public class GrpcIssueWatcherServiceClient {
             String targetUserId,
             GatewayContext context
     ) {
+        return removeIssueWatcher("", issueId, targetUserId, context);
+    }
+
+    /** Передаёт projectId исходного REST-пути для проверки владельцем задачи. */
+    public Mono<UnwatchIssueResponseDto> removeIssueWatcher(
+            String projectId,
+            String issueId,
+            String targetUserId,
+            GatewayContext context
+    ) {
         log.debug("[{}] Calling removeIssueWatcher", context.requestId());
 
         return ru.taska.security.tenant.RpcContextBridge.outbound(() -> dynamicStub().unwatchIssue(
@@ -165,6 +216,7 @@ public class GrpcIssueWatcherServiceClient {
                         .setHeader(buildGrpcHeader(context))
                         .setBody(
                                 UnwatchIssueRequestBody.newBuilder()
+                                        .setProjectId(projectId)
                                         .setIssueId(issueId)
                                         .setActorUserId(context.userContext().userId())
                                         .setTargetUserId(targetUserId)

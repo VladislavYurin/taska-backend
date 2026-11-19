@@ -327,6 +327,7 @@ class LabelsControllerTest {
         response.setTotalCount(1);
 
         Mockito.when(labelClient.listIssueLabels(
+                        Mockito.eq(PROJECT_ID.toString()),
                         Mockito.eq(ISSUE_ID.toString()),
                         Mockito.any(GatewayContext.class)))
                 .thenReturn(Mono.just(response));
@@ -342,6 +343,7 @@ class LabelsControllerTest {
                 .isEqualTo(response);
 
         Mockito.verify(labelClient).listIssueLabels(
+                Mockito.eq(PROJECT_ID.toString()),
                 Mockito.eq(ISSUE_ID.toString()),
                 Mockito.any(GatewayContext.class));
     }
@@ -355,6 +357,7 @@ class LabelsControllerTest {
         var response = addIssueLabelResponse(ISSUE_ID, LABEL_ID, UUID.fromString(USER_ID));
 
         Mockito.when(labelClient.addIssueLabel(
+                        Mockito.eq(PROJECT_ID.toString()),
                         Mockito.eq(ISSUE_ID.toString()),
                         Mockito.any(Mono.class),
                         Mockito.any(GatewayContext.class)))
@@ -373,6 +376,7 @@ class LabelsControllerTest {
                 .isEqualTo(response);
 
         Mockito.verify(labelClient).addIssueLabel(
+                Mockito.eq(PROJECT_ID.toString()),
                 Mockito.eq(ISSUE_ID.toString()),
                 Mockito.any(Mono.class),
                 Mockito.any(GatewayContext.class));
@@ -386,6 +390,7 @@ class LabelsControllerTest {
         var request = addIssueLabelRequest(LABEL_ID);
 
         Mockito.when(labelClient.addIssueLabel(
+                        Mockito.eq(PROJECT_ID.toString()),
                         Mockito.eq(ISSUE_ID.toString()),
                         Mockito.any(Mono.class),
                         Mockito.any(GatewayContext.class)))
@@ -404,6 +409,7 @@ class LabelsControllerTest {
                 .jsonPath("$.message").exists();
 
         Mockito.verify(labelClient).addIssueLabel(
+                Mockito.eq(PROJECT_ID.toString()),
                 Mockito.eq(ISSUE_ID.toString()),
                 Mockito.any(Mono.class),
                 Mockito.any(GatewayContext.class));
@@ -417,6 +423,7 @@ class LabelsControllerTest {
         var request = addIssueLabelRequest(LABEL_ID);
 
         Mockito.when(labelClient.addIssueLabel(
+                        Mockito.eq(PROJECT_ID.toString()),
                         Mockito.eq(ISSUE_ID.toString()),
                         Mockito.any(Mono.class),
                         Mockito.any(GatewayContext.class)))
@@ -435,6 +442,7 @@ class LabelsControllerTest {
                 .jsonPath("$.message").exists();
 
         Mockito.verify(labelClient).addIssueLabel(
+                Mockito.eq(PROJECT_ID.toString()),
                 Mockito.eq(ISSUE_ID.toString()),
                 Mockito.any(Mono.class),
                 Mockito.any(GatewayContext.class));
@@ -446,6 +454,7 @@ class LabelsControllerTest {
         mockAuthenticatedUser();
 
         Mockito.when(labelClient.removeIssueLabel(
+                        Mockito.eq(PROJECT_ID.toString()),
                         Mockito.eq(ISSUE_ID.toString()),
                         Mockito.eq(LABEL_ID.toString()),
                         Mockito.any(GatewayContext.class)))
@@ -460,6 +469,7 @@ class LabelsControllerTest {
                 .expectBody().isEmpty();
 
         Mockito.verify(labelClient).removeIssueLabel(
+                Mockito.eq(PROJECT_ID.toString()),
                 Mockito.eq(ISSUE_ID.toString()),
                 Mockito.eq(LABEL_ID.toString()),
                 Mockito.any(GatewayContext.class));
@@ -471,6 +481,7 @@ class LabelsControllerTest {
         mockAuthenticatedUser();
 
         Mockito.when(labelClient.removeIssueLabel(
+                        Mockito.eq(PROJECT_ID.toString()),
                         Mockito.eq(ISSUE_ID.toString()),
                         Mockito.eq(LABEL_ID.toString()),
                         Mockito.any(GatewayContext.class)))
@@ -487,6 +498,7 @@ class LabelsControllerTest {
                 .jsonPath("$.message").exists();
 
         Mockito.verify(labelClient).removeIssueLabel(
+                Mockito.eq(PROJECT_ID.toString()),
                 Mockito.eq(ISSUE_ID.toString()),
                 Mockito.eq(LABEL_ID.toString()),
                 Mockito.any(GatewayContext.class));

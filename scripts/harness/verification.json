@@ -398,7 +398,8 @@
         "selectors": [
           "*",
           "TenantIssueStorageIntegrationTest",
-          "TrustedIssueOutboxIntegrationTest"
+          "TrustedIssueOutboxIntegrationTest",
+          "TenantIssueMetadataIntegrationTest"
         ],
         "noTestsReason": null
       },

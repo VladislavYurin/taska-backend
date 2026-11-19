@@ -1,0 +1,30 @@
+syntax = "proto3";
+package ru.taska.b2b.v1;
+import "v1/tenant-context.proto";
+option java_multiple_files = true;
+option java_package = "ru.taska.api.b2b.v1";
+
+// Внутренние ограниченные primary-проверки, без выдачи профилей получателей.
+message ProjectRecipientsRequest {
+  RequestContext context = 1;
+  string project_id = 2;
+  repeated string user_ids = 3;
+  bool content_read = 4;
+}
+message ProjectRecipientsResponse { repeated string user_ids = 1; }
+service ProjectRecipientService {
+  rpc Check(ProjectRecipientsRequest) returns (ProjectRecipientsResponse);
+}
+message IssueRecipientsRequest {
+  RequestContext context = 1;
+  string issue_id = 2;
+  string cursor = 3;
+  int32 limit = 4;
+}
+message IssueRecipientsResponse {
+  repeated string user_ids = 1;
+  string next_cursor = 2;
+}
+service IssueRecipientService {
+  rpc Resolve(IssueRecipientsRequest) returns (IssueRecipientsResponse);
+}
