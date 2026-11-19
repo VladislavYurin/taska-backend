@@ -10,6 +10,7 @@ logs/
 *.iws
 *.iml
 *.ipr
+**/compose.local.yml
 
 ### Eclipse ###
 .apt_generated

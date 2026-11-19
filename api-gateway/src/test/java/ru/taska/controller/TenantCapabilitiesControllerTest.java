@@ -15,7 +15,7 @@ import ru.taska.api.b2b.v1.*;
 import ru.taska.capability.*;
 import ru.taska.domain.*;
 import ru.taska.filter.*;
-import ru.taska.service.TenantCapabilitiesClient;
+import ru.taska.service.grpc.client.TenantCapabilitiesClient;
 
 class TenantCapabilitiesControllerTest {
   final UUID tenant = UUID.randomUUID(), actor = UUID.randomUUID();

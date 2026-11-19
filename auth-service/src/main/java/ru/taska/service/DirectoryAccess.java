@@ -17,6 +17,12 @@ import java.util.UUID;
 public class DirectoryAccess {
     private final UserRepository users;
 
+    /**
+     * Поиск пользователи и проверка статуса аккаунта пользователя и принадлежность его с роли GLOBAL_ADMIN
+     * @param actorId id пользователя, который выполняет запрос
+     * @param admin флаг админа
+     * @return возвращает пользователя, если он имеет право выполнять запрос
+     */
     public Mono<User> requireActor(UUID actorId, boolean admin) {
         return users.findById(actorId)
                 .filter(user -> user.getStatus() == UserStatus.ACTIVE || user.getStatus() == UserStatus.LOCKED)

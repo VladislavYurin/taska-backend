@@ -1,23 +1,21 @@
 package ru.taska.service;
 
-import org.junit.jupiter.api.Assertions;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
-import org.junit.jupiter.api.Nested;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentMatchers;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.transaction.reactive.TransactionalOperator;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
+import ru.taska.api.b2b.v1.Membership;
+import ru.taska.api.b2b.v1.MembershipSnapshot;
+import ru.taska.api.b2b.v1.MembershipValidation;
+import ru.taska.api.b2b.v1.MembershipValidationBatch;
 import ru.taska.dto.AvatarDto;
 import ru.taska.dto.UserDetailsDto;
 import ru.taska.entity.User;
-import ru.taska.storage.dto.PresignedUploadResult;
-import ru.taska.storage.dto.StoredObjectMetadata;
 import ru.taska.entity.UserAvatar;
 import ru.taska.entity.UserStatus;
 import ru.taska.exception.DomainException;
@@ -25,12 +23,14 @@ import ru.taska.exception.DomainStatus;
 import ru.taska.mapper.ProfileMapper;
 import ru.taska.repository.UserAvatarRepository;
 import ru.taska.repository.UserRepository;
+import ru.taska.security.tenant.VerifiedTenantContext;
 import ru.taska.service.impl.ProfileServiceImpl;
 import ru.taska.storage.client.StorageClient;
-import org.springframework.transaction.reactive.TransactionalOperator;
+import ru.taska.storage.dto.PresignedUploadResult;
+import ru.taska.storage.dto.StoredObjectMetadata;
 
-import java.util.Collections;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 @ExtendWith(MockitoExtension.class)
@@ -69,9 +69,27 @@ class ProfileServiceImplTest {
     private UserDetailsDto testUserDetailsDto;
     private UserDetailsDto testUserDetailsDto2;
 
+    @Mock
+    private DirectoryMembershipAccess membership;
+
+    @Mock
+    private DirectoryAccess access;
+
+    @Mock
+    private ru.taska.security.trust.GrpcTenantServiceClient tenantClient;
+
     @BeforeEach
     void setUp() {
-        profileServiceImpl = new ProfileServiceImpl(userRepository, userAvatarRepository, storageClient, profileMapper, transactionalOperator);
+        profileServiceImpl = new ProfileServiceImpl(
+                userRepository,
+                userAvatarRepository,
+                storageClient,
+                profileMapper,
+                transactionalOperator,
+                membership,
+                access,
+                tenantClient
+        );
         testUserId = UUID.randomUUID();
         NEW_OBJECT_KEY = "avatars/" + testUserId + "/" + UUID.randomUUID();
         testUserId2 = UUID.randomUUID();
@@ -495,114 +513,203 @@ class ProfileServiceImplTest {
     }
 
     @Nested
-    @DisplayName("UserDetailsByIds Tests")
+    @DisplayName("Получение профилей пользователей в разрешённой компании")
     class UserDetailsByIdsTests {
-        @Test
-        @DisplayName("Should return empty Flux when user IDs list is empty")
-        void getUserDetailsByIds_whenListIsEmpty_thenReturnsEmptyFlux() {
-            Flux<UserDetailsDto> result = profileServiceImpl.getUserDetailsByIds(Collections.emptyList());
 
-            StepVerifier.create(result)
-                    .verifyComplete();
+        private final UUID tenantId = UUID.randomUUID();
 
-            Mockito.verifyNoInteractions(userRepository);
+        /**
+         * Настраивает разрешённый доступ актора и всех целей запроса,
+         * затем устанавливает тестовый tenant-контекст.
+         */
+        private Flux<UserDetailsDto> authorizedRequest(List<UUID> userIds) {
+            var context = Mockito.mock(VerifiedTenantContext.class);
+
+            Mockito.when(context.tenantId())
+                    .thenReturn(tenantId.toString());
+            Mockito.when(context.actorId())
+                    .thenReturn(testUserId.toString());
+            Mockito.when(context.scopes())
+                    .thenReturn(Set.of("read"));
+
+            Mockito.when(access.requireActor(testUserId, false))
+                    .thenReturn(Mono.just(testUser));
+
+            Mockito.when(membership.check(testUser, tenantId.toString()))
+                    .thenReturn(Mono.empty());
+
+            if (!userIds.isEmpty()) {
+                List<UUID> distinctIds = userIds.stream().distinct().toList();
+
+                var batch = MembershipValidationBatch.newBuilder()
+                        .setTenantId(tenantId.toString());
+
+                for (UUID userId : distinctIds) {
+                    batch.addItems(
+                            MembershipValidation.newBuilder()
+                                    .setUserId(userId.toString())
+                                    .setFound(true)
+                                    .setMembership(
+                                            MembershipSnapshot.newBuilder()
+                                                    .setTenantId(tenantId.toString())
+                                                    .setUserId(userId.toString())
+                                                    .setState(
+                                                            Membership.StateValue.STATE_ACTIVE
+                                                    )
+                                    )
+                    );
+                }
+
+                Mockito.when(tenantClient.batchValidateMemberships(
+                        tenantId.toString(),
+                        distinctIds
+                )).thenReturn(Mono.just(batch.build()));
+            }
+
+            return profileServiceImpl.getUserDetailsByIds(userIds)
+                    .contextWrite(ctx ->
+                            ctx.put(VerifiedTenantContext.class, context)
+                    );
         }
 
+        /**
+         * Проверяет, что авторизованный пустой запрос успешно завершается
+         * без batch-проверки целей, чтения профилей и обращения к storage.
+         */
         @Test
-        @DisplayName("Should throw NOT_FOUND when one or more users are not found")
-        void getUserDetailsByIds_whenSomeUsersNotFound_thenThrowsDomainException() {
-            UUID missingUserId = UUID.randomUUID();
-            List<UUID> requestIds = List.of(testUserId, missingUserId);
-
-            Mockito.when(userRepository.findUsersWithAvatars(ArgumentMatchers.anyList()))
-                    .thenReturn(Flux.just(testUserDetailsDto));
-
-            Flux<UserDetailsDto> result = profileServiceImpl.getUserDetailsByIds(requestIds);
-
-            StepVerifier.create(result)
-                    .expectNext(testUserDetailsDto)
+        @DisplayName("Пустой список после проверки доступа возвращает пустой результат")
+        void returnsEmptyForEmptyList() {
+            StepVerifier.create(authorizedRequest(List.of()))
                     .verifyComplete();
 
-            Mockito.verify(userRepository, Mockito.times(1))
-                    .findUsersWithAvatars(requestIds);
+            Mockito.verify(membership)
+                    .check(testUser, tenantId.toString());
+
+            Mockito.verifyNoInteractions(
+                    tenantClient,
+                    userRepository,
+                    storageClient
+            );
         }
 
+        /**
+         * Проверяет устранение повторных UUID и восстановление входного порядка,
+         * даже если репозиторий вернул пользователей в обратном порядке.
+         */
         @Test
-        @DisplayName("Should return Flux of user details when all requested users are found")
-        void getUserDetailsByIds_whenAllUsersFound_thenReturnsUserDetailsFlux() {
-            List<UUID> requestIds = List.of(testUserId, testUserId2, testUserId);
-            List<UUID> expectedDistinctIds = List.of(testUserId, testUserId2);
+        @DisplayName("Дубли удаляются, профили возвращаются в порядке входных UUID")
+        void returnsProfilesInRequestedOrderWithoutDuplicates() {
+            List<UUID> requestedIds =
+                    List.of(testUserId, testUserId2, testUserId);
 
-            Mockito.when(userRepository.findUsersWithAvatars(expectedDistinctIds))
-                    .thenReturn(Flux.just(testUserDetailsDto, testUserDetailsDto2));
+            List<UUID> distinctIds =
+                    List.of(testUserId, testUserId2);
 
-            Flux<UserDetailsDto> result = profileServiceImpl.getUserDetailsByIds(requestIds);
+            Mockito.when(userRepository.findUsersWithAvatars(distinctIds))
+                    .thenReturn(Flux.just(
+                            testUserDetailsDto2,
+                            testUserDetailsDto
+                    ));
 
-            StepVerifier.create(result)
+            StepVerifier.create(authorizedRequest(requestedIds))
                     .expectNext(testUserDetailsDto)
                     .expectNext(testUserDetailsDto2)
                     .verifyComplete();
 
-            Mockito.verify(userRepository, Mockito.times(1))
-                    .findUsersWithAvatars(expectedDistinctIds);
+            Mockito.verify(tenantClient).batchValidateMemberships(
+                    tenantId.toString(),
+                    distinctIds
+            );
+            Mockito.verify(userRepository)
+                    .findUsersWithAvatars(distinctIds);
         }
 
+        /**
+         * Проверяет согласованное допущение: если membership разрешено,
+         * но глобальный профиль отсутствует в Auth, эта запись пропускается.
+         */
         @Test
-        @DisplayName("getUserDetailsByIds: при ошибке S3 для одного пользователя поток не падает, а возвращает его без downloadUrl")
-        void getUserDetailsByIds_whenStorageFailsForOneUser_shouldNotFailStreamAndReturnUserWithoutUrl() {
-            AvatarDto validAvatar = AvatarDto.builder()
-                    .id(UUID.randomUUID())
-                    .objectKey("avatars/user1.png")
-                    .build();
+        @DisplayName("Отсутствующий профиль разрешённого участника пропускается")
+        void skipsMissingProfile() {
+            UUID missingProfileId = UUID.randomUUID();
+            List<UUID> requestedIds = List.of(
+                    testUserId,
+                    missingProfileId
+            );
 
-            AvatarDto brokenAvatar = AvatarDto.builder()
-                    .id(UUID.randomUUID())
-                    .objectKey("avatars/broken.png")
-                    .build();
+            Mockito.when(userRepository.findUsersWithAvatars(requestedIds))
+                    .thenReturn(Flux.just(testUserDetailsDto));
 
-            UserDetailsDto user1 = UserDetailsDto.builder()
+            StepVerifier.create(authorizedRequest(requestedIds))
+                    .expectNext(testUserDetailsDto)
+                    .verifyComplete();
+
+            Mockito.verify(userRepository)
+                    .findUsersWithAvatars(requestedIds);
+        }
+
+        /**
+         * Проверяет, что ошибка получения одного аватара не прерывает batch.
+         * У проблемного пользователя удаляется аватар, но сохраняются профиль и порядок.
+         */
+        @Test
+        @DisplayName("Ошибка storage убирает только проблемный аватар")
+        void returnsProfilesWhenOneAvatarFails() {
+            var first = UserDetailsDto.builder()
                     .userId(testUserId)
-                    .displayName("John Doe")
-                    .avatar(validAvatar)
+                    .displayName("Иван Петров")
+                    .email("ivan@example.test")
+                    .avatar(AvatarDto.builder()
+                            .id(UUID.randomUUID())
+                            .objectKey("avatars/ivan.png")
+                            .build())
                     .build();
 
-            UserDetailsDto user2 = UserDetailsDto.builder()
+            var second = UserDetailsDto.builder()
                     .userId(testUserId2)
-                    .displayName("Jane Smith")
-                    .avatar(brokenAvatar)
+                    .displayName("Мария Иванова")
+                    .email("maria@example.test")
+                    .avatar(AvatarDto.builder()
+                            .id(UUID.randomUUID())
+                            .objectKey("avatars/maria.png")
+                            .build())
                     .build();
 
-            UserDetailsDto user3 = UserDetailsDto.builder()
-                    .userId(testUserId3)
-                    .displayName("Jane Doe")
-                    .avatar(validAvatar)
-                    .build();
+            List<UUID> requestedIds = List.of(testUserId, testUserId2);
 
-            Mockito.when(userRepository.findUsersWithAvatars(Mockito.anyCollection()))
-                    .thenReturn(Flux.just(user1, user2, user3));
+            Mockito.when(userRepository.findUsersWithAvatars(requestedIds))
+                    .thenReturn(Flux.just(first, second));
 
-            Mockito.when(storageClient.createPresignedDownloadUrl("avatars/user1.png"))
-                    .thenReturn(Mono.just(URL));
+            Mockito.when(storageClient.createPresignedDownloadUrl(
+                    "avatars/ivan.png"
+            )).thenReturn(Mono.just(URL));
 
-            Mockito.when(storageClient.createPresignedDownloadUrl("avatars/broken.png"))
-                    .thenReturn(Mono.error(new RuntimeException("MinIO S3 error: NoSuchKey (Object does not exist)")));
+            Mockito.when(storageClient.createPresignedDownloadUrl(
+                    "avatars/maria.png"
+            )).thenReturn(Mono.error(
+                    new IllegalStateException("Storage unavailable")
+            ));
 
-            Flux<UserDetailsDto> resultFlux = profileServiceImpl.getUserDetailsByIds(List.of(testUserId, testUserId2, testUserId3));
-
-            StepVerifier.create(resultFlux)
-                    .assertNext(resUser1 -> {
-                        Assertions.assertEquals(testUserId, resUser1.userId());
-                        Assertions.assertNotNull(resUser1.avatar());
-                        Assertions.assertEquals(URL, resUser1.avatar().getDownloadUrl());
+            StepVerifier.create(authorizedRequest(requestedIds))
+                    .assertNext(result -> {
+                        Assertions.assertEquals(testUserId, result.userId());
+                        Assertions.assertNotNull(result.avatar());
+                        Assertions.assertEquals(
+                                URL,
+                                result.avatar().getDownloadUrl()
+                        );
                     })
-                    .assertNext(resUser2 -> {
-                        Assertions.assertEquals(testUserId2, resUser2.userId());
-                        Assertions.assertNull(resUser2.avatar());
-                    })
-                    .assertNext(resUser3 -> {
-                        Assertions.assertEquals(testUserId3, resUser3.userId());
-                        Assertions.assertNotNull(resUser3.avatar());
-                        Assertions.assertEquals(URL, resUser3.avatar().getDownloadUrl());
+                    .assertNext(result -> {
+                        Assertions.assertEquals(testUserId2, result.userId());
+                        Assertions.assertEquals(
+                                "Мария Иванова",
+                                result.displayName()
+                        );
+                        Assertions.assertEquals(
+                                "maria@example.test",
+                                result.email()
+                        );
+                        Assertions.assertNull(result.avatar());
                     })
                     .verifyComplete();
         }

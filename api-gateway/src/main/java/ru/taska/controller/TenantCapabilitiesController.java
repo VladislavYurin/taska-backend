@@ -9,7 +9,7 @@ import reactor.core.publisher.Mono;
 import ru.taska.api.TenantCapabilitiesApi;
 import ru.taska.domain.dto.*;
 import ru.taska.filter.GatewayRequestExecutor;
-import ru.taska.service.TenantCapabilitiesClient;
+import ru.taska.service.grpc.client.TenantCapabilitiesClient;
 
 @RestController
 public class TenantCapabilitiesController implements TenantCapabilitiesApi {

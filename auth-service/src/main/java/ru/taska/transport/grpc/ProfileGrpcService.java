@@ -1,5 +1,6 @@
 package ru.taska.transport.grpc;
 
+import exception.GrpcExceptionHandler;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -228,7 +229,8 @@ public class ProfileGrpcService {
                             .doOnSuccess(response -> log.debug("[{}][{}] GetUserDetailsByIds success for userId={}",
                                     requestId, nodeId, userIds))
                             .doOnError(error -> log.warn("[{}][{}] GetUserDetailsByIds failed for userId={}: {}",
-                                    requestId, nodeId, userIds, error.getMessage()));
+                                    requestId, nodeId, userIds, error.getMessage()))
+                            .transform(GrpcExceptionHandler.withErrorHandling("GetUserDetailsByIds"));
                 });
     }
 }
