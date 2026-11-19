@@ -141,7 +141,8 @@ class IssueMetadataLocal(IssueAclLocal):
         owner.expect('DELETE', labels_path + '/' + label, 204)
         owner.expect('DELETE', path + '/labels/' + label, 204)
         owner.expect('DELETE', path + '/labels/' + label, 204)
-        e.require(owner.expect('GET', labels_path, 200).json()['labels'] == [], 'Deleted label remained visible')
+        empty_labels = owner.expect('GET', labels_path, 200).json()
+        e.require(empty_labels['items'] == [] and empty_labels['totalCount'] == 0, 'Deleted label remained visible')
         payload = self.sql('issue_db', "SELECT coalesce(string_agg(payload::text,' '),'') FROM taska.outbox_events WHERE tenant_id='%s' AND aggregate_id='%s';" % (tenant, issue))
         e.require('Owned metadata' not in payload and 'same-name' not in payload and 'displayName' not in payload and 'email' not in payload,
                   'Outbox disclosed content or profile')
