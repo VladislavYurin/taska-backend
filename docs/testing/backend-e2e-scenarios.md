@@ -844,3 +844,24 @@ Cleanup: закрыть каналы/серверы/pools и удалить со
 Дополнительные проверки модулей: scopes/срок/лимит, receipt conflict/expiry, актуальность
 membership/credential, source outage и startup; HTTP→gRPC OAuth metadata и scoped revoke;
 production OAuth admission отвергает FREE_MCP до записи. Полный браузерный consent — TAS-543.
+
+
+## E2E-48. Передача владения оплаченной компанией (TAS-473)
+
+`python3 scripts/harness/tenant_ownership_e2e.py` поднимает собственные auth,
+gateway, tenant и billing с PostgreSQL и managed mTLS/JWS. Сценарий проверяет
+передачу через REST и отказ участнику, FREE denial,
+GLOBAL_ADMIN MFA, явное подтверждение, размер тела, сохранённый ответ повтора,
+отзыв прежнего autopay и неизменность финансовой истории. Принудительная ошибка
+SQL после Billing Prepare проверяет настоящий recovery worker: PENDING отменяется,
+финансовый fence снимается, владелец не меняется. Cleanup использует signed owner
+state и не затрагивает общий стенд. Invoice/coverage/mandate синтетические;
+реальные платежи PSP и доставка финансовых писем этим сценарием не подтверждаются.
+При выключенном tenant PAT модуле HTTP проверяет 401. Разрешённый verified PAT
+владельца и PERMISSION_DENIED участника через настоящий gRPC handler проверяет
+`TenantOwnershipTransfersIntegrationTest`; HTTP PAT с включённым модулем требует
+отдельного auth capability source adapter и этим стендом не заявляется.
+
+| REST | operationId | Сценарий | Позитивный статус |
+| --- | --- | --- | --- |
+| `POST /api/v1/tenants/{tenantId}/ownership-transfer` | `transferTenantOwnership` | E2E-48 | 200 |

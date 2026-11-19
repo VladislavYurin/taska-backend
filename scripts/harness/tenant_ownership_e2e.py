@@ -1,6 +1,8 @@
 """TAS-473: собственный стенд REST/auth/Root/Billing, без реальных платежей PSP."""
 import hashlib
 import secrets
+import time
+import json
 import uuid
 
 import e2e as e
@@ -100,7 +102,7 @@ class TenantOwnershipLocal(CapabilitiesLocal):
         payload = {'newOwnerUserId': target, 'confirmed': True}
         original = self.headers('1')
         ordinary.expect('POST', transfer, 403, payload, original)
-        self.pat_client(target, tenant).expect('POST', transfer, 403, payload, original)
+        self.pat_client(target, tenant).expect('POST', transfer, 401, payload, original)
         free_owner.expect('POST', '/api/v1/tenants/' + free_tenant + '/ownership-transfer', 403, payload, self.headers('1'))
         owner.expect('POST', transfer, 400, {'newOwnerUserId': target, 'confirmed': False}, original)
         owner.expect('POST', transfer, 413, {'newOwnerUserId': target, 'confirmed': True, 'padding': 'x' * 20000}, original)
@@ -117,18 +119,35 @@ class TenantOwnershipLocal(CapabilitiesLocal):
         e.require(audit == '1' and revoked == '1', 'Audit или отзыв согласия не были однократными')
         after = self.sql('billing_db', "SELECT jsonb_build_object('periods',(SELECT jsonb_agg(to_jsonb(p) ORDER BY id) FROM taska.subscription_periods p),'invoices',(SELECT jsonb_agg(to_jsonb(i) ORDER BY id) FROM taska.invoices i),'attempts',(SELECT count(*) FROM taska.payment_attempts));").strip()
         e.require(before == after, 'Передача изменила оплаченные факты или создала PSP попытку')
-        pat_owner = self.pat_client(target, tenant)
-        pat_owner.timeout = 20
-        returned = pat_owner.expect('POST', transfer, 200, {'newOwnerUserId': owner_id, 'confirmed': True}, self.headers(changed['version'])).json()
-        e.require(returned['ownerId'] == owner_id and returned['ownerVersion'] == '3', 'PAT владельца не прошёл общую WRITE policy')
+        current.timeout = 20
+        returned = current.expect('POST', transfer, 200, {'newOwnerUserId': owner_id, 'confirmed': True}, self.headers(changed['version'])).json()
+        e.require(returned['ownerId'] == owner_id and returned['ownerVersion'] == '3', 'Владелец не смог вернуть владение')
         admin_id = self.user('ownership-admin@harness.invalid', 'GLOBAL_ADMIN')
         admin = self.web_client(admin_id, assurance='ADMIN_EMAIL_MFA')
         admin.timeout = 20
         admin_changed = admin.expect('POST', '/api/v1/tenants/' + free_tenant + '/ownership-transfer', 200,
                                      payload, self.headers('1')).json()
         e.require(admin_changed['ownerId'] == target, 'GLOBAL_ADMIN MFA потерял бизнес-исключение B02')
+        # Ошибка SQL после финансового Prepare: worker отменяет PENDING, не передаёт владение.
+        failed_key = str(uuid.uuid4())
+        self.sql('tenant_db', "CREATE FUNCTION taska.owned_transfer_failure() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'OWNED_TRANSFER_FAILURE'; END $$;CREATE TRIGGER owned_transfer_failure BEFORE INSERT ON taska.tenant_ownership_audit FOR EACH ROW EXECUTE FUNCTION taska.owned_transfer_failure();")
+        try:
+            owner.expect('POST', transfer, 500, payload, self.headers(returned['version'], failed_key))
+        finally:
+            self.sql('tenant_db', 'DROP TRIGGER owned_transfer_failure ON taska.tenant_ownership_audit;DROP FUNCTION taska.owned_transfer_failure();')
+        deadline = time.monotonic() + 50
+        recovered = False
+        while time.monotonic() < deadline:
+            outcome = self.sql('tenant_db', "SELECT state FROM taska.tenant_ownership_transfers WHERE tenant_id='%s' AND request_key='%s';" % (tenant, failed_key)).strip()
+            pending = self.sql('billing_db', "SELECT ownership_transfer_id IS NULL FROM taska.subscriptions WHERE tenant_id='%s';" % tenant).strip()
+            if outcome == 'CANCELLED' and pending == 't':
+                recovered = True
+                break
+            time.sleep(2)
+        e.require(recovered, 'Recovery не отменил PENDING и не снял финансовый fence')
+        e.require(owner.expect('GET', path, 200).json()['ownerId'] == owner_id, 'Worker применил неуспешную передачу')
         return {'ownershipRest': 'PASS', 'ownerAndActiveMembership': 'PASS', 'freeAndConfirmationDenied': 'PASS',
-                'exactReplay': 'PASS', 'patOwnerAndNonOwner': 'PASS', 'adminMfaBypass': 'PASS', 'oldConsentRevoked': 'PASS', 'financialHistoryPreserved': 'PASS'}
+                'exactReplay': 'PASS', 'disabledPatFailsClosed': 'PASS', 'adminMfaBypass': 'PASS', 'oldConsentRevoked': 'PASS', 'financialHistoryPreserved': 'PASS', 'pendingRecovery': 'PASS'}
 
 
 if __name__ == '__main__':

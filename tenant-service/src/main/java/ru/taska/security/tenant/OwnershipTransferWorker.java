@@ -31,48 +31,55 @@ public final class OwnershipTransferWorker {
 
   @Scheduled(fixedDelayString = "${taska.tenant.ownership-poll-ms:1000}")
   public Mono<Void> poll() {
-    return dispatch
-        .sql(
-            "SELECT tenant_id,operation_id FROM taska.tenant_ownership_dispatch WHERE completed_at"
-                + " IS NULL AND next_attempt_at<=:now ORDER BY next_attempt_at,tenant_id LIMIT 20")
-        .bind("now", clock.instant().atOffset(ZoneOffset.UTC))
-        .fetch()
-        .all()
-        .concatMap(
-            row -> {
-              UUID tenant = (UUID) row.get("tenant_id"), operation = (UUID) row.get("operation_id");
-              return contexts
-                  .authorize(
-                      "billing",
-                      "tenant-service",
-                      TenantOwnershipTransferServiceGrpc.getRecoverMethod().getFullMethodName(),
-                      "recoverOwnershipTransfer",
-                      tenant,
-                      Set.of("write", "ownership:recover"),
-                      new RpcContextSecurity.Policy(true, true))
-                  .flatMap(
-                      v ->
-                          transfers
-                              .recover(
-                                  OwnershipTransferRequest.newBuilder()
-                                      .setContext(RpcContextBridge.details(v))
-                                      .setTenantId(tenant.toString())
-                                      .setOperationId(operation.toString())
-                                      .build())
-                              .contextWrite(v::install))
-                  .onErrorResume(
-                      error ->
-                          dispatch
-                              .sql(
-                                  "UPDATE taska.tenant_ownership_dispatch SET next_attempt_at=:next"
-                                      + " WHERE tenant_id=:t AND operation_id=:op AND completed_at"
-                                      + " IS NULL")
-                              .bind("next", clock.instant().plusSeconds(5).atOffset(ZoneOffset.UTC))
-                              .bind("t", tenant)
-                              .bind("op", operation)
-                              .then()
-                              .then(Mono.empty()));
-            })
-        .then();
+    return Mono.defer(
+        () ->
+            dispatch
+                .sql(
+                    "SELECT tenant_id,operation_id FROM taska.tenant_ownership_dispatch WHERE"
+                        + " completed_at IS NULL AND next_attempt_at<=:now ORDER BY"
+                        + " next_attempt_at,tenant_id LIMIT 20")
+                .bind("now", clock.instant().atOffset(ZoneOffset.UTC))
+                .fetch()
+                .all()
+                .concatMap(
+                    row -> {
+                      UUID tenant = (UUID) row.get("tenant_id"),
+                          operation = (UUID) row.get("operation_id");
+                      return contexts
+                          .authorize(
+                              "billing",
+                              "tenant-service",
+                              TenantOwnershipTransferServiceGrpc.getRecoverMethod()
+                                  .getFullMethodName(),
+                              "recoverOwnershipTransfer",
+                              tenant,
+                              Set.of("write", "ownership:recover"),
+                              new RpcContextSecurity.Policy(true, true))
+                          .flatMap(
+                              v ->
+                                  transfers
+                                      .recover(
+                                          OwnershipTransferRequest.newBuilder()
+                                              .setContext(RpcContextBridge.details(v))
+                                              .setTenantId(tenant.toString())
+                                              .setOperationId(operation.toString())
+                                              .build())
+                                      .contextWrite(v::install))
+                          .onErrorResume(
+                              error ->
+                                  dispatch
+                                      .sql(
+                                          "UPDATE taska.tenant_ownership_dispatch SET"
+                                              + " next_attempt_at=:next WHERE tenant_id=:t AND"
+                                              + " operation_id=:op AND completed_at IS NULL")
+                                      .bind(
+                                          "next",
+                                          clock.instant().plusSeconds(5).atOffset(ZoneOffset.UTC))
+                                      .bind("t", tenant)
+                                      .bind("op", operation)
+                                      .then()
+                                      .then(Mono.empty()));
+                    })
+                .then());
   }
 }

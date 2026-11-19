@@ -7,7 +7,7 @@
 ## ADDED Requirements
 
 ### Requirement: Передача проверяет текущие полномочия
-Система SHALL требовать текущую сессию, явное подтверждение, ожидаемую tenant version и ACTIVE target того же tenant. Обычный caller SHALL быть текущим owner с paid coverage и transfer flag. Owner pause сама SHALL не запрещать передачу; FREE, platform block, dispute и прочие ordinary ограничения SHALL отклонять её. B02 SHALL проверяться текущим primary GLOBAL_ADMIN/MFA с аудитом.
+Система SHALL требовать текущую разрешённую identity/credential (для web — действующую сессию), явное подтверждение, ожидаемую tenant version и ACTIVE target того же tenant. Обычный caller SHALL быть текущим owner с paid coverage и transfer flag. Owner pause сама SHALL не запрещать передачу; FREE, platform block, dispute и прочие ordinary ограничения SHALL отклонять её. B02 SHALL проверяться текущим primary GLOBAL_ADMIN/MFA с аудитом.
 
 #### Scenario: Разрешённая передача
 - **WHEN** owner оплаченной ACTIVE компании подтверждает передачу своему ACTIVE MEMBER
@@ -18,11 +18,11 @@
 - **THEN** owner/роли/версии/финансовая история не меняются
 
 ### Requirement: Передача сериализуется с актуальной оплатой
-Система SHALL удерживать durable billing fence текущего coverage до Root commit либо expiry. Root SHALL проверить время и текущие tenant/membership versions под собственным lock. Конкурирующая FREE PREPARED SHALL не давать устаревшее разрешение передачи.
+Система SHALL удерживать durable billing fence текущего coverage до подтверждённого Root outcome. Root SHALL проверить время и текущие tenant/membership versions под собственным lock. Конкурирующая FREE PREPARED SHALL не давать устаревшее разрешение передачи.
 
 #### Scenario: Отзыв membership или истечение покрытия
 - **WHEN** target отозван либо fence/paid coverage истекли до Root mutation
-- **THEN** передача не применяется; временное финансовое ограждение отменяется/истекает по проверенному receipt
+- **THEN** передача не применяется; финансовое ограждение снимается только по проверенному COMMITTED/CANCELLED receipt, а не по истечению часов
 
 #### Scenario: Конкурирующая финансовая мутация
 - **WHEN** coverage меняется одновременно с передачей
