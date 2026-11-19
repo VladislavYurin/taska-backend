@@ -157,6 +157,8 @@ public final class TenantOwnershipTransfers {
         });
   }
 
+  // Ошибка или потеря ответа не доказывают отмену commit: fence снимает Recover
+  // после известного Root outcome. PENDING отменяется worker по deadline (не более 30 с).
   private Mono<Tenant> run(Command command, VerifiedTenantContext v, Map<String, Object> op) {
     if ("COMMITTED".equals(op.get("state")))
       return complete(command.tenant(), (UUID) op.get("id")).thenReturn(response(op));

@@ -1,5 +1,6 @@
 """TAS-473: собственный стенд REST/auth/Root/Billing, без реальных платежей PSP."""
-import json
+import hashlib
+import secrets
 import uuid
 
 import e2e as e
@@ -35,6 +36,13 @@ class TenantOwnershipLocal(CapabilitiesLocal):
                       ['SERVICE'], ['read' if read else 'write', scope], 'billing', mode)
             self.snapshot['edges'][-1]['serviceIdentities'] = [issuer]
         self.refresh()
+
+    def pat_client(self, actor, tenant):
+        secret = 'tsk_pat_' + secrets.token_urlsafe(32)
+        token, grant = str(uuid.uuid4()), str(uuid.uuid4())
+        digest = hashlib.sha256(secret.encode()).hexdigest()
+        self.sql('auth_db', "INSERT INTO taska.integration_grants(id,user_id,kind,scope_type,tenant_id,access_level,permissions,version,created_at,expires_at) VALUES('%s','%s','USER','ONE_TENANT','%s','MODIFY','{}',1,now(),now()+interval '1 hour');INSERT INTO taska.personal_access_tokens(id,user_id,name,token_prefix,token_hash,scopes,created_at,expires_at,integration_grant_id) VALUES('%s','%s','owned-transfer','tsk_pat_test','%s',ARRAY['read','write'],now(),now()+interval '1 hour','%s');" % (grant, actor, tenant, token, actor, digest, grant))
+        return e.Http(self.state['origin'], secret)
 
     def paid(self, tenant):
         invoice, period, operation, fact = [str(uuid.uuid4()) for _ in range(4)]
@@ -92,8 +100,10 @@ class TenantOwnershipLocal(CapabilitiesLocal):
         payload = {'newOwnerUserId': target, 'confirmed': True}
         original = self.headers('1')
         ordinary.expect('POST', transfer, 403, payload, original)
+        self.pat_client(target, tenant).expect('POST', transfer, 403, payload, original)
         free_owner.expect('POST', '/api/v1/tenants/' + free_tenant + '/ownership-transfer', 403, payload, self.headers('1'))
         owner.expect('POST', transfer, 400, {'newOwnerUserId': target, 'confirmed': False}, original)
+        owner.expect('POST', transfer, 413, {'newOwnerUserId': target, 'confirmed': True, 'padding': 'x' * 20000}, original)
         before = self.sql('billing_db', "SELECT jsonb_build_object('periods',(SELECT jsonb_agg(to_jsonb(p) ORDER BY id) FROM taska.subscription_periods p),'invoices',(SELECT jsonb_agg(to_jsonb(i) ORDER BY id) FROM taska.invoices i),'attempts',(SELECT count(*) FROM taska.payment_attempts));").strip()
         changed = owner.expect('POST', transfer, 200, payload, original).json()
         e.require(changed['ownerId'] == target and changed['ownerVersion'] == '2', 'Не сменились owner и owner_version')
@@ -107,6 +117,10 @@ class TenantOwnershipLocal(CapabilitiesLocal):
         e.require(audit == '1' and revoked == '1', 'Audit или отзыв согласия не были однократными')
         after = self.sql('billing_db', "SELECT jsonb_build_object('periods',(SELECT jsonb_agg(to_jsonb(p) ORDER BY id) FROM taska.subscription_periods p),'invoices',(SELECT jsonb_agg(to_jsonb(i) ORDER BY id) FROM taska.invoices i),'attempts',(SELECT count(*) FROM taska.payment_attempts));").strip()
         e.require(before == after, 'Передача изменила оплаченные факты или создала PSP попытку')
+        pat_owner = self.pat_client(target, tenant)
+        pat_owner.timeout = 20
+        returned = pat_owner.expect('POST', transfer, 200, {'newOwnerUserId': owner_id, 'confirmed': True}, self.headers(changed['version'])).json()
+        e.require(returned['ownerId'] == owner_id and returned['ownerVersion'] == '3', 'PAT владельца не прошёл общую WRITE policy')
         admin_id = self.user('ownership-admin@harness.invalid', 'GLOBAL_ADMIN')
         admin = self.web_client(admin_id, assurance='ADMIN_EMAIL_MFA')
         admin.timeout = 20
@@ -114,7 +128,7 @@ class TenantOwnershipLocal(CapabilitiesLocal):
                                      payload, self.headers('1')).json()
         e.require(admin_changed['ownerId'] == target, 'GLOBAL_ADMIN MFA потерял бизнес-исключение B02')
         return {'ownershipRest': 'PASS', 'ownerAndActiveMembership': 'PASS', 'freeAndConfirmationDenied': 'PASS',
-                'exactReplay': 'PASS', 'oldConsentRevoked': 'PASS', 'financialHistoryPreserved': 'PASS'}
+                'exactReplay': 'PASS', 'patOwnerAndNonOwner': 'PASS', 'adminMfaBypass': 'PASS', 'oldConsentRevoked': 'PASS', 'financialHistoryPreserved': 'PASS'}
 
 
 if __name__ == '__main__':
