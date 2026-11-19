@@ -5507,6 +5507,54 @@ paths:
         '429': {$ref: '#/components/responses/ErrorResponse'}
         '503': {$ref: '#/components/responses/ErrorResponse'}
         default: {$ref: '#/components/responses/ErrorResponse'}
+  /api/v1/tenants/{tenantId}/ownership-transfer:
+    post:
+      operationId: transferTenantOwnership
+      tags: [tenant]
+      summary: Передать владение компанией
+      description: >-
+        Текущий владелец оплаченной компании передаёт владение активному участнику.
+        Требуются явное подтверждение, актуальный If-Match и UUID Idempotency-Key.
+        Пауза владельца допускается; блокировка платформы и спор запрещают обычную передачу.
+        Прежний владелец остаётся TENANT_ADMIN, его автоплатёж отзывается.
+        Повтор исходного запроса возвращает сохранённый результат. Ответ не кэшируется.
+      x-pat-scope: write
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: tenantId
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema: {type: string, format: uuid}
+        - name: If-Match
+          in: header
+          required: true
+          schema: {type: string, pattern: '^"[1-9][0-9]{0,18}"$'}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransferOwnershipRequestDto'
+      responses:
+        '200':
+          description: Компания после передачи владения
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantDto'
+        '400': {$ref: '#/components/responses/ErrorResponse'}
+        '401': {$ref: '#/components/responses/ErrorResponse'}
+        '403': {$ref: '#/components/responses/ErrorResponse'}
+        '404': {$ref: '#/components/responses/ErrorResponse'}
+        '409': {$ref: '#/components/responses/ErrorResponse'}
+        '412': {$ref: '#/components/responses/ErrorResponse'}
+        '428': {$ref: '#/components/responses/ErrorResponse'}
+        '503': {$ref: '#/components/responses/ErrorResponse'}
   /api/v1/tenants/{tenantId}/capabilities:
     get:
       operationId: getTenantCapabilities
@@ -5861,6 +5909,13 @@ components:
       description: 1 to 120 Unicode code points. No leading or trailing Java strip whitespace or ISO control characters.
       not:
         pattern: '[\u0000-\u001F\u007F-\u009F]|^[\u0020\u1680\u2000-\u2006\u2008-\u200A\u2028\u2029\u205F\u3000]|[\u0020\u1680\u2000-\u2006\u2008-\u200A\u2028\u2029\u205F\u3000]$'
+    TransferOwnershipRequestDto:
+      type: object
+      additionalProperties: false
+      required: [newOwnerUserId, confirmed]
+      properties:
+        newOwnerUserId: {type: string, format: uuid}
+        confirmed: {type: boolean, enum: [true]}
     RenameTenantRequestDto:
       type: object
       additionalProperties: false

@@ -37,14 +37,22 @@ public class GatewayContextFactory {
   private final ContextMapper contextMapper;
   private final ru.taska.security.McpMarkerVerifier markerVerifier;
 
-  public GatewayContextFactory(BearerTokenExtractor extractor, GrpcAuthServiceClient auth, ContextMapper mapper) {
+  public GatewayContextFactory(
+      BearerTokenExtractor extractor, GrpcAuthServiceClient auth, ContextMapper mapper) {
     this(extractor, auth, mapper, new ru.taska.security.McpMarkerVerifier("", 10000));
   }
 
   @org.springframework.beans.factory.annotation.Autowired
-  private org.springframework.beans.factory.ObjectProvider<ru.taska.security.tenant.RpcContextSecurity> trustedSecurity;
+  private org.springframework.beans.factory.ObjectProvider<
+          ru.taska.security.tenant.RpcContextSecurity>
+      trustedSecurity;
+
   @org.springframework.beans.factory.annotation.Autowired
-  private org.springframework.beans.factory.ObjectProvider<ru.taska.api.b2b.v1.ReactorGatewayCredentialServiceGrpc.ReactorGatewayCredentialServiceStub> credentialStubs;
+  private org.springframework.beans.factory.ObjectProvider<
+          ru.taska.api.b2b.v1.ReactorGatewayCredentialServiceGrpc
+              .ReactorGatewayCredentialServiceStub>
+      credentialStubs;
+
   @Value("${taska.rpc.context.enabled:false}")
   private boolean trustedEnabled;
 
@@ -59,10 +67,13 @@ public class GatewayContextFactory {
   public Mono<GatewayContext> buildContext(
       String requestId, ServerWebExchange exchange, EndpointSecurity secured) {
     return switch (secured) {
-      case PUBLIC -> Mono.fromSupplier(() -> {
-        if (markerVerifier.hasMarker(exchange.getRequest())) throw ru.taska.security.McpMarkerVerifier.rejected();
-        return new GatewayContext(requestId, nodeId, null);
-      });
+      case PUBLIC ->
+          Mono.fromSupplier(
+              () -> {
+                if (markerVerifier.hasMarker(exchange.getRequest()))
+                  throw ru.taska.security.McpMarkerVerifier.rejected();
+                return new GatewayContext(requestId, nodeId, null);
+              });
       case PROTECTED, JWT_SESSION_REQUIRED -> buildSecuredContext(exchange, requestId, secured);
       case GLOBAL_ADMIN_REQUIRED -> buildAdminContext(exchange, requestId);
     };
@@ -77,96 +88,191 @@ public class GatewayContextFactory {
    * @return контекст запроса с заполненным {@link ru.taska.domain.GatewayUserContext}
    */
   private Mono<GatewayContext> resolveUserContext(ServerWebExchange exchange, String requestId) {
-    if(trustedEnabled)return resolveTrustedUserContext(exchange,requestId);
+    if (trustedEnabled) return resolveTrustedUserContext(exchange, requestId);
     return Mono.fromCallable(() -> bearerTokenExtractor.extract(exchange, requestId))
-        .flatMap(token -> authServiceClient.validateAccessToken(requestId, nodeId, token)
-            .map(response -> {
-              var proto = response.getUserContext();
-              log.info("[{}] User context resolved: userId={}, tokenKind={}, tokenId={}",
-                  requestId, proto.getUserId(), proto.getTokenKind(), proto.hasTokenId() ? proto.getTokenId() : null);
-              var user = contextMapper.mapToGatewayUserContext(proto);
-              ru.taska.domain.ActionChannel channel;
-              if (user.tokenKind() == GatewayTokenKind.DELEGATION) {
-                if (markerVerifier.hasMarker(exchange.getRequest())) throw ru.taska.security.McpMarkerVerifier.rejected();
-                channel = ru.taska.domain.ActionChannel.MCP;
-              } else channel = markerVerifier.resolve(exchange.getRequest(), requestId, token, user.tokenKind() == GatewayTokenKind.PAT);
-              return new GatewayContext(requestId, nodeId, user, channel);
-            }));
+        .flatMap(
+            token ->
+                authServiceClient
+                    .validateAccessToken(requestId, nodeId, token)
+                    .map(
+                        response -> {
+                          var proto = response.getUserContext();
+                          log.info(
+                              "[{}] User context resolved: userId={}, tokenKind={}, tokenId={}",
+                              requestId,
+                              proto.getUserId(),
+                              proto.getTokenKind(),
+                              proto.hasTokenId() ? proto.getTokenId() : null);
+                          var user = contextMapper.mapToGatewayUserContext(proto);
+                          ru.taska.domain.ActionChannel channel;
+                          if (user.tokenKind() == GatewayTokenKind.DELEGATION) {
+                            if (markerVerifier.hasMarker(exchange.getRequest()))
+                              throw ru.taska.security.McpMarkerVerifier.rejected();
+                            channel = ru.taska.domain.ActionChannel.MCP;
+                          } else
+                            channel =
+                                markerVerifier.resolve(
+                                    exchange.getRequest(),
+                                    requestId,
+                                    token,
+                                    user.tokenKind() == GatewayTokenKind.PAT);
+                          return new GatewayContext(requestId, nodeId, user, channel);
+                        }));
   }
 
-  private record TenantTarget(String id,String action) {}
+  private record TenantTarget(String id, String action) {}
 
-  private static boolean isTenantListPath(String path,String method){
-    return ("GET".equals(method)||"HEAD".equals(method)) && "/api/v1/tenants".equals(path);
+  private static boolean isTenantListPath(String path, String method) {
+    return ("GET".equals(method) || "HEAD".equals(method)) && "/api/v1/tenants".equals(path);
   }
 
-  private static TenantTarget tenantTarget(String path,String method){
-    if("PUT".equals(method)||"DELETE".equals(method)) {
-      var pause=java.util.regex.Pattern.compile("^/api/v1/tenants/([^/]+)/pause$").matcher(path);
-      if(pause.matches()) return new TenantTarget(canonicalTenantId(pause.group(1)),"PUT".equals(method)?"pauseTenant":"resumeTenant");
-      var block=java.util.regex.Pattern.compile("^/api/v1/admin/tenants/([^/]+)/platform-block$").matcher(path);
-      if("PUT".equals(method)&&block.matches()) return new TenantTarget(canonicalTenantId(block.group(1)),"setPlatformBlock");
+  private static TenantTarget tenantTarget(String path, String method) {
+    if ("POST".equals(method)) {
+      var transfer =
+          java.util.regex.Pattern.compile("^/api/v1/tenants/([^/]+)/ownership-transfer$")
+              .matcher(path);
+      if (transfer.matches())
+        return new TenantTarget(canonicalTenantId(transfer.group(1)), "transferTenantOwnership");
     }
-    if(!"GET".equals(method)&&!"HEAD".equals(method)&&!"PATCH".equals(method))return null;
-    var matcher=java.util.regex.Pattern.compile("^/api/v1/tenants/([^/]+)$").matcher(path);
-    if(!matcher.matches())return null;
-    var id=canonicalTenantId(matcher.group(1));
-    return new TenantTarget(id,"PATCH".equals(method)?"renameTenant":"getTenant");
+    if ("PUT".equals(method) || "DELETE".equals(method)) {
+      var pause = java.util.regex.Pattern.compile("^/api/v1/tenants/([^/]+)/pause$").matcher(path);
+      if (pause.matches())
+        return new TenantTarget(
+            canonicalTenantId(pause.group(1)),
+            "PUT".equals(method) ? "pauseTenant" : "resumeTenant");
+      var block =
+          java.util.regex.Pattern.compile("^/api/v1/admin/tenants/([^/]+)/platform-block$")
+              .matcher(path);
+      if ("PUT".equals(method) && block.matches())
+        return new TenantTarget(canonicalTenantId(block.group(1)), "setPlatformBlock");
+    }
+    if (!"GET".equals(method) && !"HEAD".equals(method) && !"PATCH".equals(method)) return null;
+    var matcher = java.util.regex.Pattern.compile("^/api/v1/tenants/([^/]+)$").matcher(path);
+    if (!matcher.matches()) return null;
+    var id = canonicalTenantId(matcher.group(1));
+    return new TenantTarget(id, "PATCH".equals(method) ? "renameTenant" : "getTenant");
   }
 
-  private static String canonicalTenantId(String supplied){
+  private static String canonicalTenantId(String supplied) {
     try {
-      var parsed=java.util.UUID.fromString(supplied);
-      if(!parsed.toString().equalsIgnoreCase(supplied))throw new IllegalArgumentException();
+      var parsed = java.util.UUID.fromString(supplied);
+      if (!parsed.toString().equalsIgnoreCase(supplied)) throw new IllegalArgumentException();
       return parsed.toString();
-    }catch(IllegalArgumentException e){throw Status.INVALID_ARGUMENT.withDescription("Invalid tenant id").asRuntimeException();}
+    } catch (IllegalArgumentException e) {
+      throw Status.INVALID_ARGUMENT.withDescription("Invalid tenant id").asRuntimeException();
+    }
   }
 
-  private static boolean sameTenant(String bound,String supplied){
+  private static boolean sameTenant(String bound, String supplied) {
     return canonicalTenantId(bound).equals(canonicalTenantId(supplied));
   }
-  private Mono<GatewayContext> resolveTrustedUserContext(ServerWebExchange exchange,String requestId) {
-    return Mono.defer(()->{
-      var stub=credentialStubs.getIfAvailable();var security=trustedSecurity.getIfAvailable();
-      if(stub==null || security==null)return Mono.error(Status.UNAVAILABLE.asRuntimeException());
-      try {java.util.UUID.fromString(requestId);}catch(IllegalArgumentException e){return Mono.error(Status.INVALID_ARGUMENT.withDescription("Invalid X-Request-Id").asRuntimeException());}
-      String token=bearerTokenExtractor.extract(exchange,requestId);
-      String path=EndpointAccessPolicy.canonicalPath(exchange.getRequest());
-      String method=exchange.getRequest().getMethod().name();
-      var target=tenantTarget(path,method);
-      boolean tenantList=isTenantListPath(path,method);
-      var credentialRequest=ru.taska.api.b2b.v1.ResolveGatewayCredentialRequest.newBuilder().setCredential(token);
-      if(target!=null)credentialRequest.setTargetTenantId(target.id()).setTargetAction(target.action());
-      return stub.withDeadlineAfter(5,java.util.concurrent.TimeUnit.SECONDS)
-        .resolveGatewayCredential(credentialRequest.build())
-        .flatMap(resolved->{
-          var user=contextMapper.mapToGatewayUserContext(resolved.getUser());
-          var binding=resolved.getBinding();
-          if(!binding.getActorUserId().equals(user.userId()))return Mono.error(Status.UNAUTHENTICATED.asRuntimeException());
-          if(tenantList && (binding.hasTenantId()
-              || binding.getCredentialKind()!=ru.taska.api.b2b.v1.CredentialKind.CREDENTIAL_KIND_WEB_GLOBAL
-              || !binding.getScopesList().contains("tenants:select")))return Mono.error(Status.PERMISSION_DENIED.asRuntimeException());
-          if(target!=null && (!binding.hasTenantId() || !sameTenant(binding.getTenantId(),target.id())))return Mono.error(Status.PERMISSION_DENIED.asRuntimeException());
-          if(target!=null && !binding.getScopesList().contains("getTenant".equals(target.action())?"read":"write"))return Mono.error(Status.PERMISSION_DENIED.asRuntimeException());
-          var suppliedTenants=exchange.getRequest().getHeaders().getOrEmpty("X-Tenant-Id");
-          if(suppliedTenants.size()>1)return Mono.error(Status.PERMISSION_DENIED.asRuntimeException());
-          String selected=exchange.getRequest().getHeaders().getFirst("X-Tenant-Id");
-          if(selected!=null && (!binding.hasTenantId() || !sameTenant(binding.getTenantId(),selected)))return Mono.error(Status.PERMISSION_DENIED.asRuntimeException());
-          // A URL tenant is a target assertion, never an authority source.
-          var matcher=java.util.regex.Pattern.compile("^/api/v1/(?:tenants|companies)/([^/]+)(?:/|$)").matcher(path);
-          if(matcher.find() && binding.hasTenantId() && !sameTenant(binding.getTenantId(),matcher.group(1)))return Mono.error(Status.PERMISSION_DENIED.asRuntimeException());
-          var channel=markerVerifier.resolve(exchange.getRequest(),requestId,token,user.tokenKind()==GatewayTokenKind.PAT);
-          var now=java.time.Instant.now();
-          var claims=binding.toBuilder().setContextVersion(1).setIssuerService("api-gateway").setAudienceService("api-gateway")
-            .setAction("gatewayRequest").setIssuedAt(now.toString()).setExpiresAt(now.plusSeconds(30).toString()).setAssertionId(java.util.UUID.randomUUID().toString());
-          var header=ru.taska.api.common.v1.Header.newBuilder().setRequestId(requestId).setNodeId(nodeId).setActionChannel(channel.name());
-          if(user.tokenId()!=null)header.setTokenId(user.tokenId());
-          var context=ru.taska.api.b2b.v1.RequestContext.newBuilder().setHeader(header).setContext(claims).build();
-          boolean write=!java.util.Set.of("GET","HEAD","OPTIONS").contains(exchange.getRequest().getMethod().name());
-          return security.authorize(context,"gatewayRequest",new ru.taska.security.tenant.RpcContextSecurity.Policy(binding.hasTenantId(),write))
-            .map(verified->new GatewayContext(requestId,nodeId,user,channel,verified));
+
+  private Mono<GatewayContext> resolveTrustedUserContext(
+      ServerWebExchange exchange, String requestId) {
+    return Mono.defer(
+        () -> {
+          var stub = credentialStubs.getIfAvailable();
+          var security = trustedSecurity.getIfAvailable();
+          if (stub == null || security == null)
+            return Mono.error(Status.UNAVAILABLE.asRuntimeException());
+          try {
+            java.util.UUID.fromString(requestId);
+          } catch (IllegalArgumentException e) {
+            return Mono.error(
+                Status.INVALID_ARGUMENT
+                    .withDescription("Invalid X-Request-Id")
+                    .asRuntimeException());
+          }
+          String token = bearerTokenExtractor.extract(exchange, requestId);
+          String path = EndpointAccessPolicy.canonicalPath(exchange.getRequest());
+          String method = exchange.getRequest().getMethod().name();
+          var target = tenantTarget(path, method);
+          boolean tenantList = isTenantListPath(path, method);
+          var credentialRequest =
+              ru.taska.api.b2b.v1.ResolveGatewayCredentialRequest.newBuilder().setCredential(token);
+          if (target != null)
+            credentialRequest.setTargetTenantId(target.id()).setTargetAction(target.action());
+          return stub.withDeadlineAfter(5, java.util.concurrent.TimeUnit.SECONDS)
+              .resolveGatewayCredential(credentialRequest.build())
+              .flatMap(
+                  resolved -> {
+                    var user = contextMapper.mapToGatewayUserContext(resolved.getUser());
+                    var binding = resolved.getBinding();
+                    if (!binding.getActorUserId().equals(user.userId()))
+                      return Mono.error(Status.UNAUTHENTICATED.asRuntimeException());
+                    if (tenantList
+                        && (binding.hasTenantId()
+                            || binding.getCredentialKind()
+                                != ru.taska.api.b2b.v1.CredentialKind.CREDENTIAL_KIND_WEB_GLOBAL
+                            || !binding.getScopesList().contains("tenants:select")))
+                      return Mono.error(Status.PERMISSION_DENIED.asRuntimeException());
+                    if (target != null
+                        && (!binding.hasTenantId()
+                            || !sameTenant(binding.getTenantId(), target.id())))
+                      return Mono.error(Status.PERMISSION_DENIED.asRuntimeException());
+                    if (target != null
+                        && !binding
+                            .getScopesList()
+                            .contains("getTenant".equals(target.action()) ? "read" : "write"))
+                      return Mono.error(Status.PERMISSION_DENIED.asRuntimeException());
+                    var suppliedTenants =
+                        exchange.getRequest().getHeaders().getOrEmpty("X-Tenant-Id");
+                    if (suppliedTenants.size() > 1)
+                      return Mono.error(Status.PERMISSION_DENIED.asRuntimeException());
+                    String selected = exchange.getRequest().getHeaders().getFirst("X-Tenant-Id");
+                    if (selected != null
+                        && (!binding.hasTenantId() || !sameTenant(binding.getTenantId(), selected)))
+                      return Mono.error(Status.PERMISSION_DENIED.asRuntimeException());
+                    // A URL tenant is a target assertion, never an authority source.
+                    var matcher =
+                        java.util.regex.Pattern.compile(
+                                "^/api/v1/(?:tenants|companies)/([^/]+)(?:/|$)")
+                            .matcher(path);
+                    if (matcher.find()
+                        && binding.hasTenantId()
+                        && !sameTenant(binding.getTenantId(), matcher.group(1)))
+                      return Mono.error(Status.PERMISSION_DENIED.asRuntimeException());
+                    var channel =
+                        markerVerifier.resolve(
+                            exchange.getRequest(),
+                            requestId,
+                            token,
+                            user.tokenKind() == GatewayTokenKind.PAT);
+                    var now = java.time.Instant.now();
+                    var claims =
+                        binding.toBuilder()
+                            .setContextVersion(1)
+                            .setIssuerService("api-gateway")
+                            .setAudienceService("api-gateway")
+                            .setAction("gatewayRequest")
+                            .setIssuedAt(now.toString())
+                            .setExpiresAt(now.plusSeconds(30).toString())
+                            .setAssertionId(java.util.UUID.randomUUID().toString());
+                    var header =
+                        ru.taska.api.common.v1.Header.newBuilder()
+                            .setRequestId(requestId)
+                            .setNodeId(nodeId)
+                            .setActionChannel(channel.name());
+                    if (user.tokenId() != null) header.setTokenId(user.tokenId());
+                    var context =
+                        ru.taska.api.b2b.v1.RequestContext.newBuilder()
+                            .setHeader(header)
+                            .setContext(claims)
+                            .build();
+                    boolean write =
+                        !java.util.Set.of("GET", "HEAD", "OPTIONS")
+                            .contains(exchange.getRequest().getMethod().name());
+                    return security
+                        .authorize(
+                            context,
+                            "gatewayRequest",
+                            new ru.taska.security.tenant.RpcContextSecurity.Policy(
+                                binding.hasTenantId(), write))
+                        .map(
+                            verified ->
+                                new GatewayContext(requestId, nodeId, user, channel, verified));
+                  });
         });
-    });
   }
 
   /**

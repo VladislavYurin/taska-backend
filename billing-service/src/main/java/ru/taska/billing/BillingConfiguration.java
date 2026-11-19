@@ -426,6 +426,14 @@ public class BillingConfiguration {
           security,
           Map.ofEntries(
               java.util.Map.entry(
+                  ru.taska.api.b2b.v1.BillingOwnershipTransferServiceGrpc.getPrepareMethod()
+                      .getFullMethodName(),
+                  new RpcContextSecurity.Policy(true, true)),
+              java.util.Map.entry(
+                  ru.taska.api.b2b.v1.BillingOwnershipTransferServiceGrpc.getFinishMethod()
+                      .getFullMethodName(),
+                  new RpcContextSecurity.Policy(true, true)),
+              java.util.Map.entry(
                   BillingServiceGrpc.getReadReferencedPlanVersionMethod().getFullMethodName(),
                   new RpcContextSecurity.Policy(false, false)),
               Map.entry(
@@ -485,7 +493,8 @@ public class BillingConfiguration {
                   BillingServiceGrpc.getResumeSubscriptionRenewalMethod().getFullMethodName(),
                   new RpcContextSecurity.Policy(true, true)),
               Map.entry(
-                  ru.taska.api.b2b.v1.AutopayWorkerServiceGrpc.getDispatchAutopayMethod().getFullMethodName(),
+                  ru.taska.api.b2b.v1.AutopayWorkerServiceGrpc.getDispatchAutopayMethod()
+                      .getFullMethodName(),
                   new RpcContextSecurity.Policy(true, true)),
               Map.entry(
                   BillingServiceGrpc.getSetAutopayConsentMethod().getFullMethodName(),

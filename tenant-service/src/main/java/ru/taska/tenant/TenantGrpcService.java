@@ -39,6 +39,29 @@ public final class TenantGrpcService extends ReactorTenantServiceGrpc.TenantServ
     this.mutations = mutations;
   }
 
+  @org.springframework.beans.factory.annotation.Autowired
+  private org.springframework.beans.factory.ObjectProvider<TenantOwnershipTransfers>
+      ownershipTransfers;
+
+  @Override
+  public Mono<Tenant> transferTenantOwnership(
+      Mono<ru.taska.api.b2b.v1.TransferTenantOwnershipRpcRequest> request) {
+    return RpcContextBridge.inbound(
+            request.flatMap(
+                q -> {
+                  var store =
+                      ownershipTransfers == null ? null : ownershipTransfers.getIfAvailable();
+                  if (store == null)
+                    return Mono.error(
+                        new ru.taska.exception.DomainException(
+                            ru.taska.exception.DomainStatus.UNAVAILABLE, "DEPENDENCY_UNAVAILABLE"));
+                  return store.transfer(q);
+                }))
+        .onErrorMap(
+            ru.taska.exception.DomainException.class, GrpcExceptionMapper::toStatusRuntimeException)
+        .onErrorMap(GrpcExceptionMapper::toGrpcStatus);
+  }
+
   @Override
   public Mono<ru.taska.api.b2b.v1.QuotaSnapshot> getTenantQuotas(
       Mono<ru.taska.api.b2b.v1.GetTenantQuotasRpcRequest> request) {

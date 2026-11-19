@@ -553,6 +553,18 @@ public class TenantConfiguration {
           security,
           Map.ofEntries(
               java.util.Map.entry(
+                  ru.taska.api.b2b.v1.TenantServiceGrpc.getTransferTenantOwnershipMethod()
+                      .getFullMethodName(),
+                  new RpcContextSecurity.Policy(true, true)),
+              java.util.Map.entry(
+                  ru.taska.api.b2b.v1.TenantOwnershipTransferServiceGrpc.getInspectMethod()
+                      .getFullMethodName(),
+                  new RpcContextSecurity.Policy(true, false)),
+              java.util.Map.entry(
+                  ru.taska.api.b2b.v1.TenantOwnershipTransferServiceGrpc.getRecoverMethod()
+                      .getFullMethodName(),
+                  new RpcContextSecurity.Policy(true, true)),
+              java.util.Map.entry(
                   ru.taska.api.b2b.v1.TenantCapabilitiesServiceGrpc.getGetTenantCapabilitiesMethod()
                       .getFullMethodName(),
                   new RpcContextSecurity.Policy(true, false)),
