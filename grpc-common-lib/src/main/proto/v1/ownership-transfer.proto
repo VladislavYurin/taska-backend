@@ -1,0 +1,43 @@
+syntax = "proto3";
+package ru.taska.b2b.v1;
+import "v1/tenant-context.proto";
+option java_multiple_files = true;
+option java_package = "ru.taska.api.b2b.v1";
+
+// Только purpose-bound SERVICE; operation не заменяет пользовательское разрешение.
+message OwnershipTransferRequest {
+  RequestContext context = 1;
+  string tenant_id = 2;
+  string operation_id = 3;
+}
+message OwnershipTransferReceipt {
+  enum State { STATE_UNSPECIFIED = 0; PENDING = 1; COMMITTED = 2; CANCELLED = 3; }
+  string tenant_id = 1;
+  string operation_id = 2;
+  State state = 3;
+  string old_owner_id = 4;
+  string old_owner_version = 5;
+  string new_owner_id = 6;
+  string expected_tenant_version = 7;
+  string expires_at = 8;
+  bool administrative = 9;
+  string committed_at = 10;
+  string billing_fence_until = 11;
+}
+message OwnershipTransferFence {
+  string tenant_id = 1;
+  string operation_id = 2;
+  string old_owner_id = 3;
+  string old_owner_version = 4;
+  string valid_until = 5;
+  string entitlement_version = 6;
+  bool administrative = 7;
+}
+service TenantOwnershipTransferService {
+  rpc Inspect(OwnershipTransferRequest) returns (OwnershipTransferReceipt);
+  rpc Recover(OwnershipTransferRequest) returns (OwnershipTransferReceipt);
+}
+service BillingOwnershipTransferService {
+  rpc Prepare(OwnershipTransferRequest) returns (OwnershipTransferFence);
+  rpc Finish(OwnershipTransferRequest) returns (OwnershipTransferFence);
+}

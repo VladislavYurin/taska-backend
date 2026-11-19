@@ -110,6 +110,18 @@ message RenameTenantRequest {
   string name = 1;
 }
 
+// TAS-473: номера полей совпадают с принятым blueprint.
+message TransferOwnershipRequest {
+  string new_owner_user_id = 1;
+  bool confirmed = 2;
+}
+message TransferTenantOwnershipRpcRequest {
+  RequestContext context = 1;
+  string tenant_id = 2;
+  TransferOwnershipRequest payload = 3;
+  MutationOptions mutation = 4;
+}
+
 message CreateTenantResponse {
   Tenant tenant = 1;
   Operation operation = 2;
@@ -236,6 +248,7 @@ message LeaveTenantRpcRequest {
 }
 
 service TenantService {
+  rpc TransferTenantOwnership(TransferTenantOwnershipRpcRequest) returns (Tenant);
   rpc SetTenantMemberRole(SetTenantMemberRoleRpcRequest) returns (Membership);
   rpc SetTenantMemberState(SetTenantMemberStateRpcRequest) returns (Membership);
   rpc RemoveTenantMember(RemoveTenantMemberRpcRequest) returns (Operation);

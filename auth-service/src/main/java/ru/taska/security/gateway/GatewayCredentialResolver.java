@@ -2,13 +2,26 @@ package ru.taska.security.gateway;
 
 import io.jsonwebtoken.Jwts;
 import java.security.PublicKey;
-import java.time.*;
-import java.util.*;
+import java.time.Clock;
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.List;
+import java.util.Set;
+import java.util.UUID;
 import org.springframework.r2dbc.core.DatabaseClient;
 import reactor.core.publisher.Mono;
-import ru.taska.api.b2b.v1.*;
-import ru.taska.api.common.v1.*;
-import ru.taska.exception.*;
+import ru.taska.api.b2b.v1.AdminGrant;
+import ru.taska.api.b2b.v1.AdminScope;
+import ru.taska.api.b2b.v1.CredentialKind;
+import ru.taska.api.b2b.v1.GatewayCredential;
+import ru.taska.api.b2b.v1.TrustedTenantContext;
+import ru.taska.api.common.v1.AccessTokenKind;
+import ru.taska.api.common.v1.GlobalRoleProto;
+import ru.taska.api.common.v1.UserContext;
+import ru.taska.api.common.v1.UserStatus;
+import ru.taska.exception.DomainException;
+import ru.taska.exception.DomainStatus;
 import ru.taska.repository.UserRepository;
 import ru.taska.security.pat.TenantPersonalTokenStore;
 import ru.taska.security.session.WebSessionStore;
@@ -24,7 +37,14 @@ public final class GatewayCredentialResolver {
   private final PublicKey publicKey;
   private final String kid;
   private final Clock clock;
-  private static final Set<String> TENANT_TARGET_ACTIONS = Set.of("getTenant", "renameTenant", "pauseTenant", "resumeTenant", "setPlatformBlock");
+  private static final Set<String> TENANT_TARGET_ACTIONS =
+      Set.of(
+          "getTenant",
+          "renameTenant",
+          "transferTenantOwnership",
+          "pauseTenant",
+          "resumeTenant",
+          "setPlatformBlock");
   private static final Set<String> WEB_TENANT_SCOPES = Set.of("read", "write");
   private static final Set<String> WEB_GLOBAL_SCOPES =
       Set.of("tenants:select", "tenants:create", "account:read");
@@ -70,9 +90,9 @@ public final class GatewayCredentialResolver {
   }
 
   /**
-   * Resolve a credential for one route target. Only tenant detail actions may request this
-   * binding. A global web session receives an admin target scope only after auth primary verifies
-   * its current role and completed email MFA.
+   * Resolve a credential for one route target. Only tenant detail actions may request this binding.
+   * A global web session receives an admin target scope only after auth primary verifies its
+   * current role and completed email MFA.
    */
   public Mono<GatewayCredential> resolve(
       String secret, String targetTenantId, String targetAction) {
@@ -97,23 +117,23 @@ public final class GatewayCredentialResolver {
                           if (target != null && !b.scopes().contains(requiredScope(targetAction)))
                             return Mono.error(scopeDenied());
                           return membership(b.tenantId(), b.userId(), null)
-                                .flatMap(
-                                    generation ->
-                                        profile(
-                                            b.userId(),
-                                            TrustedTenantContext.newBuilder()
-                                                .setActorUserId(b.userId().toString())
-                                                .setTenantId(b.tenantId().toString())
-                                                .setCredentialKind(
-                                                    CredentialKind.CREDENTIAL_KIND_USER_PAT)
-                                                .setCredentialId(b.tokenId().toString())
-                                                .setGrantId(b.grantId().toString())
-                                                .setActorGeneration(Long.toString(b.authVersion()))
-                                                .setGrantGeneration(Long.toString(b.grantVersion()))
-                                                .setMembershipGeneration(Long.toString(generation))
-                                                .addAllScopes(b.scopes())
-                                                .build(),
-                                            b.tokenId().toString()));
+                              .flatMap(
+                                  generation ->
+                                      profile(
+                                          b.userId(),
+                                          TrustedTenantContext.newBuilder()
+                                              .setActorUserId(b.userId().toString())
+                                              .setTenantId(b.tenantId().toString())
+                                              .setCredentialKind(
+                                                  CredentialKind.CREDENTIAL_KIND_USER_PAT)
+                                              .setCredentialId(b.tokenId().toString())
+                                              .setGrantId(b.grantId().toString())
+                                              .setActorGeneration(Long.toString(b.authVersion()))
+                                              .setGrantGeneration(Long.toString(b.grantVersion()))
+                                              .setMembershipGeneration(Long.toString(generation))
+                                              .addAllScopes(b.scopes())
+                                              .build(),
+                                          b.tokenId().toString()));
                         });
               }
               final io.jsonwebtoken.Claims c;
@@ -143,8 +163,7 @@ public final class GatewayCredentialResolver {
               long account = Long.parseLong(c.get("account_generation", String.class));
               boolean tenant = "WEB_TENANT".equals(c.get("kind", String.class));
               boolean global = "WEB_GLOBAL".equals(c.get("kind", String.class));
-              if (!tenant && !global)
-                return Mono.error(rejected());
+              if (!tenant && !global) return Mono.error(rejected());
               Object rawScopes = c.get("scopes");
               if (!(rawScopes instanceof List<?> supplied) || supplied.isEmpty())
                 return Mono.error(rejected());
@@ -179,19 +198,19 @@ public final class GatewayCredentialResolver {
                               : CredentialKind.CREDENTIAL_KIND_WEB_GLOBAL);
               String query =
                   tenant
-                      ? "SELECT s.membership_version,u.global_role,w.assurance FROM taska.tenant_sessions s JOIN"
-                          + " taska.web_sessions w ON w.id=s.web_session_id AND"
-                          + " w.user_id=s.user_id JOIN taska.users u ON u.id=s.user_id WHERE"
-                          + " s.id=:sid AND s.user_id=:user AND s.tenant_id=:tenant AND"
-                          + " s.revoked_at IS NULL AND s.expires_at>:now AND w.state='ACTIVE' AND"
-                          + " w.revoked_at IS NULL AND w.expires_at>:now AND"
-                          + " w.auth_version=:version AND u.auth_version=:version AND"
-                          + " u.status='ACTIVE'"
-                      : "SELECT 0::bigint AS membership_version,u.global_role,w.assurance FROM taska.web_sessions w JOIN"
-                          + " taska.users u ON u.id=w.user_id WHERE w.id=:sid AND w.user_id=:user"
+                      ? "SELECT s.membership_version,u.global_role,w.assurance FROM"
+                          + " taska.tenant_sessions s JOIN taska.web_sessions w ON"
+                          + " w.id=s.web_session_id AND w.user_id=s.user_id JOIN taska.users u ON"
+                          + " u.id=s.user_id WHERE s.id=:sid AND s.user_id=:user AND"
+                          + " s.tenant_id=:tenant AND s.revoked_at IS NULL AND s.expires_at>:now"
                           + " AND w.state='ACTIVE' AND w.revoked_at IS NULL AND w.expires_at>:now"
                           + " AND w.auth_version=:version AND u.auth_version=:version AND"
-                          + " u.status='ACTIVE'";
+                          + " u.status='ACTIVE'"
+                      : "SELECT 0::bigint AS membership_version,u.global_role,w.assurance FROM"
+                          + " taska.web_sessions w JOIN taska.users u ON u.id=w.user_id WHERE"
+                          + " w.id=:sid AND w.user_id=:user AND w.state='ACTIVE' AND w.revoked_at"
+                          + " IS NULL AND w.expires_at>:now AND w.auth_version=:version AND"
+                          + " u.auth_version=:version AND u.status='ACTIVE'";
               var q =
                   db.sql(query)
                       .bind("sid", session)
@@ -216,7 +235,8 @@ public final class GatewayCredentialResolver {
                                     DomainStatus.PERMISSION_DENIED, "ADMIN_GRANT_REQUIRED"));
                           if (!"ADMIN_EMAIL_MFA".equals(facts.assurance()))
                             return Mono.error(
-                                new DomainException(DomainStatus.PERMISSION_DENIED, "MFA_REQUIRED"));
+                                new DomainException(
+                                    DomainStatus.PERMISSION_DENIED, "MFA_REQUIRED"));
                           var adminScope =
                               AdminScope.newBuilder()
                                   .setKind(AdminScope.KindValue.KIND_TENANT_SET)
