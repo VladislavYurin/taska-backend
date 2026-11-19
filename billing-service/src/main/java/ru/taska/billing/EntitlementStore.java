@@ -138,6 +138,11 @@ public final class EntitlementStore {
     return refresh(db, tenant, true).then();
   }
 
+  /** Вызывается владельцем fence на той же connection после subscription lock. */
+  Mono<Entitlement> ownershipSnapshot(DatabaseClient db, UUID tenant) {
+    return refresh(db, tenant, false);
+  }
+
   private Mono<Entitlement> refresh(DatabaseClient db, UUID tenant, boolean force) {
     Instant now = clock.instant();
     return latest(db, tenant)
@@ -186,22 +191,22 @@ public final class EntitlementStore {
       DatabaseClient db, UUID tenant, Map<String, Object> previous, Instant now) {
     return db.sql(
             """
-            SELECT s.*,c.kind selected_kind,s.selected_terms_snapshot::text selected_terms,
-              p.id effective_period_id,p.plan_version_id effective_plan_id,
-              p.starts_at effective_start,p.ends_at effective_end,p.terms_snapshot::text period_terms,
-              (SELECT min(f.starts_at) FROM taska.subscription_periods f WHERE f.tenant_id=s.tenant_id
-                 AND f.status='GRANTED' AND f.starts_at>:now) next_start,
-              EXISTS(SELECT 1 FROM taska.subscription_periods r WHERE r.tenant_id=s.tenant_id
-                 AND r.status='REVOKED') had_revocation
-            FROM taska.subscriptions s
-            JOIN taska.catalog_plan_versions selected_plan ON selected_plan.id=s.selected_plan_version_id
-            JOIN taska.catalog_plans c ON c.plan_code=selected_plan.plan_code
-            LEFT JOIN LATERAL (
-              SELECT * FROM taska.subscription_periods p WHERE p.tenant_id=s.tenant_id
-                AND p.status='GRANTED' AND p.starts_at<=:now
-              ORDER BY (p.ends_at>:now) DESC,p.starts_at DESC,p.id DESC LIMIT 1
-            ) p ON true WHERE s.tenant_id=:tenant
-            """)
+SELECT s.*,c.kind selected_kind,s.selected_terms_snapshot::text selected_terms,
+  p.id effective_period_id,p.plan_version_id effective_plan_id,
+  p.starts_at effective_start,p.ends_at effective_end,p.terms_snapshot::text period_terms,
+  (SELECT min(f.starts_at) FROM taska.subscription_periods f WHERE f.tenant_id=s.tenant_id
+     AND f.status='GRANTED' AND f.starts_at>:now) next_start,
+  EXISTS(SELECT 1 FROM taska.subscription_periods r WHERE r.tenant_id=s.tenant_id
+     AND r.status='REVOKED') had_revocation
+FROM taska.subscriptions s
+JOIN taska.catalog_plan_versions selected_plan ON selected_plan.id=s.selected_plan_version_id
+JOIN taska.catalog_plans c ON c.plan_code=selected_plan.plan_code
+LEFT JOIN LATERAL (
+  SELECT * FROM taska.subscription_periods p WHERE p.tenant_id=s.tenant_id
+    AND p.status='GRANTED' AND p.starts_at<=:now
+  ORDER BY (p.ends_at>:now) DESC,p.starts_at DESC,p.id DESC LIMIT 1
+) p ON true WHERE s.tenant_id=:tenant
+""")
         .bind("tenant", tenant)
         .bind("now", now.atOffset(ZoneOffset.UTC))
         .fetch()
@@ -294,13 +299,13 @@ public final class EntitlementStore {
     var statement =
         db.sql(
                 """
-                INSERT INTO taska.entitlement_snapshots(tenant_id,version,plan_version_id,period_id,
-                  valid_from,valid_until,paid_through,max_projects,max_members,max_tasks_per_project,
-                  max_storage_bytes,features,restrictions,coverage_state,state_key,source_operation_id,created_at)
-                VALUES(:tenant,:version,:plan,:period,:from,:until,:paid,:projects,:members,:tasks,:storage,
-                  CAST(:features AS jsonb),CAST(:restrictions AS jsonb),:coverage,:signature,:operation,:now)
-                RETURNING *,features::text AS features_text,restrictions::text AS restrictions_text
-                """)
+INSERT INTO taska.entitlement_snapshots(tenant_id,version,plan_version_id,period_id,
+  valid_from,valid_until,paid_through,max_projects,max_members,max_tasks_per_project,
+  max_storage_bytes,features,restrictions,coverage_state,state_key,source_operation_id,created_at)
+VALUES(:tenant,:version,:plan,:period,:from,:until,:paid,:projects,:members,:tasks,:storage,
+  CAST(:features AS jsonb),CAST(:restrictions AS jsonb),:coverage,:signature,:operation,:now)
+RETURNING *,features::text AS features_text,restrictions::text AS restrictions_text
+""")
             .bind("tenant", tenant)
             .bind("version", version)
             .bind("plan", p.plan())
@@ -368,11 +373,11 @@ public final class EntitlementStore {
             });
     return db.sql(
             """
-            INSERT INTO taska.outbox_events(id,tenant_id,aggregate_type,aggregate_id,aggregate_version,
-              event_type,schema_version,payload,operation_id,status,created_at)
-            VALUES(:id,:tenant,'Entitlement',:tenant,:version,'EntitlementSnapshotChanged',2,
-              CAST(:payload AS jsonb),:operation,'NEW',:now)
-            """)
+INSERT INTO taska.outbox_events(id,tenant_id,aggregate_type,aggregate_id,aggregate_version,
+  event_type,schema_version,payload,operation_id,status,created_at)
+VALUES(:id,:tenant,'Entitlement',:tenant,:version,'EntitlementSnapshotChanged',2,
+  CAST(:payload AS jsonb),:operation,'NEW',:now)
+""")
         .bind("id", UUID.randomUUID())
         .bind("tenant", tenant)
         .bind("version", version)

@@ -4,6 +4,9 @@ import io.grpc.Status;
 import java.util.Map;
 import java.util.UUID;
 import java.util.regex.Pattern;
+import mapper.GrpcErrorDetails;
+import org.springframework.core.io.buffer.DataBuffer;
+import org.springframework.core.io.buffer.DataBufferUtils;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -18,9 +21,6 @@ import ru.taska.domain.dto.TenantDto;
 import ru.taska.domain.dto.TenantPageDto;
 import ru.taska.filter.GatewayRequestExecutor;
 import ru.taska.service.TenantRegistryClient;
-import mapper.GrpcErrorDetails;
-import org.springframework.core.io.buffer.DataBuffer;
-import org.springframework.core.io.buffer.DataBufferUtils;
 import tools.jackson.core.JacksonException;
 import tools.jackson.core.StreamReadFeature;
 import tools.jackson.databind.DeserializationFeature;
@@ -96,7 +96,72 @@ public class TenantController implements TenantApi {
               String key = idempotencyKey(exchange);
               long expectedVersion = expectedVersion(exchange);
               return readName(exchange)
-                  .flatMap(name -> tenantClient.renameTenant(tenantId, name, key, expectedVersion, context));
+                  .flatMap(
+                      name ->
+                          tenantClient.renameTenant(tenantId, name, key, expectedVersion, context));
+            })
+        .map(ResponseEntity::ok);
+  }
+
+  @Override
+  public Mono<ResponseEntity<TenantDto>> transferTenantOwnership(
+      UUID tenantId,
+      UUID idempotencyKey,
+      String ifMatch,
+      Mono<ru.taska.domain.dto.TransferOwnershipRequestDto> body,
+      ServerWebExchange exchange) {
+    noStore(exchange);
+    return executor
+        .execute(
+            exchange,
+            EndpointSecurity.PROTECTED,
+            context -> {
+              String key = idempotencyKey(exchange);
+              long expected = expectedVersion(exchange);
+              return DataBufferUtils.join(exchange.getRequest().getBody(), MAX_PATCH_BYTES)
+                  .onErrorMap(
+                      org.springframework.core.io.buffer.DataBufferLimitException.class,
+                      error ->
+                          new ResponseStatusException(
+                              HttpStatus.PAYLOAD_TOO_LARGE,
+                              "Превышен размер запроса передачи владения"))
+                  .map(
+                      buffer -> {
+                        byte[] bytes = new byte[buffer.readableByteCount()];
+                        try {
+                          buffer.read(bytes);
+                        } finally {
+                          DataBufferUtils.release(buffer);
+                        }
+                        JsonNode root;
+                        try {
+                          root = STRICT_JSON.readTree(bytes);
+                        } catch (JacksonException e) {
+                          throw validation("body", "INVALID_JSON");
+                        }
+                        if (root == null
+                            || !root.isObject()
+                            || root.size() != 2
+                            || !root.has("newOwnerUserId")
+                            || !root.has("confirmed")
+                            || !root.get("newOwnerUserId").isTextual()
+                            || !root.get("confirmed").isBoolean()
+                            || !root.get("confirmed").asBoolean())
+                          throw validation("body", "INVALID_BODY");
+                        try {
+                          String raw = root.get("newOwnerUserId").asString();
+                          UUID target = UUID.fromString(raw);
+                          if (!target.toString().equals(raw)) throw new IllegalArgumentException();
+                          return target;
+                        } catch (IllegalArgumentException e) {
+                          throw validation("newOwnerUserId", "INVALID_UUID");
+                        }
+                      })
+                  .switchIfEmpty(Mono.error(validation("body", "REQUIRED")))
+                  .flatMap(
+                      target ->
+                          tenantClient.transferTenantOwnership(
+                              tenantId, target, key, expected, context));
             })
         .map(ResponseEntity::ok);
   }
@@ -105,7 +170,9 @@ public class TenantController implements TenantApi {
     return DataBufferUtils.join(exchange.getRequest().getBody(), MAX_PATCH_BYTES)
         .onErrorMap(
             org.springframework.core.io.buffer.DataBufferLimitException.class,
-            error -> new ResponseStatusException(HttpStatus.PAYLOAD_TOO_LARGE, "Tenant rename body is too large"))
+            error ->
+                new ResponseStatusException(
+                    HttpStatus.PAYLOAD_TOO_LARGE, "Tenant rename body is too large"))
         .map(this::parseName)
         .switchIfEmpty(Mono.error(validation("name", "REQUIRED")));
   }
