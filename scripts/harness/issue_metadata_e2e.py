@@ -1,5 +1,7 @@
 """TAS-363: собственные REST/mTLS/RLS fixtures меток, подписок и current recipients."""
 import json
+import math
+import re
 import time
 import uuid
 import zipfile
@@ -10,7 +12,38 @@ import trusted_rpc_e2e as t
 from issue_acl_e2e import IssueAclLocal
 
 
+class MeasuredHttp:
+    """Приватные timings без query/body/headers; исходные assertions и timeout сохраняются."""
+    def __init__(self, client, measurements):
+        self.client, self.measurements = client, measurements
+
+    def request(self, method, path, body=None, headers=None):
+        started, response = time.monotonic(), None
+        try:
+            response = self.client.request(method, path, body, headers)
+            return response
+        finally:
+            self.measurements.append({
+                'method': method,
+                'path': re.sub(r'[0-9a-f]{8}-[0-9a-f-]{27,}', '{id}', path.split('?')[0]),
+                'status': response.status if response is not None else 'TRANSPORT_ERROR',
+                'elapsedMs': round((time.monotonic() - started) * 1000, 1)})
+
+    def expect(self, method, path, status, body=None, headers=None):
+        return e.Http.expect(self, method, path, status, body, headers)
+
+
 class IssueMetadataLocal(IssueAclLocal):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.http_measurements = []
+
+    def cleanup(self):
+        try:
+            e.private_json(self.dir / 'metadata-http-timings.json', self.http_measurements)
+        finally:
+            super().cleanup()
+
     def prepare_extra_databases(self):
         super().prepare_extra_databases()
         self.edge('issue-service', 'project-service', 'ru.taska.b2b.v1.ProjectRecipientService/Check',
@@ -51,6 +84,7 @@ class IssueMetadataLocal(IssueAclLocal):
 
     def scenarios(self):
         actor, clients = self.seed()
+        clients = [(tenant, MeasuredHttp(client, self.http_measurements)) for tenant, client in clients]
         fixtures = []
         for tenant, client in clients:
             project, issue, warm = str(uuid.uuid4()), str(uuid.uuid4()), str(uuid.uuid4())
@@ -79,6 +113,7 @@ class IssueMetadataLocal(IssueAclLocal):
             if role != 'OUTSIDE':
                 self.sql('project_db', "INSERT INTO taska.project_members(tenant_id,project_id,user_id,role,added_by,root_membership_version) VALUES('%s','%s','%s','%s','%s',1);" % (tenant, project, user, role, actor))
             client, _ = self.member_client(tenant, user, 1)
+            client = MeasuredHttp(client, self.http_measurements)
             self.ready(client, '/api/v1/tenants/' + tenant + '/capabilities')
             members[role] = (user, client)
         member_id, member = members['MEMBER']
@@ -157,7 +192,11 @@ class IssueMetadataLocal(IssueAclLocal):
         owner.expect('POST', path + '/labels', 201, {'name': 'audited-admin-bypass', 'color': '#112233'})
         e.require(int(self.sql('issue_db', "SELECT count(*) FROM taska.issue_authorization_audit WHERE tenant_id='%s' AND actor_id='%s' AND action='createProjectLabel';" % (tenant, actor)).strip()) > 0, 'Administrative metadata bypass was not audited')
         self.sql('auth_db', "UPDATE taska.users SET global_role='USER' WHERE id='%s';UPDATE taska.web_sessions SET assurance='PASSWORD' WHERE user_id='%s';" % (actor, actor))
-        return {**probe, 'publicLabelsAndWatchers': 'PASS', 'tenantProjectIsolation': 'PASS',
+        durations = sorted(row['elapsedMs'] for row in self.http_measurements
+                           if row['method'] not in ('GET', 'HEAD', 'OPTIONS'))
+        return {**probe, 'metadataMutationMaxMs': max(durations),
+                'metadataMutationP95Ms': durations[math.ceil(len(durations) * 0.95) - 1],
+                'publicLabelsAndWatchers': 'PASS', 'tenantProjectIsolation': 'PASS',
                 'nativeRolePolicy': 'PASS', 'retryAndConcurrentOnce': 'PASS', 'currentTargetAndAccount': 'PASS',
                 'scopedPanelAndPrivacy': 'PASS', 'searchListFailClosed': 'PASS', 'archivedWriteDenial': 'PASS', 'readOnlyAndAuditedBypass': 'PASS'}
 

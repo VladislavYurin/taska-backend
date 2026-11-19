@@ -83,3 +83,10 @@ delivery. Существующий native outbox остаётся durable гра
 primary auth/root/project/account и подписанный SERVICE resolver. Общая stage не
 используется; reports/material/state остаются в ignored target, cleanup — только своих
 ресурсов. Перед merge/deploy нужны отдельные полномочия пользователя.
+
+`metadata-http-timings.json` сохраняет длительности, HTTP status, метод и path с
+нормализованными UUID без query/body/headers. Он пишется в собственный каталог
+прогона и при отказе; cleanup выполняется независимо от записи диагностики.
+Report содержит max/p95 длительности mutations. При проверке нестабильности
+выполнять последовательные полные прогоны на одном чистом head с новыми fixtures;
+не заменять проверяемые статусы повтором записи после неоднозначного timeout.

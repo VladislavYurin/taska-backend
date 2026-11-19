@@ -51,6 +51,14 @@ Snapshot соответствует Java records `ManagedRpcTrust.Snapshot/Servi
 делегирует уже проверенную session/PAT binding. Каждый recipient проверяет primary
 account auth_version, точный credential/session/grant, expiry/revocation и membership
 заново через auth. Чтения также uncached; отзыв не ждёт 30-секундного TTL assertion.
+
+`ManagedRpcTrust` на каждом обращении заново читает файл и сверяет SHA-256. При
+неизменных bytes переиспользуется только неизменяемая проверенная модель JSON;
+expiry и допустимость текущего ключа проверяются заново. Изменение файла требует
+полной проверки generation/содержимого; missing, corrupt, expired, rollback или
+замена bytes с прежней generation закрывают вызов, без last-known-good fallback.
+Это не кэш решений actor/grant/ACL, primary-проверки не пропускаются.
+
 Auth запрашивает `TenantMembershipService.GetMembership` с собственной SERVICE
 identity, purpose=`membership`, scope=`memberships:read`, через mTLS/JWS. Этот путь
 не рекурсирует через user authority. Текущие USER_OAUTH/ADMIN credentials без реализованной
