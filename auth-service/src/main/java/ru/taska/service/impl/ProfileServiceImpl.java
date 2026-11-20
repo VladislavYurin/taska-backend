@@ -2,6 +2,7 @@ package ru.taska.service.impl;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.reactive.TransactionalOperator;
 import reactor.core.publisher.Flux;
@@ -42,7 +43,7 @@ public class ProfileServiceImpl implements ProfileService {
     private final TransactionalOperator transactionalOperator;
     private final DirectoryMembershipAccess membership;
     private final DirectoryAccess access;
-    private final GrpcTenantServiceClient grpcTenantServiceClient;
+    private final ObjectProvider<GrpcTenantServiceClient> grpcTenantServiceClientsProvider;
     private static final int MEMBERSHIP_BATCH_SIZE = 100;
 
     @Override
@@ -227,11 +228,19 @@ public class ProfileServiceImpl implements ProfileService {
                     .flatMapMany(user ->
                             membership.check(user, tenantId)
                                     .thenMany(Flux.defer(() -> {
-                                                if (userIds == null || userIds.isEmpty())
-                                                    return Flux.empty();
+                                                GrpcTenantServiceClient grpcTenantServiceClient = grpcTenantServiceClientsProvider.getIfAvailable();
+                                                if (grpcTenantServiceClient == null) {
+                                                    return Mono.error(new DomainException(
+                                                            DomainStatus.UNAVAILABLE,
+                                                            "Tenant membership verification is unavailable"
+                                                    ));
+                                                }
+                                                if (userIds == null || userIds.isEmpty()) {
+                                                            return Flux.empty();
+                                                        }
                                                 List<UUID> distinctIds = userIds.stream()
-                                                        .distinct()
-                                                        .toList();
+                                                                .distinct()
+                                                                .toList();
                                                 return Flux.fromIterable(distinctIds)
                                                         .buffer(MEMBERSHIP_BATCH_SIZE)
                                                         .concatMap(uuids ->

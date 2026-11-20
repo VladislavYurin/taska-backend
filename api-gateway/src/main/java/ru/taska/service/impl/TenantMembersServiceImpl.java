@@ -38,7 +38,7 @@ public class TenantMembersServiceImpl implements TenantMembersService {
                     List<UUID> uuids = membershipPage.getItemsList()
                             .stream()
                             .map(Membership::getUserId)
-                            .map(UUID::fromString)
+                            .map(TenantMembersServiceImpl::parseResponseUuid)
                             .toList();
 
                     var expectedIds = new HashSet<>(
@@ -118,8 +118,8 @@ public class TenantMembersServiceImpl implements TenantMembersService {
 
         var item = new TenantMemberDto()
                 .id(UUID.fromString(member.getId()))
-                .tenantId(UUID.fromString(member.getTenantId()))
-                .userId(UUID.fromString(member.getUserId()))
+                .tenantId(parseResponseUuid(member.getTenantId()))
+                .userId(parseResponseUuid(member.getUserId()))
                 .role(role)
                 .state(state)
                 .isOwner(member.getIsOwner())
@@ -133,5 +133,33 @@ public class TenantMembersServiceImpl implements TenantMembersService {
         }
 
         return item;
+    }
+
+    private static UUID parseResponseUuid(String value) {
+        if (value == null) {
+            throw invalidDirectoryResponse();
+        }
+
+        final UUID parsed;
+        try {
+            parsed = UUID.fromString(value);
+        } catch (IllegalArgumentException exception) {
+            throw invalidDirectoryResponse();
+        }
+
+        // Не принимаем сокращённые формы, которые UUID.fromString
+        // может разобрать, например "1-1-1-1-1".
+        if (!parsed.toString().equalsIgnoreCase(value)) {
+            throw invalidDirectoryResponse();
+        }
+
+        return parsed;
+    }
+
+    private static DomainException invalidDirectoryResponse() {
+        return new DomainException(
+                DomainStatus.UNAVAILABLE,
+                "Incomplete or invalid directory response"
+        );
     }
 }
