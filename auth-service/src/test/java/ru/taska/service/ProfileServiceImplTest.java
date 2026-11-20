@@ -5,6 +5,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.beans.factory.support.StaticListableBeanFactory;
 import org.springframework.transaction.reactive.TransactionalOperator;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -24,6 +25,7 @@ import ru.taska.mapper.ProfileMapper;
 import ru.taska.repository.UserAvatarRepository;
 import ru.taska.repository.UserRepository;
 import ru.taska.security.tenant.VerifiedTenantContext;
+import ru.taska.security.trust.GrpcTenantServiceClient;
 import ru.taska.service.impl.ProfileServiceImpl;
 import ru.taska.storage.client.StorageClient;
 import ru.taska.storage.dto.PresignedUploadResult;
@@ -80,6 +82,8 @@ class ProfileServiceImplTest {
 
     @BeforeEach
     void setUp() {
+        var beans = new StaticListableBeanFactory();
+        beans.addBean("grpcTenantServiceClient", tenantClient);
         profileServiceImpl = new ProfileServiceImpl(
                 userRepository,
                 userAvatarRepository,
@@ -88,7 +92,7 @@ class ProfileServiceImplTest {
                 transactionalOperator,
                 membership,
                 access,
-                tenantClient
+                beans.getBeanProvider(GrpcTenantServiceClient.class)
         );
         testUserId = UUID.randomUUID();
         NEW_OBJECT_KEY = "avatars/" + testUserId + "/" + UUID.randomUUID();

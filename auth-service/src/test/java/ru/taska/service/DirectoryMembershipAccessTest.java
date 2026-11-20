@@ -4,6 +4,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+import org.springframework.beans.factory.support.StaticListableBeanFactory;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 import ru.taska.entity.User;
@@ -33,7 +34,9 @@ class DirectoryMembershipAccessTest {
     @BeforeEach
     void setUp() {
         authority = mock(GrpcMembershipAuthority.class);
-        service = new DirectoryMembershipAccess(authority);
+        var beans = new StaticListableBeanFactory();
+        beans.addBean("grpcMembershipAuthority", authority);
+        service = new DirectoryMembershipAccess(beans.getBeanProvider(GrpcMembershipAuthority.class));
         actor = User.builder().id(ACTOR).build();
     }
 

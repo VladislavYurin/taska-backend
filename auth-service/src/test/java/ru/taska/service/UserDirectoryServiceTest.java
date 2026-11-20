@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.springframework.beans.factory.support.StaticListableBeanFactory;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
@@ -54,11 +55,11 @@ import static org.mockito.Mockito.*;
  *
  * <p>Проверяются:
  * <ul>
- *     <li>изоляция выдачи A/B при глобальном поиске кандидатов;</li>
- *     <li>отказ при подмене актора и отсутствии membership;</li>
- *     <li>единое глобальное имя, email и аватар общей identity;</li>
- *     <li>прекращение доступа после отзыва membership;</li>
- *     <li>независимость страниц и hasMore от чужих пользователей.</li>
+ *     <li>Изоляция выдачи A/B при глобальном поиске кандидатов;</li>
+ *     <li>Отказ при подмене актора и отсутствии membership;</li>
+ *     <li>Единое глобальное имя, email и аватар общей identity;</li>
+ *     <li>Прекращение доступа после отзыва membership;</li>
+ *     <li>Независимость страниц и hasMore от чужих пользователей.</li>
  * </ul>
  *
  * <p>Репозиторий и membership RPC заменены управляемыми тестовыми данными.
@@ -119,9 +120,12 @@ class UserDirectoryServiceTest {
         membershipAccess = mock(DirectoryMembershipAccess.class);
         storage = mock(StorageClient.class);
 
+        var beans = new StaticListableBeanFactory();
+        beans.addBean("grpcTenantServiceClient", tenantClient);
+
         service = new UserDirectoryService(
                 users,
-                tenantClient,
+                beans.getBeanProvider(GrpcTenantServiceClient.class),
                 access,
                 storage,
                 membershipAccess

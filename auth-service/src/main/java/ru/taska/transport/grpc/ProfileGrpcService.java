@@ -229,8 +229,7 @@ public class ProfileGrpcService {
                             .doOnSuccess(response -> log.debug("[{}][{}] GetUserDetailsByIds success for userId={}",
                                     requestId, nodeId, userIds))
                             .doOnError(error -> log.warn("[{}][{}] GetUserDetailsByIds failed for userId={}: {}",
-                                    requestId, nodeId, userIds, error.getMessage()))
-                            .transform(GrpcExceptionHandler.withErrorHandling("GetUserDetailsByIds"));
+                                    requestId, nodeId, userIds, error.getMessage()));
                 });
     }
 }

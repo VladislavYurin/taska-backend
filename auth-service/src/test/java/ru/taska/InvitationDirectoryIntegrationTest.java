@@ -28,19 +28,47 @@ import ru.taska.entity.UserStatus;
 import ru.taska.repository.UserRepository;
 import ru.taska.transport.kafka.OutboxEventScheduler;
 import tools.jackson.databind.json.JsonMapper;
+import org.junit.jupiter.api.DisplayName;
+import ru.taska.api.b2b.v1.Membership;
+import ru.taska.api.b2b.v1.MembershipSnapshot;
+import ru.taska.api.b2b.v1.MembershipValidation;
+import ru.taska.api.b2b.v1.MembershipValidationBatch;
+import ru.taska.api.directory.v1.SearchUsersResponse;
+import ru.taska.exception.DomainException;
+import ru.taska.exception.DomainStatus;
+import ru.taska.security.tenant.VerifiedTenantContext;
+import ru.taska.security.trust.GrpcTenantServiceClient;
+import ru.taska.service.DirectoryMembershipAccess;
+import ru.taska.service.UserDirectoryService;
 
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE, properties = "jwt.invite-token-ttl=PT2H")
 class InvitationDirectoryIntegrationTest extends AbstractIT {
     @MockitoBean
     private OutboxEventScheduler outboxScheduler;
+
+    @Autowired
+    private UserDirectoryService directoryService;
+
+    @MockitoBean
+    private DirectoryMembershipAccess membershipAccess;
+
+    @MockitoBean
+    private GrpcTenantServiceClient tenantClient;
+
     @Autowired
     private UserRepository users;
     @Autowired
@@ -271,44 +299,183 @@ class InvitationDirectoryIntegrationTest extends AbstractIT {
         assertThat(invite(email, "", false).getCreated()).isTrue();
     }
 
+    /**
+     * Проверяет реальный SQL-поиск: регистронезависимость, пагинацию,
+     * буквальное восприятие специальных символов LIKE, исключение
+     * заблокированных аккаунтов и валидацию параметров.
+     * Членство пользователей задаётся тестовыми ответами tenant-клиента.
+     */
     @Test
+    @DisplayName(
+            "Поиск учитывает регистр независимо, экранирует LIKE, "
+            + "соблюдает пагинацию и исключает заблокированные аккаунты"
+    )
     void searchIsLiteralCaseInsensitiveBoundedAndNeverReturnsBlockedAccounts() {
+        UUID tenantId = UUID.randomUUID();
         String prefix = "Каталог" + UUID.randomUUID().toString().substring(0, 8);
-        var first = user("first-" + UUID.randomUUID() + "@example.test", prefix + " Alpha", UserStatus.ACTIVE, GlobalRole.USER);
-        var second = user("second-" + UUID.randomUUID() + "@example.test", prefix + " Beta", UserStatus.INVITED, GlobalRole.USER);
-        user("blocked-" + UUID.randomUUID() + "@example.test", prefix + " Gamma", UserStatus.BLOCKED, GlobalRole.USER);
-        var page = directory.searchUsers(Mono.just(search(prefix.toUpperCase(java.util.Locale.ROOT), 0, 1))).block(TIMEOUT);
+
+        var first = user(
+                "first-" + UUID.randomUUID() + "@example.test",
+                prefix + " Alpha",
+                UserStatus.ACTIVE,
+                GlobalRole.USER
+        );
+        var second = user(
+                "second-" + UUID.randomUUID() + "@example.test",
+                prefix + " Beta",
+                UserStatus.INVITED,
+                GlobalRole.USER
+        );
+        var blocked = user(
+                "blocked-" + UUID.randomUUID() + "@example.test",
+                prefix + " Gamma",
+                UserStatus.BLOCKED,
+                GlobalRole.USER
+        );
+
+        allowTenantDirectory(
+                tenantId,
+                admin.getId(),
+                Set.of(admin.getId(), first.getId(), second.getId(), blocked.getId())
+        );
+
+        var page = searchInTenant(
+                tenantId,
+                search(prefix.toUpperCase(java.util.Locale.ROOT), 0, 1)
+        ).block(TIMEOUT);
+
+        assertThat(page).isNotNull();
         assertThat(page.getHasMore()).isTrue();
-        assertThat(page.getItemsList()).extracting(row -> row.getId()).containsExactly(first.getId().toString());
-        var next = directory.searchUsers(Mono.just(search(prefix, 1, 1))).block(TIMEOUT);
+        assertThat(page.getItemsList())
+                .extracting(row -> row.getId())
+                .containsExactly(first.getId().toString());
+
+        var next = searchInTenant(
+                tenantId,
+                search(prefix, 1, 1)
+        ).block(TIMEOUT);
+
+        assertThat(next).isNotNull();
         assertThat(next.getHasMore()).isFalse();
-        assertThat(next.getItemsList()).extracting(row -> row.getId()).containsExactly(second.getId().toString());
-        var literal = user("literal-" + UUID.randomUUID() + "@example.test", "Acme%_!" + prefix, UserStatus.LOCKED, GlobalRole.USER);
-        user("other-" + UUID.randomUUID() + "@example.test", "Acme-other" + prefix, UserStatus.ACTIVE, GlobalRole.USER);
-        var found = directory.searchUsers(Mono.just(search("Acme%_!" + prefix, 0, 20))).block(TIMEOUT);
-        assertThat(found.getItemsList()).extracting(row -> row.getId()).containsExactly(literal.getId().toString());
-        for (var request : List.of(search("  ", 0, 20), search("ab", 0, 20), search("ab\0", 0, 20), search(prefix, 0, 51), search(prefix, -1, 20))) {
-            assertCode(() -> directory.searchUsers(Mono.just(request)).block(TIMEOUT), Status.Code.INVALID_ARGUMENT);
+        assertThat(next.getItemsList())
+                .extracting(row -> row.getId())
+                .containsExactly(second.getId().toString());
+
+        var literal = user(
+                "literal-" + UUID.randomUUID() + "@example.test",
+                "Acme%_!" + prefix,
+                UserStatus.LOCKED,
+                GlobalRole.USER
+        );
+        var other = user(
+                "other-" + UUID.randomUUID() + "@example.test",
+                "Acme-other" + prefix,
+                UserStatus.ACTIVE,
+                GlobalRole.USER
+        );
+
+        // Оба пользователя разрешены по membership:
+        // исключить other должен именно SQL-фильтр поиска.
+        allowTenantDirectory(
+                tenantId,
+                admin.getId(),
+                Set.of(
+                        admin.getId(), first.getId(), second.getId(),
+                        blocked.getId(), literal.getId(), other.getId()
+                )
+        );
+
+        var found = searchInTenant(
+                tenantId,
+                search("Acme%_!" + prefix, 0, 20)
+        ).block(TIMEOUT);
+
+        assertThat(found).isNotNull();
+        assertThat(found.getItemsList())
+                .extracting(row -> row.getId())
+                .containsExactly(literal.getId().toString());
+
+        for (var request : List.of(
+                search("  ", 0, 20),
+                search("ab", 0, 20),
+                search("ab\0", 0, 20),
+                search(prefix, 0, 51),
+                search(prefix, -1, 20)
+        )) {
+            assertThatThrownBy(() ->
+                    searchInTenant(tenantId, request).block(TIMEOUT)
+            ).isInstanceOfSatisfying(
+                    DomainException.class,
+                    error -> assertThat(error.getStatus())
+                            .isEqualTo(DomainStatus.INVALID_ARGUMENT)
+            );
         }
     }
 
+    /**
+     * Проверяет, что отсутствие файла аватара не скрывает профиль,
+     * а блокировка аккаунта в БД запрещает следующий поиск.
+     * Membership остаётся разрешённым, поэтому отказ должен возникнуть
+     * именно при проверке статуса аккаунта.
+     */
     @Test
+    @DisplayName(
+            "Отсутствующий аватар не скрывает пользователя; "
+            + "блокировка актора возвращает PERMISSION_DENIED"
+    )
     void missingAvatarDoesNotHideTheUserAndBlockedActorGets403() {
+        UUID tenantId = UUID.randomUUID();
         String name = "Avatar" + UUID.randomUUID();
-        var target = user("avatar-" + UUID.randomUUID() + "@example.test", name, UserStatus.ACTIVE, GlobalRole.USER);
-        database.sql("INSERT INTO taska.user_avatars (user_id, object_key, file_name, content_type, size_bytes, created_at) "
-                        + "VALUES (:id, :key, 'avatar.png', 'image/png', 10, now())")
-                .bind("id", target.getId()).bind("key", "missing/" + UUID.randomUUID())
-                .fetch().rowsUpdated().block(TIMEOUT);
-        var response = directory.searchUsers(Mono.just(search(name, 0, 20).toBuilder()
-                .setActorUserId(target.getId().toString()).build())).block(TIMEOUT);
+
+        var target = user(
+                "avatar-" + UUID.randomUUID() + "@example.test",
+                name,
+                UserStatus.ACTIVE,
+                GlobalRole.USER
+        );
+
+        database.sql("""
+            INSERT INTO taska.user_avatars
+                (user_id, object_key, file_name, content_type, size_bytes, created_at)
+            VALUES (:id, :key, 'avatar.png', 'image/png', 10, now())
+            """)
+                .bind("id", target.getId())
+                .bind("key", "missing/" + UUID.randomUUID())
+                .fetch()
+                .rowsUpdated()
+                .block(TIMEOUT);
+
+        allowTenantDirectory(
+                tenantId,
+                target.getId(),
+                Set.of(target.getId())
+        );
+
+        var request = search(name, 0, 20).toBuilder()
+                .setActorUserId(target.getId().toString())
+                .build();
+
+        var response = searchInTenant(tenantId, request).block(TIMEOUT);
+
+        assertThat(response).isNotNull();
         assertThat(response.getItemsList()).hasSize(1);
-        assertThat(response.getItems(0).getId()).isEqualTo(target.getId().toString());
+        assertThat(response.getItems(0).getId())
+                .isEqualTo(target.getId().toString());
         assertThat(response.getItems(0).hasAvatarUrl()).isFalse();
-        database.sql("UPDATE taska.users SET status='BLOCKED' WHERE id=:id").bind("id", target.getId())
-                .fetch().rowsUpdated().block(TIMEOUT);
-        assertCode(() -> directory.searchUsers(Mono.just(search(name, 0, 20).toBuilder()
-                .setActorUserId(target.getId().toString()).build())).block(TIMEOUT), Status.Code.PERMISSION_DENIED);
+
+        database.sql("UPDATE taska.users SET status='BLOCKED' WHERE id=:id")
+                .bind("id", target.getId())
+                .fetch()
+                .rowsUpdated()
+                .block(TIMEOUT);
+
+        assertThatThrownBy(() ->
+                searchInTenant(tenantId, request).block(TIMEOUT)
+        ).isInstanceOfSatisfying(
+                DomainException.class,
+                error -> assertThat(error.getStatus())
+                        .isEqualTo(DomainStatus.PERMISSION_DENIED)
+        );
     }
 
     @Test
@@ -388,5 +555,77 @@ class InvitationDirectoryIntegrationTest extends AbstractIT {
     private void removeFailureTrigger() {
         database.sql("DROP TRIGGER reject_directory_event ON taska.outbox_events").fetch().rowsUpdated().block(TIMEOUT);
         database.sql("DROP FUNCTION taska.reject_directory_event()").fetch().rowsUpdated().block(TIMEOUT);
+    }
+
+    /**
+     * Настраивает успешную проверку членства актора и ответы batch
+     * только для явно перечисленных участников тестовой компании.
+     */
+    private void allowTenantDirectory(
+            UUID tenantId,
+            UUID actorId,
+            Set<UUID> memberIds
+    ) {
+        String tenant = tenantId.toString();
+
+        when(membershipAccess.check(
+                argThat(user -> user != null && actorId.equals(user.getId())),
+                eq(tenant)
+        )).thenReturn(Mono.empty());
+
+        when(tenantClient.batchValidateMemberships(eq(tenant), anyList()))
+                .thenAnswer(invocation -> {
+                    List<UUID> ids = invocation.getArgument(1);
+
+                    var batch = MembershipValidationBatch.newBuilder()
+                            .setTenantId(tenant);
+
+                    for (UUID id : ids) {
+                        boolean found = memberIds.contains(id);
+
+                        var item = MembershipValidation.newBuilder()
+                                .setUserId(id.toString())
+                                .setFound(found);
+
+                        if (found) {
+                            item.setMembership(
+                                    MembershipSnapshot.newBuilder()
+                                            .setTenantId(tenant)
+                                            .setUserId(id.toString())
+                                            .setState(Membership.StateValue.STATE_ACTIVE)
+                            );
+                        }
+
+                        batch.addItems(item);
+                    }
+
+                    return Mono.just(batch.build());
+                });
+    }
+
+    /**
+     * Вызывает настоящий сервис поиска с тестовым tenant-контекстом.
+     * Проверка подписи контекста и транспорт gRPC здесь не выполняются.
+     */
+    private Mono<SearchUsersResponse> searchInTenant(
+            UUID tenantId,
+            SearchUsersRequest request
+    ) {
+        UUID actorId = UUID.fromString(request.getActorUserId());
+
+        var verified = mock(VerifiedTenantContext.class);
+        when(verified.tenantId()).thenReturn(tenantId.toString());
+        when(verified.actorId()).thenReturn(actorId.toString());
+        when(verified.scopes()).thenReturn(Set.of("read"));
+
+        return directoryService.search(
+                        actorId,
+                        request.getQuery(),
+                        request.getPage(),
+                        request.getPageSize()
+                )
+                .contextWrite(context ->
+                        context.put(VerifiedTenantContext.class, verified)
+                );
     }
 }

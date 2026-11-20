@@ -1,6 +1,7 @@
 package ru.taska.service;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
@@ -25,7 +26,7 @@ import java.util.stream.Stream;
 @RequiredArgsConstructor
 public class UserDirectoryService {
     private final UserRepository users;
-    private final GrpcTenantServiceClient grpcTenantServiceClient;
+    private final ObjectProvider<GrpcTenantServiceClient> grpcTenantServiceClientObjectProvider;
     private final DirectoryAccess access;
     private final StorageClient storage;
     private final DirectoryMembershipAccess membership;
@@ -43,6 +44,13 @@ public class UserDirectoryService {
      */
     public Mono<SearchUsersResponse> search(UUID actor, String query, int page, int pageSize) {
         return Mono.deferContextual(context -> {
+            GrpcTenantServiceClient grpcTenantServiceClient = grpcTenantServiceClientObjectProvider.getIfAvailable();
+            if (grpcTenantServiceClient == null) {
+                return Mono.error(new DomainException(
+                        DomainStatus.UNAVAILABLE,
+                        "Tenant membership verification is unavailable"
+                ));
+            }
             if (!context.hasKey(VerifiedTenantContext.class))
                 return Mono.error(new DomainException(
                         DomainStatus.UNAUTHENTICATED,

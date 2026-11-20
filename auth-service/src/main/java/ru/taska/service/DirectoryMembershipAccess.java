@@ -1,6 +1,7 @@
 package ru.taska.service;
 
 import lombok.AllArgsConstructor;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
 import ru.taska.entity.User;
@@ -18,7 +19,7 @@ import java.util.UUID;
 @AllArgsConstructor
 public class DirectoryMembershipAccess {
 
-    private final GrpcMembershipAuthority grpcMembershipAuthority;
+    private final ObjectProvider<GrpcMembershipAuthority> grpcMembershipAuthorityProvider;
 
     /**
      * Проверка, что переданный пользователь находится в компании tenantId.
@@ -27,6 +28,13 @@ public class DirectoryMembershipAccess {
      * @return успешное завершение, если пользователь член организации, иначе ошибка.
      */
     public Mono<Void> check(User user, String tenantId) {
+        GrpcMembershipAuthority grpcMembershipAuthority = grpcMembershipAuthorityProvider.getIfAvailable();
+        if (grpcMembershipAuthority == null) {
+            return Mono.error(new DomainException(
+                    DomainStatus.UNAVAILABLE,
+                    "Tenant membership verification is unavailable"
+            ));
+        }
         return grpcMembershipAuthority.current(UUID.fromString(tenantId), user.getId())
                 .switchIfEmpty(Mono.error(new DomainException(
                         DomainStatus.PERMISSION_DENIED,
