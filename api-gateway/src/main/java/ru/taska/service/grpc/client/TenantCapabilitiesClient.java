@@ -1,4 +1,4 @@
-package ru.taska.service;
+package ru.taska.service.grpc.client;
 
 import io.grpc.*;
 import io.grpc.stub.MetadataUtils;
