@@ -35,12 +35,38 @@ public class DirectoryMembershipAccess {
                     "Tenant membership verification is unavailable"
             ));
         }
-        return grpcMembershipAuthority.current(UUID.fromString(tenantId), user.getId())
+        return grpcMembershipAuthority.current(parseResponseUuid(tenantId), user.getId())
                 .switchIfEmpty(Mono.error(new DomainException(
                         DomainStatus.PERMISSION_DENIED,
                         "Tenant membership is required",
                         Map.of("reason", "TENANT_MEMBERSHIP_REQUIRED")
                 )))
                 .then();
+    }
+
+    private static UUID parseResponseUuid(String value) {
+        if (value == null) {
+            throw invalidDirectoryResponse();
+        }
+
+        final UUID parsed;
+        try {
+            parsed = UUID.fromString(value);
+        } catch (IllegalArgumentException exception) {
+            throw invalidDirectoryResponse();
+        }
+
+        if (!parsed.toString().equalsIgnoreCase(value)) {
+            throw invalidDirectoryResponse();
+        }
+
+        return parsed;
+    }
+
+    private static DomainException invalidDirectoryResponse() {
+        return new DomainException(
+                DomainStatus.UNAVAILABLE,
+                "Incomplete or invalid directory response"
+        );
     }
 }

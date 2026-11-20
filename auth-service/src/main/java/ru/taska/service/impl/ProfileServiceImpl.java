@@ -224,7 +224,7 @@ public class ProfileServiceImpl implements ProfileService {
                 ));
             }
 
-            return access.requireActor(UUID.fromString(actorId), false)
+            return access.requireActor(parseResponseUuid(actorId), false)
                     .flatMapMany(user ->
                             membership.check(user, tenantId)
                                     .thenMany(Flux.defer(() -> {
@@ -306,6 +306,32 @@ public class ProfileServiceImpl implements ProfileService {
     private Mono<User> verifyUserExists(UUID userId) {
         return userRepository.findById(userId)
                 .switchIfEmpty(Mono.error(new DomainException(DomainStatus.NOT_FOUND, "User not found: " + userId)));
+    }
+
+    private static UUID parseResponseUuid(String value) {
+        if (value == null) {
+            throw invalidDirectoryResponse();
+        }
+
+        final UUID parsed;
+        try {
+            parsed = UUID.fromString(value);
+        } catch (IllegalArgumentException exception) {
+            throw invalidDirectoryResponse();
+        }
+
+        if (!parsed.toString().equalsIgnoreCase(value)) {
+            throw invalidDirectoryResponse();
+        }
+
+        return parsed;
+    }
+
+    private static DomainException invalidDirectoryResponse() {
+        return new DomainException(
+                DomainStatus.UNAVAILABLE,
+                "Incomplete or invalid directory response"
+        );
     }
 
     /**

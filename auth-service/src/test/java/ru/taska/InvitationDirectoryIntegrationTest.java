@@ -52,8 +52,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE, properties = "jwt.invite-token-ttl=PT2H")
 class InvitationDirectoryIntegrationTest extends AbstractIT {
@@ -333,6 +332,13 @@ class InvitationDirectoryIntegrationTest extends AbstractIT {
                 GlobalRole.USER
         );
 
+        var outsider = user(
+                "outsider-" + UUID.randomUUID() + "@example.test",
+                prefix + " Outsider",
+                UserStatus.ACTIVE,
+                GlobalRole.USER
+        );
+
         allowTenantDirectory(
                 tenantId,
                 admin.getId(),
@@ -360,6 +366,14 @@ class InvitationDirectoryIntegrationTest extends AbstractIT {
         assertThat(next.getItemsList())
                 .extracting(row -> row.getId())
                 .containsExactly(second.getId().toString());
+
+        verify(
+                tenantClient,
+                org.mockito.Mockito.atLeastOnce()
+        ).batchValidateMemberships(
+                eq(tenantId.toString()),
+                argThat(ids -> ids != null && ids.contains(outsider.getId()))
+        );
 
         var literal = user(
                 "literal-" + UUID.randomUUID() + "@example.test",

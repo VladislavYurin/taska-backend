@@ -147,8 +147,6 @@ public class TenantMembersServiceImpl implements TenantMembersService {
             throw invalidDirectoryResponse();
         }
 
-        // Не принимаем сокращённые формы, которые UUID.fromString
-        // может разобрать, например "1-1-1-1-1".
         if (!parsed.toString().equalsIgnoreCase(value)) {
             throw invalidDirectoryResponse();
         }
