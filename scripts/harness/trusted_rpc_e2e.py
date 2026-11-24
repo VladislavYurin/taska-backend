@@ -392,8 +392,8 @@ class TrustedLocal(e.Local):
                 'protectedReadinessAttempts': readiness}
 
 
-def main():
-    parser = argparse.ArgumentParser(description=__doc__)
+def main(*, description=None, scenario='trusted-rpc'):
+    parser = argparse.ArgumentParser(description=description or __doc__)
     parser.add_argument('--cleanup', help='Signed state.json from an interrupted owned run')
     args = parser.parse_args()
     root = Path(__file__).resolve().parents[2]
@@ -408,7 +408,7 @@ def main():
         return
     state = store.create(secrets.token_hex(8), 'local', 'isolated-trusted-rpc', '')
     local = TrustedLocal(root, store, state)
-    report = {'source': e.source(root), 'scenario': 'trusted-rpc', 'status': 'FAIL'}
+    report = {'source': e.source(root), 'scenario': scenario, 'status': 'FAIL'}
     print(json.dumps({'runState': str(store.path(state['runId'])), 'status': 'RUNNING'}), flush=True)
     with e.mutex(local.dir / '.run-lock'):
         try:

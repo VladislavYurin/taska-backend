@@ -49,7 +49,7 @@ class ProjectOutboxLocal(IssueAclLocal):
 
 def main():
     t.TrustedLocal = ProjectOutboxLocal
-    t.main()
+    t.main(description=__doc__, scenario='native-project-outbox')
 
 
 if __name__ == '__main__':
