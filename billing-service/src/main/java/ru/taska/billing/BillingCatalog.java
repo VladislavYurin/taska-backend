@@ -502,6 +502,7 @@ public final class BillingCatalog {
             .setId(row.get("id").toString())
             .setCode(row.get("plan_code").toString())
             .setVersion(row.get("version").toString())
+            .setMaxAttachmentBytes(row.get("max_attachment_bytes").toString())
             .setName(row.get("name").toString())
             .setKind(PlanVersion.KindValue.valueOf("KIND_" + row.get("kind")))
             .setPrice(

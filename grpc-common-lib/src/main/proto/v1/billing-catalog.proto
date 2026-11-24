@@ -33,6 +33,8 @@ message PlanVersion {
   StateValue state = 9;
   optional string published_at = 10;
   KindValue kind = 11;
+  // Предельный размер одного вложения из неизменяемого каталога.
+  optional string max_attachment_bytes = 12;
 }
 
 message PlanVersionPage {

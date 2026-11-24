@@ -348,6 +348,38 @@ public final class TenantDecisionFacts {
         .then();
   }
 
+  public Mono<CapabilityEvaluator.Decision> acceptedAttachment(
+      Frame frame, Target target, ProjectRole role, Set<ErrorCode> integrity) {
+    return decide(
+        frame,
+        Action.ATTACHMENT_CONFIRM,
+        target,
+        role,
+        integrity,
+        new Accepted(
+            target.operation(),
+            target,
+            Set.of(Action.ATTACHMENT_CONFIRM),
+            Set.of(Flag.ATTACHMENT_UPLOAD)));
+  }
+
+  /** Только повтор/поиск сохранённого намерения: бизнес-отказ не становится новым admission. */
+  public Mono<CapabilityEvaluator.Decision> attachmentPrincipal(
+      Frame frame, Target target, ProjectRole role, Set<ErrorCode> integrity) {
+    return evaluate(frame, Action.ATTACHMENT_CONFIRM, target, role, integrity, null)
+        .map(
+            d -> {
+              var business =
+                  Set.of(
+                      ErrorCode.ERROR_CODE_READ_ONLY,
+                      ErrorCode.ERROR_CODE_CAPABILITY_DISABLED,
+                      ErrorCode.ERROR_CODE_QUOTA_EXCEEDED);
+              if (!d.capability().getAllowed()
+                  && !business.containsAll(d.capability().getDenialCodesList())) requireAllowed(d);
+              return d;
+            });
+  }
+
   private Mono<CapabilityEvaluator.Decision> decide(
       Frame frame,
       Action action,

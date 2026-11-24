@@ -65,18 +65,31 @@ public class GrpcIssueAttachmentServiceClient {
     /**
      * Запрос presigned URL для прямой загрузки файла в S3.
      */
+    public Mono<CreateAttachmentUploadUrlResponseDto> createAttachmentUploadUrl(String projectId, String issueId,
+            Mono<CreateAttachmentUploadUrlRequestDto> request,GatewayContext context,String key) {
+        return createAttachmentUploadUrlInternal(projectId,issueId,request,context,key);
+    }
+
     public Mono<CreateAttachmentUploadUrlResponseDto> createAttachmentUploadUrl(
             String issueId,
             Mono<CreateAttachmentUploadUrlRequestDto> request,
             GatewayContext context
     ) {
+        return createAttachmentUploadUrlInternal("",issueId,request,context,context.requestId());
+    }
+
+    private Mono<CreateAttachmentUploadUrlResponseDto> createAttachmentUploadUrlInternal(String projectId,String issueId,
+        Mono<CreateAttachmentUploadUrlRequestDto> request,GatewayContext context,String key) {
         log.info("[{}] Calling createAttachmentUploadUrl", context.requestId());
 
         return request.flatMap(requestDto ->
-                ru.taska.security.tenant.RpcContextBridge.outbound(() -> dynamicStub().createAttachmentUploadUrl(
+                ru.taska.security.tenant.RpcContextBridge.outbound(() -> uploadStub().createAttachmentUploadUrl(
                                 CreateAttachmentUploadUrlRequest.newBuilder()
                                         .setHeader(buildGrpcHeader(context))
                                         .setBody(CreateAttachmentUploadUrlRequestBody.newBuilder()
+                                                .setProjectId(projectId)
+                                                .setFileName(requestDto.getFileName())
+                                                .setIdempotencyKey(key==null?context.requestId():key)
                                                 .setContentType(requestDto.getContentType())
                                                 .setSizeBytes(requestDto.getSizeBytes())
                                                 .setActorUserId(context.userContext().userId())
@@ -92,18 +105,29 @@ public class GrpcIssueAttachmentServiceClient {
     /**
      * Подтверждение загрузки файла в S3 и создание записи о вложении.
      */
+    public Mono<IssueAttachmentDto> confirmAttachmentUpload(String projectId,String issueId,
+        Mono<ConfirmAttachmentUploadRequestDto> request,GatewayContext context) {
+      return confirmAttachmentUploadInternal(projectId,issueId,request,context);
+    }
+
     public Mono<IssueAttachmentDto> confirmAttachmentUpload(
             String issueId,
             Mono<ConfirmAttachmentUploadRequestDto> request,
             GatewayContext context
     ) {
+        return confirmAttachmentUploadInternal("",issueId,request,context);
+    }
+
+    private Mono<IssueAttachmentDto> confirmAttachmentUploadInternal(String projectId,String issueId,
+        Mono<ConfirmAttachmentUploadRequestDto> request,GatewayContext context) {
         log.info("[{}] Calling confirmAttachmentUpload", context.requestId());
 
         return request.flatMap(requestDto ->
-                ru.taska.security.tenant.RpcContextBridge.outbound(() -> dynamicStub().confirmAttachmentUpload(
+                ru.taska.security.tenant.RpcContextBridge.outbound(() -> uploadStub().confirmAttachmentUpload(
                                 ConfirmAttachmentUploadRequest.newBuilder()
                                         .setHeader(buildGrpcHeader(context))
                                         .setBody(ConfirmAttachmentUploadRequestBody.newBuilder()
+                                                .setProjectId(projectId)
                                                 .setIssueId(issueId)
                                                 .setActorUserId(context.userContext().userId())
                                                 .setContentType(requestDto.getContentType())
@@ -165,8 +189,18 @@ public class GrpcIssueAttachmentServiceClient {
      * Возвращает gRPC stub с динамически настроенным временем ожидания (deadline).
      */
     private ReactorIssueAttachmentServiceGrpc.ReactorIssueAttachmentServiceStub dynamicStub() {
-        return attachmentServiceStub.withDeadlineAfter(properties.issueService().deadlineDuration().toMillis(), TimeUnit.MILLISECONDS);
+        return attachmentServiceStub.withDeadlineAfter(
+                properties.issueService().deadlineDuration().toMillis(), TimeUnit.MILLISECONDS);
     }
+
+    private ReactorIssueAttachmentServiceGrpc.ReactorIssueAttachmentServiceStub uploadStub() {
+        long deadline = properties.issueService().deadlineDuration().toMillis();
+        return attachmentServiceStub.withDeadlineAfter(
+                nativeContext ? Math.max(20000, deadline) : deadline, TimeUnit.MILLISECONDS);
+    }
+
+    @org.springframework.beans.factory.annotation.Value("${taska.rpc.context.enabled:false}")
+    private boolean nativeContext;
 
     private Header buildGrpcHeader(GatewayContext context) {
         return ru.taska.mapper.MappingUtils.buildGrpcHeader(context);
