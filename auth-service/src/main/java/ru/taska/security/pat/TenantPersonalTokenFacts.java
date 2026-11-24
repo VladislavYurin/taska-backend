@@ -87,6 +87,7 @@ public final class TenantPersonalTokenFacts implements CapabilityEvaluator.Sourc
                         Instant until = Collections.min(List.of(clock.instant().plusSeconds(30),
                             Instant.parse(actor.getExpiresAt()), values.getT1().validUntil(),
                             Instant.parse(claim.getExpiresAt())));
+                        if (!clock.instant().isBefore(until)) throw unavailable();
                         var frame = new TenantDecisionFacts.Frame(c, actor,
                             members.getItems(0).getMembership(), members.getTenantLifecycle(),
                             entitlement, plan, values.getT1(), until);

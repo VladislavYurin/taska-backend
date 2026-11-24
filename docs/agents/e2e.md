@@ -155,3 +155,17 @@ python3 scripts/harness.py docs-check
 ```
 
 Для нового сценария сохранить stable ID, объявить preconditions/actors, число и тип записей, ожидаемые success/errors, bounded polling и cleanup. Сначала реализовать write-ahead registry и отказ при missing capability, затем позитивный путь и проверку сохранности после отказа. В tests моделировать Docker/HTTP только своей fixture; дополнительно выполнить реальный local run. Не менять итоговый PARTIAL на PASS до покрытия всех пунктов исходного сценария.
+
+## Токены одной компании (TAS-542)
+
+```sh
+python3 scripts/harness/tenant_tokens_e2e.py
+```
+
+Отдельный local-only runner расширяет owned capabilities fixture: семь приложений,
+собственные PostgreSQL, mTLS/JWS и managed trust. Проверяет production Source при включённом
+модуле auth, REST issuance/replay с тем же секретом, foreign-tenant denial без записи,
+метаданные компании, запрет выпуска по PAT, отзыв и причины двух флагов.
+Состояние и cleanup следуют `trusted_rpc_e2e.py`; shared stage не используется.
+Подключения OAuth проверяются отдельными HTTP/gRPC и owner-store regressions;
+браузерный выбор компании и consent bridge остаются TAS-543.

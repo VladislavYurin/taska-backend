@@ -141,6 +141,14 @@ class TenantOAuthGrantBoundaryTest {
   }
 
   @Test
+  void disabledMcpCannotPersistConsent() throws Exception {
+    when(admission.admitOAuth(any(), any())).thenReturn(Mono.error(new ru.taska.exception.DomainException(
+        ru.taska.exception.DomainStatus.PERMISSION_DENIED, "CAPABILITY_DISABLED", Map.of("code", "CAPABILITY_DISABLED"))));
+    rejected(Status.Code.PERMISSION_DENIED, "CAPABILITY_DISABLED", approve(tenantSession(), request()));
+    verifyNoInteractions(store);
+  }
+
+  @Test
   void forgedRequestContextCannotReachAuthorityOrStore() {
     var forged =
         request().toBuilder()

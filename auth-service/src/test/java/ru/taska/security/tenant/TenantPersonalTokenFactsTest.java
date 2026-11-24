@@ -54,6 +54,11 @@ class TenantPersonalTokenFactsTest extends TenantPersonalTokenBoundaryTest {
     var evaluator = new CapabilityEvaluator(source, Clock.systemUTC());
     var first = inbound(claims, () -> RpcContextBridge.inbound(evaluator.evaluate(Action.PAT_CREATE, target))).block();
     assertTrue(first.capability().getAllowed());
+    var expired = claims.toBuilder().setAction("approveTenantOAuthGrant")
+        .setExpiresAt(Instant.now().minusSeconds(1).toString()).build();
+    var expiredFailure = assertThrows(ru.taska.exception.DomainException.class, () -> inbound(expired,
+        () -> RpcContextBridge.inbound(source.admitOAuth(tenant, user))).block());
+    assertEquals("DEPENDENCY_UNAVAILABLE", expiredFailure.getDetails().get("code"));
     var blocked = values.stream().map(f -> f.getKey().equals("FREE_MCP")
         ? f.toBuilder().setVersion("2").setBooleanValue(false).build() : f).toList();
     when(reads.configuration()).thenReturn(Mono.just(PlatformConfigurationSnapshotCache.snapshot(blocked)));
@@ -65,8 +70,8 @@ class TenantPersonalTokenFactsTest extends TenantPersonalTokenBoundaryTest {
     when(reads.configuration()).thenReturn(Mono.error(new IllegalStateException("owned outage")));
     rejected(io.grpc.Status.Code.UNAVAILABLE, "DEPENDENCY_UNAVAILABLE", inbound(claims,
         () -> handler.createTenantPersonalToken(Mono.just(request(UUID.randomUUID(), PersonalTokenRequest.ScopesValue.SCOPES_read)))));
-    verify(identity, times(3)).actorFacts(any(), any(), any());
-    verify(reads, times(3)).actorMembership(any());
+    verify(identity, times(4)).actorFacts(any(), any(), any());
+    verify(reads, times(4)).actorMembership(any());
     verifyNoInteractions(store);
   }
 }

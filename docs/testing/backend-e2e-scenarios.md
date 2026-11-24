@@ -797,3 +797,24 @@ Cleanup: закрыть каналы/серверы/pools и удалить со
 ## Независимая пауза и блокировка компании (TAS-480)
 
 `python3 scripts/harness/tenant_restrictions_e2e.py` поднимает семь собственных native приложений с primary auth/root/billing и managed mTLS/JWS. Проверяет owner/admin MFA, независимые причины, CAS/replay/conflict/concurrency, READ_WHILE_RESTRICTED true/false на реальном project read/write, доступность metadata/lifecycle и financial capability, неизменность subscription/period/payment state и отсутствие private audit reason в событиях. Не заявляет отсутствующий members REST или live PSP charges. Admission/reconciliation autopay и missing/offline root отдельно проверяет AutopayIntegrationTest на PostgreSQL; источник payment-state получает причины из root snapshot. Cleanup только ownership-checked, общий стенд не затрагивается.
+
+## E2E-47. Токен одной компании через REST (TAS-542)
+
+Локальный runner: `python3 scripts/harness/tenant_tokens_e2e.py`. Только собственный стек
+с реальными auth/tenant/billing, PostgreSQL и mTLS/JWS; managed trust и receipt key обязательны.
+
+1. WEB_TENANT компании A на FREE без FREE_PERSONAL_API_TOKENS получает 403 CAPABILITY_DISABLED;
+   токен, grant и receipt не создаются. Включить флаг только в собственной fixture.
+2. Выпустить PAT через POST /api/v1/account/tenant-tokens с UUID ключом. Проверить 201,
+   no-store, tenantId, prefix и scopes (write включает read). Повтор в 60 секунд даёт
+   тот же секрет и одну строку токена.
+3. С сессией A указать B: 403 TENANT_MISMATCH без нового токена. По выданному PAT выпуск
+   ещё одного PAT запрещён. GET metadata возвращает компанию, но не секрет.
+4. Отозвать токен обычной веб-сессией; прежний секрет больше не аутентифицирует запрос.
+   Выключить PERSONAL_API_TOKENS в собственной fixture: pat.create и POST запрещены,
+   disabledFlags различает общий и FREE-флаг. После отказов число токенов не растёт.
+5. Cleanup удаляет только owned Compose project и fixtures; отчёты/секреты остаются вне Git.
+
+Дополнительные проверки модулей: scopes/срок/лимит, receipt conflict/expiry, актуальность
+membership/credential, source outage и startup; HTTP→gRPC OAuth metadata и scoped revoke;
+production OAuth admission отвергает FREE_MCP до записи. Полный браузерный consent — TAS-543.
