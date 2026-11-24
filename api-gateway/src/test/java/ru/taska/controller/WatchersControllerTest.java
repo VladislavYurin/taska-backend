@@ -87,6 +87,7 @@ class WatchersControllerTest {
         response.setTotalCount(1);
 
         Mockito.when(watcherClient.listIssueWatchers(
+                        Mockito.eq(PROJECT_ID.toString()),
                         Mockito.eq(ISSUE_ID.toString()),
                         Mockito.any(GatewayContext.class)))
                 .thenReturn(Mono.just(response));
@@ -102,6 +103,7 @@ class WatchersControllerTest {
                 .isEqualTo(response);
 
         Mockito.verify(watcherClient).listIssueWatchers(
+                Mockito.eq(PROJECT_ID.toString()),
                 Mockito.eq(ISSUE_ID.toString()),
                 Mockito.any(GatewayContext.class));
     }
@@ -114,6 +116,7 @@ class WatchersControllerTest {
         var response = watchIssueResponse(UUID.fromString(USER_ID), 3);
 
         Mockito.when(watcherClient.watchIssueMe(
+                        Mockito.eq(PROJECT_ID.toString()),
                         Mockito.eq(ISSUE_ID.toString()),
                         Mockito.any(GatewayContext.class)))
                 .thenReturn(Mono.just(response));
@@ -129,6 +132,7 @@ class WatchersControllerTest {
                 .isEqualTo(response);
 
         Mockito.verify(watcherClient).watchIssueMe(
+                Mockito.eq(PROJECT_ID.toString()),
                 Mockito.eq(ISSUE_ID.toString()),
                 Mockito.any(GatewayContext.class));
     }
@@ -141,6 +145,7 @@ class WatchersControllerTest {
         var response = unwatchIssueResponse(true, 2);
 
         Mockito.when(watcherClient.unwatchIssueMe(
+                        Mockito.eq(PROJECT_ID.toString()),
                         Mockito.eq(ISSUE_ID.toString()),
                         Mockito.any(GatewayContext.class)))
                 .thenReturn(Mono.just(response));
@@ -156,6 +161,7 @@ class WatchersControllerTest {
                 .isEqualTo(response);
 
         Mockito.verify(watcherClient).unwatchIssueMe(
+                Mockito.eq(PROJECT_ID.toString()),
                 Mockito.eq(ISSUE_ID.toString()),
                 Mockito.any(GatewayContext.class));
     }
@@ -169,6 +175,7 @@ class WatchersControllerTest {
         var response = watchIssueResponse(TARGET_USER_ID, 4);
 
         Mockito.when(watcherClient.addIssueWatcher(
+                        Mockito.eq(PROJECT_ID.toString()),
                         Mockito.eq(ISSUE_ID.toString()),
                         Mockito.any(Mono.class),
                         Mockito.any(GatewayContext.class)))
@@ -187,6 +194,7 @@ class WatchersControllerTest {
                 .isEqualTo(response);
 
         Mockito.verify(watcherClient).addIssueWatcher(
+                Mockito.eq(PROJECT_ID.toString()),
                 Mockito.eq(ISSUE_ID.toString()),
                 Mockito.any(Mono.class),
                 Mockito.any(GatewayContext.class));
@@ -200,6 +208,7 @@ class WatchersControllerTest {
         var response = unwatchIssueResponse(true, 3);
 
         Mockito.when(watcherClient.removeIssueWatcher(
+                        Mockito.eq(PROJECT_ID.toString()),
                         Mockito.eq(ISSUE_ID.toString()),
                         Mockito.eq(TARGET_USER_ID.toString()),
                         Mockito.any(GatewayContext.class)))
@@ -216,6 +225,7 @@ class WatchersControllerTest {
                 .isEqualTo(response);
 
         Mockito.verify(watcherClient).removeIssueWatcher(
+                Mockito.eq(PROJECT_ID.toString()),
                 Mockito.eq(ISSUE_ID.toString()),
                 Mockito.eq(TARGET_USER_ID.toString()),
                 Mockito.any(GatewayContext.class));
@@ -227,6 +237,7 @@ class WatchersControllerTest {
         mockAuthenticatedUser();
 
         Mockito.when(watcherClient.removeIssueWatcher(
+                        Mockito.eq(PROJECT_ID.toString()),
                         Mockito.eq(ISSUE_ID.toString()),
                         Mockito.eq(TARGET_USER_ID.toString()),
                         Mockito.any(GatewayContext.class)))
@@ -243,6 +254,7 @@ class WatchersControllerTest {
                 .jsonPath("$.message").exists();
 
         Mockito.verify(watcherClient).removeIssueWatcher(
+                Mockito.eq(PROJECT_ID.toString()),
                 Mockito.eq(ISSUE_ID.toString()),
                 Mockito.eq(TARGET_USER_ID.toString()),
                 Mockito.any(GatewayContext.class));
@@ -254,11 +266,12 @@ class WatchersControllerTest {
         mockAuthenticatedUser();
 
         Mockito.when(watcherClient.addIssueWatcher(
+                        Mockito.eq(PROJECT_ID.toString()),
                         Mockito.eq(ISSUE_ID.toString()),
                         Mockito.any(Mono.class),
                         Mockito.any(GatewayContext.class)))
                 .thenAnswer(inv -> {
-                    Mono<AddIssueWatcherRequestDto> body = inv.getArgument(1);
+                    Mono<AddIssueWatcherRequestDto> body = inv.getArgument(2);
                     return body.map(dto -> watchIssueResponse(dto.getUserId(), 1));
                 });
 

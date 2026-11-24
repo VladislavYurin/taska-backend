@@ -334,6 +334,8 @@ This proves the named subset, not full product E2E, Kafka delivery or stand roll
 
 1. `POST /api/v1/issues/{I1}/links` с `{"targetIssueId":"${I2}","linkType":"BLOCKS"}`: 201; `GET /api/v1/issues/{I1}/links` и `GET /api/v1/issues/{I2}/links` 200, противоположные направления/viewLinkType и targetIssue согласованы. Самоссылка, дубликат, неизвестный linkType и связь в чужой проект отклоняются по правилам доступа.
 2. `DELETE /api/v1/issues/{I1}/links/{linkId}`: 204; связь отсутствует с обеих сторон.
+Native TAS-363: `python3 scripts/harness/issue_metadata_e2e.py` автоматизирует поднабор E2E-21 на собственных семи приложениях: labels/watchers REST, роли, current target/account, mTLS purpose-bound resolver, однократные эффекты и privacy. Это не email/Telegram delivery E2E и не позитивная проверка search/board TAS-344.
+
 3. A `POST /api/v1/projects/{P}/labels` с `{"name":"E2E ${RUN}","color":"#0052CC"}`: 201; `GET /api/v1/projects/{P}/labels`: 200. `PATCH /api/v1/projects/{P}/labels/{labelId}` с name/color: 200; повторное имя/неправильный HEX/слишком длинное имя — отказ без порчи прежней метки. MEMBER не создаёт/редактирует/удаляет проектную метку.
 4. M `POST /api/v1/projects/{P}/issues/{id}/labels` с labelId: 201; list labels и карточка/list/search/board содержат одну метку с актуальными name/color. Чужая project label не привязывается. `DELETE /api/v1/projects/{P}/issues/{id}/labels/{labelId}` у задачи — 204, проектная метка остаётся.
 5. `PUT /api/v1/projects/{P}/issues/{id}/watchers/me`: 200; повтор не дублирует подписку, GET watchers и isWatching согласованы. `DELETE /api/v1/projects/{P}/issues/{id}/watchers/me`: 200, повтор не затрагивает других. Проверить auto-watch reporter/assignee при включённых настройках.
