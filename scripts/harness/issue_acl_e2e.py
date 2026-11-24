@@ -26,16 +26,6 @@ class IssueAclLocal(WorkflowAclLocal):
         if name == 'issue-service':
             service.setdefault('ports', []).append('127.0.0.1::9090')
 
-    def prepare_extra_databases(self):
-        super().prepare_extra_databases()
-        for rpc, action, audience, purpose, mode, scopes in (
-            ('ru.taska.b2b.v1.TenantMembershipService/BatchValidateMemberships', 'batchValidateMemberships', 'tenant-service', 'membership', 'BOUND', ['memberships:read']),
-            ('ru.taska.b2b.v1.PlatformService/GetPlatformConfigurationSnapshot', 'getPlatformConfigurationSnapshot', 'tenant-service', 'admin', 'NONE', ['read']),
-            ('ru.taska.b2b.v1.EntitlementService/GetEntitlementSnapshot', 'getEntitlementSnapshot', 'billing-service', 'billing', 'BOUND', ['read']),
-            ('ru.taska.b2b.v1.BillingService/ReadReferencedPlanVersion', 'readReferencedPlanVersion', 'billing-service', 'billing', 'NONE', ['read', 'catalog:read'])):
-            self.edge('issue-service', audience, rpc, action, ['SERVICE'], scopes, purpose, mode)
-        self.refresh()
-
     def probe(self, client, actor, tenant, project, **extra):
         claims = json.loads(base64.urlsafe_b64decode(client.token.split('.')[1] + '=='))
         libraries = self.material / 'issue-probe-libs'

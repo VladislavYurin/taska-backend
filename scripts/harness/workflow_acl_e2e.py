@@ -19,15 +19,6 @@ class WorkflowAclLocal(ProjectAclLocal):
         if name == 'workflow-service':
             service.setdefault('ports', []).append('127.0.0.1::9090')
 
-    def prepare_extra_databases(self):
-        super().prepare_extra_databases()
-        for rpc, action, audience, purpose, mode, scopes in (
-            ('ru.taska.b2b.v1.PlatformService/GetPlatformConfigurationSnapshot', 'getPlatformConfigurationSnapshot', 'tenant-service', 'admin', 'NONE', ['read']),
-            ('ru.taska.b2b.v1.EntitlementService/GetEntitlementSnapshot', 'getEntitlementSnapshot', 'billing-service', 'billing', 'BOUND', ['read']),
-            ('ru.taska.b2b.v1.BillingService/ReadReferencedPlanVersion', 'readReferencedPlanVersion', 'billing-service', 'billing', 'NONE', ['read', 'catalog:read'])):
-            self.edge('workflow-service', audience, rpc, action, ['SERVICE'], scopes, purpose, mode)
-        self.refresh()
-
     def workflows(self, client, project):
         return client.expect('GET', '/api/v1/projects/' + project + '/workflows', 200).json()
 

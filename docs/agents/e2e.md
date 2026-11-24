@@ -52,6 +52,8 @@ Runner использует существующую `IssueAclLocal` fixture: с
 
 ## Native project ACL / quota (TAS-340)
 
+TAS-546: базовая project fixture объявляет SERVICE source grants для project/workflow/issue и membership lookup; workflow/issue наследники используют тот же граф без повторного объявления. Identity, purpose, tenant binding и минимальные scopes проверяются regression suite `test_native_fixture_sources.py`. Root sources остаются в capabilities fixture.
+
 ```sh
 python3 scripts/harness/project_acl_e2e.py
 python3 scripts/harness/project_acl_e2e.py --cleanup /absolute/owned/run/state.json

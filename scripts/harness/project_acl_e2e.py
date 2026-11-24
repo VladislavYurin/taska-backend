@@ -56,10 +56,12 @@ class ProjectAclLocal(CapabilitiesLocal):
                          '-v', 'service=' + service, '-v', 'schema=taska', '-f', '/tmp/bootstrap.psql')
             self.sql(service + '_db', "CREATE SCHEMA %s_liquibase AUTHORIZATION taska_%s_migrator;ALTER ROLE taska_%s_app PASSWORD '%s';ALTER ROLE taska_%s_deployer PASSWORD '%s';" % (service, service, service, self.password, service, self.password))
         self.sql('issue_db', 'CREATE EXTENSION IF NOT EXISTS pg_trgm WITH SCHEMA public;')
-        for issuer in ('project-service', 'workflow-service', 'tenant-service', 'auth-service'):
+        for issuer in ('project-service', 'workflow-service', 'tenant-service', 'auth-service', 'issue-service'):
             self.edge(issuer, 'tenant-service', 'ru.taska.b2b.v1.TenantMembershipService/BatchValidateMemberships',
                       'batchValidateMemberships', ['SERVICE'], ['memberships:read'], 'membership')
-        for issuer in ('project-service', 'tenant-service'):
+        # Root sources are already declared by CapabilitiesLocal. Declare the
+        # domain sources here so project context works without a child fixture.
+        for issuer in ('project-service', 'workflow-service', 'issue-service'):
             self.edge(issuer, 'tenant-service', 'ru.taska.b2b.v1.PlatformService/GetPlatformConfigurationSnapshot',
                       'getPlatformConfigurationSnapshot', ['SERVICE'], ['read'], 'admin', 'NONE')
             self.edge(issuer, 'billing-service', 'ru.taska.b2b.v1.EntitlementService/GetEntitlementSnapshot',
