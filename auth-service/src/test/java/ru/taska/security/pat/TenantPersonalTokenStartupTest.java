@@ -15,9 +15,14 @@ import tools.jackson.databind.json.JsonMapper;
 
 class TenantPersonalTokenStartupTest {
   @Test void enabledModuleHasProductionSourceWithoutExternalSourceBean() {
-    new ApplicationContextRunner().withUserConfiguration(TenantPersonalTokenConfiguration.class, TenantIntegrationFactsConfiguration.class)
+    new ApplicationContextRunner().withUserConfiguration(TenantPersonalTokenConfiguration.class, TenantIntegrationFactsConfiguration.class, TenantPersonalTokenGrpcService.class)
         .withPropertyValues("taska.b2b.tenant-tokens.enabled=true",
             "taska.b2b.sessions.refresh-receipt-key=" + java.util.Base64.getEncoder().encodeToString(new byte[32]))
+        .withBean(org.springframework.validation.beanvalidation.MethodValidationPostProcessor.class, () -> {
+          var validation = new org.springframework.validation.beanvalidation.MethodValidationPostProcessor();
+          validation.setProxyTargetClass(true);
+          return validation;
+        })
         .withBean(DatabaseClient.class, () -> mock(DatabaseClient.class))
         .withBean("transactionalOperator", TransactionalOperator.class, () -> mock(TransactionalOperator.class))
         .withBean(PersonalTokenProperties.class, PersonalTokenProperties::new)
@@ -26,7 +31,8 @@ class TenantPersonalTokenStartupTest {
         .withBean(RpcTrustBackend.class, () -> mock(RpcTrustBackend.class))
         .run(context -> {
           assertThat(context).hasNotFailed().hasSingleBean(CapabilityEvaluator.Source.class)
-              .hasSingleBean(TenantPersonalTokenAdmission.class).hasSingleBean(TenantPersonalTokenStore.class);
+              .hasSingleBean(TenantPersonalTokenAdmission.class).hasSingleBean(TenantPersonalTokenStore.class)
+              .hasSingleBean(TenantPersonalTokenGrpcService.class);
           assertThat(context.getBean(CapabilityEvaluator.Source.class)).isInstanceOf(TenantPersonalTokenFacts.class);
         });
   }

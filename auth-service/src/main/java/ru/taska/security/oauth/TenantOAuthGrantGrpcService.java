@@ -26,7 +26,7 @@ import ru.taska.security.tenant.VerifiedTenantContext;
 /** TAS-498 RPC. Approval requires the verified tenant web session of the selected tenant. */
 @GrpcService
 @ConditionalOnProperty(name = "taska.b2b.tenant-oauth.enabled", havingValue = "true")
-public final class TenantOAuthGrantGrpcService
+public class TenantOAuthGrantGrpcService
     extends ReactorTenantOAuthGrantServiceGrpc.TenantOAuthGrantServiceImplBase {
   private final TenantOAuthGrantStore grants;
   private final WebSessionStore.MembershipAuthority memberships;

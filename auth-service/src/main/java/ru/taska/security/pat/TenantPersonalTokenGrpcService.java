@@ -24,7 +24,7 @@ import ru.taska.security.tenant.VerifiedTenantContext;
 /** TAS-463 RPC. Issuance requires the verified tenant web session of the requested tenant. */
 @GrpcService
 @ConditionalOnProperty(name = "taska.b2b.tenant-tokens.enabled", havingValue = "true")
-public final class TenantPersonalTokenGrpcService
+public class TenantPersonalTokenGrpcService
     extends ReactorTenantPersonalTokenServiceGrpc.TenantPersonalTokenServiceImplBase {
   private final TenantPersonalTokenStore tokens;
   private final TenantPersonalTokenAdmission admission;
