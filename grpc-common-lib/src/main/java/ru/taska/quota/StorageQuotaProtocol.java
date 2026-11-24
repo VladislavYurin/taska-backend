@@ -121,6 +121,12 @@ public final class StorageQuotaProtocol {
     Mono<Reservation> commit(Reservation r);
 
     Mono<Reservation> release(Reservation r);
+
+    default Mono<Void> releaseUsage(Reservation r) {
+      return Mono.error(
+          new ru.taska.exception.DomainException(
+              ru.taska.exception.DomainStatus.UNAVAILABLE, "STORAGE_RELEASE_USAGE_UNAVAILABLE"));
+    }
   }
 
   public interface Owner {

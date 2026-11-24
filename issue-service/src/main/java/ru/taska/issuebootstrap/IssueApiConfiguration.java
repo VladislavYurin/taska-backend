@@ -84,8 +84,48 @@ public class IssueApiConfiguration {
       TenantDecisionFacts facts,
       ManagedDomainReads reads,
       RpcContextSecurity security,
-      TenantIssueStore issues) {
-    return new ru.taska.issuestorage.PrimaryAttachmentPolicy(facts, reads, security, issues);
+      TenantIssueStore issues,
+      ru.taska.issuestorage.AttachmentLifecyclePolicy lifecycle) {
+    return new ru.taska.issuestorage.PrimaryAttachmentPolicy(
+        facts, reads, security, issues, lifecycle);
+  }
+
+  @Bean
+  ru.taska.issuestorage.AttachmentLifecycleStore attachmentLifecycleStore(
+      ConnectionFactory factory) {
+    return new ru.taska.issuestorage.AttachmentLifecycleStore(
+        new TenantTransactionExecutor(factory));
+  }
+
+  @Bean
+  ru.taska.issuestorage.AttachmentLifecyclePolicy attachmentLifecyclePolicy(
+      ru.taska.issuestorage.AttachmentLifecycleStore store,
+      TenantIssueStore issues,
+      TenantIssueAccess access) {
+    return new ru.taska.issuestorage.AttachmentLifecyclePolicy(store, issues, access);
+  }
+
+  @Bean
+  ru.taska.issuestorage.AttachmentDeletions attachmentDeletions(
+      ru.taska.issuestorage.AttachmentLifecycleStore store,
+      ru.taska.issuestorage.StorageQuotaOwner owner,
+      ru.taska.quota.StorageQuotaProtocol.Authority root) {
+    return new ru.taska.issuestorage.AttachmentDeletions(store, owner, root);
+  }
+
+  @Bean
+  ru.taska.storage.versioned.AttachmentContentObjects attachmentContentObjects(
+      software.amazon.awssdk.services.s3.S3AsyncClient s3,
+      ru.taska.storage.config.StorageProperties properties) {
+    return new ru.taska.storage.versioned.S3AttachmentContentObjects(s3, properties.getBucket());
+  }
+
+  @Bean
+  ru.taska.issuestorage.AttachmentLifecycle attachmentLifecycle(
+      ru.taska.issuestorage.AttachmentLifecycleStore store,
+      ru.taska.issuestorage.AttachmentLifecyclePolicy policy,
+      ru.taska.storage.versioned.AttachmentContentObjects objects) {
+    return new ru.taska.issuestorage.AttachmentLifecycle(store, policy, objects);
   }
 
   @Bean

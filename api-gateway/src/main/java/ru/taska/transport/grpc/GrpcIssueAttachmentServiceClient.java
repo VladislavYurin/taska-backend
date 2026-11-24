@@ -43,7 +43,7 @@ public class GrpcIssueAttachmentServiceClient {
     /**
      * Запрос списка вложений, прикрепленных к указанной задаче.
      */
-    public Mono<IssueAttachmentsResponseDto> listAttachments(
+    public Mono<IssueAttachmentsResponseDto> listAttachments(String projectId,
             String issueId,
             GatewayContext context
     ) {
@@ -52,7 +52,7 @@ public class GrpcIssueAttachmentServiceClient {
         return ru.taska.security.tenant.RpcContextBridge.outbound(() -> dynamicStub().listAttachments(
                         ListAttachmentsRequest.newBuilder()
                                 .setHeader(buildGrpcHeader(context))
-                                .setBody(ListAttachmentsRequestBody.newBuilder()
+                                .setBody(ListAttachmentsRequestBody.newBuilder().setProjectId(projectId)
                                         .setActorUserId(context.userContext().userId())
                                         .setIssueId(issueId)
                                         .build()
@@ -144,7 +144,7 @@ public class GrpcIssueAttachmentServiceClient {
     /**
      * Запрос presigned URL для скачивания файла из S3.
      */
-    public Mono<GetAttachmentDownloadUrlResponseDto> getAttachmentDownloadUrl(
+    public Mono<GetAttachmentDownloadUrlResponseDto> getAttachmentDownloadUrl(String projectId,String issueId,
             String attachmentId,
             GatewayContext context
     ) {
@@ -153,7 +153,7 @@ public class GrpcIssueAttachmentServiceClient {
         return ru.taska.security.tenant.RpcContextBridge.outbound(() -> dynamicStub().getAttachmentDownloadUrl(
                         GetAttachmentDownloadUrlRequest.newBuilder()
                                 .setHeader(buildGrpcHeader(context))
-                                .setBody(GetAttachmentDownloadUrlRequestBody.newBuilder()
+                                .setBody(GetAttachmentDownloadUrlRequestBody.newBuilder().setProjectId(projectId).setIssueId(issueId)
                                         .setActorUserId(context.userContext().userId())
                                         .setAttachmentId(attachmentId)
                                         .build()
@@ -166,7 +166,7 @@ public class GrpcIssueAttachmentServiceClient {
     /**
      * Мягкое удаление вложения.
      */
-    public Mono<Void> deleteAttachment(
+    public Mono<Void> deleteAttachment(String projectId,String issueId,
             String attachmentId,
             GatewayContext context
     ) {
@@ -175,7 +175,7 @@ public class GrpcIssueAttachmentServiceClient {
         return ru.taska.security.tenant.RpcContextBridge.outbound(() -> dynamicStub().deleteAttachment(
                         DeleteAttachmentRequest.newBuilder()
                                 .setHeader(buildGrpcHeader(context))
-                                .setBody(DeleteAttachmentRequestBody.newBuilder()
+                                .setBody(DeleteAttachmentRequestBody.newBuilder().setProjectId(projectId).setIssueId(issueId)
                                         .setActorUserId(context.userContext().userId())
                                         .setAttachmentId(attachmentId)
                                         .build()
@@ -184,6 +184,31 @@ public class GrpcIssueAttachmentServiceClient {
                 ))
                 .then();
     }
+
+  public Mono<ru.taska.api.issue.attachment.v1.ReadAttachmentContentResponse> readContent(
+      String project,
+      String issue,
+      String attachment,
+      long offset,
+      int length,
+      String checksum,
+      boolean metadata,
+      GatewayContext context) {
+    return ru.taska.security.tenant.RpcContextBridge.outbound(
+        () ->
+            dynamicStub()
+                .readAttachmentContent(
+                    ru.taska.api.issue.attachment.v1.ReadAttachmentContentRequest.newBuilder()
+                        .setActorUserId(context.userContext().userId())
+                        .setProjectId(project)
+                        .setIssueId(issue)
+                        .setAttachmentId(attachment)
+                        .setOffset(offset)
+                        .setLength(length)
+                        .setExpectedChecksum(checksum)
+                        .setMetadataOnly(metadata)
+                        .build()));
+  }
 
     /*
      * Возвращает gRPC stub с динамически настроенным временем ожидания (deadline).

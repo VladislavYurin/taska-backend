@@ -89,6 +89,7 @@ class StorageQuotaIntegrationTest {
       billingOnline = new AtomicBoolean(true),
       failOpen = new AtomicBoolean();
   static final AtomicBoolean loseCancelResponse = new AtomicBoolean();
+  static final AtomicBoolean loseUsageResponse = new AtomicBoolean();
   static final AtomicBoolean expireOnInspect = new AtomicBoolean();
   static final AtomicReference<CredentialKind> lastCredential = new AtomicReference<>();
   static final AtomicLong limit = new AtomicLong(1),
@@ -425,14 +426,42 @@ class StorageQuotaIntegrationTest {
             QuotaAuthorityServiceGrpc.getReserveQuotaMethod().getFullMethodName(),
             QuotaAuthorityServiceGrpc.getCommitQuotaMethod().getFullMethodName(),
             QuotaAuthorityServiceGrpc.getReleaseQuotaMethod().getFullMethodName(),
-            QuotaAuthorityServiceGrpc.getGetQuotaReservationMethod().getFullMethodName()))
+            QuotaAuthorityServiceGrpc.getGetQuotaReservationMethod().getFullMethodName(),
+            QuotaAuthorityServiceGrpc.getReleaseStorageUsageMethod().getFullMethodName()))
       rootPolicies.put(method, new RpcContextSecurity.Policy(true, false));
     rootServer =
         server("tenant-service")
             .addService(
                 ServerInterceptors.intercept(
                     new ProjectQuotaGrpcService(null, root),
-                    new TenantServerInterceptor(rootSecurity, rootPolicies, "test")))
+                    new TenantServerInterceptor(rootSecurity, rootPolicies, "test"),
+                    new ServerInterceptor() {
+                      public <Q, S> ServerCall.Listener<Q> interceptCall(
+                          ServerCall<Q, S> call, Metadata headers, ServerCallHandler<Q, S> next) {
+                        if (!loseUsageResponse.get()
+                            || !call.getMethodDescriptor()
+                                .getFullMethodName()
+                                .equals(
+                                    QuotaAuthorityServiceGrpc.getReleaseStorageUsageMethod()
+                                        .getFullMethodName())) return next.startCall(call, headers);
+                        return next.startCall(
+                            new ForwardingServerCall.SimpleForwardingServerCall<Q, S>(call) {
+                              @Override
+                              public void sendMessage(S message) {}
+
+                              @Override
+                              public void close(Status status, Metadata trailers) {
+                                super.close(
+                                    status.isOk()
+                                        ? Status.UNAVAILABLE.withDescription(
+                                            "fixture lost committed release acknowledgement")
+                                        : status,
+                                    new Metadata());
+                              }
+                            },
+                            headers);
+                      }
+                    }))
             .build()
             .start();
     rootChannel = channel("issue-service", rootServer.getPort());
@@ -482,6 +511,7 @@ class StorageQuotaIntegrationTest {
   @BeforeEach
   void seed() {
     loseCancelResponse.set(false);
+    loseUsageResponse.set(false);
     expireOnInspect.set(false);
     time.set(Instant.now());
     enabled.set(true);

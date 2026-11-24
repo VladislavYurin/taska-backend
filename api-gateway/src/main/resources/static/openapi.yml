@@ -2848,10 +2848,135 @@ paths:
         '404':
           $ref: '#/components/responses/ErrorResponse'
 
+  /api/v1/projects/{projectId}/issues/{issueId}/attachments/{attachmentId}/content:
+    get:
+      x-pat-scope: read
+      operationId: readAttachmentContent
+      summary: Авторизованное чтение закреплённой версии вложения (native)
+      description: Повторная проверка доступа во время потока. Требуется Bearer; S3 URL не выдаётся. Ответ private, no-store.
+      tags: [ attachment-content ]
+      security:
+        - bearerAuth: [ ]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: issueId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: attachmentId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: Range
+          in: header
+          description: Одиночный диапазон bytes=start-end, bytes=start- либо bytes=-suffix. Несколько диапазонов не поддерживаются.
+          schema: { type: string, maxLength: 128 }
+      responses:
+        '200':
+          description: Содержимое файла (HEAD возвращает только заголовки)
+          headers:
+            Accept-Ranges:
+              schema: { type: string, enum: [ bytes ] }
+            Content-Length:
+              schema: { type: integer, format: int64 }
+            Content-Disposition:
+              schema: { type: string }
+            Cache-Control:
+              schema: { type: string }
+          content:
+            '*/*':
+              schema: { type: string, format: binary }
+        '206':
+          description: Запрошенный диапазон (HEAD возвращает только заголовки)
+          headers:
+            Content-Range:
+              schema: { type: string }
+          content:
+            '*/*':
+              schema: { type: string, format: binary }
+        '416':
+          description: Недопустимый диапазон; проверяется после авторизации
+          headers:
+            Content-Range:
+              schema: { type: string }
+        '401':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+        '503':
+          $ref: '#/components/responses/ErrorResponse'
+    head:
+      x-pat-scope: read
+      operationId: headAttachmentContent
+      summary: Авторизованное чтение закреплённой версии вложения (native)
+      description: Повторная проверка доступа во время потока. Требуется Bearer; S3 URL не выдаётся. Ответ private, no-store.
+      tags: [ attachment-content ]
+      security:
+        - bearerAuth: [ ]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: issueId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: attachmentId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: Range
+          in: header
+          description: Одиночный диапазон bytes=start-end, bytes=start- либо bytes=-suffix. Несколько диапазонов не поддерживаются.
+          schema: { type: string, maxLength: 128 }
+      responses:
+        '200':
+          description: Содержимое файла (HEAD возвращает только заголовки)
+          headers:
+            Accept-Ranges:
+              schema: { type: string, enum: [ bytes ] }
+            Content-Length:
+              schema: { type: integer, format: int64 }
+            Content-Disposition:
+              schema: { type: string }
+            Cache-Control:
+              schema: { type: string }
+          content:
+            '*/*':
+              schema: { type: string, format: binary }
+        '206':
+          description: Запрошенный диапазон (HEAD возвращает только заголовки)
+          headers:
+            Content-Range:
+              schema: { type: string }
+          content:
+            '*/*':
+              schema: { type: string, format: binary }
+        '416':
+          description: Недопустимый диапазон; проверяется после авторизации
+          headers:
+            Content-Range:
+              schema: { type: string }
+        '401':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+        '503':
+          $ref: '#/components/responses/ErrorResponse'
+
   /api/v1/projects/{projectId}/issues/{issueId}/attachments/{attachmentId}/download-url:
     get:
       x-pat-scope: read
-      summary: Получение Presigned URL для скачивания файла
+      summary: Получение пути для скачивания файла
+      description: Native возвращает относительный authenticated gateway path; legacy возвращает presigned URL. Для native GET/HEAD нужен Bearer и текущий ACL.
       operationId: getAttachmentDownloadUrl
       tags:
         - attachments
@@ -2923,7 +3048,7 @@ paths:
             format: uuid
       responses:
         '204':
-          description: Вложение успешно удалено
+          description: Удаление принято и вложение скрыто. Native очистка S3 выполняется повторяемо; bytes освобождаются только после подтверждённой очистки.
           headers:
             X-Request-Id:
               $ref: '#/components/headers/X-RequestId-Header'
@@ -4671,7 +4796,7 @@ paths:
           description: Идентификатор пользователя, чей аватар запрашивается
       responses:
         '200':
-          description: Presigned URL для скачивания успешно сгенерирован
+          description: Native authenticated gateway path или legacy presigned URL успешно сгенерирован
           headers:
             X-Request-Id:
               $ref: '#/components/headers/X-RequestId-Header'
@@ -8645,14 +8770,14 @@ components:
 
         downloadUrl:
           type: string
-          description: Presigned URL для скачивания аватара
+          description: Native authenticated gateway path или legacy presigned URL аватара
 
     GetAvatarDownloadUrlResponseDto:
       type: object
       properties:
         url:
           type: string
-          description: Presigned URL для скачивания аватара (отсутствует, если у пользователя нет аватара)
+          description: Native authenticated gateway path или legacy presigned URL аватара (отсутствует, если у пользователя нет аватара)
           example: "https://s3.example.com/bucket/path?X-Amz-Algorithm=..."
           nullable: true
 

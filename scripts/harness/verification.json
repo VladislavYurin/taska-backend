@@ -620,7 +620,9 @@
           "TenantProvisioningRpcIntegrationTest",
           "SeatQuotaIntegrationTest",
           "ProjectQuotaIntegrationTest",
-          "AttachmentUploadIntegrationTest"
+          "AttachmentUploadIntegrationTest",
+          "StorageQuotaIntegrationTest",
+          "AttachmentLifecycleIntegrationTest"
         ],
         "noTestsReason": null
       },

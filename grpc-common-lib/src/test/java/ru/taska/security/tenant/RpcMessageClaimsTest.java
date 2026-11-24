@@ -12,6 +12,35 @@ import ru.taska.api.common.v1.Header;
 import ru.taska.api.oauth.v1.*;
 
 class RpcMessageClaimsTest {
+  @Test
+  void storageAdmissionScopesMatchThePhaseWithoutGrantingOtherReads() {
+    String rpc =
+        ru.taska.api.issue.attachment.v1.AttachmentAdmissionServiceGrpc.getCheckAdmissionMethod()
+            .getFullMethodName();
+    var original = context("issue-service", "checkAttachmentAdmission");
+    var write =
+        original.toBuilder()
+            .setContext(original.getContext().toBuilder().clearScopes().addScopes("write"))
+            .build();
+    var read =
+        original.toBuilder()
+            .setContext(original.getContext().toBuilder().clearScopes().addScopes("read"))
+            .build();
+    var lookup =
+        ru.taska.api.issue.attachment.v1.AttachmentAdmissionRequest.newBuilder()
+            .setPhase("LOOKUP")
+            .build();
+    var usage = lookup.toBuilder().setPhase("READ").build();
+    assertDoesNotThrow(() -> RpcMessageClaims.validate(lookup, rpc, write));
+    assertThrows(StatusRuntimeException.class, () -> RpcMessageClaims.validate(lookup, rpc, read));
+    assertDoesNotThrow(() -> RpcMessageClaims.validate(usage, rpc, read));
+    assertThrows(StatusRuntimeException.class, () -> RpcMessageClaims.validate(usage, rpc, write));
+    assertThrows(
+        StatusRuntimeException.class,
+        () ->
+            RpcMessageClaims.validate(GetQuotaReservationRequest.getDefaultInstance(), rpc, write));
+  }
+
   RequestContext context(String audience, String action) {
     var now = Instant.now();
     return RequestContext.newBuilder()
@@ -159,8 +188,7 @@ class RpcMessageClaimsTest {
                 getTenantRpc,
                 ordinary));
 
-    var readAdmin =
-        adminTarget(ordinary, "getTenant", AdminGrant.LevelValue.LEVEL_READ, "read");
+    var readAdmin = adminTarget(ordinary, "getTenant", AdminGrant.LevelValue.LEVEL_READ, "read");
     assertDoesNotThrow(() -> RpcMessageClaims.validate(getTenant, getTenantRpc, readAdmin));
     var foreignAdmin =
         readAdmin.toBuilder()
@@ -178,14 +206,8 @@ class RpcMessageClaimsTest {
     var renameTenantRpc = TenantServiceGrpc.getRenameTenantMethod().getFullMethodName();
     var renameTenant = RenameTenantRpcRequest.newBuilder().setTenantId(tenantId).build();
     var modifyAdmin =
-        adminTarget(
-            ordinary,
-            "renameTenant",
-            AdminGrant.LevelValue.LEVEL_MODIFY,
-            "read",
-            "write");
-    assertDoesNotThrow(
-        () -> RpcMessageClaims.validate(renameTenant, renameTenantRpc, modifyAdmin));
+        adminTarget(ordinary, "renameTenant", AdminGrant.LevelValue.LEVEL_MODIFY, "read", "write");
+    assertDoesNotThrow(() -> RpcMessageClaims.validate(renameTenant, renameTenantRpc, modifyAdmin));
     var readOnlyRename =
         adminTarget(ordinary, "renameTenant", AdminGrant.LevelValue.LEVEL_READ, "read");
     assertThrows(
@@ -219,8 +241,7 @@ class RpcMessageClaimsTest {
                 request,
                 rpc,
                 global.toBuilder()
-                    .setContext(
-                        global.getContext().toBuilder().clearScopes().addScopes("read"))
+                    .setContext(global.getContext().toBuilder().clearScopes().addScopes("read"))
                     .build()));
     assertThrows(
         StatusRuntimeException.class,
@@ -229,15 +250,13 @@ class RpcMessageClaimsTest {
                 request,
                 rpc,
                 global.toBuilder()
-                    .setContext(global.getContext().toBuilder().setTenantId(UUID.randomUUID().toString()))
+                    .setContext(
+                        global.getContext().toBuilder().setTenantId(UUID.randomUUID().toString()))
                     .build()));
   }
 
   private static RequestContext adminTarget(
-      RequestContext template,
-      String action,
-      AdminGrant.LevelValue level,
-      String... scopes) {
+      RequestContext template, String action, AdminGrant.LevelValue level, String... scopes) {
     String sessionId = UUID.randomUUID().toString();
     var scope =
         AdminScope.newBuilder()

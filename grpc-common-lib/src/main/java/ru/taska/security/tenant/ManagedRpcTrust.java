@@ -89,7 +89,14 @@ public final class ManagedRpcTrust implements RpcContextSecurity.Keys {
   private static final JsonMapper JSON =
       JsonMapper.builder().enable(StreamReadFeature.STRICT_DUPLICATE_DETECTION).build();
   private static final Set<String> PURPOSES =
-      Set.of("provisioning", "outbox", "billing", "admin", "membership", "NOTIFICATION_DELIVERY");
+      Set.of(
+          "provisioning",
+          "outbox",
+          "billing",
+          "admin",
+          "membership",
+          "NOTIFICATION_DELIVERY",
+          "STORAGE_CLEANUP");
   private final Path snapshotFile, privateKeyFile;
   private final String service, environment;
   private final Clock clock;

@@ -118,4 +118,28 @@ public final class GrpcStorageQuotaAuthority implements StorageQuotaProtocol.Aut
                     .releaseQuota(Mono.just(q)))
         .map(StorageQuotaWire::decode);
   }
+
+  public Mono<Void> releaseUsage(Reservation r) {
+    return client
+        .call(
+            r.tenant(),
+            QuotaAuthorityServiceGrpc.getReleaseStorageUsageMethod().getFullMethodName(),
+            "releaseStorageUsage",
+            c ->
+                FinalizeQuotaRpcRequest.newBuilder()
+                    .setContext(c)
+                    .setKind(QuotaReservation.KindValue.KIND_STORAGE_BYTES)
+                    .setReservationId(r.id().toString())
+                    .setFence(Long.toString(r.fence()))
+                    .setPayload(
+                        FinalizeQuotaRequest.newBuilder()
+                            .setOperationId(r.operation().toString())
+                            .setResourceId(r.resource().toString()))
+                    .build(),
+            (q, auth) ->
+                stub.withDeadlineAfter(5, TimeUnit.SECONDS)
+                    .withInterceptors(auth)
+                    .releaseStorageUsage(Mono.just(q)))
+        .then();
+  }
 }

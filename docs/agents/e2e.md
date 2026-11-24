@@ -69,6 +69,12 @@ Issue consumer учитывает actor-specific watched_by_me в чтении T
 
 Обычный local `e2e --scenario E2E-08` блокируется до записи из-за несовместимой legacy fixture; stage сохраняет прежний поднабор и собственные prerequisites. This native tier does not prove Kafka delivery, full workflow/issue CRUD, real payments or shared-stage rollout. After shared transport changes also run `python3 scripts/harness/trusted_rpc_e2e.py` for the legacy regression.
 
+## Native attachment lifecycle (TAS-367)
+
+`python3 scripts/harness/attachment_lifecycle_e2e.py` запускает собственный контур семи приложений. Проверяются list, download path, GET/HEAD/Range, отзыв доступа во время живого потока, foreign tenant/path, VIEWER delete, чтение при upload flag off, отказ delete при storage READ_ONLY, durable S3 failure/restart, продолжение SERVICE после отзыва uploader и однократный release. Исходное 300s PUT window сохраняется, поэтому прогон требует нескольких минут. Проверяются сохранность нового файла/другого tenant/avatar sentinel и отсутствие версий удалённых manifest keys. Fault injection применяет pause/unpause только собственного S3 и restart собственного issue-service; после restart наблюдаются до трёх обычных retry-интервалов без изменения продуктовых deadlines.
+
+Run-state и evidence находятся в ignored target; cleanup после прерывания: `python3 scripts/harness/attachment_lifecycle_e2e.py --cleanup /absolute/path/to/state.json`. Это не весь E2E-22 и не проверка общего стенда. Контракты/метрики/повторный запуск — [runbook](../../issue-service/ATTACHMENT-LIFECYCLE.md).
+
 ## Opt-in stage
 
 Stage не запускается без `--tier stage --config FILE`. До запуска владелец среды выделяет пять разных ACTIVE actors A/M/V/O/G, разрешает создание и архивирование собственных проектов и принимает остаточные archived projects (публичного удаления проекта нет). Обычный JWT нужен для G; GLOBAL_ADMIN не заменяет project ADMIN. Runner не создаёт/блокирует пользователей на stage, не читает secrets из DB и не выполняет fault injection.

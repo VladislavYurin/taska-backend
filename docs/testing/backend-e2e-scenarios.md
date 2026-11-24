@@ -352,7 +352,17 @@ Native TAS-363: `python3 scripts/harness/issue_metadata_e2e.py` автомати
 реальные primary ACL и versioned S3, включая повторы, X-Request-Id fallback, чужие
 tenant/project/issue и административный bypass с честным учётом. Project/issue
 создаются как собственные fixtures. List/download/delete и аватары этим runner
-не покрыты; полный E2E-22 остаётся отдельным набором. Для native delete нужна TAS-367.
+не покрыты; полный E2E-22 остаётся отдельным набором.
+
+TAS-367: `python3 scripts/harness/attachment_lifecycle_e2e.py` проверяет native list,
+gateway download GET/HEAD/Range и прекращение потока после revoke, durable delete,
+S3 failure/restart, SERVICE continuation и однократное освобождение bytes после
+реального PUT window. Native проверяет все path IDs; MEMBER с attachment.delete
+может удалить вложение другого uploader. Storage READ_ONLY запрещает direct delete.
+Чтение сохраняется при upload flag off. Avatar lifecycle остаётся отдельным, runner
+проверяет только неприкосновенность собственного avatar sentinel. Native semantics
+описаны в [runbook](../../issue-service/ATTACHMENT-LIFECYCLE.md); следующие шаги с
+presigned download и legacy ownership относятся к legacy профилю.
 
 **Условия:** выделенная активная учётная запись без чужого аватара, задача P, небольшой валидный PNG и доступный клиенту S3.
 
@@ -744,6 +754,8 @@ tenant/project/issue и административный bypass с честны�
 | `POST /api/v1/projects/{projectId}/issues/{issueId}/attachments/upload-url` | `createAttachmentUploadUrl` | E2E-22 | 200 |
 | `POST /api/v1/projects/{projectId}/issues/{issueId}/attachments/confirm` | `confirmAttachmentUpload` | E2E-22 | 201 |
 | `GET /api/v1/projects/{projectId}/issues/{issueId}/attachments/{attachmentId}/download-url` | `getAttachmentDownloadUrl` | E2E-22 | 200 |
+| `GET /api/v1/projects/{projectId}/issues/{issueId}/attachments/{attachmentId}/content` | `readAttachmentContent` | E2E-22 (native) | 200/206 |
+| `HEAD /api/v1/projects/{projectId}/issues/{issueId}/attachments/{attachmentId}/content` | `headAttachmentContent` | E2E-22 (native) | 200/206 |
 | `DELETE /api/v1/projects/{projectId}/issues/{issueId}/attachments/{attachmentId}` | `deleteAttachment` | E2E-22 | 204 |
 | `GET /api/v1/projects/{projectId}/board` | `getBoard` | E2E-18 | 200 |
 | `GET /api/v1/projects/{projectId}/board/columns/{statusKey}/issues` | `listBoardColumnIssues` | E2E-18 | 200 |

@@ -585,6 +585,9 @@ public class TenantConfiguration {
                       .getFullMethodName(),
                   new RpcContextSecurity.Policy(true, false)),
               java.util.Map.entry(
+                  ru.taska.api.b2b.v1.QuotaAuthorityServiceGrpc.getReleaseStorageUsageMethod().getFullMethodName(),
+                  new RpcContextSecurity.Policy(true,false)),
+              java.util.Map.entry(
                   ru.taska.api.b2b.v1.TenantPaymentStateServiceGrpc.getGetTenantPaymentStateMethod()
                       .getFullMethodName(),
                   new RpcContextSecurity.Policy(true, false)),

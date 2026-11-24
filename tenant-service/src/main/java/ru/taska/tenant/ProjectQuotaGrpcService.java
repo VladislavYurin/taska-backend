@@ -143,6 +143,32 @@ public final class ProjectQuotaGrpcService
                 })));
   }
 
+  @Override
+  public Mono<com.google.protobuf.Empty> releaseStorageUsage(
+      Mono<FinalizeQuotaRpcRequest> requests) {
+    return errors(
+        RpcContextBridge.inbound(
+            requests.flatMap(
+                r -> {
+                  if (r.getKind() != QuotaReservation.KindValue.KIND_STORAGE_BYTES
+                      || r.getPayload().hasActualQuantity()) return Mono.error(invalid());
+                  return storage()
+                      .get(uuid(r.getPayload().getOperationId()))
+                      .flatMap(
+                          current -> {
+                            if (!current.id().equals(uuid(r.getReservationId()))
+                                || !current.resource().equals(uuid(r.getPayload().getResourceId()))
+                                || current.fence() != number(r.getFence()))
+                              return Mono.error(
+                                  new DomainException(
+                                      DomainStatus.FAILED_PRECONDITION, "STALE_FENCE"));
+                            return storage()
+                                .releaseUsage(current)
+                                .thenReturn(com.google.protobuf.Empty.getDefaultInstance());
+                          });
+                })));
+  }
+
   private static <T> Mono<T> errors(Mono<T> work) {
     return work.onErrorMap(DomainException.class, GrpcExceptionMapper::toStatusRuntimeException)
         .onErrorMap(GrpcExceptionMapper::toGrpcStatus);

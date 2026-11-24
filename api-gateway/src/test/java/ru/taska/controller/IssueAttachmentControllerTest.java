@@ -92,6 +92,7 @@ class IssueAttachmentControllerTest {
         response.setItems(List.of(issueAttachmentDto()));
 
         Mockito.when(attachmentClient.listAttachments(
+                        Mockito.eq(PROJECT_ID.toString()),
                         Mockito.eq(ISSUE_ID.toString()),
                         Mockito.any(GatewayContext.class)))
                 .thenReturn(Mono.just(response));
@@ -107,7 +108,8 @@ class IssueAttachmentControllerTest {
                 .isEqualTo(response);
 
         Mockito.verify(attachmentClient).listAttachments(
-                Mockito.eq(ISSUE_ID.toString()),
+                Mockito.eq(PROJECT_ID.toString()),
+                        Mockito.eq(ISSUE_ID.toString()),
                 Mockito.any(GatewayContext.class));
     }
 
@@ -117,6 +119,7 @@ class IssueAttachmentControllerTest {
         mockAuthenticatedUser();
 
         Mockito.when(attachmentClient.listAttachments(
+                        Mockito.eq(PROJECT_ID.toString()),
                         Mockito.eq(ISSUE_ID.toString()),
                         Mockito.any(GatewayContext.class)))
                 .thenReturn(Mono.error(Status.PERMISSION_DENIED.asRuntimeException()));
@@ -138,6 +141,7 @@ class IssueAttachmentControllerTest {
         mockAuthenticatedUser();
 
         Mockito.when(attachmentClient.listAttachments(
+                        Mockito.eq(PROJECT_ID.toString()),
                         Mockito.eq(ISSUE_ID.toString()),
                         Mockito.any(GatewayContext.class)))
                 .thenReturn(Mono.error(Status.NOT_FOUND.asRuntimeException()));
@@ -353,6 +357,7 @@ class IssueAttachmentControllerTest {
         response.setChecksum("sha256:abc123");
 
         Mockito.when(attachmentClient.getAttachmentDownloadUrl(
+                        Mockito.eq(PROJECT_ID.toString()), Mockito.eq(ISSUE_ID.toString()),
                         Mockito.eq(ATTACHMENT_ID.toString()),
                         Mockito.any(GatewayContext.class)))
                 .thenReturn(Mono.just(response));
@@ -369,7 +374,8 @@ class IssueAttachmentControllerTest {
                 .isEqualTo(response);
 
         Mockito.verify(attachmentClient).getAttachmentDownloadUrl(
-                Mockito.eq(ATTACHMENT_ID.toString()),
+                Mockito.eq(PROJECT_ID.toString()), Mockito.eq(ISSUE_ID.toString()),
+                        Mockito.eq(ATTACHMENT_ID.toString()),
                 Mockito.any(GatewayContext.class));
     }
 
@@ -379,6 +385,7 @@ class IssueAttachmentControllerTest {
         mockAuthenticatedUser();
 
         Mockito.when(attachmentClient.getAttachmentDownloadUrl(
+                        Mockito.eq(PROJECT_ID.toString()), Mockito.eq(ISSUE_ID.toString()),
                         Mockito.eq(ATTACHMENT_ID.toString()),
                         Mockito.any(GatewayContext.class)))
                 .thenReturn(Mono.error(Status.NOT_FOUND.asRuntimeException()));
@@ -398,6 +405,7 @@ class IssueAttachmentControllerTest {
         mockAuthenticatedUser();
 
         Mockito.when(attachmentClient.getAttachmentDownloadUrl(
+                        Mockito.eq(PROJECT_ID.toString()), Mockito.eq(ISSUE_ID.toString()),
                         Mockito.eq(ATTACHMENT_ID.toString()),
                         Mockito.any(GatewayContext.class)))
                 .thenReturn(Mono.error(Status.PERMISSION_DENIED.asRuntimeException()));
@@ -417,6 +425,7 @@ class IssueAttachmentControllerTest {
         mockAuthenticatedUser();
 
         Mockito.when(attachmentClient.deleteAttachment(
+                        Mockito.eq(PROJECT_ID.toString()), Mockito.eq(ISSUE_ID.toString()),
                         Mockito.eq(ATTACHMENT_ID.toString()),
                         Mockito.any(GatewayContext.class)))
                 .thenReturn(Mono.empty());
@@ -430,7 +439,8 @@ class IssueAttachmentControllerTest {
                 .expectHeader().exists("X-Request-Id");
 
         Mockito.verify(attachmentClient).deleteAttachment(
-                Mockito.eq(ATTACHMENT_ID.toString()),
+                Mockito.eq(PROJECT_ID.toString()), Mockito.eq(ISSUE_ID.toString()),
+                        Mockito.eq(ATTACHMENT_ID.toString()),
                 Mockito.any(GatewayContext.class));
     }
 
@@ -440,6 +450,7 @@ class IssueAttachmentControllerTest {
         mockAuthenticatedUser();
 
         Mockito.when(attachmentClient.deleteAttachment(
+                        Mockito.eq(PROJECT_ID.toString()), Mockito.eq(ISSUE_ID.toString()),
                         Mockito.eq(ATTACHMENT_ID.toString()),
                         Mockito.any(GatewayContext.class)))
                 .thenReturn(Mono.error(Status.PERMISSION_DENIED.asRuntimeException()));
@@ -453,7 +464,8 @@ class IssueAttachmentControllerTest {
                 .expectHeader().exists("X-Request-Id");
 
         Mockito.verify(attachmentClient).deleteAttachment(
-                Mockito.eq(ATTACHMENT_ID.toString()),
+                Mockito.eq(PROJECT_ID.toString()), Mockito.eq(ISSUE_ID.toString()),
+                        Mockito.eq(ATTACHMENT_ID.toString()),
                 Mockito.any(GatewayContext.class));
     }
 

@@ -131,7 +131,7 @@ public final class StorageQuotaOwner implements Owner {
                                                               Mono.defer(
                                                                   () ->
                                                                       db.sql(
-                                                                              """
+"""
 INSERT INTO taska.attachment_object_manifest(id,tenant_id,project_id,issue_id,actor_id,object_key,staging_object_key,reservation_id,operation_id,generation,state,expected_bytes,content_type,expires_at,created_at,maximum_attachment_bytes,policy_version,request_hash,reservation_version)
 VALUES(:id,:t,:p,:i,:a,:key,:staging,:reservation,:op,:f,'RESERVED',:bytes,:mime,:expires,:now,:max,:policy,:hash,:version)
 """)
@@ -403,7 +403,7 @@ VALUES(:id,:t,:p,:i,:a,:key,:staging,:reservation,:op,:f,'RESERVED',:bytes,:mime
 
   private Mono<Void> attachUpload(DatabaseClient db, Reservation r) {
     return db.sql(
-            """
+"""
 INSERT INTO taska.issue_attachments(id,tenant_id,project_id,issue_id,uploaded_by,file_name,content_type,size_bytes,checksum,created_at,object_key,object_version)
 SELECT m.id,m.tenant_id,m.project_id,m.issue_id,m.actor_id,u.file_name,m.content_type,m.confirmed_bytes,m.checksum_sha256,m.created_at,m.object_key,m.final_object_version
 FROM taska.attachment_object_manifest m JOIN taska.attachment_uploads u
@@ -418,7 +418,7 @@ ON CONFLICT(tenant_id,id) DO NOTHING
         .rowsUpdated()
         .then(
             db.sql(
-                    """
+"""
 SELECT NOT EXISTS(SELECT 1 FROM taska.attachment_uploads WHERE tenant_id=:t AND operation_id=:op)
   OR EXISTS(SELECT 1 FROM taska.issue_attachments WHERE tenant_id=:t AND id=:id) AS complete
 """)
@@ -892,7 +892,7 @@ SELECT NOT EXISTS(SELECT 1 FROM taska.attachment_uploads WHERE tenant_id=:t AND 
       throw fail(DomainStatus.FAILED_PRECONDITION, "OWNER_IDENTITY_CONFLICT");
   }
 
-  private static Reservation fromManifest(Map<String, Object> m) {
+  static Reservation fromManifest(Map<String, Object> m) {
     return new Reservation(
         (UUID) m.get("tenant_id"),
         new Request(

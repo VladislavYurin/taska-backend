@@ -1255,7 +1255,7 @@
     {
       "rpc": "ru.taska.issue.attachment.v1.AttachmentAdmissionService/CheckAdmission",
       "audience": "issue-service",
-      "scope": "TENANT",
+      "scope": "TENANT_STORAGE_ADMISSION",
       "tenantRequired": true,
       "mutation": false,
       "action": "checkAttachmentAdmission",
@@ -1269,6 +1269,33 @@
       "mutation": true,
       "action": "reconcileAttachmentUploads",
       "requestClass": "ru.taska.api.issue.attachment.v1.ReconcileAttachmentUploadsRequest"
+    },
+    {
+      "rpc": "ru.taska.b2b.v1.QuotaAuthorityService/ReleaseStorageUsage",
+      "audience": "tenant-service",
+      "scope": "TENANT",
+      "tenantRequired": true,
+      "mutation": true,
+      "action": "releaseStorageUsage",
+      "requestClass": "ru.taska.api.b2b.v1.FinalizeQuotaRpcRequest"
+    },
+    {
+      "rpc": "ru.taska.issue.attachment.v1.AttachmentAdmissionService/ReconcileDeletions",
+      "audience": "issue-service",
+      "scope": "TENANT",
+      "tenantRequired": true,
+      "mutation": true,
+      "action": "reconcileAttachmentDeletions",
+      "requestClass": "ru.taska.api.issue.attachment.v1.ReconcileAttachmentDeletionsRequest"
+    },
+    {
+      "rpc": "ru.taska.issue.attachment.v1.IssueAttachmentService/ReadAttachmentContent",
+      "audience": "issue-service",
+      "scope": "TENANT",
+      "tenantRequired": true,
+      "mutation": false,
+      "action": "readAttachmentContent",
+      "requestClass": "ru.taska.api.issue.attachment.v1.ReadAttachmentContentRequest"
     }
   ]
 }

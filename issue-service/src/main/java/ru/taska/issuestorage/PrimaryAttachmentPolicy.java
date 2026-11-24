@@ -23,19 +23,43 @@ public final class PrimaryAttachmentPolicy implements AttachmentUploadPolicy {
   private final ManagedDomainReads reads;
   private final ProjectAccessClient projects;
   private final TenantIssueStore issues;
+  private final AttachmentLifecyclePolicy lifecycle;
 
   public PrimaryAttachmentPolicy(
       TenantDecisionFacts facts,
       ManagedDomainReads reads,
       RpcContextSecurity security,
       TenantIssueStore issues) {
+    this(facts, reads, security, issues, null);
+  }
+
+  public PrimaryAttachmentPolicy(
+      TenantDecisionFacts facts,
+      ManagedDomainReads reads,
+      RpcContextSecurity security,
+      TenantIssueStore issues,
+      AttachmentLifecyclePolicy lifecycle) {
     this.facts = facts;
     this.reads = reads;
     this.projects = new ProjectAccessClient(reads, security, "issue-service");
     this.issues = issues;
+    this.lifecycle = lifecycle;
   }
 
   public Mono<Grant> check(
+      UUID project, UUID issue, AttachmentUploadStore.Upload upload, String phase) {
+    if (lifecycle != null)
+      return lifecycle
+          .bound(upload, phase)
+          .flatMap(
+              bound ->
+                  bound ? lifecycle.check(upload) : uploadCheck(project, issue, upload, phase));
+    if (Set.of("DIRECT_DELETE", "PROJECT_CLEANUP", "DELETE_USAGE").contains(phase))
+      return Mono.error(denied("ACCEPTED_DELETION_REQUIRED"));
+    return uploadCheck(project, issue, upload, phase);
+  }
+
+  private Mono<Grant> uploadCheck(
       UUID project, UUID issue, AttachmentUploadStore.Upload upload, String phase) {
     if (upload != null
         && phase.equals("CANCEL")

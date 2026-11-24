@@ -96,8 +96,9 @@ class ManagedRpcTrustTest extends RpcContextFixture {
     assertThrows(io.grpc.StatusRuntimeException.class, source::snapshot);
   }
 
-  @Test
-  void servicePurposeIdentityTenantAndScopesCannotBeSubstituted() throws Exception {
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(strings = {"outbox", "STORAGE_CLEANUP"})
+  void servicePurposeIdentityTenantAndScopesCannotBeSubstituted(String purpose) throws Exception {
     fixture.edges.add(
         new ManagedRpcTrust.Edge(
             "a",
@@ -106,7 +107,7 @@ class ManagedRpcTrustTest extends RpcContextFixture {
             "test.write",
             Set.of("SERVICE"),
             Set.of("write"),
-            "outbox",
+            purpose,
             Set.of("a"),
             "SET",
             Set.of(TENANT)));
@@ -116,7 +117,7 @@ class ManagedRpcTrustTest extends RpcContextFixture {
             .clearActorUserId()
             .clearMembershipGeneration()
             .setCredentialKind(CredentialKind.CREDENTIAL_KIND_SERVICE)
-            .setServicePurpose("outbox")
+            .setServicePurpose(purpose)
             .setServiceIdentity("a");
     var r = context().toBuilder().setContext(c).build();
     assertTrue(source.allowed(r, RPC, POLICY));

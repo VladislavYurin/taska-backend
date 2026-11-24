@@ -25,7 +25,7 @@ import java.util.UUID;
  * Делегирует обработку запросов {@link GatewayRequestExecutor}
  * и взаимодействие с issue-сервисом через {@link GrpcIssueAttachmentServiceClient}.
  *
- * projectId в пути используется только для REST-иерархии/читаемости URL и не участвует в авторизации.
+ * Native RPC проверяет tenant и все идентификаторы REST-иерархии.
  */
 @RestController
 @RequiredArgsConstructor
@@ -43,7 +43,7 @@ public class IssueAttachmentController implements AttachmentsApi {
             ServerWebExchange exchange
     ) {
         return executor.execute(exchange, EndpointSecurity.PROTECTED, context ->
-                attachmentClient.listAttachments(issueId.toString(), context)
+                attachmentClient.listAttachments(projectId.toString(),issueId.toString(), context)
                         .map(ResponseEntity::ok));
     }
 
@@ -96,7 +96,7 @@ public class IssueAttachmentController implements AttachmentsApi {
             ServerWebExchange exchange
     ) {
         return executor.execute(exchange, EndpointSecurity.PROTECTED, context ->
-                attachmentClient.getAttachmentDownloadUrl(attachmentId.toString(), context)
+                attachmentClient.getAttachmentDownloadUrl(projectId.toString(),issueId.toString(),attachmentId.toString(), context)
                         .map(ResponseEntity::ok));
     }
 
@@ -111,7 +111,7 @@ public class IssueAttachmentController implements AttachmentsApi {
             ServerWebExchange exchange
     ) {
         return executor.execute(exchange, EndpointSecurity.PROTECTED, context ->
-                attachmentClient.deleteAttachment(attachmentId.toString(), context)
+                attachmentClient.deleteAttachment(projectId.toString(),issueId.toString(),attachmentId.toString(), context)
                         .thenReturn(ResponseEntity.noContent().build()));
     }
 }

@@ -536,6 +536,43 @@
           }
         ]
       }
+    },
+    {
+      "changeSet": {
+        "id": "issue-attachment-lifecycle-0025",
+        "author": "taska",
+        "changes": [
+          {
+            "sqlFile": {
+              "path": "attachment-lifecycle.sql",
+              "relativeToChangelogFile": true,
+              "splitStatements": false
+            }
+          },
+          {
+            "sql": {
+              "sql": "SET LOCAL ROLE taska_issue_migrator; SELECT set_config('taska.guard_service','issue',true),set_config('taska.guard_schema','taska',true),set_config('taska.guard_table','attachment_deletion_jobs',true),set_config('taska.guard_column','tenant_id',true),set_config('taska.guard_app_access','read_write',true);"
+            }
+          },
+          {
+            "sqlFile": {
+              "path": "db/tenant/v2/protect-table.sql",
+              "splitStatements": false
+            }
+          },
+          {
+            "sql": {
+              "sql": "SET LOCAL ROLE taska_issue_migrator; SELECT set_config('taska.audit_service','issue',true),set_config('taska.audit_schema','taska',true),set_config('taska.audit_table','attachment_deletion_jobs',true),set_config('taska.audit_column','tenant_id',true),set_config('taska.audit_app_access','read_write',true);"
+            }
+          },
+          {
+            "sqlFile": {
+              "path": "db/tenant/v2/audit.sql",
+              "splitStatements": false
+            }
+          }
+        ]
+      }
     }
   ]
 }
