@@ -69,7 +69,7 @@ paths:
       x-pat-scope: session
       operationId: listConnectedApps
       summary: Подключённые OAuth-приложения
-      description: Только JWT-сессия. Одна строка на приложение по активным grants; scopes объединены и отсортированы. Порядок connectedAt desc, appId desc. OAuth выключен — available false и пустой items. lastUsedAt — последняя выдача access token (код или refresh), точность 10 минут. Ответ не кэшируется.
+      description: Только JWT-сессия. Одна строка на приложение по активным grants; scopes объединены и отсортированы. Порядок connectedAt desc, appId desc, tenantId nulls first. OAuth выключен — available false и пустой items. lastUsedAt — последняя выдача access token (код или refresh), точность 10 минут. Ответ не кэшируется.
       tags: [connected-apps]
       security: [{bearerAuth: []}]
       responses:
@@ -102,6 +102,11 @@ paths:
         - name: appId
           in: path
           required: true
+          schema: {type: string, format: uuid}
+        - name: tenantId
+          in: query
+          required: false
+          description: Отозвать только подключение этой компании; без параметра — во всех компаниях.
           schema: {type: string, format: uuid}
       responses:
         '204':
@@ -5072,6 +5077,36 @@ paths:
         default:
           $ref: '#/components/responses/ErrorResponse'
 
+  /api/v1/account/tenant-tokens:
+    post:
+      operationId: createTenantPersonalToken
+      tags: [tenant-personal-token]
+      x-pat-scope: session
+      summary: Выпустить PAT для одной компании
+      description: >-
+        Только WEB_TENANT сессия той же компании. Idempotency-Key — канонический UUID.
+        Повтор в течение 60 секунд возвращает тот же секрет после текущей авторизации;
+        поздний повтор или отозванный токен даёт 409. Ответы не кэшируются.
+        Просмотр метаданных и отзыв — GET /users/me/access-tokens и DELETE /users/me/access-tokens/{tokenId}.
+      security: [{bearerAuth: []}]
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema: {type: string, format: uuid}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/TenantPersonalTokenRequestDto'}
+      responses:
+        '201':
+          description: Токен выпущен; секрет доступен в пределах окна идемпотентности.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/TenantPersonalTokenCreatedDto'}
+        default: {$ref: '#/components/responses/ErrorResponse'}
+
   /api/v1/tenants:
     get:
       operationId: listTenants
@@ -5705,6 +5740,10 @@ components:
       additionalProperties: false
       required: [action, allowed, denialCodes, restrictions]
       properties:
+        disabledFlags:
+          type: array
+          description: Ключи выключенных флагов, объясняющие CAPABILITY_DISABLED для pat.create.
+          items: {type: string}
         action:
           $ref: '#/components/schemas/CapabilityAction'
         allowed: {type: boolean}
@@ -5754,6 +5793,7 @@ components:
       type: object
       required: [appId, name, host, scopes, connectedAt, lastUsedAt, expiresAt]
       properties:
+        tenantId: {type: string, format: uuid, nullable: true, description: 'Компания токена/подключения; отсутствует у прежних без компании.'}
         appId: {type: string, format: uuid}
         name: {type: string}
         host: {type: string, description: 'Host адреса возврата клиента; при нескольких — лексикографически первого URI.'}
@@ -5766,6 +5806,96 @@ components:
         connectedAt: {type: string, format: date-time, description: 'Минимум времени выдачи authorization code активных grants.'}
         lastUsedAt: {type: string, format: date-time}
         expiresAt: {type: string, format: date-time}
+    TenantPersonalTokenRequestDto:
+      type: object
+      additionalProperties: false
+      properties:
+        tenantId:
+          type: string
+          format: uuid
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        scopes:
+          description: write включает read; сервис сохраняет и возвращает канонический набор read,write.
+          type: array
+          items:
+            type: string
+            enum:
+            - read
+            - write
+          maxItems: 2
+          minItems: 1
+          uniqueItems: true
+        expiresInDays:
+          type: integer
+          minimum: 1
+          maximum: 90
+      required:
+      - tenantId
+      - name
+      - scopes
+      - expiresInDays
+    TenantPersonalTokenDto:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+          format: uuid
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        scopes:
+          type: array
+          items:
+            type: string
+            enum:
+            - read
+            - write
+          maxItems: 2
+          minItems: 1
+          uniqueItems: true
+        createdAt:
+          type: string
+          format: date-time
+        expiresAt:
+          type: string
+          format: date-time
+        tokenPrefix:
+          type: string
+        lastUsedAt:
+          type: string
+          format: date-time
+          nullable: true
+        revoked:
+          type: boolean
+      required:
+      - id
+      - tenantId
+      - name
+      - scopes
+      - createdAt
+      - expiresAt
+      - revoked
+    TenantPersonalTokenCreatedDto:
+      type: object
+      additionalProperties: false
+      properties:
+        metadata:
+          $ref: '#/components/schemas/TenantPersonalTokenDto'
+        secret:
+          type: string
+          minLength: 32
+          maxLength: 512
+      required:
+      - metadata
+      - secret
     PersonalAccessTokenScopeDto:
       type: string
       enum: [read, write]
@@ -5795,6 +5925,7 @@ components:
       type: object
       required: [id, name, tokenPrefix, scopes, createdAt, expiresAt]
       properties:
+        tenantId: {type: string, format: uuid, nullable: true, description: 'Компания токена/подключения; отсутствует у прежних без компании.'}
         id: {type: string, format: uuid}
         name: {type: string}
         tokenPrefix:

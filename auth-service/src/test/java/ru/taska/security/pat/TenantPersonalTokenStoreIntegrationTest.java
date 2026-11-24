@@ -168,6 +168,23 @@ class TenantPersonalTokenStoreIntegrationTest {
   }
 
   @Test
+  void listMetadataResolvesCompanyFromOwnedGrant() {
+    var a = issue(sessionA, A, "A", List.of("read"), UUID.randomUUID()).block(WAIT);
+    var b = issue(sessionB, B, "B", List.of("read"), UUID.randomUUID()).block(WAIT);
+    var repository = new R2dbcRepositoryFactory(new R2dbcEntityTemplate(factory))
+        .getRepository(PersonalAccessTokenRepository.class);
+    var rows = repository.listOwned(USER).collectList().block(WAIT);
+    assertEquals(2, rows.size());
+    assertEquals(A, rows.stream().filter(r -> r.getId().equals(a.tokenId())).findFirst().orElseThrow().getTenantId());
+    assertEquals(B, rows.stream().filter(r -> r.getId().equals(b.tokenId())).findFirst().orElseThrow().getTenantId());
+    assertTrue(repository.listOwned(UUID.randomUUID()).collectList().block(WAIT).isEmpty());
+    db.sql("UPDATE taska.integration_grants SET revoked_at=now(),version=version+1 WHERE tenant_id=:tenant")
+        .bind("tenant", A).then().block(WAIT);
+    var historical = repository.listOwned(USER).filter(r -> r.getId().equals(a.tokenId())).blockFirst(WAIT);
+    assertEquals(A, historical.getTenantId());
+  }
+
+  @Test
   void issuanceFixesSessionTenantAndAuthenticationReturnsThatBindingOnly() {
     var issued = issue(sessionA, A, " CI bot ", List.of("write"), UUID.randomUUID()).block(WAIT);
     assertEquals(A, issued.tenantId());

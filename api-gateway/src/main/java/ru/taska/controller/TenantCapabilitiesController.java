@@ -53,6 +53,7 @@ public class TenantCapabilitiesController implements TenantCapabilitiesApi {
                                       new TenantCapabilityDto()
                                           .action(CapabilityAction.fromValue(item.getAction()))
                                           .allowed(item.getAllowed())
+                                          .disabledFlags(item.getDisabledFlagsList())
                                           .denialCodes(
                                               item.getDenialCodesList().stream()
                                                   .map(

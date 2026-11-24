@@ -97,6 +97,7 @@ message Problem {
   string request_id = 5;
   repeated RestrictionCode reasons = 6;
   repeated FieldViolation violations = 7;
+  map<string, string> details = 8;
 }
 
 message ConfirmedAction {
@@ -483,6 +484,8 @@ message PersonalToken {
   string created_at = 5;
   string expires_at = 6;
   bool revoked = 7;
+  string token_prefix = 8;
+  optional string last_used_at = 9;
 }
 
 message PersonalTokenCreated {
@@ -939,6 +942,7 @@ message Capability {
   bool allowed = 2;
   repeated ErrorCode denial_codes = 3;
   repeated RestrictionCode restrictions = 4;
+  repeated string disabled_flags = 5;
 }
 
 message Capabilities {

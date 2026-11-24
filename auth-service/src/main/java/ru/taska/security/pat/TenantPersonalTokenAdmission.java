@@ -79,6 +79,9 @@ public final class TenantPersonalTokenAdmission {
           default -> DomainStatus.PERMISSION_DENIED;
         };
     String name = code.name().substring("ERROR_CODE_".length());
-    return new DomainException(status, name, Map.of("code", name));
+    var details = new java.util.LinkedHashMap<String, String>();
+    details.put("code", name);
+    if (capability.getDisabledFlagsCount() > 0) details.put("disabledFlags", String.join(",", capability.getDisabledFlagsList()));
+    return new DomainException(status, name, details);
   }
 }

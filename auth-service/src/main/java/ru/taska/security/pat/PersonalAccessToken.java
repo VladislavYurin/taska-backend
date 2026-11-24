@@ -29,4 +29,5 @@ public class PersonalAccessToken {
     private String revokedReason;
     /** TAS-463: tenant-bound tokens authenticate only through TenantPersonalTokenStore. */
     private UUID integrationGrantId;
+    @org.springframework.data.annotation.ReadOnlyProperty private UUID tenantId;
 }

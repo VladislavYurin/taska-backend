@@ -62,8 +62,10 @@ class TenantOAuthGrantBoundaryTest {
   final TenantOAuthGrantStore store = mock(TenantOAuthGrantStore.class);
   final OAuthIntrospectionClient introspection = TenantOAuthTestSupport.introspection();
   final AtomicReference<Mono<Long>> membership = new AtomicReference<>(Mono.just(2L));
+  final ru.taska.security.pat.TenantPersonalTokenFacts admission = mock(ru.taska.security.pat.TenantPersonalTokenFacts.class);
+  { when(admission.admitOAuth(any(), any())).thenReturn(Mono.empty()); }
   final TenantOAuthGrantGrpcService service =
-      new TenantOAuthGrantGrpcService(store, (t, u) -> membership.get(), introspection);
+      new TenantOAuthGrantGrpcService(store, (t, u) -> membership.get(), introspection, admission);
   final String requestId = UUID.randomUUID().toString();
 
   TrustedTenantContext tenantSession() {
@@ -136,6 +138,14 @@ class TenantOAuthGrantBoundaryTest {
                         || reason.equals(
                             GrpcErrorDetails.decode(status.getTrailers()).get("code"))))
         .verify();
+  }
+
+  @Test
+  void disabledMcpCannotPersistConsent() throws Exception {
+    when(admission.admitOAuth(any(), any())).thenReturn(Mono.error(new ru.taska.exception.DomainException(
+        ru.taska.exception.DomainStatus.PERMISSION_DENIED, "CAPABILITY_DISABLED", Map.of("code", "CAPABILITY_DISABLED"))));
+    rejected(Status.Code.PERMISSION_DENIED, "CAPABILITY_DISABLED", approve(tenantSession(), request()));
+    verifyNoInteractions(store);
   }
 
   @Test

@@ -1861,9 +1861,13 @@ paths:
     post:
       operationId: createTenantPersonalToken
       summary: createTenantPersonalToken
+      description: >-
+        WEB_TENANT same-company issuance. Token metadata and revoke use the existing
+        GET /api/v1/users/me/access-tokens and DELETE /api/v1/users/me/access-tokens/{tokenId}.
+        Idempotency-Key is a canonical lowercase UUID; write includes read in the returned metadata.
       tags:
       - Account
-      x-policy: WEB_ACCOUNT
+      x-policy: WEB_TENANT
       x-implementation-tas:
       - TAS-463
       responses:
@@ -1905,7 +1909,7 @@ paths:
       summary: approveTenantOAuthGrant
       tags:
       - Account
-      x-policy: WEB_ACCOUNT
+      x-policy: WEB_TENANT
       x-implementation-tas:
       - TAS-498
       responses:
@@ -3994,6 +3998,10 @@ components:
       type: object
       additionalProperties: false
       properties:
+        details:
+          type: object
+          additionalProperties: {type: string}
+          description: Безопасные параметры отказа (maxLifetimeDays, limit, disabledFlags).
         type:
           type: string
           minLength: 1
@@ -5216,6 +5224,7 @@ components:
           minLength: 1
           maxLength: 100
         scopes:
+          description: write включает read; сервис сохраняет и возвращает канонический набор read,write.
           type: array
           items:
             type: string
@@ -5264,6 +5273,12 @@ components:
         expiresAt:
           type: string
           format: date-time
+        tokenPrefix:
+          type: string
+        lastUsedAt:
+          type: string
+          format: date-time
+          nullable: true
         revoked:
           type: boolean
       required:
@@ -5478,11 +5493,12 @@ components:
         clientId:
           type: string
           minLength: 1
-          maxLength: 300
+          maxLength: 2048
         tenantId:
           type: string
           format: uuid
         scopes:
+          description: Обязателен read; write без read запрещён.
           type: array
           items:
             type: string
@@ -7054,6 +7070,10 @@ components:
       type: object
       additionalProperties: false
       properties:
+        disabledFlags:
+          type: array
+          items: {type: string}
+          description: Disabled flag keys explaining pat.create CAPABILITY_DISABLED.
         action:
           type: string
           minLength: 1
