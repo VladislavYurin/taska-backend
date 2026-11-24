@@ -52,7 +52,7 @@ class IssueAclLocal(WorkflowAclLocal):
             response = client.request('GET', '/api/v1/projects/' + project + '/workflows')
             if response.status == 200:
                 return response.json()
-            e.require(response.status == 503, 'Workflow readiness returned unexpected status')
+            e.require(response.status in (503, 504), 'Workflow readiness returned unexpected status %s' % response.status)
             time.sleep(1)
         raise e.Blocked('Workflow readiness deadline exceeded')
 
