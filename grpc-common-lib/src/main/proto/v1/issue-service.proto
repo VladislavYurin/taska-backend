@@ -1417,6 +1417,8 @@ message AddIssueLabelRequestBody {
    * Идентификатор пользователя, добавляющего метку (MEMBER+).
    */
   string actor_user_id = 3;
+  // Проверенный projectId из публичного REST-пути; не заменяет primary ACL.
+  string project_id = 4;
 }
 
 message AddIssueLabelResponse {
@@ -1474,6 +1476,8 @@ message RemoveIssueLabelRequestBody {
    * Идентификатор пользователя, удаляющего метку (MEMBER+).
    */
   string actor_user_id = 3;
+  // Проверенный projectId из публичного REST-пути; не заменяет primary ACL.
+  string project_id = 4;
 }
 
 message RemoveIssueLabelResponse {
@@ -1516,6 +1520,8 @@ message ListIssueLabelsRequestBody {
    * Идентификатор пользователя, запрашивающего список (VIEWER+).
    */
   string actor_user_id = 2;
+  // Проверенный projectId из публичного REST-пути; не заменяет primary ACL.
+  string project_id = 3;
 }
 
 message ListIssueLabelsResponse {
@@ -2068,6 +2074,8 @@ message WatchIssueRequestBody {
    * Идентификатор подписываемого пользователя (опционально; по умолчанию — актор).
    */
   optional string target_user_id = 3;
+  // Проверенный projectId из публичного REST-пути; не заменяет primary ACL.
+  string project_id = 4;
 }
 
 /**
@@ -2121,6 +2129,8 @@ message UnwatchIssueRequestBody {
    * Идентификатор отписываемого пользователя (опционально; по умолчанию — актор).
    */
   optional string target_user_id = 3;
+  // Проверенный projectId из публичного REST-пути; не заменяет primary ACL.
+  string project_id = 4;
 }
 
 /**
@@ -2184,6 +2194,8 @@ message ListIssueWatchersRequestBody {
    * Номер страницы, начиная с 0 (опционально).
    */
   optional int32 page = 4;
+  // Проверенный projectId из публичного REST-пути; не заменяет primary ACL.
+  string project_id = 5;
 }
 
 /**
@@ -2232,6 +2244,8 @@ message GetIssueWatchStateRequestBody {
    * Идентификатор пользователя, инициировавшего запрос.
    */
   string actor_user_id = 2;
+  // Проверенный projectId из публичного REST-пути; не заменяет primary ACL.
+  string project_id = 3;
 }
 
 /**

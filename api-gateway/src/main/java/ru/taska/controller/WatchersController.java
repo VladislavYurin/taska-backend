@@ -38,7 +38,7 @@ public class WatchersController implements WatchersApi {
             ServerWebExchange exchange
     ) {
         return executor.execute(exchange, EndpointSecurity.PROTECTED, context ->
-                grpcClient.listIssueWatchers(issueId.toString(), context)
+                grpcClient.listIssueWatchers(projectId.toString(), issueId.toString(), context)
                         .map(ResponseEntity::ok)
         );
     }
@@ -53,7 +53,7 @@ public class WatchersController implements WatchersApi {
             ServerWebExchange exchange
     ) {
         return executor.execute(exchange, EndpointSecurity.PROTECTED, context ->
-                grpcClient.watchIssueMe(issueId.toString(), context)
+                grpcClient.watchIssueMe(projectId.toString(), issueId.toString(), context)
                         .map(ResponseEntity::ok)
         );
     }
@@ -68,7 +68,7 @@ public class WatchersController implements WatchersApi {
             ServerWebExchange exchange
     ) {
         return executor.execute(exchange, EndpointSecurity.PROTECTED, context ->
-                grpcClient.unwatchIssueMe(issueId.toString(), context)
+                grpcClient.unwatchIssueMe(projectId.toString(), issueId.toString(), context)
                         .map(ResponseEntity::ok)
         );
     }
@@ -84,7 +84,7 @@ public class WatchersController implements WatchersApi {
             ServerWebExchange exchange
     ) {
         return executor.execute(exchange, EndpointSecurity.PROTECTED, context ->
-                grpcClient.addIssueWatcher(issueId.toString(), addIssueWatcherRequestDto, context)
+                grpcClient.addIssueWatcher(projectId.toString(), issueId.toString(), addIssueWatcherRequestDto, context)
                         .map(ResponseEntity::ok)
         );
     }
@@ -100,7 +100,7 @@ public class WatchersController implements WatchersApi {
             ServerWebExchange exchange
     ) {
         return executor.execute(exchange, EndpointSecurity.PROTECTED, context ->
-                grpcClient.removeIssueWatcher(issueId.toString(), userId.toString(), context)
+                grpcClient.removeIssueWatcher(projectId.toString(), issueId.toString(), userId.toString(), context)
                         .map(ResponseEntity::ok)
         );
     }
