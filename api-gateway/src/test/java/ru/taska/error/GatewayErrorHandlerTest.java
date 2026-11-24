@@ -131,6 +131,7 @@ class GatewayErrorHandlerTest {
     }
     @Test
     void lifetimeQuotaDetailsSurviveGrpcAndReachProblemBody() {
+      exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/api/v1/tenants"));
       org.springframework.test.util.ReflectionTestUtils.setField(handler, "trustedEnabled", true);
       var error =
           mapper.GrpcExceptionMapper.toStatusRuntimeException(
