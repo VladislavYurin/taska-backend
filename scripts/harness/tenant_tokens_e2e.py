@@ -26,6 +26,10 @@ class TenantTokensLocal(CapabilitiesLocal):
         self.edge('api-gateway', 'auth-service',
                   'ru.taska.b2b.v1.TenantPersonalTokenService/CreateTenantPersonalToken',
                   'createTenantPersonalToken', ['WEB_TENANT'], ['write'])
+        for method, action in (('ListPersonalAccessTokens', 'listPersonalAccessTokens'),
+                               ('RevokePersonalAccessToken', 'revokePersonalAccessToken')):
+            self.edge('api-gateway', 'auth-service', 'ru.taska.auth.v1.PersonalAccessTokenService/' + method,
+                      action, ['WEB_TENANT'], ['read', 'write'])
         self.edge('auth-service', 'tenant-service',
                   'ru.taska.b2b.v1.TenantMembershipService/BatchValidateMemberships',
                   'batchValidateMemberships', ['SERVICE'], ['memberships:read'], 'membership')
