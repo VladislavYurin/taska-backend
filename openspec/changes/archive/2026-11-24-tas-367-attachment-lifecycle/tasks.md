@@ -13,8 +13,8 @@
 ## 3. Эксплуатация и интеграция
 
 - [x] 3.1 Добавить opt-in tenant worklist scheduler для delete/expired uploads, метрики и runbook; проверить purpose/scopes, bound intent, bounded batch и отсутствие avatar/global scan.
-- [ ] 3.2 Добавить owned native lifecycle E2E и harness selection; выполнить применимые проверки из verification.json, явные IT, native download/delete/retry/restart/изоляцию и физический cleanup с evidence вне Git.
-- [ ] 3.3 Создать отдельный PR, разрешить подтверждённые замечания current-head AI review, повторить затронутые E2E на финальной версии и проверить docs/OpenSpec strict validation.
+- [x] 3.2 Добавить owned native lifecycle E2E и harness selection; выполнить применимые проверки из verification.json, явные IT, native download/delete/retry/restart/изоляцию и физический cleanup с evidence вне Git.
+- [x] 3.3 Создать отдельный PR, разрешить подтверждённые замечания current-head AI review, повторить затронутые E2E на финальной версии и проверить docs/OpenSpec strict validation.
 
 ## Workflow follow-up
 

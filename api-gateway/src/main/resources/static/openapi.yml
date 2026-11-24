@@ -2887,7 +2887,7 @@ paths:
             Cache-Control:
               schema: { type: string }
           content:
-            application/octet-stream:
+            '*/*':
               schema: { type: string, format: binary }
         '206':
           description: Запрошенный диапазон (HEAD возвращает только заголовки)
@@ -2895,7 +2895,7 @@ paths:
             Content-Range:
               schema: { type: string }
           content:
-            application/octet-stream:
+            '*/*':
               schema: { type: string, format: binary }
         '416':
           description: Недопустимый диапазон; проверяется после авторизации
@@ -2948,7 +2948,7 @@ paths:
             Cache-Control:
               schema: { type: string }
           content:
-            application/octet-stream:
+            '*/*':
               schema: { type: string, format: binary }
         '206':
           description: Запрошенный диапазон (HEAD возвращает только заголовки)
@@ -2956,7 +2956,7 @@ paths:
             Content-Range:
               schema: { type: string }
           content:
-            application/octet-stream:
+            '*/*':
               schema: { type: string, format: binary }
         '416':
           description: Недопустимый диапазон; проверяется после авторизации

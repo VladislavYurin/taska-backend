@@ -91,7 +91,7 @@ message AttachmentResponse {
   google.protobuf.Timestamp created_at = 9;
 
   /**
-   * Presigned URL для скачивания вложения.
+   * Native: относительный gateway path с Bearer; legacy: presigned URL для скачивания.
    */
   string url = 10;
 
@@ -242,7 +242,7 @@ message ListAttachmentsResponse {
 }
 
 /**
- * Запрос на получение presigned URL для скачивания вложения.
+ * Запрос на получение native authenticated path либо legacy presigned URL.
  */
 message GetAttachmentDownloadUrlRequest {
   // TAS-316: untrusted until verified by the message-bound mTLS/JWS interceptor.
@@ -260,7 +260,7 @@ message GetAttachmentDownloadUrlRequest {
 }
 
 /**
- * Тело запроса на получение presigned URL для скачивания вложения.
+ * Тело запроса на получение пути/ссылки для скачивания вложения.
  */
 message GetAttachmentDownloadUrlRequestBody {
   /**
@@ -277,11 +277,11 @@ message GetAttachmentDownloadUrlRequestBody {
 }
 
 /**
- * Ответ с presigned URL для скачивания вложения.
+ * Ответ с native authenticated path либо legacy presigned URL.
  */
 message GetAttachmentDownloadUrlResponse {
   /**
-   * Presigned URL для скачивания вложения.
+   * Native: относительный gateway path с Bearer; legacy: presigned URL для скачивания.
    */
   string url = 1;
 
