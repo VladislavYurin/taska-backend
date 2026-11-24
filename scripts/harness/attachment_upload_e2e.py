@@ -56,6 +56,7 @@ class AttachmentUploadLocal(IssueAclLocal):
     def scenarios(self):
         actor, clients = self.seed()
         transients, counter_lock = {'upload': 0, 'confirm': 0}, threading.Lock()
+        readiness_transients = {'503': 0, '504': 0}
 
         def positive(client, path, expected, body, headers=None):
             # Проверяем bounded retry того же intent, а не создаём новую команду после тайм-аута.
@@ -85,7 +86,8 @@ class AttachmentUploadLocal(IssueAclLocal):
                 response = client.request('GET', probe_path)
                 if response.status == 200:
                     break
-                e.require(response.status == 503, 'Protected readiness returned unexpected status')
+                e.require(response.status in (503, 504), 'Protected readiness returned unexpected status %s' % response.status)
+                readiness_transients[str(response.status)] += 1
                 time.sleep(1)
             else:
                 raise e.Blocked('Attachment primary readiness deadline exceeded')
@@ -95,7 +97,8 @@ class AttachmentUploadLocal(IssueAclLocal):
                 response = client.request('GET', '/api/v1/issues/' + issue)
                 if response.status == 200:
                     break
-                e.require(response.status == 503, 'Issue readiness returned unexpected status')
+                e.require(response.status in (503, 504), 'Issue readiness returned unexpected status %s' % response.status)
+                readiness_transients[str(response.status)] += 1
                 time.sleep(1)
             else:
                 raise e.Blocked('Attachment issue readiness deadline exceeded')
@@ -169,7 +172,7 @@ class AttachmentUploadLocal(IssueAclLocal):
         response = owner.request('POST', path + 'confirm', body=dict(confirm, objectKey=late['objectKey']))
         e.require(response.status in (401, 403), 'Revoked membership retained confirm access')
         return {'publicRestSignedPutConfirm': 'PASS', 'tenantAndProjectIsolation': 'PASS',
-                'retryAndAccountingOnce': 'PASS', 'payloadConflict': 'PASS', 'membershipRevocation': 'PASS', 'primaryAdminBypassAccounting': 'PASS', 'requestIdFallback': 'PASS', 'actorOwnership': 'PASS', 'mimeAdmission': 'PASS', 'quotaRefusalAccountingUnchanged': 'PASS', 'transient503Retries': transients}
+                'retryAndAccountingOnce': 'PASS', 'payloadConflict': 'PASS', 'membershipRevocation': 'PASS', 'primaryAdminBypassAccounting': 'PASS', 'requestIdFallback': 'PASS', 'actorOwnership': 'PASS', 'mimeAdmission': 'PASS', 'quotaRefusalAccountingUnchanged': 'PASS', 'transient503Retries': transients, 'readinessTransients': readiness_transients}
 
 
 def main():
