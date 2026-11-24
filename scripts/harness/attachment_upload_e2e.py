@@ -150,9 +150,11 @@ class AttachmentUploadLocal(IssueAclLocal):
         for size in [20000000] * 4 + [19999980]:
             positive(owner, path + 'upload-url', 200, dict(payload, sizeBytes=size),
                      {'Idempotency-Key': str(uuid.uuid4())})
+        quota_state = self.sql('tenant_db', "SELECT used||'/'||reserved||'/'||(SELECT count(*) FROM taska.quota_reservations WHERE tenant_id='%s' AND resource='STORAGE_BYTES') FROM taska.quota_counters WHERE tenant_id='%s' AND resource='STORAGE_BYTES';" % (tenant, tenant)).strip()
         quota_problem = positive(owner, path + 'upload-url', 422, payload, {'Idempotency-Key': str(uuid.uuid4())})
         e.require(quota_problem['code'] == 'QUOTA_EXCEEDED'
                   and quota_problem['details']['quota.kind'] == 'STORAGE_BYTES', 'Storage quota problem lost its machine code')
+        e.require(self.sql('tenant_db', "SELECT used||'/'||reserved||'/'||(SELECT count(*) FROM taska.quota_reservations WHERE tenant_id='%s' AND resource='STORAGE_BYTES') FROM taska.quota_counters WHERE tenant_id='%s' AND resource='STORAGE_BYTES';" % (tenant, tenant)).strip() == quota_state, 'Quota refusal changed accounting or allocated a reservation')
         self.sql('auth_db', "UPDATE taska.users SET global_role='GLOBAL_ADMIN' WHERE id='%s';UPDATE taska.web_sessions SET assurance='ADMIN_EMAIL_MFA' WHERE user_id='%s';" % (actor, actor))
         administrative = positive(owner, path + 'upload-url', 200, payload,
                                   {'Idempotency-Key': str(uuid.uuid4())})
@@ -167,7 +169,7 @@ class AttachmentUploadLocal(IssueAclLocal):
         response = owner.request('POST', path + 'confirm', body=dict(confirm, objectKey=late['objectKey']))
         e.require(response.status in (401, 403), 'Revoked membership retained confirm access')
         return {'publicRestSignedPutConfirm': 'PASS', 'tenantAndProjectIsolation': 'PASS',
-                'retryAndAccountingOnce': 'PASS', 'payloadConflict': 'PASS', 'membershipRevocation': 'PASS', 'primaryAdminBypassAccounting': 'PASS', 'requestIdFallback': 'PASS', 'actorOwnership': 'PASS', 'mimeAdmission': 'PASS', 'transient503Retries': transients}
+                'retryAndAccountingOnce': 'PASS', 'payloadConflict': 'PASS', 'membershipRevocation': 'PASS', 'primaryAdminBypassAccounting': 'PASS', 'requestIdFallback': 'PASS', 'actorOwnership': 'PASS', 'mimeAdmission': 'PASS', 'quotaRefusalAccountingUnchanged': 'PASS', 'transient503Retries': transients}
 
 
 def main():

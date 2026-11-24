@@ -2791,6 +2791,15 @@ paths:
           $ref: '#/components/responses/ErrorResponse'
         '404':
           $ref: '#/components/responses/ErrorResponse'
+        '422':
+          description: В доверенном режиме used bytes и reservations исчерпали STORAGE_BYTES; code=QUOTA_EXCEEDED, details содержит quota.kind, quota.used, quota.reserved и quota.limit.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/RestErrorResponse'
 
   /api/v1/projects/{projectId}/issues/{issueId}/attachments/confirm:
     post:
