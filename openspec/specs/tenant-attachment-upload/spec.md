@@ -26,8 +26,8 @@
 - **THEN** новое admission запрещено, а принятая операция может завершиться по своему lifecycle с остальными текущими проверками
 
 #### Scenario: Хранилище занято обычным actor
-- **WHEN** used bytes и активные reservations вместе исчерпали бизнес-лимит
-- **THEN** новый upload обычного actor возвращает HTTP 422 с кодом QUOTA_EXCEEDED без нового расхода
+- **WHEN** used bytes и активные reservations вместе исчерпали бизнес-лимит и обычный actor вызывает POST attachment upload-url
+- **THEN** сервер возвращает HTTP 422 application/problem+json с code=QUOTA_EXCEEDED, details quota.kind=STORAGE_BYTES и requestId без нового расхода; прочие ошибки и соседние legacy операции сохраняют свой формат
 
 ### Requirement: Подтверждение сохраняет целостность и однократность
 
