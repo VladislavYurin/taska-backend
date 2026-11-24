@@ -68,8 +68,12 @@ public final class PrimaryIssueAccess implements TenantIssueAccess {
             && action != Action.ISSUE_HISTORY
             && action != Action.ISSUE_SEARCH
             && action != Action.LABEL_READ
-            && action != Action.WATCHER_READ;
-    boolean metadata = action.name().startsWith("LABEL_") || action.name().startsWith("WATCHER_");
+            && action != Action.WATCHER_READ
+            && action != Action.ATTACHMENT_READ;
+    boolean metadata =
+        action.name().startsWith("LABEL_")
+            || action.name().startsWith("WATCHER_")
+            || action.name().startsWith("ATTACHMENT_");
     return (metadata
             ? facts.currentAdministrative(write ? "write" : "read")
             : facts.current(write ? "write" : "read"))

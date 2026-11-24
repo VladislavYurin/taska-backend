@@ -17,6 +17,28 @@ service IssueAttachmentService {
   rpc ListAttachments(ListAttachmentsRequest) returns (ListAttachmentsResponse);
   rpc GetAttachmentDownloadUrl(GetAttachmentDownloadUrlRequest) returns (GetAttachmentDownloadUrlResponse);
   rpc DeleteAttachment(DeleteAttachmentRequest) returns (google.protobuf.Empty);
+  // Bounded version-pinned content, no object keys or S3 capabilities in the response.
+  rpc ReadAttachmentContent(ReadAttachmentContentRequest) returns (ReadAttachmentContentResponse);
+}
+
+message ReadAttachmentContentRequest {
+  ru.taska.b2b.v1.RequestContext context = 100;
+  string actor_user_id = 1;
+  string project_id = 2;
+  string issue_id = 3;
+  string attachment_id = 4;
+  int64 offset = 5;
+  int32 length = 6;
+  string expected_checksum = 7;
+  bool metadata_only = 8;
+}
+message ReadAttachmentContentResponse {
+  int64 total_size = 1;
+  string file_name = 2;
+  string content_type = 3;
+  string checksum = 4;
+  int64 offset = 5;
+  bytes data = 6;
 }
 
 /**
@@ -206,6 +228,7 @@ message ListAttachmentsRequestBody {
    * Идентификатор задачи.
    */
   string issue_id = 2;
+  string project_id = 3;
 }
 
 /**
@@ -249,6 +272,8 @@ message GetAttachmentDownloadUrlRequestBody {
    * Идентификатор вложения.
    */
   string attachment_id = 2;
+  string project_id = 3;
+  string issue_id = 4;
 }
 
 /**
@@ -317,12 +342,22 @@ message DeleteAttachmentRequestBody {
    * Идентификатор вложения.
    */
   string attachment_id = 2;
+  string project_id = 3;
+  string issue_id = 4;
 }
 
 // Приватная проверка исходных actor/credential и локального upload intent для quota owner.
 service AttachmentAdmissionService {
   rpc CheckAdmission(AttachmentAdmissionRequest) returns (AttachmentAdmissionGrant);
   rpc ReconcileUploads(ReconcileAttachmentUploadsRequest) returns (ReconcileAttachmentUploadsResponse);
+  rpc ReconcileDeletions(ReconcileAttachmentUploadsRequest) returns (ReconcileAttachmentDeletionsResponse);
+}
+message ReconcileAttachmentDeletionsResponse {
+  int32 processed = 1;
+  int32 completed = 2;
+  int32 failed = 3;
+  int32 data_loss = 4;
+  string next_cursor = 5;
 }
 message AttachmentAdmissionRequest {
   ru.taska.b2b.v1.RequestContext context = 100;

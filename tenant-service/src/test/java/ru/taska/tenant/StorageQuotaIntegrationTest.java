@@ -425,7 +425,8 @@ class StorageQuotaIntegrationTest {
             QuotaAuthorityServiceGrpc.getReserveQuotaMethod().getFullMethodName(),
             QuotaAuthorityServiceGrpc.getCommitQuotaMethod().getFullMethodName(),
             QuotaAuthorityServiceGrpc.getReleaseQuotaMethod().getFullMethodName(),
-            QuotaAuthorityServiceGrpc.getGetQuotaReservationMethod().getFullMethodName()))
+            QuotaAuthorityServiceGrpc.getGetQuotaReservationMethod().getFullMethodName(),
+            QuotaAuthorityServiceGrpc.getReleaseStorageUsageMethod().getFullMethodName()))
       rootPolicies.put(method, new RpcContextSecurity.Policy(true, false));
     rootServer =
         server("tenant-service")

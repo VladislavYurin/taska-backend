@@ -321,7 +321,10 @@ public final class AttachmentUploadStore {
                     db -> {
                       var q =
                           db.sql(
-                                  "SELECT * FROM taska.attachment_uploads WHERE tenant_id=:t"
+                                  "SELECT * FROM taska.attachment_uploads u WHERE tenant_id=:t AND"
+                                      + " NOT EXISTS (SELECT 1 FROM taska.attachment_deletion_jobs"
+                                      + " d WHERE d.tenant_id=u.tenant_id AND"
+                                      + " d.operation_id=u.operation_id)"
                                       + (after == null ? "" : " AND id>:after")
                                       + " ORDER BY id LIMIT :limit")
                               .bind("t", UUID.fromString(c.tenantId()))

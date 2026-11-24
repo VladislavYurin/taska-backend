@@ -20,12 +20,40 @@ public final class AttachmentAdmissionGrpc
   private final AttachmentUploadStore store;
   private final AttachmentUploadPolicy policy;
   private final AttachmentUploads uploads;
+  private final AttachmentDeletions deletions;
 
   public AttachmentAdmissionGrpc(
-      AttachmentUploadStore store, AttachmentUploadPolicy policy, AttachmentUploads uploads) {
+      AttachmentUploadStore store,
+      AttachmentUploadPolicy policy,
+      AttachmentUploads uploads,
+      AttachmentDeletions deletions) {
     this.store = store;
     this.policy = policy;
     this.uploads = uploads;
+    this.deletions = deletions;
+  }
+
+  @Override
+  public Mono<ru.taska.api.issue.attachment.v1.ReconcileAttachmentDeletionsResponse>
+      reconcileDeletions(
+          Mono<ru.taska.api.issue.attachment.v1.ReconcileAttachmentUploadsRequest> q) {
+    return RpcContextBridge.inbound(
+            q.flatMap(
+                    r ->
+                        deletions.reconcile(
+                            r.getAfterId().isEmpty() ? null : id(r.getAfterId()), r.getLimit()))
+                .map(
+                    r ->
+                        ru.taska.api.issue.attachment.v1.ReconcileAttachmentDeletionsResponse
+                            .newBuilder()
+                            .setProcessed(r.processed())
+                            .setCompleted(r.completed())
+                            .setFailed(r.failed())
+                            .setDataLoss(r.dataLoss())
+                            .setNextCursor(r.next())
+                            .build()))
+        .onErrorMap(DomainException.class, GrpcExceptionMapper::toStatusRuntimeException)
+        .onErrorMap(GrpcExceptionMapper::toGrpcStatus);
   }
 
   @Override
