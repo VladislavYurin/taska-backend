@@ -350,7 +350,12 @@ message DeleteAttachmentRequestBody {
 service AttachmentAdmissionService {
   rpc CheckAdmission(AttachmentAdmissionRequest) returns (AttachmentAdmissionGrant);
   rpc ReconcileUploads(ReconcileAttachmentUploadsRequest) returns (ReconcileAttachmentUploadsResponse);
-  rpc ReconcileDeletions(ReconcileAttachmentUploadsRequest) returns (ReconcileAttachmentDeletionsResponse);
+  rpc ReconcileDeletions(ReconcileAttachmentDeletionsRequest) returns (ReconcileAttachmentDeletionsResponse);
+}
+message ReconcileAttachmentDeletionsRequest {
+  ru.taska.b2b.v1.RequestContext context = 100;
+  string after_id = 2;
+  int32 limit = 3;
 }
 message ReconcileAttachmentDeletionsResponse {
   int32 processed = 1;

@@ -156,6 +156,23 @@ public final class AttachmentLifecycleStore {
                                       fail(
                                           DomainStatus.FAILED_PRECONDITION,
                                           "ATTACHMENT_NOT_CONFIRMED"));
+                                if (!state.equals("CONFIRMED"))
+                                  return db.sql(
+                                          "SELECT EXISTS(SELECT 1 FROM"
+                                              + " taska.attachment_deletion_jobs WHERE tenant_id=:t"
+                                              + " AND attachment_id=:id AND operation_id=:op) AS"
+                                              + " found")
+                                      .bind("t", r.tenant())
+                                      .bind("id", r.resource())
+                                      .bind("op", r.operation())
+                                      .map((v, m) -> v.get("found", Boolean.class))
+                                      .one()
+                                      .filter(Boolean::booleanValue)
+                                      .switchIfEmpty(
+                                          Mono.error(
+                                              fail(
+                                                  DomainStatus.DATA_LOSS, "DELETE_INTENT_MISSING")))
+                                      .then();
                                 return db.sql(
                                         "INSERT INTO"
                                             + " taska.attachment_deletion_jobs(tenant_id,attachment_id,operation_id,initiator_id)"

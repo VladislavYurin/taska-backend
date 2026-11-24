@@ -123,13 +123,19 @@ class AttachmentLifecycleLocal(AttachmentUploadLocal):
         owner.expect('DELETE', file_path, 403)
         e.require(self.sql('issue_db', "SELECT count(*) FROM taska.attachment_deletion_jobs;").strip() == '0', 'Denied delete persisted a job')
         self.sql('tenant_db', "UPDATE taska.tenant_restrictions SET active=false,version=version+1,resolved_at=now() WHERE tenant_id='%s' AND source_id='%s';" % (tenant, restriction))
+        deleter = str(uuid.uuid4())
+        self.sql('auth_db', "INSERT INTO taska.users(id,email,display_name,status,global_role) VALUES('%s','lifecycle-deleter@harness.invalid','Owned deleter','ACTIVE','USER');" % deleter)
+        self.sql('tenant_db', "INSERT INTO taska.tenant_memberships(tenant_id,user_id,role,status) VALUES('%s','%s','MEMBER','ACTIVE');" % (tenant, deleter))
+        self.sql('project_db', "INSERT INTO taska.project_members(tenant_id,project_id,user_id,role,added_by,root_membership_version) VALUES('%s','%s','%s','MEMBER','%s',1);" % (tenant, project, deleter, actor))
+        deleting_member, _ = self.member_client(tenant, deleter, 1)
+        deleting_member.timeout = 120
         # Scheduler starts with its exact owned tenant worklist; no global scan.
         props = self.material / 'issue-service/application.properties'
         props.write_text(props.read_text() + '\ntaska.attachments.cleanup-tenants=' + tenant + '\ntaska.attachments.cleanup-interval=2s\n')
         self.compose('restart', 'issue-service', timeout=120)
         self.wait_ready('http://' + self.compose('port', 'issue-service', '8080').strip())
         t.wait_protected_read(owner, '/api/v1/issues/' + issue, 200)
-        owner.expect('DELETE', file_path, 204)
+        deleting_member.expect('DELETE', file_path, 204)
         owner.expect('DELETE', file_path, 204)
         owner.expect('GET', content, 404)
         e.require(len(owner.expect('GET', path[:-1], 200).json()['items']) == 1, 'Pending deletion remained visible')
@@ -157,10 +163,10 @@ class AttachmentLifecycleLocal(AttachmentUploadLocal):
             raise e.Failure('S3 failure was not durably retried after PUT expiry')
         e.require(self.sql('issue_db', "SELECT state FROM taska.attachment_object_manifest WHERE id='%s';" % file['id']).strip() == 'DELETE_PENDING', 'Failed S3 purge lost pending state')
         # Revoke the original uploader too: accepted technical continuation uses fresh SERVICE authority.
-        self.sql('tenant_db', "UPDATE taska.tenant_memberships SET status='SUSPENDED',version=version+1 WHERE tenant_id='%s' AND user_id='%s';" % (tenant, actor))
+        self.sql('tenant_db', "UPDATE taska.tenant_memberships SET status='SUSPENDED',version=version+1 WHERE tenant_id='%s' AND user_id IN ('%s','%s');" % (tenant, actor, deleter))
         self.compose('restart', 'issue-service', timeout=120)
-        self.wait_ready('http://' + self.compose('port', 'issue-service', '8080').strip())
         self.compose('start', 'storage', timeout=60)
+        self.wait_ready('http://' + self.compose('port', 'issue-service', '8080').strip())
         deadline = time.monotonic() + 100
         while time.monotonic() < deadline:
             if self.sql('issue_db', "SELECT state FROM taska.attachment_deletion_jobs WHERE attachment_id='%s';" % file['id']).strip() == 'COMPLETED':
@@ -179,7 +185,7 @@ class AttachmentLifecycleLocal(AttachmentUploadLocal):
         e.require(current.expect('GET', path + new_file['id'] + '/content', 200).body == b'new-owned', 'Late cleanup changed a new attachment')
         return {'authorizedRangeHead': 'PASS', 'liveStreamRevocation': 'PASS', 'uploadFlagOffRead': 'PASS',
                 'readOnlyDeleteStatePreserved': 'PASS', 'tenantPathIsolation': 'PASS', 'durableS3FailureRestart': 'PASS',
-                'serviceContinuationAfterUploaderRevoke': 'PASS', 'releaseUsageOnce': 'PASS',
+                'serviceContinuationAfterUploaderRevoke': 'PASS', 'deleteByOtherMember': 'PASS', 'releaseUsageOnce': 'PASS',
                 'lateCleanupNewObjectIsolation': 'PASS', 'avatarNamespacePreserved': 'PASS', 'physicalOwnedVersionsAbsent': 'PASS', 'realPutWindow': 'PASS'}
 
 

@@ -325,7 +325,10 @@ class LegacyRpcTransportTest {
         assertEquals(RequestContext.getDescriptor(), f.getMessageType());
         // Native root services use field 1; legacy adapters retain their field 100.
         int expectedContextNumber =
-            Set.of(TenantServiceGrpc.SERVICE_NAME, PlatformServiceGrpc.SERVICE_NAME)
+            Set.of(
+                        TenantServiceGrpc.SERVICE_NAME,
+                        PlatformServiceGrpc.SERVICE_NAME,
+                        ru.taska.api.b2b.v1.QuotaAuthorityServiceGrpc.SERVICE_NAME)
                     .contains(fullService)
                 ? 1
                 : 100;

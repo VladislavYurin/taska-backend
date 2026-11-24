@@ -1286,7 +1286,7 @@
       "tenantRequired": true,
       "mutation": true,
       "action": "reconcileAttachmentDeletions",
-      "requestClass": "ru.taska.api.issue.attachment.v1.ReconcileAttachmentUploadsRequest"
+      "requestClass": "ru.taska.api.issue.attachment.v1.ReconcileAttachmentDeletionsRequest"
     },
     {
       "rpc": "ru.taska.issue.attachment.v1.IssueAttachmentService/ReadAttachmentContent",

@@ -36,7 +36,7 @@ public final class AttachmentAdmissionGrpc
   @Override
   public Mono<ru.taska.api.issue.attachment.v1.ReconcileAttachmentDeletionsResponse>
       reconcileDeletions(
-          Mono<ru.taska.api.issue.attachment.v1.ReconcileAttachmentUploadsRequest> q) {
+          Mono<ru.taska.api.issue.attachment.v1.ReconcileAttachmentDeletionsRequest> q) {
     return RpcContextBridge.inbound(
             q.flatMap(
                     r ->

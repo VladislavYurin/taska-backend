@@ -240,6 +240,100 @@ class AttachmentLifecycleIntegrationTest {
   }
 
   @Test
+  void lostReleaseAcknowledgementRetriesOneLedgerEffectAfterRestart() throws Exception {
+    var file = confirmed();
+    user(A, ACTOR, api.delete(deletion(ACTOR, file.getId())));
+    time.set(time.get().plusSeconds(301));
+    var lost = new java.util.concurrent.atomic.AtomicBoolean(true);
+    var flaky =
+        new ru.taska.quota.StorageQuotaProtocol.Authority() {
+          public Mono<ru.taska.quota.StorageQuotaProtocol.Reservation> reserve(
+              ru.taska.quota.StorageQuotaProtocol.Request r) {
+            return authorityClient.reserve(r);
+          }
+
+          public Mono<ru.taska.quota.StorageQuotaProtocol.Reservation> get(UUID op) {
+            return authorityClient.get(op);
+          }
+
+          public Mono<ru.taska.quota.StorageQuotaProtocol.Reservation> commit(
+              ru.taska.quota.StorageQuotaProtocol.Reservation r) {
+            return authorityClient.commit(r);
+          }
+
+          public Mono<ru.taska.quota.StorageQuotaProtocol.Reservation> release(
+              ru.taska.quota.StorageQuotaProtocol.Reservation r) {
+            return authorityClient.release(r);
+          }
+
+          public Mono<Void> releaseUsage(ru.taska.quota.StorageQuotaProtocol.Reservation r) {
+            return authorityClient
+                .releaseUsage(r)
+                .then(
+                    Mono.defer(
+                        () ->
+                            lost.getAndSet(false)
+                                ? Mono.error(
+                                    new DomainException(
+                                        DomainStatus.UNAVAILABLE, "LOST_RELEASE_ACK"))
+                                : Mono.empty()));
+          }
+        };
+    worker = new AttachmentDeletions(store, owner, flaky);
+    assertEquals(1, service(worker.reconcile(null, 1)).failed());
+    assertEquals("0", usage(A).getUsed());
+    assertEquals(2, rows(rootAdmin, "quota_effects"));
+    retryNow();
+    worker = new AttachmentDeletions(new AttachmentLifecycleStore(ownerTx), owner, authorityClient);
+    assertEquals(1, service(worker.reconcile(null, 1)).completed());
+    assertEquals("0", usage(A).getUsed());
+    assertEquals(2, rows(rootAdmin, "quota_effects"));
+  }
+
+  @Test
+  void repeatedDeleteDoesNotAdvanceManifestVersionOrResetRetry() throws Exception {
+    var file = confirmed();
+    user(A, ACTOR, api.delete(deletion(ACTOR, file.getId())));
+    service(worker.reconcile(null, 1));
+    String sql =
+        "SELECT (SELECT version FROM taska.storage_manifest_versions WHERE tenant_id='"
+            + A
+            + "')::text||'/'||to_jsonb(d)::text AS snapshot FROM taska.attachment_deletion_jobs d";
+    String before =
+        ownerAdmin.sql(sql).map((r, m) -> r.get("snapshot", String.class)).one().block(WAIT);
+    UUID member = UUID.randomUUID();
+    reactor.core.publisher.Flux.merge(
+            upload.as(A, ACTOR, "attachmentLifecycle", api.delete(deletion(ACTOR, file.getId()))),
+            upload.as(A, member, "attachmentLifecycle", api.delete(deletion(member, file.getId()))))
+        .then()
+        .block(WAIT);
+    assertEquals(
+        before,
+        ownerAdmin.sql(sql).map((r, m) -> r.get("snapshot", String.class)).one().block(WAIT));
+  }
+
+  @Test
+  void emptyActualObjectCannotBeConfirmed() throws Exception {
+    var u = upload.begin("empty-object");
+    s3.putObject(
+            b -> b.bucket(BUCKET).key(u.getObjectKey()).contentType("text/plain"),
+            software.amazon.awssdk.core.async.AsyncRequestBody.fromBytes(new byte[0]))
+        .get();
+    assertThrows(
+        DomainException.class,
+        () ->
+            upload
+                .as(
+                    A,
+                    ACTOR,
+                    "confirmAttachmentUpload",
+                    upload.uploads.confirm(upload.confirmation(u)))
+                .block(WAIT));
+    assertEquals(0, rows(ownerAdmin, "issue_attachments"));
+    assertEquals("0", usage(A).getUsed());
+  }
+
+  @Test
   void serviceNeedsAcceptedDeletionAndExactPurposeAndScopes() throws Exception {
     var file = confirmed();
     var u =
