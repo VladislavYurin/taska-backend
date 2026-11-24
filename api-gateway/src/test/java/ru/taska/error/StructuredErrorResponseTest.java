@@ -55,7 +55,7 @@ class StructuredErrorResponseTest {
       {DomainStatus.FAILED_PRECONDITION, "QUOTA_EXCEEDED", 422}
     };
     for (var row : rows) {
-      var exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/api/v1/projects"));
+      var exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/api/v1/tenants"));
       var error =
           GrpcExceptionMapper.toStatusRuntimeException(
               new DomainException(
@@ -66,13 +66,14 @@ class StructuredErrorResponseTest {
           .isEqualTo(org.springframework.http.MediaType.APPLICATION_PROBLEM_JSON);
       var body = json.readTree(exchange.getResponse().getBodyAsString().block());
       assertThat(body.path("code").asString()).isEqualTo(row[1]);
+      assertThat(body.path("details").path("code").asString()).isEqualTo(row[1]);
       assertThat(body.path("status").asInt()).isEqualTo(row[2]);
       assertThat(body.path("requestId").asString()).isEqualTo("owned-trace");
       assertThat(body.path("reasons").get(0).asString()).isEqualTo(row[1]);
       assertThat(exchange.getResponse().getHeaders().getFirst("X-Request-Id"))
           .isEqualTo("owned-trace");
     }
-    var exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/api/v1/projects"));
+    var exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/api/v1/tenants"));
     handler
         .handleError(
             exchange,
@@ -91,7 +92,7 @@ class StructuredErrorResponseTest {
   @Test
   void trustedMissingCredentialAndDependencyTimeoutHaveStableProblemCodes() {
     org.springframework.test.util.ReflectionTestUtils.setField(handler, "trustedEnabled", true);
-    var missing = MockServerWebExchange.from(MockServerHttpRequest.get("/api/v1/projects"));
+    var missing = MockServerWebExchange.from(MockServerHttpRequest.get("/api/v1/tenants"));
     handler
         .handleError(
             missing,
@@ -103,7 +104,7 @@ class StructuredErrorResponseTest {
     assertThat(
             json.readTree(missing.getResponse().getBodyAsString().block()).path("code").asString())
         .isEqualTo("AUTHENTICATION_REQUIRED");
-    var timeout = MockServerWebExchange.from(MockServerHttpRequest.get("/api/v1/projects"));
+    var timeout = MockServerWebExchange.from(MockServerHttpRequest.get("/api/v1/tenants"));
     handler.handleError(timeout, Status.DEADLINE_EXCEEDED.asRuntimeException(), "trace").block();
     assertThat(timeout.getResponse().getStatusCode().value()).isEqualTo(503);
     assertThat(

@@ -6,6 +6,12 @@ info:
     Авторитетный контракт API — этот документ /openapi.yml.
     /v3/api-docs публикует тот же контракт в JSON; совпадение проверяется в CI.
     /v3/api-docs/generated — справочная модель springdoc из Java-аннотаций.
+    Включение taska.rpc.context.enabled не меняет code, HTTP-статус и details.reason
+    существующих REST-операций. Доменный код при наличии дополнительно доступен в details.code.
+    Маршруты компаний (/tenants, /admin/tenants), сессий компаний, tenant-tokens и
+    tenant-oauth-consents используют Problem (application/problem+json) в доверенном режиме.
+    Ошибки VERSION_CONFLICT и IDEMPOTENCY_CONFLICT архивирования/восстановления проекта
+    сохраняют опубликованные статусы 412/428 и 409 соответственно.
 
 servers:
   - url: /
@@ -5416,12 +5422,15 @@ components:
 
   responses:
     ErrorResponse:
-      description: Единая схема ошибки гейтвея
+      description: Единая схема ошибки гейтвея; формат и коды определяет контракт операции.
       headers:
         X-Request-Id:
           $ref: '#/components/headers/X-RequestId-Header'
       content:
         application/json:
+          schema:
+            $ref: '#/components/schemas/RestErrorResponse'
+        application/problem+json:
           schema:
             $ref: '#/components/schemas/RestErrorResponse'
 
