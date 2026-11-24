@@ -146,7 +146,7 @@ class AttachmentLifecycleLocal(AttachmentUploadLocal):
         e.require(self.sql('tenant_db', "SELECT used FROM taska.quota_counters WHERE tenant_id='%s' AND resource='STORAGE_BYTES';" % tenant).strip() == str(len(data) + 9), 'Delete released bytes without S3 proof')
 
         # Keep the real 300s admission guard. Stop only this run's S3 before the first eligible purge.
-        self.compose('stop', 'storage', timeout=60)
+        self.compose('pause', 'storage', timeout=60)
         deadline = time.monotonic() + 390
         while time.monotonic() < deadline:
             remaining = float(self.sql('issue_db', "SELECT greatest(0,extract(epoch FROM (put_not_after-now()))) FROM taska.attachment_uploads WHERE id='%s';" % file['id']).strip())
@@ -170,10 +170,14 @@ class AttachmentLifecycleLocal(AttachmentUploadLocal):
         e.require(self.sql('issue_db', "SELECT state FROM taska.attachment_object_manifest WHERE id='%s';" % file['id']).strip() == 'DELETE_PENDING', 'Failed S3 purge lost pending state')
         # Revoke the original uploader too: accepted technical continuation uses fresh SERVICE authority.
         self.sql('tenant_db', "UPDATE taska.tenant_memberships SET status='SUSPENDED',version=version+1 WHERE tenant_id='%s' AND user_id IN ('%s','%s');" % (tenant, actor, deleter))
+        self.compose('unpause', 'storage', timeout=60)
+        # Keep S3's owned network endpoint/versioning intact; prove recovery before worker restart.
+        self.object_probe('verify')
+        e.require(self.sql('issue_db', "SELECT state FROM taska.attachment_deletion_jobs WHERE attachment_id='%s';" % file['id']).strip() == 'PENDING', 'Job finished before restart durability assertion')
         self.compose('restart', 'issue-service', timeout=120)
-        self.compose('start', 'storage', timeout=60)
         self.wait_ready('http://' + self.compose('port', 'issue-service', '8080').strip())
-        deadline = time.monotonic() + 100
+        # Observe three unchanged 60s retry intervals, including cold reconnect after JVM restart.
+        deadline = time.monotonic() + 180
         while time.monotonic() < deadline:
             if self.sql('issue_db', "SELECT state FROM taska.attachment_deletion_jobs WHERE attachment_id='%s';" % file['id']).strip() == 'COMPLETED':
                 break
@@ -189,6 +193,9 @@ class AttachmentLifecycleLocal(AttachmentUploadLocal):
         # Re-establish an owned current member session; old credentials remain revoked.
         self.sql('tenant_db', "UPDATE taska.tenant_memberships SET status='ACTIVE',version=version+1 WHERE tenant_id='%s' AND user_id='%s';" % (tenant, member))
         current, _ = self.member_client(tenant, member, 3)
+        # Root reactivation does not revive a project grant stamped for the old membership.
+        current.expect('GET', path + new_file['id'] + '/content', 404)
+        self.sql('project_db', "UPDATE taska.project_members SET root_membership_version=3 WHERE tenant_id='%s' AND project_id='%s' AND user_id='%s';" % (tenant, project, member))
         e.require(current.expect('GET', path + new_file['id'] + '/content', 200).body == b'new-owned', 'Late cleanup changed a new attachment')
         return {'authorizedRangeHead': 'PASS', 'liveStreamRevocation': 'PASS', 'uploadFlagOffRead': 'PASS',
                 'readOnlyDeleteStatePreserved': 'PASS', 'tenantPathIsolation': 'PASS', 'durableS3FailureRestart': 'PASS',
