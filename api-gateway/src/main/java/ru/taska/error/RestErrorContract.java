@@ -23,7 +23,7 @@ final class RestErrorContract {
     if (COMPANY_PATHS.stream().anyMatch(path::matches)) return true;
 
     // Эти новые ошибки lifecycle опубликованы рядом с прежним контрактом проекта.
-    String code = details.get("code");
+    String code = details.getOrDefault("code", details.get("reason"));
     boolean lifecycle =
         (exchange.getRequest().getMethod() == org.springframework.http.HttpMethod.DELETE
                 && path.matches("/api/v1/projects/[^/]+"))

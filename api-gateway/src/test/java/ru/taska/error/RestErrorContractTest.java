@@ -34,5 +34,6 @@ class RestErrorContractTest {
     var archive = MockServerWebExchange.from(MockServerHttpRequest.delete("/api/v1/projects/p"));
     assertThat(RestErrorContract.usesProblemContract(archive, Map.of("code", "VERSION_CONFLICT"))).isTrue();
     assertThat(RestErrorContract.usesProblemContract(archive, Map.of("reason", "LAST_ADMIN"))).isFalse();
+    assertThat(RestErrorContract.usesProblemContract(archive, Map.of("reason", "VERSION_CONFLICT"))).isTrue();
   }
 }
