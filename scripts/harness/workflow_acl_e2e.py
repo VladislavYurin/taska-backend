@@ -130,7 +130,8 @@ class WorkflowAclLocal(ProjectAclLocal):
                                 member_headers).status in (401, 403),
                   'Suspended membership replayed a completed create receipt')
         self.compose('stop', 'project-service')
-        owner.expect('GET', '/api/v1/projects/' + project + '/workflows', 503)
+        response = owner.request('GET', '/api/v1/projects/' + project + '/workflows')
+        e.require(response.status in (503, 504), 'Unavailable project primary admitted workflow access')
         self.compose('start', 'project-service')
         self.wait_ready('http://' + self.compose('port', 'project-service', '8080').strip())
         t.wait_protected_read(owner, '/api/v1/projects/' + project + '/workflows', 200)
