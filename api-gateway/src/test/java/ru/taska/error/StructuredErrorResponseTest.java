@@ -66,6 +66,7 @@ class StructuredErrorResponseTest {
           .isEqualTo(org.springframework.http.MediaType.APPLICATION_PROBLEM_JSON);
       var body = json.readTree(exchange.getResponse().getBodyAsString().block());
       assertThat(body.path("code").asString()).isEqualTo(row[1]);
+      assertThat(body.path("details").path("code").asString()).isEqualTo(row[1]);
       assertThat(body.path("status").asInt()).isEqualTo(row[2]);
       assertThat(body.path("requestId").asString()).isEqualTo("owned-trace");
       assertThat(body.path("reasons").get(0).asString()).isEqualTo(row[1]);

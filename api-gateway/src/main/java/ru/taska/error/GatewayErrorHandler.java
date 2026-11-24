@@ -30,29 +30,6 @@ public class GatewayErrorHandler {
   @org.springframework.beans.factory.annotation.Value("${taska.rpc.context.enabled:false}")
   private boolean trustedEnabled;
 
-  /** Формат ошибки задаёт REST-контракт маршрута, а не способ передачи actor в RPC. */
-  private static boolean usesProblemContract(
-      ServerWebExchange exchange, Map<String, String> details) {
-    String path = exchange.getRequest().getPath().pathWithinApplication().value();
-    if (path.equals("/api/v1/tenants") || path.startsWith("/api/v1/tenants/")
-        || path.startsWith("/api/v1/admin/tenants/")
-        || path.equals("/api/v1/auth/tenant-sessions")
-        || path.startsWith("/api/v1/auth/tenant-sessions/")
-        || path.equals("/api/v1/auth/web-sessions")
-        || path.equals("/api/v1/auth/web-sessions/refresh")
-        || path.equals("/api/v1/account/tenant-tokens")
-        || path.equals("/api/v1/auth/tenant-oauth-consents")) return true;
-
-    // Эти новые ошибки lifecycle опубликованы рядом с прежним контрактом проекта.
-    String code = details.get("code");
-    boolean lifecycle =
-        (exchange.getRequest().getMethod() == org.springframework.http.HttpMethod.DELETE
-                && path.matches("/api/v1/projects/[^/]+"))
-            || (exchange.getRequest().getMethod() == org.springframework.http.HttpMethod.POST
-                && path.matches("/api/v1/projects/[^/]+/restore"));
-    return lifecycle && ("VERSION_CONFLICT".equals(code) || "IDEMPOTENCY_CONFLICT".equals(code));
-  }
-
   public Mono<Void> handleError(ServerWebExchange exchange, Throwable error, String requestId) {
     HttpStatus httpStatus;
     String code;
@@ -96,7 +73,7 @@ public class GatewayErrorHandler {
 
     String reason = details.getOrDefault("code", details.get("reason"));
     if (reason != null && !reason.matches("[A-Z][A-Z0-9_]{1,79}")) reason = null;
-    boolean problem = trustedEnabled && usesProblemContract(exchange, details);
+    boolean problem = trustedEnabled && RestErrorContract.usesProblemContract(exchange, details);
     if (trustedEnabled && reason != null && !details.containsKey("code")) {
       details = new java.util.LinkedHashMap<>(details);
       details.put("code", reason);
@@ -107,6 +84,10 @@ public class GatewayErrorHandler {
       else if (httpStatus == HttpStatus.UNAUTHORIZED) code = "AUTHENTICATION_REQUIRED";
       else if (httpStatus == HttpStatus.FORBIDDEN) code = "SCOPE_DENIED";
       if (transportCode != null) httpStatus = restErrorMapper.problemStatus(transportCode, code);
+    }
+    if (problem && !details.containsKey("code")) {
+      details = new java.util.LinkedHashMap<>(details);
+      details.put("code", code);
     }
     RestErrorResponse errorResponse = new RestErrorResponse(code, message);
     errorResponse.setRequestId(requestId);
