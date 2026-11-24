@@ -19,3 +19,5 @@ Root возвращает FAILED_PRECONDITION с code=QUOTA_EXCEEDED и quota.ki
 ## Verification
 
 Gateway focused tests, CI matrix и native attachment runner на чистом head; повтор runner после финального review. Logs/results остаются вне Git.
+
+После объединения TAS-363 и TAS-365 migration inventory содержит восемь исходных changesets. Интеграционный storage test учитывает оба добавления и отдельно проверяет FORCE RLS и отказ runtime TRUNCATE для attachment_uploads и issue_attachments; сами changesets сохраняются.
