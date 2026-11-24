@@ -11,7 +11,7 @@ python3 scripts/harness.py doctor --tier java
 python3 scripts/harness.py e2e --tier local --scenario E2E-01 --scenario E2E-08
 ```
 
-До provisioning runner проверяет совместимость сценариев с локальной fixture. Local E2E-08 получает **BLOCKED**: legacy Compose не предоставляет verified tenant context, необходимый project outbox envelope v2 (TAS-545). При выборе только E2E-08 Maven/Docker/HTTP не запускаются: exit code 3, testCount 0, пустые HTTP operations/ресурсы/pending writes, cleanup PASS. Tenant не подставляется искусственно. Для native project acceptance используйте [отдельный runner](#native-project-acl--quota-tas-340). В смешанном наборе выше выполняются чтения E2E-01, а общий результат остаётся BLOCKED.
+До provisioning runner проверяет совместимость сценариев с локальной fixture. Local E2E-08 получает **BLOCKED**: legacy Compose не предоставляет verified tenant context, необходимый project outbox envelope v2 (TAS-545). При выборе только E2E-08 Maven/Docker/HTTP не запускаются: exit code 3, testCount 0, пустые HTTP operations/ресурсы/pending writes, cleanup PASS. Tenant не подставляется искусственно. Для native project/outbox acceptance используйте [отдельный runner](#native-project-outbox-tas-545). В смешанном наборе выше выполняются чтения E2E-01, а общий результат остаётся BLOCKED.
 
 При наличии исполнимого локального сценария runner собирает JAR текущего checkout через Maven wrapper (`package -DskipTests`), копирует их в каталог RUN, создаёт уникальный Compose project `taska-harness-<16 hex>` с динамическими loopback-портами. У каждого RUN собственные PostgreSQL tmpfs, Kafka, storage, service containers и network. Unit/IT эта сборка не заменяет: они выполняются отдельным `check`. Базовый JRE fixture — `eclipse-temurin:21-jre`; Docker получает образы обычным механизмом pull/cache. Фактические image IDs и SHA-256 JAR записываются в report.
 
@@ -38,6 +38,17 @@ python3 scripts/harness.py cleanup --run-state target/harness-e2e/0123456789abcd
 Команда идемпотентна. Она не исполняет argv/compose path из state и не принимает произвольные Docker project names. Подмена HMAC, пути, checkout, environment или ownership отклоняется. Для local сохраняется наблюдаемый Docker daemon ID: смена context/DOCKER_HOST на другой daemon запрещает cleanup, даже если в нём не найдено контейнеров RUN. При потере `.state-key` автоматическая очистка недоступна: оператор отдельно сопоставляет реальные Docker labels и владельца; не создавайте фиктивный state.
 
 Для создания проекта сначала сохраняется pending intent, затем отправляется единственный POST. После transport timeout повтор записи не выполняется. Stage cleanup ищет свой projectKey и createdBy через публичный список, проверяет также уникальный creation marker из исходного POST description, сохраняет найденный ID и архивирует. Совпадения actor/projectKey недостаточно: старый проект с другим marker не принимается в registry. При явном отказе 4xx intent удаляется; после timeout/5xx сохраняется для безопасного reconcile. Если запись ещё не видна, pending intent остаётся unresolved: повторите cleanup позже. Отсутствие объекта сразу после timeout не считается доказательством отсутствия записи.
+
+## Native project outbox (TAS-545)
+
+```sh
+python3 scripts/harness/project_outbox_e2e.py
+python3 scripts/harness/project_outbox_e2e.py --cleanup /absolute/owned/run/state.json
+```
+
+Runner использует существующую `IssueAclLocal` fixture: семь настоящих приложений с последовательным startup, собственные DB/app LOGIN/RLS и mTLS/JWS. Проверяет создание в двух tenants и provenance, один `ProjectCreated` в outbox, replay/conflict без изменения project/member/outbox/quota, отказ MEMBER без мутации при native создании. Компенсация bootstrap требует отдельной проверки. HTTP-код отказа соответствует текущему `RestErrorMapper`. Cleanup использует подписанный state; shared stage не затрагивается.
+
+Scope ограничен перечисленными сценариями: агрегация context, полный project ACL, Kafka delivery и активация стенда требуют отдельных проверок. Согласование fixture/ожиданий широкого `project_acl_e2e.py` отслеживается в [TAS-546](https://jira.ozero.dev/browse/TAS-546).
 
 ## Native project ACL / quota (TAS-340)
 

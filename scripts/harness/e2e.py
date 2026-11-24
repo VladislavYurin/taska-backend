@@ -32,7 +32,7 @@ ASSERTIONS = 0
 # project writes have a separate owned runner; never synthesize a tenant here.
 LOCAL_SCENARIO_BLOCKERS = {
     'E2E-08': 'Legacy Compose fixture lacks verified tenant context required by project outbox v2 '
-              '(TAS-545). Use python3 scripts/harness/project_acl_e2e.py for native project acceptance.'
+              '(TAS-545). Use python3 scripts/harness/project_outbox_e2e.py for native project/outbox acceptance.'
 }
 
 

@@ -130,6 +130,10 @@
 
 **Очистка:** P/Q архивировать только после зависимых сценариев; собственных участников удалить до архивации, сохранив одного ADMIN.
 
+### Native project/outbox subset TAS-545
+
+`python3 scripts/harness/project_outbox_e2e.py`: собственная native fixture проверяет tenant provenance, один outbox event на создание, replay/conflict, отказ MEMBER с сохранностью состояния при native создании. Компенсация bootstrap в этот поднабор не входит. [Scope и cleanup](../agents/e2e.md#native-project-outbox-tas-545). Это отдельный поднабор; полный ACL runner требует согласования в [TAS-546](https://jira.ozero.dev/browse/TAS-546).
+
 ### Native variant TAS-340
 
 Owned local tier: `python3 scripts/harness/project_acl_e2e.py`; [runtime/setup/cleanup](../../project-service/TENANT-API.md). Обычный `harness.py e2e --tier local --scenario E2E-08` возвращает BLOCKED до provisioning/записи: legacy fixture не предоставляет verified tenant, обязательный для outbox v2 (TAS-545). Это ограничение runner, а не успешная приёмка пунктов выше. Opt-in stage сохраняет прежний поднабор с отдельными prerequisites; [границы runner](../agents/e2e.md).

@@ -19,4 +19,4 @@ TAS-545: локальный E2E-08 вызывает legacy создание пр
 
 ## Impact
 
-`scripts/harness/e2e.py`, его regression tests и документация E2E. Базовый снимок — актуальный origin/develop; развёрнутое поведение отдельно не проверяется. Native project ACL/RLS и tenant envelope остаются строгими.
+`scripts/harness/e2e.py`, его regression tests, отдельный native project/outbox runner и документация E2E. Базовый снимок — актуальный origin/develop; развёрнутое поведение отдельно не проверяется. Native project ACL/RLS и tenant envelope остаются строгими.
