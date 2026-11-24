@@ -20,6 +20,7 @@ import ru.taska.api.oauth.v1.*;
 class ConnectedAppsWireIntegrationTest {
   static final String OWNER = "00000000-0000-0000-0000-000000000042",
       APP = "00000000-0000-0000-0000-000000000043";
+  static final java.util.concurrent.atomic.AtomicReference<String> REVOKED_TENANT = new java.util.concurrent.atomic.AtomicReference<>();
   static final AtomicInteger CALLS = new AtomicInteger();
   static final Server SERVER = start();
   @LocalServerPort int port;
@@ -33,6 +34,25 @@ class ConnectedAppsWireIntegrationTest {
   @AfterAll
   static void stop() {
     SERVER.shutdownNow();
+  }
+
+  @Test
+  void tenantMetadataAndScopedRevocationSurviveRealHttpAndGrpc() {
+    http().get().uri("/api/v1/users/me/connected-apps").headers(h -> h.setBearerAuth("jwt"))
+        .exchange().expectStatus().isOk().expectBody().jsonPath("$.items[0].tenantId").isEqualTo(OWNER);
+    http().delete().uri("/api/v1/users/me/connected-apps/" + APP + "?tenantId=" + OWNER)
+        .headers(h -> h.setBearerAuth("jwt")).exchange().expectStatus().isNoContent();
+    assertThat(REVOKED_TENANT.get()).isEqualTo(OWNER);
+    int before = CALLS.get();
+    http().delete().uri("/api/v1/users/me/connected-apps/" + APP + "?tenantId=bad")
+        .headers(h -> h.setBearerAuth("jwt")).exchange().expectStatus().isBadRequest();
+    for (String query : new String[]{"?tenantId=", "?tenantId=" + OWNER + "&tenantId=" + OWNER})
+      http().delete().uri("/api/v1/users/me/connected-apps/" + APP + query)
+          .headers(h -> h.setBearerAuth("jwt")).exchange().expectStatus().isBadRequest();
+    assertThat(CALLS.get()).isEqualTo(before);
+    http().delete().uri("/api/v1/users/me/connected-apps/" + APP)
+        .headers(h -> h.setBearerAuth("jwt")).exchange().expectStatus().isNoContent();
+    assertThat(REVOKED_TENANT.get()).isNull();
   }
 
   @Test
@@ -158,6 +178,7 @@ class ConnectedAppsWireIntegrationTest {
                                 .addItems(
                                     ConnectedApp.newBuilder()
                                         .setAppId(APP)
+                                        .setTenantId(OWNER)
                                         .setName("Fixture")
                                         .setHost("client.example.test")
                                         .addScopes("read")
@@ -177,6 +198,7 @@ class ConnectedAppsWireIntegrationTest {
                         assertThat(req.getUserId()).isEqualTo(OWNER);
                         assertThat(req.getSessionAccessToken()).isEqualTo("jwt");
                         assertThat(req.getAppId()).isEqualTo(APP);
+                        REVOKED_TENANT.set(req.hasTenantId() ? req.getTenantId() : null);
                         return Empty.getDefaultInstance();
                       });
                 }

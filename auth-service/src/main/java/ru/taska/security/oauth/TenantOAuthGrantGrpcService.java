@@ -31,14 +31,17 @@ public final class TenantOAuthGrantGrpcService
   private final TenantOAuthGrantStore grants;
   private final WebSessionStore.MembershipAuthority memberships;
   private final OAuthIntrospectionClient introspection;
+  private final ru.taska.security.pat.TenantPersonalTokenFacts admission;
 
   public TenantOAuthGrantGrpcService(
       TenantOAuthGrantStore grants,
       WebSessionStore.MembershipAuthority memberships,
-      OAuthIntrospectionClient introspection) {
+      OAuthIntrospectionClient introspection,
+      ru.taska.security.pat.TenantPersonalTokenFacts admission) {
     this.grants = grants;
     this.memberships = memberships;
     this.introspection = introspection;
+    this.admission = admission;
   }
 
   private static UUID id(String raw) {
@@ -143,7 +146,8 @@ public final class TenantOAuthGrantGrpcService
                           verified -> {
                             var context = RpcContextBridge.details(verified).getContext();
                             UUID actor = id(context.getActorUserId());
-                            return membership(tenant, actor, context.getMembershipGeneration())
+                            return admission.admitOAuth(tenant, actor)
+                                .then(membership(tenant, actor, context.getMembershipGeneration()))
                                 .flatMap(
                                     version ->
                                         grants.approve(

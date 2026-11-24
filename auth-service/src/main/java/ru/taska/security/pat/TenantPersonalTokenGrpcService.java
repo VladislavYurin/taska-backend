@@ -156,7 +156,8 @@ public final class TenantPersonalTokenGrpcService
             .setName(issued.name())
             .setCreatedAt(issued.createdAt().toString())
             .setExpiresAt(issued.expiresAt().toString())
-            .setRevoked(false);
+            .setRevoked(false)
+            .setTokenPrefix(issued.secret().substring(0, PersonalAccessTokenService.PREFIX.length() + 4));
     for (String scope : issued.scopes())
       metadata.addScopes(
           "write".equals(scope)

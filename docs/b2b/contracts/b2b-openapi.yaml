@@ -1863,7 +1863,7 @@ paths:
       summary: createTenantPersonalToken
       tags:
       - Account
-      x-policy: WEB_ACCOUNT
+      x-policy: WEB_TENANT
       x-implementation-tas:
       - TAS-463
       responses:
@@ -1905,7 +1905,7 @@ paths:
       summary: approveTenantOAuthGrant
       tags:
       - Account
-      x-policy: WEB_ACCOUNT
+      x-policy: WEB_TENANT
       x-implementation-tas:
       - TAS-498
       responses:
@@ -3994,6 +3994,10 @@ components:
       type: object
       additionalProperties: false
       properties:
+        details:
+          type: object
+          additionalProperties: {type: string}
+          description: Безопасные параметры отказа (maxLifetimeDays, limit, disabledFlags).
         type:
           type: string
           minLength: 1
@@ -5264,6 +5268,12 @@ components:
         expiresAt:
           type: string
           format: date-time
+        tokenPrefix:
+          type: string
+        lastUsedAt:
+          type: string
+          format: date-time
+          nullable: true
         revoked:
           type: boolean
       required:
@@ -5478,11 +5488,12 @@ components:
         clientId:
           type: string
           minLength: 1
-          maxLength: 300
+          maxLength: 2048
         tenantId:
           type: string
           format: uuid
         scopes:
+          description: Обязателен read; write без read запрещён.
           type: array
           items:
             type: string
@@ -7054,6 +7065,10 @@ components:
       type: object
       additionalProperties: false
       properties:
+        disabledFlags:
+          type: array
+          items: {type: string}
+          description: Disabled flag keys explaining pat.create CAPABILITY_DISABLED.
         action:
           type: string
           minLength: 1

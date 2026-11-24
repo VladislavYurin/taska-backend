@@ -202,3 +202,25 @@ For authorized working-content reads, `AWAITING_PAYMENT` returns `PAYMENT_PENDIN
 ### Delivered entitlement foundation — TAS-319
 
 [Entitlement snapshots](../../../billing-service/ENTITLEMENTS.md) implement `BillingService.GetEntitlement` and internal `EntitlementService.GetEntitlementSnapshot` with immutable tenant-scoped versions, period-bound validity and transactional outbox. Blueprint fields are preserved; `Entitlement.paid_through=11` adds the explicit exclusive coverage end required by TAS-319. Safe member reads use their own mandatory authority; financial-document owner/admin checks remain separate. Gateway activation, consumer projection and full capabilities are follow-up tasks, not implied by the backend transport.
+
+### Токены одной компании (TAS-542)
+
+`POST /api/v1/account/tenant-tokens` требует WEB_TENANT той же компании и ключ UUID;
+в течение 60 секунд текущая авторизация допускает повтор с тем же секретом.
+Метаданные/отзыв остаются на `GET /api/v1/users/me/access-tokens` и
+`DELETE /api/v1/users/me/access-tokens/{tokenId}`. Метаданные содержат `tokenPrefix`,
+nullable `lastUsedAt` и `tenantId` (у прежних токенов без компании поле отсутствует).
+Список подключений отдаёт компанию каждой строки. `DELETE /api/v1/users/me/connected-apps/{appId}`
+принимает необязательный UUID `tenantId`; отсутствие отзывает все компании, пустое/повторное
+значение отклоняется. `pat.create` в capabilities получает target текущего аккаунта;
+`disabledFlags` различает PERSONAL_API_TOKENS и FREE_PERSONAL_API_TOKENS.
+
+Auth при включении tenant-tokens читает primary identity/membership/billing/plan при каждом
+выпуске и ADMISSION snapshot флагов через managed service grants. До включения нужны trust
+edges для auth-service: membership к tenant-service, admin/configuration к tenant-service,
+billing entitlement и referenced plan к billing-service; TLS, receipt key и trusted context
+остаются обязательными. Флаги стенда этот адаптер не переключает.
+
+Одобрение tenant OAuth также сверяет текущие MCP/FREE_MCP до записи grant: отключённый
+канал или FREE без разрешённого MCP даёт CAPABILITY_DISABLED с disabledFlags.
+Это не включает браузерный bridge и REST consent (TAS-543).

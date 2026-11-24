@@ -168,6 +168,19 @@ class TenantPersonalTokenStoreIntegrationTest {
   }
 
   @Test
+  void listMetadataResolvesCompanyFromOwnedGrant() {
+    var a = issue(sessionA, A, "A", List.of("read"), UUID.randomUUID()).block(WAIT);
+    var b = issue(sessionB, B, "B", List.of("read"), UUID.randomUUID()).block(WAIT);
+    var repository = new R2dbcRepositoryFactory(new R2dbcEntityTemplate(factory))
+        .getRepository(PersonalAccessTokenRepository.class);
+    var rows = repository.listOwned(USER).collectList().block(WAIT);
+    assertEquals(2, rows.size());
+    assertEquals(A, rows.stream().filter(r -> r.getId().equals(a.tokenId())).findFirst().orElseThrow().getTenantId());
+    assertEquals(B, rows.stream().filter(r -> r.getId().equals(b.tokenId())).findFirst().orElseThrow().getTenantId());
+    assertTrue(repository.listOwned(UUID.randomUUID()).collectList().block(WAIT).isEmpty());
+  }
+
+  @Test
   void issuanceFixesSessionTenantAndAuthenticationReturnsThatBindingOnly() {
     var issued = issue(sessionA, A, " CI bot ", List.of("write"), UUID.randomUUID()).block(WAIT);
     assertEquals(A, issued.tenantId());

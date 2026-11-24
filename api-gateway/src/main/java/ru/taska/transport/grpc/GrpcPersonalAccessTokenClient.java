@@ -84,6 +84,7 @@ public class GrpcPersonalAccessTokenClient {
   private static PersonalAccessTokenDto metadata(PersonalAccessTokenMetadata token) {
     return new PersonalAccessTokenDto()
         .id(java.util.UUID.fromString(token.getId()))
+        .tenantId(token.hasTenantId() ? java.util.UUID.fromString(token.getTenantId()) : null)
         .name(token.getName())
         .tokenPrefix(token.getTokenPrefix())
         .scopes(token.getScopesList().stream().map(PersonalAccessTokenScopeDto::fromValue).toList())
