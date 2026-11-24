@@ -99,15 +99,19 @@ class AttachmentLifecycleLocal(AttachmentUploadLocal):
         request = urllib.request.Request(owner.origin + content, headers={'Authorization': 'Bearer ' + viewer.token})
         received = 0
         with urllib.request.urlopen(request, timeout=120) as stream:
-            received += len(stream.read(1024))
+            prefix = stream.read(1024)
+            e.require(prefix == data[:len(prefix)], 'Initial stream bytes differ')
+            received += len(prefix)
             self.sql('tenant_db', "UPDATE taska.tenant_memberships SET status='SUSPENDED',version=version+1 WHERE tenant_id='%s' AND user_id='%s';" % (tenant, member))
             try:
                 while True:
                     block = stream.read(65536)
                     if not block:
                         break
+                    e.require(block == data[received:received + len(block)], 'Stream contains unexpected bytes or appended error JSON')
                     received += len(block)
             except http.client.IncompleteRead as failure:
+                e.require(failure.partial == data[received:received + len(failure.partial)], 'Final stream bytes differ')
                 received += len(failure.partial)
         e.require(received < len(data), 'Revoked member received the entire remaining stream')
         e.require(viewer.request('GET', content, headers={'Range': 'bytes=0-1'}).status in (401, 403), 'Revoked member retained Range access')

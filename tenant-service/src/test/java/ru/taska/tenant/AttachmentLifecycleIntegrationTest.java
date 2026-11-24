@@ -244,50 +244,23 @@ class AttachmentLifecycleIntegrationTest {
     var file = confirmed();
     user(A, ACTOR, api.delete(deletion(ACTOR, file.getId())));
     time.set(time.get().plusSeconds(301));
-    var lost = new java.util.concurrent.atomic.AtomicBoolean(true);
-    var flaky =
-        new ru.taska.quota.StorageQuotaProtocol.Authority() {
-          public Mono<ru.taska.quota.StorageQuotaProtocol.Reservation> reserve(
-              ru.taska.quota.StorageQuotaProtocol.Request r) {
-            return authorityClient.reserve(r);
-          }
-
-          public Mono<ru.taska.quota.StorageQuotaProtocol.Reservation> get(UUID op) {
-            return authorityClient.get(op);
-          }
-
-          public Mono<ru.taska.quota.StorageQuotaProtocol.Reservation> commit(
-              ru.taska.quota.StorageQuotaProtocol.Reservation r) {
-            return authorityClient.commit(r);
-          }
-
-          public Mono<ru.taska.quota.StorageQuotaProtocol.Reservation> release(
-              ru.taska.quota.StorageQuotaProtocol.Reservation r) {
-            return authorityClient.release(r);
-          }
-
-          public Mono<Void> releaseUsage(ru.taska.quota.StorageQuotaProtocol.Reservation r) {
-            return authorityClient
-                .releaseUsage(r)
-                .then(
-                    Mono.defer(
-                        () ->
-                            lost.getAndSet(false)
-                                ? Mono.error(
-                                    new DomainException(
-                                        DomainStatus.UNAVAILABLE, "LOST_RELEASE_ACK"))
-                                : Mono.empty()));
-          }
-        };
-    worker = new AttachmentDeletions(store, owner, flaky);
+    loseUsageResponse.set(true);
     assertEquals(1, service(worker.reconcile(null, 1)).failed());
     assertEquals("0", usage(A).getUsed());
     assertEquals(2, rows(rootAdmin, "quota_effects"));
+    loseUsageResponse.set(false);
     retryNow();
     worker = new AttachmentDeletions(new AttachmentLifecycleStore(ownerTx), owner, authorityClient);
     assertEquals(1, service(worker.reconcile(null, 1)).completed());
     assertEquals("0", usage(A).getUsed());
     assertEquals(2, rows(rootAdmin, "quota_effects"));
+    assertEquals(
+        1L,
+        rootAdmin
+            .sql("SELECT count(*) AS n FROM taska.quota_effects WHERE effect_kind='RELEASE_USAGE'")
+            .map((r, m) -> r.get("n", Long.class))
+            .one()
+            .block(WAIT));
   }
 
   @Test

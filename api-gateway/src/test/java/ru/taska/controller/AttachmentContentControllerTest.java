@@ -203,4 +203,45 @@ class AttachmentContentControllerTest {
           IllegalArgumentException.class, () -> AttachmentByteRange.parse(invalid, 10), invalid);
     assertEquals(Long.MAX_VALUE, AttachmentByteRange.parse(null, Long.MAX_VALUE).length());
   }
+
+  @Test
+  void revocationStopsAStreamStalledByClientBackpressureWithinLease() {
+    int chunk = 1024 * 1024;
+    stubMetadata(2L * chunk);
+    AtomicInteger checks = new AtomicInteger();
+    when(contexts.buildContext(anyString(), any(), any()))
+        .thenAnswer(
+            inv ->
+                checks.incrementAndGet() <= 2
+                    ? Mono.just(context)
+                    : Mono.error(io.grpc.Status.PERMISSION_DENIED.asRuntimeException()));
+    when(client.readContent(
+            anyString(),
+            anyString(),
+            anyString(),
+            eq(0L),
+            eq(chunk),
+            anyString(),
+            eq(false),
+            any()))
+        .thenReturn(
+            Mono.just(
+                metadata(2L * chunk).toBuilder()
+                    .setData(ByteString.copyFrom(new byte[chunk]))
+                    .build()));
+    var exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/content"));
+    exchange
+        .getResponse()
+        .setWriteHandler(
+            body ->
+                body.take(1)
+                    .doOnNext(org.springframework.core.io.buffer.DataBufferUtils::release)
+                    .then(Mono.never()));
+    reactor.test.StepVerifier.withVirtualTime(
+            () -> controller.content(project, issue, attachment, exchange))
+        .thenAwait(Duration.ofSeconds(16))
+        .expectError(io.grpc.StatusRuntimeException.class)
+        .verify(Duration.ofSeconds(5));
+    assertEquals(3, checks.get());
+  }
 }

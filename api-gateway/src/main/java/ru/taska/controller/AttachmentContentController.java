@@ -139,7 +139,39 @@ public class AttachmentContentController {
                                                                     });
                                                           }))
                                           .doOnDiscard(DataBuffer.class, DataBufferUtils::release));
-                      return response.writeAndFlushWith(chunks);
+                      // A slow client can keep a single chunk in flight beyond the access lease.
+                      // Check independently of body demand and cancel the write on revocation.
+                      Mono<Void> watchdog =
+                          Flux.interval(java.time.Duration.ofSeconds(15))
+                              .concatMap(
+                                  tick ->
+                                      contexts
+                                          .buildContext(
+                                              c.requestId(), exchange, EndpointSecurity.PROTECTED)
+                                          .flatMap(
+                                              fresh -> {
+                                                if (fresh.verified() == null)
+                                                  return Mono.error(
+                                                      new IllegalStateException(
+                                                          "Native download authority unavailable"));
+                                                return RpcContextBridge.install(
+                                                    client.readContent(
+                                                        p, i, a, 0, 0, "", true, fresh),
+                                                    fresh.verified());
+                                              })
+                                          .timeout(java.time.Duration.ofSeconds(10))
+                                          .doOnNext(
+                                              current -> {
+                                                if (current.getTotalSize() != meta.getTotalSize()
+                                                    || !current
+                                                        .getChecksum()
+                                                        .equals(meta.getChecksum()))
+                                                  throw new IllegalStateException(
+                                                      "Attachment content mismatch");
+                                              }),
+                                  1)
+                              .then();
+                      return Mono.firstWithSignal(response.writeAndFlushWith(chunks), watchdog);
                     }));
   }
 
