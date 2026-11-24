@@ -224,3 +224,8 @@ billing entitlement и referenced plan к billing-service; TLS, receipt key и t
 Одобрение tenant OAuth также сверяет текущие MCP/FREE_MCP до записи grant: отключённый
 канал или FREE без разрешённого MCP даёт CAPABILITY_DISABLED с disabledFlags.
 Это не включает браузерный bridge и REST consent (TAS-543).
+
+Billing разрешает auth-service только `readReferencedPlanVersion` по SERVICE/billing с
+`read,catalog:read`, без tenant payload. Это не даёт auth-service `resolvePublishedPlan`,
+создание или публикацию тарифов. Приёмка auth/module проверяется с реальными Spring proxy:
+native gRPC handlers не final, чтобы включённая method validation не ломала startup.

@@ -1861,6 +1861,10 @@ paths:
     post:
       operationId: createTenantPersonalToken
       summary: createTenantPersonalToken
+      description: >-
+        WEB_TENANT same-company issuance. Token metadata and revoke use the existing
+        GET /api/v1/users/me/access-tokens and DELETE /api/v1/users/me/access-tokens/{tokenId}.
+        Idempotency-Key is a canonical lowercase UUID; write includes read in the returned metadata.
       tags:
       - Account
       x-policy: WEB_TENANT
