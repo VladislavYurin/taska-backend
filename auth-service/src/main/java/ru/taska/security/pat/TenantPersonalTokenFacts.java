@@ -17,6 +17,7 @@ import ru.taska.exception.DomainStatus;
 import ru.taska.security.tenant.*;
 
 /** Для каждого выпуска повторно читает primary identity, membership, flags и billing. */
+@lombok.extern.slf4j.Slf4j
 public final class TenantPersonalTokenFacts implements CapabilityEvaluator.Source {
   private final ManagedDomainReads reads;
   private final RpcTrustBackend identity;
@@ -69,6 +70,7 @@ public final class TenantPersonalTokenFacts implements CapabilityEvaluator.Sourc
         return Mono.error(denied());
       return identity.actorFacts(RpcContextBridge.details(c), rpc,
               new RpcContextSecurity.Policy(true, true))
+          .doOnError(e -> primaryFailure("identity", e))
           .flatMap(actor -> {
             if (!actor.getActorUserId().equals(c.actorId())
                 || !actor.getActorGeneration().equals(claim.getActorGeneration())
@@ -77,13 +79,13 @@ public final class TenantPersonalTokenFacts implements CapabilityEvaluator.Sourc
                 || !Set.copyOf(actor.getScopesList()).equals(c.scopes())) return Mono.error(denied());
             if (actor.getGlobalAdmin() && !actor.getWebMfa()) return Mono.error(new DomainException(
                 DomainStatus.PERMISSION_DENIED, "MFA_REQUIRED", Map.of("code", "MFA_REQUIRED")));
-            return reads.actorMembership(c).flatMap(members ->
-                Mono.zip(flags.resolve(PlatformConfigurationSnapshotCache.Use.ADMISSION),
-                        reads.entitlement(target.tenant(), 0).map(EntitlementProjection::validate))
+            return reads.actorMembership(c).doOnError(e -> primaryFailure("membership", e)).flatMap(members ->
+                Mono.zip(flags.resolve(PlatformConfigurationSnapshotCache.Use.ADMISSION).doOnError(e -> primaryFailure("configuration", e)),
+                        reads.entitlement(target.tenant(), 0).map(EntitlementProjection::validate).doOnError(e -> primaryFailure("billing", e)))
                     .flatMap(values -> {
                       var entitlement = values.getT2();
                       if (!entitlement.getTenantId().equals(c.tenantId())) return Mono.error(unavailable());
-                      return reads.plan(entitlement.getPlanVersionId()).map(plan -> {
+                      return reads.plan(entitlement.getPlanVersionId()).doOnError(e -> primaryFailure("plan", e)).map(plan -> {
                         Instant until = Collections.min(List.of(clock.instant().plusSeconds(30),
                             Instant.parse(actor.getExpiresAt()), values.getT1().validUntil(),
                             Instant.parse(claim.getExpiresAt())));
@@ -104,6 +106,11 @@ public final class TenantPersonalTokenFacts implements CapabilityEvaluator.Sourc
             return new DomainException(DomainStatus.PERMISSION_DENIED, "Current authority required", Map.of("code", "SCOPE_DENIED"));
           return unavailable();
         });
+  }
+
+  private static void primaryFailure(String source, Throwable error) {
+    log.warn("Tenant integration primary {} failed: {}", source,
+        error instanceof DomainException domain ? domain.getStatus().name() : io.grpc.Status.fromThrowable(error).getCode().name());
   }
 
   private static DomainException denied() {
