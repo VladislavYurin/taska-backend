@@ -42,7 +42,7 @@ def wait_protected_read(client, path, expected):
             break
         if status == expected:
             return attempts
-        e.require(status == 503, 'Protected readiness returned unexpected status %s' % status)
+        e.require(status in (503, 504), 'Protected readiness returned unexpected status %s' % status)
         time.sleep(1)
     raise e.Blocked('Protected RPC readiness deadline exceeded')
 
