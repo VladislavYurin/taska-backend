@@ -1,4 +1,4 @@
-"""TAS-340: owned seven-application native project ACL/quota/bootstrap acceptance.
+"""Owned seven-application native project ACL/quota/bootstrap acceptance.
 
 Uses generated mTLS/JWS credentials, native app roles/RLS and primary auth/root/billing.
 No shared stand or existing database is modified. Cleanup uses the signed harness run state.
@@ -20,6 +20,7 @@ class ProjectAclLocal(CapabilitiesLocal):
     def __init__(self, root, store, state):
         super().__init__(root, store, state)
         self.recovery_tenant = str(uuid.uuid4())
+        self.compensation_tenant = str(uuid.uuid4())
 
     def edge(self, issuer, audience, rpc, action, kinds, scopes, purpose='USER', mode='BOUND'):
         _base_edge(self, issuer, audience, rpc, action, kinds, scopes, purpose, mode)
@@ -123,8 +124,11 @@ class ProjectAclLocal(CapabilitiesLocal):
             e.require(self.sql('project_db', "SELECT count(*) FROM taska.outbox_events WHERE tenant_id='%s' AND aggregate_id='%s' AND event_type='ProjectCreated';" % (tenant, project)).strip() == '1', 'Creation domain event was missing or duplicated')
             projects.append(project)
         project, foreign = projects
-        # A different operation with the same key must compensate its own reservation only.
-        owner.expect('POST', '/api/v1/projects', 422, {'projectKey': '_', 'name': 'Duplicate'})
+        # FREE has one slot. This is quota admission, before duplicate-key handling.
+        before = self.project_state(first)
+        owner.expect('POST', '/api/v1/projects', 400, {'projectKey': 'NO_SLOT', 'name': 'Quota denied'},
+                     {'Idempotency-Key': str(uuid.uuid4())})
+        e.require(self.project_state(first) == before, 'Quota denial changed project/member/outbox state')
         e.require(self.sql('tenant_db', "SELECT used||'/'||reserved FROM taska.quota_counters WHERE tenant_id='%s' AND resource='PROJECT';" % first).strip() == '1/0', 'Rejected admission leaked quota')
         owner.expect('GET', '/api/v1/projects/' + foreign, 404)
         owner.expect('PATCH', '/api/v1/projects/' + foreign, 404, {'name': 'Foreign'})
@@ -207,17 +211,34 @@ class ProjectAclLocal(CapabilitiesLocal):
         fresh.expect('POST', '/api/v1/projects', 201, {'projectKey': 'GA', 'name': 'Audited administrative fixture'})
         e.require(self.sql('tenant_db', "SELECT used||'/'||reserved FROM taska.quota_counters WHERE tenant_id='%s' AND resource='PROJECT';" % tenant).strip() == '2/0', 'Verified administrative exception was not applied')
         e.require(int(self.sql('project_db', "SELECT count(*) FROM taska.project_authorization_audit WHERE tenant_id='%s' AND actor_id='%s' AND action='project.create' AND decision->>'businessBypass'='true';" % (tenant, creator)).strip()) > 0, 'Administrative creation was not audited')
+        # Verified MFA bypass reaches the resource constraint despite the full FREE quota.
+        before = self.project_state(tenant)
+        fresh.expect('POST', '/api/v1/projects', 409,
+                     {'projectKey': 'GA', 'name': 'Audited administrative fixture'},
+                     {'Idempotency-Key': str(uuid.uuid4())})
+        e.require(self.project_state(tenant) == before, 'Duplicate resource changed projects/members/outbox')
+        e.require(self.sql('tenant_db', "SELECT used||'/'||reserved FROM taska.quota_counters WHERE tenant_id='%s' AND resource='PROJECT';" % tenant).strip() == '2/0', 'Duplicate resource leaked a reservation')
+
+    def project_state(self, tenant):
+        return json.loads(self.sql('project_db', "SELECT jsonb_build_object('projects',(SELECT count(*) FROM taska.projects WHERE tenant_id='%s'),'members',(SELECT count(*) FROM taska.project_members WHERE tenant_id='%s'),'outbox',(SELECT count(*) FROM taska.outbox_events WHERE tenant_id='%s'));" % (tenant, tenant, tenant)).strip())
 
 
-    def recovery_scenarios(self, actor):
-        tenant = self.recovery_tenant
+    def creation_company(self, actor, tenant, with_template):
         self.sql('tenant_db', "BEGIN;INSERT INTO taska.tenants(id,name,owner_id,lifecycle,creation_kind,plan_version_id,creation_actor_id,creation_request_hash,creation_operation_id) VALUES('%s','Recovery fixture','%s','ACTIVE','FREE','%s','%s',decode('00','hex'),'%s');INSERT INTO taska.tenant_memberships(tenant_id,user_id,role,status) VALUES('%s','%s','TENANT_ADMIN','ACTIVE');COMMIT;" % (tenant, actor, str(uuid.uuid4()), actor, str(uuid.uuid4()), tenant, actor))
         self.sql('billing_db', "INSERT INTO taska.subscriptions(tenant_id,selected_plan_version_id,selected_terms_snapshot,mode) SELECT '%s',id,to_jsonb(p),'FREE' FROM taska.catalog_plan_versions p WHERE id='00000000-0000-8000-8000-000000000001';" % tenant)
+        if with_template:
+            self.sql('workflow_db', "INSERT INTO taska.tenant_workflow_templates(tenant_id,template_id,code,version,name,graph_schema_version,graph) SELECT '%s',id,code,version,name,graph_schema_version,graph FROM taska.workflow_templates WHERE code='DEFAULT';" % tenant)
         client, credential = self.member_client(tenant, actor, 1)
         t.wait_protected_read(client, '/api/v1/projects/' + str(uuid.uuid4()), 404)
+        return client, credential
+
+    def recovery_scenarios(self, actor):
+        # Synchronous compensation is outside the worker worklist.
+        tenant = self.compensation_tenant
+        client, _ = self.creation_company(actor, tenant, False)
         payload, failed_key = {'projectKey': 'RECOVER', 'name': 'Recovery fixture'}, str(uuid.uuid4())
         # Missing company copy is a confirmed rejection, not a successful empty initialization.
-        client.expect('POST', '/api/v1/projects', 409, payload, {'Idempotency-Key': failed_key})
+        client.expect('POST', '/api/v1/projects', 400, payload, {'Idempotency-Key': failed_key})
         deadline = time.monotonic() + 20
         while time.monotonic() < deadline:
             if self.sql('tenant_db', "SELECT used||'/'||reserved FROM taska.quota_counters WHERE tenant_id='%s' AND resource='PROJECT';" % tenant).strip() == '0/0':
@@ -226,11 +247,20 @@ class ProjectAclLocal(CapabilitiesLocal):
         e.require(self.sql('project_db', "SELECT count(*) FROM taska.projects WHERE tenant_id='%s';" % tenant).strip() == '0', 'Confirmed rejection retained a hidden project')
         e.require(self.sql('tenant_db', "SELECT used||'/'||reserved FROM taska.quota_counters WHERE tenant_id='%s' AND resource='PROJECT';" % tenant).strip() == '0/0', 'Confirmed rejection retained quota')
         e.require(self.sql('workflow_db', "SELECT count(*) FROM taska.project_initializations WHERE tenant_id='%s' AND state='CANCELLED';" % tenant).strip() == '1', 'Cancellation tombstone missing')
+        e.require(self.sql('project_db', "SELECT count(*) FROM taska.outbox_events WHERE tenant_id='%s' AND event_type IN ('ProjectCreated','ProjectAdmissionOpened');" % tenant).strip() == '0', 'Rejected bootstrap emitted successful creation')
+        e.require(self.sql('project_db', "SELECT count(*) FROM taska.outbox_events WHERE tenant_id='%s' AND event_type='ProjectProvisioned';" % tenant).strip() == '1', 'Committed provisioning history changed')
         self.sql('workflow_db', "INSERT INTO taska.tenant_workflow_templates(tenant_id,template_id,code,version,name,graph_schema_version,graph) SELECT '%s',id,code,version,name,graph_schema_version,graph FROM taska.workflow_templates WHERE code='DEFAULT';" % tenant)
-        client.expect('POST', '/api/v1/projects', 409, payload, {'Idempotency-Key': failed_key})
+        before = self.project_state(tenant)
+        client.expect('POST', '/api/v1/projects', 400, payload, {'Idempotency-Key': failed_key})
+        e.require(self.project_state(tenant) == before, 'Closed operation replay changed project/member/outbox state')
+        e.require(self.sql('tenant_db', "SELECT used||'/'||reserved FROM taska.quota_counters WHERE tenant_id='%s' AND resource='PROJECT';" % tenant).strip() == '0/0', 'Closed operation replay changed quota')
+        tenant = self.recovery_tenant
+        client, credential = self.creation_company(actor, tenant, True)
         self.compose('stop', 'workflow-service')
         pending_key = str(uuid.uuid4())
-        client.expect('POST', '/api/v1/projects', 503, payload, {'Idempotency-Key': pending_key})
+        # Legacy project errors map UNAVAILABLE to 503 and DEADLINE_EXCEEDED to 504.
+        response = client.request('POST', '/api/v1/projects', payload, {'Idempotency-Key': pending_key})
+        e.require(response.status in (503, 504), 'Unavailable bootstrap did not return a dependency failure')
         pending = self.sql('project_db', "SELECT project_id FROM taska.project_creation_operations WHERE tenant_id='%s' AND state='CREATING';" % tenant).strip()
         e.require(bool(pending), 'Unknown outcome lost its original resource identity')
         e.require(self.sql('tenant_db', "SELECT used||'/'||reserved FROM taska.quota_counters WHERE tenant_id='%s' AND resource='PROJECT';" % tenant).strip() == '0/1', 'Unknown outcome released a potentially committed slot')
@@ -259,8 +289,7 @@ class ProjectAclLocal(CapabilitiesLocal):
 
 
 def main():
-    t.TrustedLocal = ProjectAclLocal
-    t.main()
+    t.main(description=__doc__, scenario='native-project-acl', local_cls=ProjectAclLocal)
 
 
 if __name__ == '__main__':
