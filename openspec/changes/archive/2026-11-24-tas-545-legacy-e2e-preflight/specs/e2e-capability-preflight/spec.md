@@ -28,3 +28,7 @@ Production RPC, RLS, транзакции и outbox MUST сохранять те
 #### Scenario: Native запись и отказ
 - **WHEN** выполняется отдельный native project runner
 - **THEN** успешное создание сохраняет проверенную tenant-область, а отказ не меняет доменное состояние; результат отражает реальный scope проверки
+
+#### Scenario: Синхронная компенсация bootstrap
+- **WHEN** собственная native fixture без конкурирующего recovery получает подтверждённый отказ bootstrap из-за отсутствия tenant workflow template
+- **THEN** проект и его members отсутствуют, занятая и зарезервированная квота освобождены, ProjectCreated и ProjectAdmissionOpened отсутствуют, исторический ProjectProvisioned сохраняется однократно и существует workflow cancellation tombstone

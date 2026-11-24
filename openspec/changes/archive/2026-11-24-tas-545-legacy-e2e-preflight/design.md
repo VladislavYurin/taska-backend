@@ -19,4 +19,6 @@ Non-Goals: восстановление событий v1, изменение do
 
 ## Native проверка
 
+Для синхронной компенсации recovery worklist собственной fixture оставлен пустым: конкурирующий worker относится к отдельному сценарию и не должен менять причину отказа между Ensure и ответом HTTP.
+
 Для точных критериев TAS-545 добавляется `project_outbox_e2e.py` на существующей `IssueAclLocal` fixture с последовательным запуском приложений и актуальными trust edges. Проверяются создание в A/B, tenant provenance, один outbox event, replay/conflict, отказ MEMBER с сохранностью состояния при native создании, а также компенсация bootstrap без проекта/занятой квоты/успешного ProjectCreated. Исторический ProjectProvisioned сохраняется, поскольку provisioning уже был закоммичен; проверяется cancellation tombstone. HTTP отказа bootstrap соответствует RestErrorMapper. Полный project ACL runner и согласование его fixture/ожиданий относятся к TAS-546; новый runner не заявляет его полный scope и доставку Kafka.
