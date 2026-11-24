@@ -46,7 +46,7 @@ python3 scripts/harness/project_outbox_e2e.py
 python3 scripts/harness/project_outbox_e2e.py --cleanup /absolute/owned/run/state.json
 ```
 
-Runner использует существующую `IssueAclLocal` fixture: семь настоящих приложений с последовательным startup, собственные DB/app LOGIN/RLS и mTLS/JWS. Проверяет создание в двух tenants и provenance, один `ProjectCreated` в outbox, replay/conflict без изменения project/member/outbox/quota, отказ MEMBER без мутации при native создании. Компенсация bootstrap требует отдельной проверки. HTTP-код отказа соответствует текущему `RestErrorMapper`. Cleanup использует подписанный state; shared stage не затрагивается.
+Runner использует существующую `IssueAclLocal` fixture: семь настоящих приложений с последовательным startup, собственные DB/app LOGIN/RLS и mTLS/JWS. Проверяет создание в двух tenants и provenance, один `ProjectCreated` в outbox, replay/conflict без изменения project/member/outbox/quota, отказ MEMBER без мутации при native создании, а также компенсацию bootstrap без проекта/занятой квоты и без успешных `ProjectCreated`/`ProjectAdmissionOpened`. Историческое событие `ProjectProvisioned` сохраняется; проверяется workflow cancellation tombstone. HTTP-код отказа соответствует текущему `RestErrorMapper`. Cleanup использует подписанный state; shared stage не затрагивается.
 
 Scope ограничен перечисленными сценариями: агрегация context, полный project ACL, Kafka delivery и активация стенда требуют отдельных проверок. Согласование fixture/ожиданий широкого `project_acl_e2e.py` отслеживается в [TAS-546](https://jira.ozero.dev/browse/TAS-546).
 

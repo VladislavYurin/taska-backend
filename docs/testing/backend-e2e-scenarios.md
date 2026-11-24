@@ -132,7 +132,7 @@
 
 ### Native project/outbox subset TAS-545
 
-`python3 scripts/harness/project_outbox_e2e.py`: собственная native fixture проверяет tenant provenance, один outbox event на создание, replay/conflict, отказ MEMBER с сохранностью состояния при native создании. Компенсация bootstrap в этот поднабор не входит. [Scope и cleanup](../agents/e2e.md#native-project-outbox-tas-545). Это отдельный поднабор; полный ACL runner требует согласования в [TAS-546](https://jira.ozero.dev/browse/TAS-546).
+`python3 scripts/harness/project_outbox_e2e.py`: собственная native fixture проверяет tenant provenance, один outbox event на создание, replay/conflict, отказ MEMBER с сохранностью состояния при native создании и bootstrap compensation без проекта/занятой квоты/успешного `ProjectCreated`. История `ProjectProvisioned` сохраняется. [Scope и cleanup](../agents/e2e.md#native-project-outbox-tas-545). Это отдельный поднабор; полный ACL runner требует согласования в [TAS-546](https://jira.ozero.dev/browse/TAS-546).
 
 ### Native variant TAS-340
 

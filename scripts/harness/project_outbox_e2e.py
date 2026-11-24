@@ -1,5 +1,6 @@
 """TAS-545: изолированная native проверка создания и outbox проекта."""
 import json
+import time
 import uuid
 import e2e as e
 import trusted_rpc_e2e as t
@@ -41,9 +42,30 @@ class ProjectOutboxLocal(IssueAclLocal):
         client.expect('POST', '/api/v1/projects', 403, {'projectKey': 'DENIED', 'name': 'Denied'})
         e.require(self.domain_state(tenant) == before, 'Denied creation changed projects/members/outbox/quota')
 
+        failed = self.recovery_tenant
+        self.sql('tenant_db', "BEGIN;INSERT INTO taska.tenants(id,name,owner_id,lifecycle,creation_kind,plan_version_id,creation_actor_id,creation_request_hash,creation_operation_id) VALUES('%s','Owned rollback','%s','ACTIVE','FREE','%s','%s',decode('00','hex'),'%s');INSERT INTO taska.tenant_memberships(tenant_id,user_id,role,status) VALUES('%s','%s','TENANT_ADMIN','ACTIVE');COMMIT;" % (failed, actor, str(uuid.uuid4()), actor, str(uuid.uuid4()), failed, actor))
+        self.sql('billing_db', "INSERT INTO taska.subscriptions(tenant_id,selected_plan_version_id,selected_terms_snapshot,mode) SELECT '%s',id,to_jsonb(p),'FREE' FROM taska.catalog_plan_versions p WHERE id='00000000-0000-8000-8000-000000000001';" % failed)
+        rejected, _ = self.member_client(failed, actor, 1)
+        t.wait_protected_read(rejected, '/api/v1/projects/' + str(uuid.uuid4()), 404)
+        # GatewayErrorHandler maps FAILED_PRECONDITION to HTTP 400. The SQL
+        # cancellation/outbox/quota checks below establish the actual rejection.
+        rejected.expect('POST', '/api/v1/projects', 400, {'projectKey': 'FAIL', 'name': 'No workflow template'}, {'Idempotency-Key': str(uuid.uuid4())})
+        deadline = time.monotonic() + 20
+        while time.monotonic() < deadline and self.domain_state(failed)[1] != '0/0':
+            time.sleep(.5)
+        failed_state = self.domain_state(failed)
+        e.require(failed_state[0][0] == 0 and failed_state[0][2] == 0 and failed_state[1] == '0/0',
+                  'Confirmed rejection retained project/member/quota: ' + repr(failed_state))
+        # Provisioning is a committed phase; its historical event is retained.
+        # A failed bootstrap must never publish the successful opening/creation.
+        e.require(self.sql('project_db', "SELECT count(*) FROM taska.outbox_events WHERE tenant_id='%s' AND event_type IN ('ProjectCreated','ProjectAdmissionOpened');" % failed).strip() == '0',
+                  'Rejected bootstrap emitted successful creation/opening')
+        e.require(self.sql('project_db', "SELECT count(*) FROM taska.outbox_events WHERE tenant_id='%s' AND event_type='ProjectProvisioned' AND payload->>'projectId'=aggregate_id::text;" % failed).strip() == '1',
+                  'Compensation lost or duplicated the committed provisioning history')
+        e.require(self.sql('workflow_db', "SELECT count(*) FROM taska.project_initializations WHERE tenant_id='%s' AND state='CANCELLED';" % failed).strip() == '1', 'Workflow cancellation tombstone missing')
         return {'scenario': 'native-project-outbox', 'nativeCreateTenantProvenance': 'PASS', 'singleOutboxEvent': 'PASS',
                 'replayAndConflictState': 'PASS', 'crossTenantDenied': 'PASS',
-                'memberDeniedState': 'PASS',
+                'memberDeniedState': 'PASS', 'bootstrapCompensation': 'PASS',
                 'testCount': e.ASSERTIONS - initial,
                 'scope': 'Собственная REST/mTLS/JWS/RLS fixture; project/outbox rows и квота. Агрегация context, доставка Kafka и stage не проверяются.'}
 

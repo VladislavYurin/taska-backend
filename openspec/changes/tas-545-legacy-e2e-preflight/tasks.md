@@ -4,7 +4,7 @@
 
 - [x] 1.1 Добавить ранний BLOCKED для local E2E-08; регрессионными тестами подтвердить отсутствие provisioning/HTTP и пустые ресурсы/pending writes, сохранение mixed E2E-01 и stage dispatch; обновить документацию runner и сценария.
 
-- [ ] 1.2 Добавить отдельный воспроизводимый native project/outbox runner на существующей owned fixture; проверить tenant provenance, один event, replay/conflict и отказ без мутации; документировать фактический scope и ограничение полного ACL runner (TAS-546).
+- [ ] 1.2 Добавить отдельный воспроизводимый native project/outbox runner на существующей owned fixture; проверить tenant provenance, один event, replay/conflict, отказ без мутации и компенсацию без ProjectCreated/утечки проекта или квоты с сохранением provisioning history; документировать фактический scope и ограничение полного ACL runner (TAS-546).
 
 ## 2. Проверка интеграции
 
