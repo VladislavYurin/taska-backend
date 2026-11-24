@@ -7,6 +7,13 @@ import trusted_rpc_e2e as t
 from issue_acl_e2e import IssueAclLocal
 
 class ProjectOutboxLocal(IssueAclLocal):
+    def configure_service(self, name, env, props):
+        super().configure_service(name, env, props)
+        if name == 'project-service':
+            # This scenario checks synchronous compensation. Recovery concurrency
+            # is covered separately by the broad project ACL runner.
+            props['taska.projects.recovery-tenants'] = ''
+
     def domain_state(self, tenant):
         return (
             json.loads(self.sql('project_db', "SELECT jsonb_build_array((SELECT count(*) FROM taska.projects WHERE tenant_id='%s'),(SELECT count(*) FROM taska.outbox_events WHERE tenant_id='%s'),(SELECT count(*) FROM taska.project_members WHERE tenant_id='%s'))::text;" % (tenant, tenant, tenant)).strip()),
@@ -48,8 +55,8 @@ class ProjectOutboxLocal(IssueAclLocal):
         self.sql('billing_db', "INSERT INTO taska.subscriptions(tenant_id,selected_plan_version_id,selected_terms_snapshot,mode) SELECT '%s',id,to_jsonb(p),'FREE' FROM taska.catalog_plan_versions p WHERE id='00000000-0000-8000-8000-000000000001';" % failed)
         rejected, _ = self.member_client(failed, actor, 1)
         t.wait_protected_read(rejected, '/api/v1/projects/' + str(uuid.uuid4()), 404)
-        # RestErrorMapper maps FAILED_PRECONDITION to HTTP 400. The SQL
-        # cancellation/outbox/quota checks below establish the actual rejection.
+        # Missing workflow copy is FAILED_PRECONDITION in the legacy JSON
+        # representation. The SQL checks establish actual compensation.
         rejected.expect('POST', '/api/v1/projects', 400, {'projectKey': 'FAIL', 'name': 'No workflow template'}, {'Idempotency-Key': str(uuid.uuid4())})
         deadline = time.monotonic() + 20
         while time.monotonic() < deadline and self.domain_state(failed)[1] != '0/0':
