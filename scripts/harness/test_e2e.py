@@ -132,6 +132,91 @@ class E2ETest(unittest.TestCase):
             with self.assertRaises(e.Invalid):
                 e.load_config(path)
 
+    def test_local_project_preflight_blocks_before_provision_or_http(self):
+        from types import SimpleNamespace
+        args = SimpleNamespace(command='e2e', tier='local', scenario=['E2E-08'], run_id='c' * 16, config=None)
+        with patch.object(e, 'catalog', return_value={'E2E-08': 'fixture'}), \
+                patch.object(e, 'source', return_value={}), \
+                patch.object(e.Local, 'provision') as provision, \
+                patch.object(e, 'scenario_08') as scenario, \
+                patch.object(e.Http, 'request') as request:
+            report, code = e.handle(args, self.root)
+        provision.assert_not_called()
+        scenario.assert_not_called()
+        request.assert_not_called()
+        self.assertEqual(code, 3)
+        self.assertEqual(report['status'], 'BLOCKED')
+        self.assertEqual(report['results'][0]['checkId'], 'E2E-08.backend')
+        self.assertEqual(report['results'][0]['testCount'], 0)
+        self.assertIn('verified tenant context', report['results'][0]['reason'])
+        self.assertEqual(report['coverage']['httpOperations'], [])
+        self.assertEqual(report['cleanupStatus'], 'PASS')
+        self.assertEqual(report['pendingWrites'], 0)
+        self.assertEqual(report['remainingOwnedResources'], [])
+        saved = json.loads((self.store.path(args.run_id).parent / 'report.json').read_text())
+        self.assertEqual(saved, report)
+        state = self.store.load(self.store.path(args.run_id))
+        self.assertEqual(state['resources'], [])
+        self.assertEqual(state['pendingWrites'], [])
+        self.assertNotIn('composeProject', state)
+
+    def test_local_mixed_selection_runs_reads_and_remains_blocked(self):
+        from types import SimpleNamespace
+        args = SimpleNamespace(command='e2e', tier='local', scenario=['E2E-01', 'E2E-08'],
+                               run_id='c' * 16, config=None)
+        actors = {'A': {'id': 'actor', 'token': 'fixture'}}
+        def provision(local):
+            local.state['origin'] = 'https://fixture.invalid'
+            return actors
+        with patch.object(e, 'catalog', return_value=dict.fromkeys(args.scenario, 'fixture')), \
+                patch.object(e, 'source', return_value={}), \
+                patch.object(e.Local, 'provision', autospec=True, side_effect=provision) as provisioned, \
+                patch.object(e.Local, 'revisions', return_value={}), \
+                patch.object(e, 'scenario_01', return_value={'status': 'PARTIAL', 'testCount': 1,
+                             'operations': ['GET /v3/api-docs']}) as reads, \
+                patch.object(e, 'scenario_08') as writes, \
+                patch.object(e.Http, 'request') as request:
+            report, code = e.handle(args, self.root)
+        provisioned.assert_called_once()
+        reads.assert_called_once()
+        writes.assert_not_called()
+        request.assert_not_called()
+        self.assertEqual(code, 3)
+        results = {r['scenarioId']: r for r in report['results'] if 'scenarioId' in r}
+        self.assertEqual(results['E2E-01']['status'], 'PARTIAL')
+        self.assertEqual(results['E2E-08']['status'], 'BLOCKED')
+        self.assertEqual(report['coverage']['httpOperations'], ['GET /v3/api-docs'])
+        self.assertEqual(report['cleanupStatus'], 'PASS')
+        self.assertEqual(report['pendingWrites'], 0)
+        self.assertEqual(report['remainingOwnedResources'], [])
+
+    def test_stage_project_scenario_keeps_existing_dispatch(self):
+        from types import SimpleNamespace
+        args = SimpleNamespace(command='e2e', tier='stage', scenario=['E2E-08'],
+                               run_id='c' * 16, config='approved.json')
+        actors = {'A': {'id': 'actor'}}
+        config = {'environmentId': 'approved-stage', 'origin': 'https://fixture.invalid', 'actors': actors}
+        clients = {'actor': e.Http(config['origin'])}
+        with patch.object(e, 'catalog', return_value={'E2E-08': 'fixture'}), \
+                patch.object(e, 'source', return_value={}), \
+                patch.object(e, 'load_config', return_value=config) as load, \
+                patch.object(e, 'stage_revisions', return_value={}) as revisions, \
+                patch.object(e, 'stage_clients', return_value=(actors, clients)) as stage_clients, \
+                patch.object(e.Http, 'expect') as health, \
+                patch.object(e, 'scenario_08', return_value={'status': 'PARTIAL', 'testCount': 1}) as scenario, \
+                patch.object(e.Local, 'provision') as local:
+            report, code = e.handle(args, self.root)
+        load.assert_called_once_with(args.config)
+        stage_clients.assert_called_once_with(config)
+        self.assertEqual(revisions.call_count, 2)
+        health.assert_called_once_with('GET', '/actuator/health', 200)
+        local.assert_not_called()
+        scenario.assert_called_once()
+        self.assertIs(scenario.call_args.args[2], clients)
+        self.assertEqual(code, 4)
+        self.assertEqual(report['results'][0]['status'], 'PARTIAL')
+        self.assertEqual(report['cleanupStatus'], 'PASS')
+
     def test_cleanup_early_stage_state_is_idempotent_without_network(self):
         from types import SimpleNamespace
         state = self.store.create('b' * 16, 'stage', 'approved-stage', '')

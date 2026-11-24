@@ -362,10 +362,10 @@ class BillingCatalogIntegrationTest {
   }
 
   @Test
-  void workflowAndIssueCanReadReferencedKindButCannotResolveANewOffer() {
+  void domainConsumersCanReadReferencedKindButCannotResolveANewOffer() {
     String free = "00000000-0000-8000-8000-000000000001";
     var request = ResolvePublishedPlanRpcRequest.newBuilder().setPlanVersionId(free).build();
-    for (String issuer : List.of("workflow-service", "issue-service")) {
+    for (String issuer : List.of("workflow-service", "issue-service", "auth-service")) {
     var service = TrustedTenantContext.newBuilder()
         .setAction("readReferencedPlanVersion")
         .setCredentialKind(CredentialKind.CREDENTIAL_KIND_SERVICE)

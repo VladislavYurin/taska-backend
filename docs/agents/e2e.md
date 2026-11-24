@@ -11,7 +11,9 @@ python3 scripts/harness.py doctor --tier java
 python3 scripts/harness.py e2e --tier local --scenario E2E-01 --scenario E2E-08
 ```
 
-Runner всегда собирает JAR текущего checkout через Maven wrapper (`package -DskipTests`), копирует их в каталог RUN, создаёт уникальный Compose project `taska-harness-<16 hex>` с динамическими loopback-портами. У каждого RUN собственные PostgreSQL tmpfs, Kafka, storage, service containers и network. Unit/IT эта сборка не заменяет: они выполняются отдельным `check`. Базовый JRE fixture — `eclipse-temurin:21-jre`; Docker получает образы обычным механизмом pull/cache. Фактические image IDs и SHA-256 JAR записываются в report.
+До provisioning runner проверяет совместимость сценариев с локальной fixture. Local E2E-08 получает **BLOCKED**: legacy Compose не предоставляет verified tenant context, необходимый project outbox envelope v2 (TAS-545). При выборе только E2E-08 Maven/Docker/HTTP не запускаются: exit code 3, testCount 0, пустые HTTP operations/ресурсы/pending writes, cleanup PASS. Tenant не подставляется искусственно. Для native project/outbox acceptance используйте [отдельный runner](#native-project-outbox-tas-545). В смешанном наборе выше выполняются чтения E2E-01, а общий результат остаётся BLOCKED.
+
+При наличии исполнимого локального сценария runner собирает JAR текущего checkout через Maven wrapper (`package -DskipTests`), копирует их в каталог RUN, создаёт уникальный Compose project `taska-harness-<16 hex>` с динамическими loopback-портами. У каждого RUN собственные PostgreSQL tmpfs, Kafka, storage, service containers и network. Unit/IT эта сборка не заменяет: они выполняются отдельным `check`. Базовый JRE fixture — `eclipse-temurin:21-jre`; Docker получает образы обычным механизмом pull/cache. Фактические image IDs и SHA-256 JAR записываются в report.
 
 Локальные A/M/V/O/G создаются только в собственной пустой fixture DB (как в исходном MCP E2E); дальнейшие сценарии используют публичный REST. Secrets генерируются заново и остаются в памяти/приватном временном compose-файле. Существующий `.env` не читается и не меняется. Docker cleanup удаляет только контейнеры и network с одновременно совпадающими Compose project и случайной ownership label. После успешной очистки приватный compose-файл и JAR snapshots удаляются.
 
@@ -23,7 +25,7 @@ Runner всегда собирает JAR текущего checkout через Ma
 
 Report содержит source head/tree, dirty marker, revisions до/после, scenario/check ID, фактическое число выполненных assertions, scope, cleanup и остаточные ресурсы. Для dirty checkout `sourceTree` — Git tree HEAD, **не снимок незакоммиченных файлов**; такой прогон нельзя выдавать за проверку чистого SHA. HTTP operation coverage отдельно от количества полностью пройденных сценариев.
 
-Коды: `0` полный PASS; `1` FAIL/ошибка cleanup; `2` неверный вызов; `3` BLOCKED (предпосылка/неавтоматизированный выбранный сценарий); `4` PARTIAL. Нынешние E2E-01/08 выполняют содержательные поднаборы и возвращают PARTIAL, даже если все реализованные assertions прошли. Смена revision также PARTIAL. Это не «зелёная полная приёмка» всех backend-сценариев.
+Коды: `0` полный PASS; `1` FAIL/ошибка cleanup; `2` неверный вызов; `3` BLOCKED (предпосылка/неавтоматизированный выбранный сценарий); `4` PARTIAL. Исполнимые E2E-01 и stage E2E-08 выполняют содержательные поднаборы и возвращают PARTIAL, даже если все реализованные assertions прошли. Local E2E-08 возвращает BLOCKED до provisioning. Смена revision также PARTIAL; BLOCKED имеет приоритет над PARTIAL. Это не «зелёная полная приёмка» всех backend-сценариев.
 
 ## Cleanup и восстановление
 
@@ -37,6 +39,17 @@ python3 scripts/harness.py cleanup --run-state target/harness-e2e/0123456789abcd
 
 Для создания проекта сначала сохраняется pending intent, затем отправляется единственный POST. После transport timeout повтор записи не выполняется. Stage cleanup ищет свой projectKey и createdBy через публичный список, проверяет также уникальный creation marker из исходного POST description, сохраняет найденный ID и архивирует. Совпадения actor/projectKey недостаточно: старый проект с другим marker не принимается в registry. При явном отказе 4xx intent удаляется; после timeout/5xx сохраняется для безопасного reconcile. Если запись ещё не видна, pending intent остаётся unresolved: повторите cleanup позже. Отсутствие объекта сразу после timeout не считается доказательством отсутствия записи.
 
+## Native project outbox (TAS-545)
+
+```sh
+python3 scripts/harness/project_outbox_e2e.py
+python3 scripts/harness/project_outbox_e2e.py --cleanup /absolute/owned/run/state.json
+```
+
+Runner использует существующую `IssueAclLocal` fixture: семь настоящих приложений с последовательным startup, собственные DB/app LOGIN/RLS и mTLS/JWS. Проверяет создание в двух tenants и provenance, один `ProjectCreated` в outbox, replay/conflict без изменения project/member/outbox/quota, отказ MEMBER без мутации при native создании, а также компенсацию bootstrap без проекта/занятой квоты и без успешных `ProjectCreated`/`ProjectAdmissionOpened`. Историческое событие `ProjectProvisioned` сохраняется; проверяется workflow cancellation tombstone. HTTP-код отказа соответствует текущему `RestErrorMapper`. Cleanup использует подписанный state; shared stage не затрагивается.
+
+Фикстура проверяет синхронную компенсацию с пустым recovery worklist. Scope ограничен перечисленными сценариями: конкуренция с recovery, агрегация context, полный project ACL, Kafka delivery и активация стенда требуют отдельных проверок. Согласование fixture/ожиданий широкого `project_acl_e2e.py` отслеживается в [TAS-546](https://jira.ozero.dev/browse/TAS-546).
+
 ## Native project ACL / quota (TAS-340)
 
 ```sh
@@ -46,7 +59,7 @@ python3 scripts/harness/project_acl_e2e.py --cleanup /absolute/owned/run/state.j
 
 This separate local-only tier packages seven real applications and creates owned native databases, app LOGIN/RLS, mTLS/JWS and fixtures. It checks project REST and direct RPC/batch/stats, current roles/generations, MFA/audit, quota/initialization, compensation and recovery after initiating-credential revocation/flag-off. Cleanup uses the signed harness state. Extra gRPC ports bind only to loopback for the owned read-only probe. See [native project API](../../project-service/TENANT-API.md) for setup, contracts and boundaries.
 
-The ordinary `e2e --scenario E2E-08` retains its legacy subset. This native tier does not prove Kafka delivery, full workflow/issue CRUD, real payments or shared-stage rollout. After shared transport changes also run `python3 scripts/harness/trusted_rpc_e2e.py` for the legacy regression.
+Обычный local `e2e --scenario E2E-08` блокируется до записи из-за несовместимой legacy fixture; stage сохраняет прежний поднабор и собственные prerequisites. This native tier does not prove Kafka delivery, full workflow/issue CRUD, real payments or shared-stage rollout. After shared transport changes also run `python3 scripts/harness/trusted_rpc_e2e.py` for the legacy regression.
 
 ## Opt-in stage
 
@@ -96,7 +109,7 @@ HTTP redirects не следуются, origin строго HTTPS и точно 
 | ID | Actors / budget / cleanup | Автоматизировано | Не закрыто |
 |---|---|---|---|
 | E2E-01 | A; только чтение; cleanup не нужен | Контракт JSON/YAML доступен, meta auth, ETag/304/invalid ETag, no-store auth methods | Семантическое равенство YAML/JSON, полные словари, fault fixture неизвестных downstream enum, Swagger UI |
-| E2E-08 | A/M/V/O/G; 2 проекта, 2 членства, 4 отказа создания; локальный destroy либо stage archive | Создание/дубликат/валидация, сохранность после отказа, PATCH omit/null, роли, отзыв, последний ADMIN, outsider/global-admin ACL, список/context/stats | Неактивный signup/BLOCKED membership; содержательная сверка stats/context; cross-project issue/label/link/search isolation |
+| E2E-08 | Local: BLOCKED до provisioning/записи. Stage: A/M/V/O/G; 2 проекта, 2 членства, 4 отказа создания; archive | Stage subset: создание/дубликат/валидация, сохранность после отказа, PATCH omit/null, роли, отзыв, последний ADMIN, outsider/global-admin ACL, список/context/stats | Local legacy fixture без verified tenant несовместима с outbox v2; stage требует согласованных capabilities. Неактивный signup/BLOCKED membership; содержательная сверка stats/context; cross-project issue/label/link/search isolation |
 
 Все остальные IDs из исходного документа runner распознаёт, но возвращает **BLOCKED / manual**, не молча пропускает. Список ниже generated из заголовков документа при реализации; при добавлении сценария обновлять эту карту и tests.
 
@@ -155,3 +168,17 @@ python3 scripts/harness.py docs-check
 ```
 
 Для нового сценария сохранить stable ID, объявить preconditions/actors, число и тип записей, ожидаемые success/errors, bounded polling и cleanup. Сначала реализовать write-ahead registry и отказ при missing capability, затем позитивный путь и проверку сохранности после отказа. В tests моделировать Docker/HTTP только своей fixture; дополнительно выполнить реальный local run. Не менять итоговый PARTIAL на PASS до покрытия всех пунктов исходного сценария.
+
+## Токены одной компании (TAS-542)
+
+```sh
+python3 scripts/harness/tenant_tokens_e2e.py
+```
+
+Отдельный local-only runner расширяет owned capabilities fixture: семь приложений,
+собственные PostgreSQL, mTLS/JWS и managed trust. Проверяет production Source при включённом
+модуле auth, REST issuance/replay с тем же секретом, foreign-tenant denial без записи,
+метаданные компании, запрет выпуска по PAT, отзыв и причины двух флагов.
+Состояние и cleanup следуют `trusted_rpc_e2e.py`; shared stage не используется.
+Подключения OAuth проверяются отдельными HTTP/gRPC и owner-store regressions;
+браузерный выбор компании и consent bridge остаются TAS-543.

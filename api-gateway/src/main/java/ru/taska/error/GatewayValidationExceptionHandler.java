@@ -56,7 +56,7 @@ public class GatewayValidationExceptionHandler {
             ServerWebExchange exchange
     ) {
         String requestId = requestIdProvider.resolve(exchange);
-        if (isTenantRegistryRoute(exchange)) {
+        if (isTenantRegistryRoute(exchange) || isTenantTokenRoute(exchange)) {
             boolean missingVersion = exchange.getRequest().getMethod() == HttpMethod.PATCH
                     && error instanceof MissingRequestValueException missing
                     && "header".equals(missing.getLabel())
@@ -85,6 +85,10 @@ public class GatewayValidationExceptionHandler {
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .header(REQUEST_ID, requestId)
                 .body(response);
+    }
+
+    static boolean isTenantTokenRoute(ServerWebExchange exchange) {
+        return "/api/v1/account/tenant-tokens".equals(exchange.getRequest().getPath().pathWithinApplication().value());
     }
 
     static boolean isTenantRegistryRoute(ServerWebExchange exchange) {

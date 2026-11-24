@@ -69,6 +69,7 @@ public class PersonalAccessTokenGrpcService extends ReactorPersonalAccessTokenSe
                 .setTokenPrefix(token.getTokenPrefix()).addAllScopes(List.of(token.getScopes()))
                 .setCreatedAt(PersonalAccessTokenService.timestamp(token.getCreatedAt()))
                 .setExpiresAt(PersonalAccessTokenService.timestamp(token.getExpiresAt()));
+        if (token.getTenantId() != null) builder.setTenantId(token.getTenantId().toString());
         if (token.getLastUsedAt() != null) builder.setLastUsedAt(PersonalAccessTokenService.timestamp(token.getLastUsedAt()));
         return builder.build();
     }

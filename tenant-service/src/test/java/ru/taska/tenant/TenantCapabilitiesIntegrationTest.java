@@ -36,6 +36,7 @@ class TenantCapabilitiesIntegrationTest {
   static DatabaseClient operator;
   static ConnectionPool pool;
   static TenantTransactionExecutor tx;
+  final AtomicReference<PlanKind> planKind = new AtomicReference<>(PlanKind.PAID);
   final Clock clock = Clock.systemUTC();
   final AtomicReference<List<PlatformFlag>> configuration = new AtomicReference<>();
   final Map<UUID, Entitlement> commercial = new HashMap<>();
@@ -211,7 +212,7 @@ class TenantCapabilitiesIntegrationTest {
                 billingOffline.get()
                     ? Mono.error(new IllegalStateException("owned billing outage"))
                     : Mono.just(commercial.get(tenant)),
-            plan -> Mono.just(PLAN.toString().equals(plan) ? PlanKind.PAID : PlanKind.UNKNOWN),
+            plan -> Mono.just(PLAN.toString().equals(plan) ? planKind.get() : PlanKind.UNKNOWN),
             clock);
   }
 
@@ -295,11 +296,26 @@ class TenantCapabilitiesIntegrationTest {
     assertEquals(ownerA.getFlagVersion(), ownerB.getFlagVersion());
     assertNotEquals(ownerA.getTenantId(), ownerB.getTenantId());
     assertEquals(86400L, ownerA.getDurationsSecondsOrThrow("WIRE_RECONCILIATION_TARGET_SECONDS"));
-    assertEquals(CapabilityEvaluator.tenantActions().size(), ownerA.getItemsCount());
+    assertEquals(TenantCapabilities.companyActions().size(), ownerA.getItemsCount());
     assertTrue(
         item(ownerA, Action.MEMBERSHIP_LEAVE)
             .getDenialCodesList()
             .contains(ErrorCode.ERROR_CODE_OWNER_MEMBERSHIP_PROTECTED));
+  }
+
+  @Test
+  void patCreateDistinguishesGlobalAndFreePlanFlags() {
+    assertTrue(item(get(OWNER, A), Action.PAT_CREATE).getAllowed());
+    planKind.set(PlanKind.FREE);
+    configuration.set(configuration.get().stream().map(f -> f.getKey().equals("FREE_PERSONAL_API_TOKENS")
+        ? f.toBuilder().setVersion("2").setBooleanValue(false).build() : f).toList());
+    var free = item(get(OWNER, A), Action.PAT_CREATE);
+    assertFalse(free.getAllowed());
+    assertEquals(List.of("FREE_PERSONAL_API_TOKENS"), free.getDisabledFlagsList());
+    planKind.set(PlanKind.PAID);
+    configuration.set(configuration.get().stream().map(f -> f.getKey().equals("PERSONAL_API_TOKENS")
+        ? f.toBuilder().setVersion("2").setBooleanValue(false).build() : f).toList());
+    assertEquals(List.of("PERSONAL_API_TOKENS"), item(get(OWNER, A), Action.PAT_CREATE).getDisabledFlagsList());
   }
 
   @Test

@@ -104,6 +104,7 @@ public class TenantCapabilitiesClient implements AutoCloseable {
           ru.taska.capability.CapabilityEvaluator.tenantActions().stream()
               .map(ru.taska.capability.Action::wire)
               .collect(java.util.stream.Collectors.toSet());
+      known.add(ru.taska.capability.Action.PAT_CREATE.wire());
       for (var item : result.getItemsList())
         if (!known.contains(item.getAction())
             || !names.add(item.getAction())

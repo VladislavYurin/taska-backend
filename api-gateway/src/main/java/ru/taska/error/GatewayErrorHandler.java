@@ -73,12 +73,21 @@ public class GatewayErrorHandler {
 
     String reason = details.getOrDefault("code", details.get("reason"));
     if (reason != null && !reason.matches("[A-Z][A-Z0-9_]{1,79}")) reason = null;
-    if (trustedEnabled) {
+    boolean problem = trustedEnabled && RestErrorContract.usesProblemContract(exchange, details);
+    if (trustedEnabled && reason != null && !details.containsKey("code")) {
+      details = new java.util.LinkedHashMap<>(details);
+      details.put("code", reason);
+    }
+    if (problem) {
       if (reason != null) code = reason;
       else if (transportCode != null) code = restErrorMapper.problemCode(transportCode);
       else if (httpStatus == HttpStatus.UNAUTHORIZED) code = "AUTHENTICATION_REQUIRED";
       else if (httpStatus == HttpStatus.FORBIDDEN) code = "SCOPE_DENIED";
       if (transportCode != null) httpStatus = restErrorMapper.problemStatus(transportCode, code);
+    }
+    if (problem && !details.containsKey("code")) {
+      details = new java.util.LinkedHashMap<>(details);
+      details.put("code", code);
     }
     RestErrorResponse errorResponse = new RestErrorResponse(code, message);
     errorResponse.setRequestId(requestId);
@@ -86,7 +95,7 @@ public class GatewayErrorHandler {
     if (restriction != null && !restriction.matches("[A-Z][A-Z0-9_]{1,79}")) restriction = null;
     errorResponse.setReasons(
         restriction == null ? java.util.List.of() : java.util.List.of(restriction));
-    if (trustedEnabled) {
+    if (problem) {
       errorResponse.setStatus(httpStatus.value());
       errorResponse.setTitle(httpStatus.getReasonPhrase());
     }
@@ -112,7 +121,7 @@ public class GatewayErrorHandler {
     response
         .getHeaders()
         .setContentType(
-            trustedEnabled ? MediaType.APPLICATION_PROBLEM_JSON : MediaType.APPLICATION_JSON);
+            problem ? MediaType.APPLICATION_PROBLEM_JSON : MediaType.APPLICATION_JSON);
     response.getHeaders().set(REQUEST_ID, requestId);
     String retryAfter = details.get("retryAfterSeconds");
     if (httpStatus == HttpStatus.TOO_MANY_REQUESTS

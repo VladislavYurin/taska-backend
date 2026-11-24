@@ -271,7 +271,7 @@ class TenantPersonalTokenBoundaryTest {
                     List.of("read", "write"),
                     now,
                     now.plusSeconds(2592000),
-                    "test-secret")));
+                    "tsk_pat_" + "x".repeat(43))));
     var forged =
         request(
                 key,
@@ -294,7 +294,7 @@ class TenantPersonalTokenBoundaryTest {
         List.of(PersonalToken.ScopesValue.SCOPES_read, PersonalToken.ScopesValue.SCOPES_write),
         created.getMetadata().getScopesList());
     assertEquals("2026-11-06T12:00:00Z", created.getMetadata().getCreatedAt());
-    assertEquals("test-secret", created.getSecret());
+    assertEquals("tsk_pat_" + "x".repeat(43), created.getSecret());
     verify(store).issue(user, session, tenant, "CI bot", List.of("read", "write"), 30, key, requestId);
     verifyNoMoreInteractions(store);
   }
