@@ -857,10 +857,10 @@ SQL после Billing Prepare проверяет настоящий recovery wo
 финансовый fence снимается, владелец не меняется. Cleanup использует signed owner
 state и не затрагивает общий стенд. Invoice/coverage/mandate синтетические;
 реальные платежи PSP и доставка финансовых писем этим сценарием не подтверждаются.
-При выключенном tenant PAT модуле HTTP проверяет 401. Разрешённый verified PAT
-владельца и PERMISSION_DENIED участника через настоящий gRPC handler проверяет
-`TenantOwnershipTransfersIntegrationTest`; HTTP PAT с включённым модулем требует
-отдельного auth capability source adapter и этим стендом не заявляется.
+С включённым tenant PAT модулем и первичным auth-адаптером сценарий проверяет
+передачу через HTTP PAT владельца и ответ 403 для PAT обычного участника.
+Доменный допуск и gRPC mapping дополнительно проверяет
+`TenantOwnershipTransfersIntegrationTest`.
 
 | REST | operationId | Сценарий | Позитивный статус |
 | --- | --- | --- | --- |

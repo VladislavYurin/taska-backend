@@ -7,11 +7,11 @@ import uuid
 
 import e2e as e
 import trusted_rpc_e2e as t
-from capabilities_e2e import CapabilitiesLocal
+from tenant_tokens_e2e import TenantTokensLocal
 from tenant_rename_e2e import TenantRenameLocal
 
 
-class TenantOwnershipLocal(CapabilitiesLocal):
+class TenantOwnershipLocal(TenantTokensLocal):
     modules = ('auth-service', 'api-gateway', 'tenant-service', 'billing-service')
     identities = t.IDENTITIES + ('billing-service',)
     user = TenantRenameLocal.user
@@ -104,7 +104,7 @@ class TenantOwnershipLocal(CapabilitiesLocal):
         owner.expect('POST', transfer, 428, payload, {'Idempotency-Key': str(uuid.uuid4())})
         owner.expect('POST', transfer, 412, payload, self.headers('99'))
         ordinary.expect('POST', transfer, 403, payload, original)
-        self.pat_client(target, tenant).expect('POST', transfer, 401, payload, original)
+        self.pat_client(target, tenant).expect('POST', transfer, 403, payload, original)
         free_owner.expect('POST', '/api/v1/tenants/' + free_tenant + '/ownership-transfer', 403, payload, self.headers('1'))
         owner.expect('POST', transfer, 400, {'newOwnerUserId': target, 'confirmed': False}, original)
         owner.expect('POST', transfer, 413, {'newOwnerUserId': target, 'confirmed': True, 'padding': 'x' * 20000}, original)
@@ -122,8 +122,9 @@ class TenantOwnershipLocal(CapabilitiesLocal):
         e.require(audit == '1' and revoked == '1', 'Audit или отзыв согласия не были однократными')
         after = self.sql('billing_db', "SELECT jsonb_build_object('periods',(SELECT jsonb_agg(to_jsonb(p) ORDER BY id) FROM taska.subscription_periods p),'invoices',(SELECT jsonb_agg(to_jsonb(i) ORDER BY id) FROM taska.invoices i),'attempts',(SELECT count(*) FROM taska.payment_attempts));").strip()
         e.require(before == after, 'Передача изменила оплаченные факты или создала PSP попытку')
-        current.timeout = 20
-        returned = current.expect('POST', transfer, 200, {'newOwnerUserId': owner_id, 'confirmed': True}, self.headers(changed['version'])).json()
+        pat_owner = self.pat_client(target, tenant)
+        pat_owner.timeout = 20
+        returned = pat_owner.expect('POST', transfer, 200, {'newOwnerUserId': owner_id, 'confirmed': True}, self.headers(changed['version'])).json()
         e.require(returned['ownerId'] == owner_id and returned['ownerVersion'] == '3', 'Владелец не смог вернуть владение')
         admin_id = self.user('ownership-admin@harness.invalid', 'GLOBAL_ADMIN')
         admin = self.web_client(admin_id, assurance='ADMIN_EMAIL_MFA')
@@ -157,7 +158,7 @@ class TenantOwnershipLocal(CapabilitiesLocal):
         e.require(recovered, 'Recovery не отменил PENDING и не снял финансовый fence')
         e.require(owner.expect('GET', path, 200).json()['ownerId'] == owner_id, 'Worker применил неуспешную передачу')
         return {'ownershipRest': 'PASS', 'ownerAndActiveMembership': 'PASS', 'freeAndConfirmationDenied': 'PASS',
-                'exactReplay': 'PASS', 'disabledPatFailsClosed': 'PASS', 'adminMfaBypass': 'PASS', 'oldConsentRevoked': 'PASS', 'financialHistoryPreserved': 'PASS', 'pendingRecovery': 'PASS'}
+                'exactReplay': 'PASS', 'patOwnerAndNonOwner': 'PASS', 'adminMfaBypass': 'PASS', 'oldConsentRevoked': 'PASS', 'financialHistoryPreserved': 'PASS', 'pendingRecovery': 'PASS'}
 
 
 if __name__ == '__main__':

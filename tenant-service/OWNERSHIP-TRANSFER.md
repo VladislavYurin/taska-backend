@@ -57,7 +57,7 @@ Worker читает ограниченную очередь routing IDs, для 
 `TenantOwnershipTransfersIntegrationTest` и `OwnershipTransferBillingIntegrationTest`
 используют PostgreSQL и реальные миграции/RLS. Внешний сценарий
 `python3 scripts/harness/tenant_ownership_e2e.py` поднимает собственные auth,
-gateway, Root и Billing с managed mTLS/JWS. Он проверяет REST, права, подтверждение,
+gateway, Root и Billing с managed mTLS/JWS. Он проверяет REST с web/PAT, права, подтверждение,
 повтор, отзыв согласия и сохранность финансовой истории. Его синтетические
 invoice/coverage/mandate fixtures не доказывают проведение платежа у PSP.
 
