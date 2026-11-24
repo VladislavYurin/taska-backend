@@ -83,9 +83,11 @@ class IssueAclLocal(WorkflowAclLocal):
         issue = core.pop('issue')
         panel = owner.expect('GET', '/api/v1/issues/' + issue, 200).json()
         e.require(panel['issue']['version'] == 3, 'Public panel lost the native version')
-        conflict = owner.expect('PATCH', '/api/v1/issues/' + issue, 412,
+        before = panel
+        conflict = owner.expect('PATCH', '/api/v1/issues/' + issue, 409,
             {'summary': 'Denied stale version'}, {'If-Match': '1'}).json()
-        e.require(conflict['code'] == 'VERSION_CONFLICT', 'Public stale-version problem lost its code')
+        e.require(conflict['details']['code'] == 'VERSION_CONFLICT', 'Stale-version refusal lost its structured cause')
+        e.require(owner.expect('GET', '/api/v1/issues/' + issue, 200).json() == before, 'Stale patch changed issue/history')
         context = owner.expect('GET', '/api/v1/projects/' + project + '/context', 200).json()
         e.require(context['taskQuota']['used'] == 1 and context['taskQuota']['limit'] == 50, 'Project context invented task usage')
         stats = owner.expect('GET', '/api/v1/project-stats', 200).json()
@@ -116,12 +118,17 @@ class IssueAclLocal(WorkflowAclLocal):
         e.require(self.sql('issue_db', "SELECT count(*) FROM taska.issue_history WHERE issue_id='%s';" % issue).strip() == '5', 'History lost or duplicated')
         e.require(self.sql('issue_db', "SELECT lifetime_created FROM taska.project_counters WHERE tenant_id='%s' AND project_id='%s';" % (tenant, project)).strip() == '1', 'Delete reclaimed lifetime quota')
         self.sql('issue_db', "UPDATE taska.project_counters SET lifetime_created=50 WHERE tenant_id='%s' AND project_id='%s';" % (tenant, project))
-        quota = owner.expect('POST', '/api/v1/projects/' + project + '/issues', 422,
+        before = self.issue_state(tenant, project)
+        quota = owner.expect('POST', '/api/v1/projects/' + project + '/issues', 400,
             {'issueType': 'TASK', 'summary': 'Denied quota fixture', 'description': 'Owned fixture', 'priority': 'MEDIUM'},
             {'Idempotency-Key': str(uuid.uuid4())}).json()
-        e.require(quota['code'] == 'QUOTA_EXCEEDED' and quota['quota'] == {'kind': 'TASK_LIFETIME', 'limit': 50, 'used': 50},
-                  'Public quota problem lost authoritative usage')
-        return {**core, **denied, **deleted, **admin, 'archivedWriteDenied': archived['aclReadAndWriteDenial'], 'revokedMembership': 'PASS', 'publicQuotaAndVersionProblems': 'PASS'}
+        e.require(quota['details']['code'] == 'QUOTA_EXCEEDED' and quota['quota'] == {'kind': 'TASK_LIFETIME', 'limit': 50, 'used': 50},
+                  'Quota refusal lost authoritative usage')
+        e.require(self.issue_state(tenant, project) == before, 'Quota refusal changed issue/history/outbox/lifetime state')
+        return {**core, **denied, **deleted, **admin, 'archivedWriteDenied': archived['aclReadAndWriteDenial'], 'revokedMembership': 'PASS', 'quotaAndVersionRefusalStatePreserved': 'PASS'}
+
+    def issue_state(self, tenant, project):
+        return self.sql('issue_db', "SELECT jsonb_build_object('issues',(SELECT count(*) FROM taska.issues WHERE tenant_id='%s'),'history',(SELECT count(*) FROM taska.issue_history WHERE tenant_id='%s'),'outbox',(SELECT count(*) FROM taska.outbox_events WHERE tenant_id='%s'),'lifetime',(SELECT lifetime_created FROM taska.project_counters WHERE tenant_id='%s' AND project_id='%s'));" % (tenant, tenant, tenant, tenant, project)).strip()
 
 
 def main():

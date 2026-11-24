@@ -17,6 +17,8 @@ Non-goals: новая бизнес-политика, ослабление primar
 
 Issue probe различает frozen create receipt и actor-specific read enrichment TAS-363: для пустой watcher fixture чтение обязано явно вернуть watched_by_me=false; все остальные поля GetByKey строго совпадают с исходным receipt.
 
+Негативные issue consumer assertions следуют текущему legacy mapper (409 для VERSION_CONFLICT, 400 для lifetime quota), проверяют structured details и неизменность issue/history/outbox/lifetime. Новый Problem mapping для этих операций не вводится.
+
 ## Risks / Trade-offs
 
 Полный runner может обнаружить дополнительный дефект продукта: его нельзя скрывать изменением ожидаемого success, guard или deadline. Сначала отделить ошибку собственной fixture от подтверждённого runtime дефекта; нерешённые бизнес-вопросы оформить отдельно в Jira. Results/state/logs не входят в Git.

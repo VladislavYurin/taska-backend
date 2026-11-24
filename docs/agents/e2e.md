@@ -65,6 +65,8 @@ This separate local-only tier packages seven real applications and creates owned
 
 Общий protected readiness helper делает только GET и ограниченно ожидает после 503/504 холодных primary/RPC. Остальные неожиданные статусы, включая 401/403, завершают проверку сразу; постоянная недоступность не считается готовностью. Deadline и правила повторов mutation не расширяются.
 
+Issue consumer учитывает actor-specific watched_by_me в чтении TAS-363 отдельно от frozen create receipt, строго сравнивая остальные поля. Его негативные сценарии сверяют действующий legacy mapper: VERSION_CONFLICT даёт 409, lifetime quota — 400; machine cause читается из details. После отказов обязательны неизменность issue/history и issue/history/outbox/lifetime соответственно.
+
 Обычный local `e2e --scenario E2E-08` блокируется до записи из-за несовместимой legacy fixture; stage сохраняет прежний поднабор и собственные prerequisites. This native tier does not prove Kafka delivery, full workflow/issue CRUD, real payments or shared-stage rollout. After shared transport changes also run `python3 scripts/harness/trusted_rpc_e2e.py` for the legacy regression.
 
 ## Opt-in stage
