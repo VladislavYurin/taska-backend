@@ -15,6 +15,8 @@ Non-goals: новая бизнес-политика, ослабление primar
 
 Наследники и consumers проверяются на согласованном результате TAS-363/365. Общие REST/proto/schema не меняются. Сервисные БД раздельные, WebFlux/R2DBC, transactional outbox и границы DB/remote effects остаются прежними.
 
+Issue probe различает frozen create receipt и actor-specific read enrichment TAS-363: для пустой watcher fixture чтение обязано явно вернуть watched_by_me=false; все остальные поля GetByKey строго совпадают с исходным receipt.
+
 ## Risks / Trade-offs
 
 Полный runner может обнаружить дополнительный дефект продукта: его нельзя скрывать изменением ожидаемого success, guard или deadline. Сначала отделить ошибку собственной fixture от подтверждённого runtime дефекта; нерешённые бизнес-вопросы оформить отдельно в Jira. Results/state/logs не входят в Git.

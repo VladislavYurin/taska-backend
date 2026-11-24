@@ -312,8 +312,13 @@ public class IssueAclProbe {
         () -> create(value("project"), UUID.randomUUID().toString(), UUID.randomUUID().toString()),
         Status.Code.PERMISSION_DENIED);
     denied(() -> get(value("foreignIssue")), Status.Code.NOT_FOUND);
+    var resolved = byKey(first.getIssueKey());
     require(
-        byKey(first.getIssueKey()).equals(first), "GetByKey did not resolve the selected tenant");
+        resolved.hasWatchedByMe() && !resolved.getWatchedByMe(),
+        "GetByKey lost current actor watch state for an unwatched issue");
+    require(
+        resolved.equals(first.toBuilder().setWatchedByMe(false).build()),
+        "GetByKey changed the selected tenant issue beyond watch-state enrichment");
     String patchKey = UUID.randomUUID().toString();
     var changed = patch(first.getId(), 1, patchKey);
     require(changed.getIssue().getVersion() == 2, "Patch version did not advance once");
