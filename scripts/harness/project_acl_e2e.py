@@ -126,8 +126,11 @@ class ProjectAclLocal(CapabilitiesLocal):
         project, foreign = projects
         # FREE has one slot. This is quota admission, before duplicate-key handling.
         before = self.project_state(first)
-        owner.expect('POST', '/api/v1/projects', 400, {'projectKey': 'NO_SLOT', 'name': 'Quota denied'},
-                     {'Idempotency-Key': str(uuid.uuid4())})
+        denial = owner.expect('POST', '/api/v1/projects', 400,
+                              {'projectKey': 'NO_SLOT', 'name': 'Quota denied'},
+                              {'Idempotency-Key': str(uuid.uuid4())}).json()
+        e.require(denial['details']['code'] == 'QUOTA_EXCEEDED'
+                  and denial['details']['quota.kind'] == 'PROJECT', 'Quota denial lost its structured cause')
         e.require(self.project_state(first) == before, 'Quota denial changed project/member/outbox state')
         e.require(self.sql('tenant_db', "SELECT used||'/'||reserved FROM taska.quota_counters WHERE tenant_id='%s' AND resource='PROJECT';" % first).strip() == '1/0', 'Rejected admission leaked quota')
         owner.expect('GET', '/api/v1/projects/' + foreign, 404)
