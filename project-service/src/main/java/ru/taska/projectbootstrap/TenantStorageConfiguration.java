@@ -1,10 +1,17 @@
 package ru.taska.projectbootstrap;
 
-import io.grpc.*;
+import io.grpc.Metadata;
+import io.grpc.ServerCall;
+import io.grpc.ServerCallHandler;
+import io.grpc.ServerInterceptor;
+import io.grpc.Status;
 import io.r2dbc.spi.ConnectionFactory;
 import java.time.Duration;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.context.annotation.*;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.DependsOn;
+import org.springframework.context.annotation.Profile;
 import org.springframework.grpc.server.GlobalServerInterceptor;
 import org.springframework.r2dbc.core.DatabaseClient;
 import ru.taska.projectstorage.TenantProjectStore;
@@ -205,6 +212,9 @@ public class TenantStorageConfiguration {
     policies.put(
         ru.taska.api.b2b.v1.ProjectInitializationServiceGrpc.getRecoverMethod().getFullMethodName(),
         new ru.taska.security.tenant.RpcContextSecurity.Policy(true, true));
+    policies.put(
+        ru.taska.api.b2b.v1.ProjectRecipientServiceGrpc.getCheckMethod().getFullMethodName(),
+        new ru.taska.security.tenant.RpcContextSecurity.Policy(true, false));
     ServerInterceptor quota =
         security == null
             ? null

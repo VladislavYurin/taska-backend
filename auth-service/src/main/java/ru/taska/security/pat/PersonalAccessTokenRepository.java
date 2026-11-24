@@ -11,7 +11,7 @@ import reactor.core.publisher.Mono;
 public interface PersonalAccessTokenRepository extends ReactiveCrudRepository<PersonalAccessToken, UUID> {
     Mono<PersonalAccessToken> findByTokenHash(String hash);
 
-    @Query("SELECT * FROM taska.personal_access_tokens WHERE user_id=:userId AND revoked_at IS NULL ORDER BY created_at DESC,id DESC")
+    @Query("SELECT p.*,g.tenant_id FROM taska.personal_access_tokens p LEFT JOIN taska.integration_grants g ON g.id=p.integration_grant_id AND g.user_id=p.user_id WHERE p.user_id=:userId AND p.revoked_at IS NULL ORDER BY p.created_at DESC,p.id DESC")
     Flux<PersonalAccessToken> listOwned(UUID userId);
 
     @Query("SELECT count(*) FROM taska.personal_access_tokens WHERE user_id=:userId AND revoked_at IS NULL AND expires_at>:now")

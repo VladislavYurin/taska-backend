@@ -33,6 +33,7 @@ Harness объединяет инструкции, доступные инстр
 | Workflow | `workflow-service` | граф, типы, версии, резервирования; [привязки](../tas-436-workflow-type-bindings.md), [native RPC/ACL](../../workflow-service/TENANT-API.md) |
 | Задачи | `issue-service` | [Native CRUD/ACL](../../issue-service/TENANT-API.md), If-Match, идемпотентность, поиск/доска, история, связи, worklogs; [удаление типа](../tas-433-issue-type-deletion.md) |
 | События и уведомления | `common-lib`, `kafka-lib`, `notification-service` | атомарность outbox, дедупликация, каналы; [Telegram](../tas-387-telegram-notifications.md) |
+| Метки и watchers | [Native metadata TAS-363](../../issue-service/LABELS-WATCHERS.md), issue/project/auth/root | Scoped FK/RLS, current target/recipients, atomic history/outbox, native RPC и owned E2E |
 | Файлы | `storage-lib`, `auth-service`, `issue-service` | presigned URL, confirm, размер/MIME, доступ и очистка объектов |
 | Администрирование | [admin-service](../../admin-service/README.md) | session-only guards, безопасное чтение, аудит, повтор outbox |
 | MCP | [mcp-server](../../mcp-server/README.md) | schemas, catalog snapshot, scopes, owner isolation, REST dispatch |

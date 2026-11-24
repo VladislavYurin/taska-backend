@@ -128,7 +128,7 @@ public final class TenantCapabilities {
               if (!tenant.equals(verified.tenantId())
                   || !"getTenantCapabilities".equals(verified.action())
                   || !verified.scopes().contains("read")) return Mono.error(denied());
-              var target = new Target(UUID.fromString(tenant), null, null, null);
+              var target = new Target(UUID.fromString(tenant), null, UUID.fromString(verified.actorId()), null);
               var frame = new AtomicReference<Frame>();
               var source =
                   new VersionedCapabilitySource(
@@ -242,7 +242,7 @@ public final class TenantCapabilities {
                                                                   return new CapabilityFacts(
                                                                       UUID.fromString(
                                                                           context.actorId()),
-                                                                      target,
+                                                                      t,
                                                                       context.requestId(),
                                                                       until,
                                                                       new Identity(
@@ -296,7 +296,7 @@ public final class TenantCapabilities {
               // broker
               // invalidation.
               return new CapabilityEvaluator(source, clock)
-                  .decisions(CapabilityEvaluator.tenantActions(), target)
+                  .decisions(companyActions(), target)
                   .map(
                       decisions -> {
                         Frame f = frame.get();
@@ -351,6 +351,12 @@ public final class TenantCapabilities {
                 default -> unavailable();
               };
             });
+  }
+
+  public static Set<Action> companyActions() {
+    var actions = EnumSet.copyOf(CapabilityEvaluator.tenantActions());
+    actions.add(Action.PAT_CREATE);
+    return Collections.unmodifiableSet(actions);
   }
 
   private static DomainException denied() {

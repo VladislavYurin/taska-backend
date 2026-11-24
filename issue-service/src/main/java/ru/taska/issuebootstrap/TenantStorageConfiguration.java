@@ -257,7 +257,7 @@ SELECT current_user='taska_issue_app' AND NOT
             ru.taska.api.b2b.v1.ProjectQuotaReadServiceGrpc.getGetTenantTaskQuotaSummaryMethod()
                 .getFullMethodName()))
       policies.put(method, new ru.taska.security.tenant.RpcContextSecurity.Policy(true, false));
-    // Разрешены только реализованные нативные CRUD-методы; поиск, доска и вложенные домены закрыты.
+    // Разрешены реализованные CRUD, метки и подписки; поиск и остальные домены закрыты.
     ru.taska.security.tenant.RpcRoutePolicies.policies("issue-service")
         .forEach(
             (rpc, policy) -> {
@@ -273,7 +273,18 @@ SELECT current_user='taska_issue_app' AND NOT
                       "UpdateIssue",
                       "AssignIssue",
                       "TransitionIssue",
-                      "DeleteIssue")
+                      "DeleteIssue",
+                      "CreateProjectLabel",
+                      "UpdateProjectLabel",
+                      "DeleteProjectLabel",
+                      "ListProjectLabels",
+                      "AddIssueLabel",
+                      "RemoveIssueLabel",
+                      "ListIssueLabels",
+                      "WatchIssue",
+                      "UnwatchIssue",
+                      "ListIssueWatchers",
+                      "GetIssueWatchState")
                   .contains(method)) policies.put(rpc, policy);
             });
     policies.put(ru.taska.api.issue.attachment.v1.IssueAttachmentServiceGrpc.getCreateAttachmentUploadUrlMethod().getFullMethodName(),new ru.taska.security.tenant.RpcContextSecurity.Policy(true,true));
@@ -282,6 +293,9 @@ SELECT current_user='taska_issue_app' AND NOT
     policies.put(ru.taska.api.issue.attachment.v1.AttachmentAdmissionServiceGrpc.getCheckAdmissionMethod().getFullMethodName(),new ru.taska.security.tenant.RpcContextSecurity.Policy(true,false));
     policies.put(
         ru.taska.api.b2b.v1.ProjectLabelsServiceGrpc.getReadMethod().getFullMethodName(),
+        new ru.taska.security.tenant.RpcContextSecurity.Policy(true, false));
+    policies.put(
+        ru.taska.api.b2b.v1.IssueRecipientServiceGrpc.getResolveMethod().getFullMethodName(),
         new ru.taska.security.tenant.RpcContextSecurity.Policy(true, false));
     ServerInterceptor quotaSecurity =
         trust == null

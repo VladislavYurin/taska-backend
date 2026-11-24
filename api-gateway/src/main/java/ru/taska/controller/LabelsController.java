@@ -104,7 +104,7 @@ public class LabelsController implements LabelsApi {
             ServerWebExchange exchange
     ) {
         return executor.execute(exchange, EndpointSecurity.PROTECTED, context ->
-                grpcClient.addIssueLabel(issueId.toString(), requestDto, context)
+                grpcClient.addIssueLabel(projectId.toString(), issueId.toString(), requestDto, context)
                         .map(response -> ResponseEntity.status(HttpStatus.CREATED).body(response))
         );
     }
@@ -120,7 +120,7 @@ public class LabelsController implements LabelsApi {
             ServerWebExchange exchange
     ) {
         return executor.execute(exchange, EndpointSecurity.PROTECTED, context ->
-                grpcClient.removeIssueLabel(issueId.toString(), labelId.toString(), context)
+                grpcClient.removeIssueLabel(projectId.toString(), issueId.toString(), labelId.toString(), context)
                         .thenReturn(ResponseEntity.noContent().build())
         );
     }
@@ -135,7 +135,7 @@ public class LabelsController implements LabelsApi {
             ServerWebExchange exchange
     ) {
         return executor.execute(exchange, EndpointSecurity.PROTECTED, context ->
-                grpcClient.listIssueLabels(issueId.toString(), context)
+                grpcClient.listIssueLabels(projectId.toString(), issueId.toString(), context)
                         .map(ResponseEntity::ok)
         );
     }

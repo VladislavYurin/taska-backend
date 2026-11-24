@@ -40,14 +40,17 @@ public class GrpcConnectedAppsClient {
   }
 
   public Mono<Void> revoke(UUID appId, String session, GatewayContext context) {
+    return revoke(appId, null, session, context);
+  }
+
+  public Mono<Void> revoke(UUID appId, UUID tenantId, String session, GatewayContext context) {
+    var request = RevokeConnectedAppRequest.newBuilder()
+        .setHeader(MappingUtils.buildGrpcHeader(context))
+        .setUserId(context.userContext().userId().toString())
+        .setSessionAccessToken(session).setAppId(appId.toString());
+    if (tenantId != null) request.setTenantId(tenantId.toString());
     return ru.taska.security.tenant.RpcContextBridge.outbound(() -> dynamicStub()
-        .revokeConnectedApp(
-            RevokeConnectedAppRequest.newBuilder()
-                .setHeader(MappingUtils.buildGrpcHeader(context))
-                .setUserId(context.userContext().userId().toString())
-                .setSessionAccessToken(session)
-                .setAppId(appId.toString())
-                .build()))
+        .revokeConnectedApp(request.build()))
         .then();
   }
 
@@ -59,6 +62,7 @@ public class GrpcConnectedAppsClient {
   private static ConnectedAppDto app(ConnectedApp value) {
     return new ConnectedAppDto()
         .appId(UUID.fromString(value.getAppId()))
+        .tenantId(value.hasTenantId() ? UUID.fromString(value.getTenantId()) : null)
         .name(value.getName())
         .host(value.getHost())
         .metadataUrl(value.hasMetadataUrl() ? java.net.URI.create(value.getMetadataUrl()) : null)

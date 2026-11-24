@@ -28,6 +28,12 @@ MODULES = ('auth-service', 'project-service', 'workflow-service', 'issue-service
 LABEL = 'dev.taska.harness.owner'
 RUN_PATTERN = r'[0-9a-f]{16}'
 ASSERTIONS = 0
+# This runner's local Compose fixture has no trusted tenant transport. Native
+# project writes have a separate owned runner; never synthesize a tenant here.
+LOCAL_SCENARIO_BLOCKERS = {
+    'E2E-08': 'Legacy Compose fixture lacks verified tenant context required by project outbox v2 '
+              '(TAS-545). Use python3 scripts/harness/project_outbox_e2e.py for native project/outbox acceptance.'
+}
 
 
 class Invalid(ValueError):
@@ -806,9 +812,14 @@ def _handle(args, root):
     old_handler = signal.getsignal(signal.SIGTERM)
     signal.signal(signal.SIGTERM, lambda *_: (_ for _ in ()).throw(KeyboardInterrupt()))
     try:
-        runnable = [i for i in ids if i in ('E2E-01', 'E2E-08')]
+        runnable = []
         for i in ids:
-            if i not in runnable:
+            if args.tier == 'local' and i in LOCAL_SCENARIO_BLOCKERS:
+                report['results'].append({'scenarioId': i, 'checkId': i + '.backend', 'status': 'BLOCKED',
+                    'reason': LOCAL_SCENARIO_BLOCKERS[i], 'testCount': 0, 'assertionScope': []})
+            elif i in ('E2E-01', 'E2E-08'):
+                runnable.append(i)
+            else:
                 report['results'].append({'scenarioId': i, 'checkId': i + '.manual', 'status': 'BLOCKED',
                     'reason': 'Manual scenario; required actors/capabilities not automated. See e2e.md',
                     'testCount': 0, 'assertionScope': []})

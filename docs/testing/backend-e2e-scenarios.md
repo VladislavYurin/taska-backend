@@ -130,9 +130,13 @@
 
 **Очистка:** P/Q архивировать только после зависимых сценариев; собственных участников удалить до архивации, сохранив одного ADMIN.
 
+### Native project/outbox subset TAS-545
+
+`python3 scripts/harness/project_outbox_e2e.py`: собственная native fixture проверяет tenant provenance, один outbox event на создание, replay/conflict, отказ MEMBER с сохранностью состояния при native создании и bootstrap compensation без проекта/занятой квоты/успешного `ProjectCreated`. История `ProjectProvisioned` сохраняется. [Scope и cleanup](../agents/e2e.md#native-project-outbox-tas-545). Это отдельный поднабор; полный ACL runner требует согласования в [TAS-546](https://jira.ozero.dev/browse/TAS-546).
+
 ### Native variant TAS-340
 
-Owned local tier: `python3 scripts/harness/project_acl_e2e.py`; [runtime/setup/cleanup](../../project-service/TENANT-API.md). The ordinary HTTP runner retains its legacy subset.
+Owned local tier: `python3 scripts/harness/project_acl_e2e.py`; [runtime/setup/cleanup](../../project-service/TENANT-API.md). Обычный `harness.py e2e --tier local --scenario E2E-08` возвращает BLOCKED до provisioning/записи: legacy fixture не предоставляет verified tenant, обязательный для outbox v2 (TAS-545). Это ограничение runner, а не успешная приёмка пунктов выше. Opt-in stage сохраняет прежний поднабор с отдельными prerequisites; [границы runner](../agents/e2e.md).
 
 Against real Auth/Root/Billing and native project/workflow/issue app roles, verify implicit tenant administration, current grant generations, same-company member targets, path/context/batch/stats/direct RPC isolation, actual administrative MFA/audit and current authority on create replay. A retry with the same UUID key uses one resource/slot/event; a different payload conflicts. Settings/types and the complete workflow graph must exist before OPEN. Confirmed initialization rejection compensates owned resources/reservation. Unknown outcome retains the slot; the scoped worker completes the same accepted operation after initiating-credential revocation and creation flag-off, without another admission.
 
@@ -330,6 +334,8 @@ This proves the named subset, not full product E2E, Kafka delivery or stand roll
 
 1. `POST /api/v1/issues/{I1}/links` с `{"targetIssueId":"${I2}","linkType":"BLOCKS"}`: 201; `GET /api/v1/issues/{I1}/links` и `GET /api/v1/issues/{I2}/links` 200, противоположные направления/viewLinkType и targetIssue согласованы. Самоссылка, дубликат, неизвестный linkType и связь в чужой проект отклоняются по правилам доступа.
 2. `DELETE /api/v1/issues/{I1}/links/{linkId}`: 204; связь отсутствует с обеих сторон.
+Native TAS-363: `python3 scripts/harness/issue_metadata_e2e.py` автоматизирует поднабор E2E-21 на собственных семи приложениях: labels/watchers REST, роли, current target/account, mTLS purpose-bound resolver, однократные эффекты и privacy. Это не email/Telegram delivery E2E и не позитивная проверка search/board TAS-344.
+
 3. A `POST /api/v1/projects/{P}/labels` с `{"name":"E2E ${RUN}","color":"#0052CC"}`: 201; `GET /api/v1/projects/{P}/labels`: 200. `PATCH /api/v1/projects/{P}/labels/{labelId}` с name/color: 200; повторное имя/неправильный HEX/слишком длинное имя — отказ без порчи прежней метки. MEMBER не создаёт/редактирует/удаляет проектную метку.
 4. M `POST /api/v1/projects/{P}/issues/{id}/labels` с labelId: 201; list labels и карточка/list/search/board содержат одну метку с актуальными name/color. Чужая project label не привязывается. `DELETE /api/v1/projects/{P}/issues/{id}/labels/{labelId}` у задачи — 204, проектная метка остаётся.
 5. `PUT /api/v1/projects/{P}/issues/{id}/watchers/me`: 200; повтор не дублирует подписку, GET watchers и isWatching согласованы. `DELETE /api/v1/projects/{P}/issues/{id}/watchers/me`: 200, повтор не затрагивает других. Проверить auto-watch reporter/assignee при включённых настройках.
@@ -805,3 +811,24 @@ Cleanup: закрыть каналы/серверы/pools и удалить со
 ## Независимая пауза и блокировка компании (TAS-480)
 
 `python3 scripts/harness/tenant_restrictions_e2e.py` поднимает семь собственных native приложений с primary auth/root/billing и managed mTLS/JWS. Проверяет owner/admin MFA, независимые причины, CAS/replay/conflict/concurrency, READ_WHILE_RESTRICTED true/false на реальном project read/write, доступность metadata/lifecycle и financial capability, неизменность subscription/period/payment state и отсутствие private audit reason в событиях. Не заявляет отсутствующий members REST или live PSP charges. Admission/reconciliation autopay и missing/offline root отдельно проверяет AutopayIntegrationTest на PostgreSQL; источник payment-state получает причины из root snapshot. Cleanup только ownership-checked, общий стенд не затрагивается.
+
+## E2E-47. Токен одной компании через REST (TAS-542)
+
+Локальный runner: `python3 scripts/harness/tenant_tokens_e2e.py`. Только собственный стек
+с реальными auth/tenant/billing, PostgreSQL и mTLS/JWS; managed trust и receipt key обязательны.
+
+1. WEB_TENANT компании A на FREE без FREE_PERSONAL_API_TOKENS получает 403 CAPABILITY_DISABLED;
+   токен, grant и receipt не создаются. Включить флаг только в собственной fixture.
+2. Выпустить PAT через POST /api/v1/account/tenant-tokens с UUID ключом. Проверить 201,
+   no-store, tenantId, prefix и scopes (write включает read). Повтор в 60 секунд даёт
+   тот же секрет и одну строку токена.
+3. С сессией A указать B: 403 TENANT_MISMATCH без нового токена. По выданному PAT выпуск
+   ещё одного PAT запрещён. GET metadata возвращает компанию, но не секрет.
+4. Отозвать токен обычной веб-сессией; прежний секрет больше не аутентифицирует запрос.
+   Выключить PERSONAL_API_TOKENS в собственной fixture: pat.create и POST запрещены,
+   disabledFlags различает общий и FREE-флаг. После отказов число токенов не растёт.
+5. Cleanup удаляет только owned Compose project и fixtures; отчёты/секреты остаются вне Git.
+
+Дополнительные проверки модулей: scopes/срок/лимит, receipt conflict/expiry, актуальность
+membership/credential, source outage и startup; HTTP→gRPC OAuth metadata и scoped revoke;
+production OAuth admission отвергает FREE_MCP до записи. Полный браузерный consent — TAS-543.
