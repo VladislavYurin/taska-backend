@@ -72,9 +72,11 @@ final class RpcMessageClaims {
         && c.getCredentialKind() != CredentialKind.CREDENTIAL_KIND_WEB_TENANT)
       throw Status.PERMISSION_DENIED.asRuntimeException();
     String scope =
-        route.scope().equals("GLOBAL_TENANT_LIST")
-            ? "tenants:select"
-            : route.mutation() ? "write" : "read";
+        route.scope().equals("TENANT_STORAGE_ADMISSION")
+            ? storageAdmissionScope(request)
+            : route.scope().equals("GLOBAL_TENANT_LIST")
+                ? "tenants:select"
+                : route.mutation() ? "write" : "read";
     if (!c.getScopesList().contains(scope)
         && !(route.scope().equals("GLOBAL_SELF_SESSION_FOR_MUTATION")
             && c.getScopesList().contains(route.mutation() ? "account:write" : "account:read")))
@@ -88,6 +90,12 @@ final class RpcMessageClaims {
                 || route.scope().equals("GLOBAL_SELF_SESSION_FOR_MUTATION"))
             && !java.util.Set.of("getUserProfile", "getUserDetailsByIds", "getAvatarDownloadUrl")
                 .contains(route.action()));
+  }
+
+  private static String storageAdmissionScope(Message request) {
+    if (!(request instanceof ru.taska.api.issue.attachment.v1.AttachmentAdmissionRequest q))
+      throw Status.PERMISSION_DENIED.asRuntimeException();
+    return q.getPhase().equals("READ") ? "read" : "write";
   }
 
   private static boolean hasAdministrativeClaims(TrustedTenantContext context) {

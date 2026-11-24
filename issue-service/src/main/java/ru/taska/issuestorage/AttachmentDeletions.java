@@ -48,16 +48,58 @@ public final class AttachmentDeletions {
                 owner
                     .deleteConfirmed(
                         claim.item().reservation(), StorageQuotaOwner.Use.DIRECT_DELETE)
-                    .flatMap(receipt -> root.releaseUsage(receipt.reservation()))
+                    .onErrorMap(e -> new AttemptFailure("PURGE", e))
+                    .flatMap(
+                        receipt ->
+                            root.releaseUsage(receipt.reservation())
+                                .onErrorMap(e -> new AttemptFailure("RELEASE", e)))
                     .timeout(Duration.ofSeconds(20))
                     .then(store.finish(claim, null))
                     .map(done -> done ? 0 : 1)
                     .onErrorResume(
-                        e ->
-                            store
-                                .finish(claim, integrity(e) ? "DATA_LOSS" : "RETRY_REQUIRED")
-                                .thenReturn(integrity(e) ? 2 : 1)))
+                        e -> store.finish(claim, failureCode(e)).thenReturn(integrity(e) ? 2 : 1)))
         .defaultIfEmpty(3);
+  }
+
+  private static final class AttemptFailure extends RuntimeException {
+    private final String phase;
+
+    AttemptFailure(String phase, Throwable cause) {
+      super(null, cause);
+      this.phase = phase;
+    }
+  }
+
+  /** Only bounded protocol codes are retained; never exception text, keys or credentials. */
+  static String failureCode(Throwable e) {
+    if (integrity(e)) return "DATA_LOSS";
+    String phase = e instanceof AttemptFailure a ? a.phase : "ATTEMPT";
+    Throwable cause = e instanceof AttemptFailure ? e.getCause() : e;
+    String code =
+        cause instanceof DomainException d
+            ? d.getStatus().name()
+            : io.grpc.Status.fromThrowable(cause).getCode().name();
+    if (cause instanceof java.util.concurrent.TimeoutException) code = "TIMEOUT";
+    String message =
+        cause instanceof io.grpc.StatusRuntimeException g
+            ? g.getStatus().getDescription()
+            : cause.getMessage();
+    for (String known :
+        java.util.Set.of(
+            "PUT_WINDOW_STILL_OPEN",
+            "OWNED_OBJECT_CLEANUP_PENDING",
+            "BOUND_STORAGE_RECOVERY_REQUIRED",
+            "ACCEPTED_DELETION_REQUIRED",
+            "ORIGINAL_ACTOR_REQUIRED",
+            "ROOT_COMMIT_REQUIRED",
+            "STORAGE_POLICY_UNAVAILABLE",
+            "UPLOAD_INTENT_MISMATCH",
+            "DELETE_INTENT_MISSING"))
+      if (known.equals(message)) {
+        code = known;
+        break;
+      }
+    return phase + "_" + code;
   }
 
   private static Mono<Void> recovery() {

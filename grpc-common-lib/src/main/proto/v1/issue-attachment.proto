@@ -347,6 +347,7 @@ message DeleteAttachmentRequestBody {
 }
 
 // Приватная проверка исходных actor/credential и локального upload intent для quota owner.
+// Scope по фазе: READ требует read; admission/finish/delete phases требуют write.
 service AttachmentAdmissionService {
   rpc CheckAdmission(AttachmentAdmissionRequest) returns (AttachmentAdmissionGrant);
   rpc ReconcileUploads(ReconcileAttachmentUploadsRequest) returns (ReconcileAttachmentUploadsResponse);

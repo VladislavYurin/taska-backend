@@ -151,6 +151,8 @@ class AttachmentLifecycleLocal(AttachmentUploadLocal):
         while time.monotonic() < deadline:
             remaining = float(self.sql('issue_db', "SELECT greatest(0,extract(epoch FROM (put_not_after-now()))) FROM taska.attachment_uploads WHERE id='%s';" % file['id']).strip())
             attempts = int(self.sql('issue_db', "SELECT attempts FROM taska.attachment_deletion_jobs WHERE attachment_id='%s';" % file['id']).strip())
+            code = self.sql('issue_db', "SELECT coalesce(last_code,'') FROM taska.attachment_deletion_jobs WHERE attachment_id='%s';" % file['id']).strip()
+            e.require(not code or code in ('PURGE_PUT_WINDOW_STILL_OPEN', 'PURGE_UNKNOWN', 'PURGE_UNAVAILABLE'), 'Unexpected cleanup refusal: ' + code)
             if remaining == 0:
                 before = attempts
                 break
@@ -160,7 +162,7 @@ class AttachmentLifecycleLocal(AttachmentUploadLocal):
         deadline = time.monotonic() + 80
         while time.monotonic() < deadline:
             state = self.sql('issue_db', "SELECT attempts||'/'||coalesce(last_code,'') FROM taska.attachment_deletion_jobs WHERE attachment_id='%s';" % file['id']).strip().split('/')
-            if int(state[0]) > before and state[1] == 'RETRY_REQUIRED':
+            if int(state[0]) > before and state[1] in ('PURGE_UNKNOWN', 'PURGE_UNAVAILABLE'):
                 break
             time.sleep(2)
         else:
@@ -177,7 +179,8 @@ class AttachmentLifecycleLocal(AttachmentUploadLocal):
                 break
             time.sleep(2)
         else:
-            raise e.Failure('Fresh SERVICE worker did not complete retained deletion')
+            code = self.sql('issue_db', "SELECT coalesce(last_code,'') FROM taska.attachment_deletion_jobs WHERE attachment_id='%s';" % file['id']).strip()
+            raise e.Failure('Fresh SERVICE worker did not complete retained deletion: ' + code)
         e.require(self.sql('tenant_db', "SELECT used FROM taska.quota_counters WHERE tenant_id='%s' AND resource='STORAGE_BYTES';" % tenant).strip() == '9', 'Release usage amount differs')
         e.require(self.sql('tenant_db', "SELECT count(*) FROM taska.quota_effects WHERE tenant_id='%s' AND resource='STORAGE_BYTES' AND effect_kind='RELEASE_USAGE';" % tenant).strip() == '1', 'Release usage duplicated')
         keys = self.sql('issue_db', "SELECT object_key||'|'||staging_object_key FROM taska.attachment_object_manifest WHERE id='%s';" % file['id']).strip().split('|')

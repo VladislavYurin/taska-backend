@@ -1255,7 +1255,7 @@
     {
       "rpc": "ru.taska.issue.attachment.v1.AttachmentAdmissionService/CheckAdmission",
       "audience": "issue-service",
-      "scope": "TENANT",
+      "scope": "TENANT_STORAGE_ADMISSION",
       "tenantRequired": true,
       "mutation": false,
       "action": "checkAttachmentAdmission",
