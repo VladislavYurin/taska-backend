@@ -97,6 +97,16 @@ class TenantPersonalTokenHttpTest {
     assertThat(writes.get()).isEqualTo(1);
   }
 
+  @Test void nonCanonicalAndDuplicateKeysNeverIssue() {
+    for (String key : new String[]{"ABCDEF00-0000-4000-8000-000000000001", "1-1-1-1-1"})
+      http.post().uri("/api/v1/account/tenant-tokens").header("Idempotency-Key", key)
+          .bodyValue(body(tenant)).exchange().expectStatus().isBadRequest();
+    http.post().uri("/api/v1/account/tenant-tokens")
+        .header("Idempotency-Key", UUID.randomUUID().toString(), UUID.randomUUID().toString())
+        .bodyValue(body(tenant)).exchange().expectStatus().isBadRequest();
+    assertThat(writes.get()).isZero();
+  }
+
   @Test void wrongCompanyPatAndInvalidInputNeverIssue() {
     http.post().uri("/api/v1/account/tenant-tokens").header("Idempotency-Key", UUID.randomUUID().toString())
         .bodyValue(body(UUID.randomUUID())).exchange().expectStatus().isForbidden().expectBody()

@@ -5220,6 +5220,7 @@ components:
           minLength: 1
           maxLength: 100
         scopes:
+          description: write включает read; сервис сохраняет и возвращает канонический набор read,write.
           type: array
           items:
             type: string

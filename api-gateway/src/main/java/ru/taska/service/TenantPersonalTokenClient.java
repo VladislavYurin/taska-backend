@@ -60,8 +60,11 @@ public class TenantPersonalTokenClient {
                 .tenantId(UUID.fromString(token.getTenantId())).name(token.getName()).tokenPrefix(token.getTokenPrefix())
                 .createdAt(OffsetDateTime.parse(token.getCreatedAt())).expiresAt(OffsetDateTime.parse(token.getExpiresAt()))
                 .revoked(token.getRevoked()).lastUsedAt(token.hasLastUsedAt() ? OffsetDateTime.parse(token.getLastUsedAt()) : null);
-            for (var scope : token.getScopesList()) metadata.addScopesItem(
-                TenantPersonalTokenDto.ScopesEnum.fromValue(scope == PersonalToken.ScopesValue.SCOPES_read ? "read" : "write"));
+            for (var scope : token.getScopesList()) metadata.addScopesItem(switch (scope) {
+              case SCOPES_read -> TenantPersonalTokenDto.ScopesEnum.READ;
+              case SCOPES_write -> TenantPersonalTokenDto.ScopesEnum.WRITE;
+              default -> throw Status.UNAVAILABLE.withDescription("Invalid token scopes").asRuntimeException();
+            });
             return new TenantPersonalTokenCreatedDto().metadata(metadata).secret(result.getSecret());
           });
     });

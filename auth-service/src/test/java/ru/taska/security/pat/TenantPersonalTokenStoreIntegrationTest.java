@@ -178,6 +178,10 @@ class TenantPersonalTokenStoreIntegrationTest {
     assertEquals(A, rows.stream().filter(r -> r.getId().equals(a.tokenId())).findFirst().orElseThrow().getTenantId());
     assertEquals(B, rows.stream().filter(r -> r.getId().equals(b.tokenId())).findFirst().orElseThrow().getTenantId());
     assertTrue(repository.listOwned(UUID.randomUUID()).collectList().block(WAIT).isEmpty());
+    db.sql("UPDATE taska.integration_grants SET revoked_at=now(),version=version+1 WHERE tenant_id=:tenant")
+        .bind("tenant", A).then().block(WAIT);
+    var historical = repository.listOwned(USER).filter(r -> r.getId().equals(a.tokenId())).blockFirst(WAIT);
+    assertEquals(A, historical.getTenantId());
   }
 
   @Test
