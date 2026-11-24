@@ -37,9 +37,10 @@ class ProjectOutboxLocal(IssueAclLocal):
         member = str(uuid.uuid4())
         self.sql('auth_db', "INSERT INTO taska.users(id,email,display_name,status,global_role) VALUES('%s','owned-outbox@harness.invalid','Owned member','ACTIVE','USER');" % member)
         self.sql('tenant_db', "INSERT INTO taska.tenant_memberships(tenant_id,user_id,role,status) VALUES('%s','%s','MEMBER','ACTIVE');" % (tenant, member))
-        client, _ = self.member_client(tenant, member, 1)
+        member_client, _ = self.member_client(tenant, member, 1)
         before = self.domain_state(tenant)
-        client.expect('POST', '/api/v1/projects', 403, {'projectKey': 'DENIED', 'name': 'Denied'})
+        member_client.expect('POST', '/api/v1/projects', 403, {'projectKey': 'DENIED', 'name': 'Denied'},
+                             {'Idempotency-Key': str(uuid.uuid4())})
         e.require(self.domain_state(tenant) == before, 'Denied creation changed projects/members/outbox/quota')
 
         failed = self.recovery_tenant
@@ -47,7 +48,7 @@ class ProjectOutboxLocal(IssueAclLocal):
         self.sql('billing_db', "INSERT INTO taska.subscriptions(tenant_id,selected_plan_version_id,selected_terms_snapshot,mode) SELECT '%s',id,to_jsonb(p),'FREE' FROM taska.catalog_plan_versions p WHERE id='00000000-0000-8000-8000-000000000001';" % failed)
         rejected, _ = self.member_client(failed, actor, 1)
         t.wait_protected_read(rejected, '/api/v1/projects/' + str(uuid.uuid4()), 404)
-        # GatewayErrorHandler maps FAILED_PRECONDITION to HTTP 400. The SQL
+        # RestErrorMapper maps FAILED_PRECONDITION to HTTP 400. The SQL
         # cancellation/outbox/quota checks below establish the actual rejection.
         rejected.expect('POST', '/api/v1/projects', 400, {'projectKey': 'FAIL', 'name': 'No workflow template'}, {'Idempotency-Key': str(uuid.uuid4())})
         deadline = time.monotonic() + 20
@@ -70,8 +71,7 @@ class ProjectOutboxLocal(IssueAclLocal):
                 'scope': 'Собственная REST/mTLS/JWS/RLS fixture; project/outbox rows и квота. Агрегация context, доставка Kafka и stage не проверяются.'}
 
 def main():
-    t.TrustedLocal = ProjectOutboxLocal
-    t.main(description=__doc__, scenario='native-project-outbox')
+    t.main(local_cls=ProjectOutboxLocal, description=__doc__, scenario='native-project-outbox')
 
 
 if __name__ == '__main__':
