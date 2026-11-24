@@ -63,6 +63,8 @@ This separate local-only tier packages seven real applications and creates owned
 
 Негативные сценарии различают исчерпанную FREE quota (HTTP 400 действующего project mapper) и настоящий конфликт projectKey (409 после подтверждённого MFA bypass). В обоих случаях проверяется неизменность project/member/outbox и отсутствие утечки reservation. Подтверждённый отказ bootstrap и неизвестный transport outcome используют разные собственные компании: первая проверяет освобождение квоты, CANCELLED tombstone и сохранение только исторического ProjectProvisioned, вторая — удержание исходного CREATING и его завершение worker. При остановленном workflow допустимы только 503 UNAVAILABLE или 504 DEADLINE_EXCEEDED; проверки quota, видимости и однократного ProjectCreated обязательны в обоих случаях.
 
+Общий protected readiness helper делает только GET и ограниченно ожидает после 503/504 холодных primary/RPC. Остальные неожиданные статусы, включая 401/403, завершают проверку сразу; постоянная недоступность не считается готовностью. Deadline и правила повторов mutation не расширяются.
+
 Обычный local `e2e --scenario E2E-08` блокируется до записи из-за несовместимой legacy fixture; stage сохраняет прежний поднабор и собственные prerequisites. This native tier does not prove Kafka delivery, full workflow/issue CRUD, real payments or shared-stage rollout. After shared transport changes also run `python3 scripts/harness/trusted_rpc_e2e.py` for the legacy regression.
 
 ## Opt-in stage
