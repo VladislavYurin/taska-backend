@@ -450,11 +450,17 @@ public class TenantConfiguration {
 
   @Bean
   @org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
-  StorageQuotaStore.Policy storageQuotaPolicy() {
-    return (c, command, target) ->
+  StorageQuotaStore.Policy storageQuotaPolicy(org.springframework.beans.factory.ObjectProvider<ru.taska.capability.ManagedDomainReads> sources,
+      org.springframework.beans.factory.ObjectProvider<ru.taska.security.tenant.RpcContextSecurity> securities) {
+    return (c,command,target) -> {
+      var reads=sources.getIfAvailable();var security=securities.getIfAvailable();
+      if(reads!=null && security!=null && (target!=null || command==StorageQuotaStore.Command.READ))
+        return new StorageUploadPolicyClient(reads,security).current(c,command,target);
+      return
         Mono.error(
             new ru.taska.exception.DomainException(
                 ru.taska.exception.DomainStatus.UNAVAILABLE, "STORAGE_POLICY_UNAVAILABLE"));
+    };
   }
 
   @Bean
@@ -465,9 +471,11 @@ public class TenantConfiguration {
                   .ReactorStorageQuotaOwnerServiceStub>
           stubs,
       org.springframework.beans.factory.ObjectProvider<ru.taska.security.tenant.RpcContextSecurity>
-          security) {
+          security, org.springframework.beans.factory.ObjectProvider<ru.taska.capability.ManagedDomainReads> sources) {
     var stub = stubs.getIfAvailable();
     var trust = security.getIfAvailable();
+    if(stub==null && sources.getIfAvailable()!=null)
+      stub=ru.taska.api.b2b.v1.ReactorStorageQuotaOwnerServiceGrpc.newReactorStub(sources.getIfAvailable().channel("issue-service"));
     if (stub != null && trust != null)
       return new ru.taska.quota.GrpcStorageQuotaOwner(
           stub, trust, Clock.systemUTC(), "tenant-service");

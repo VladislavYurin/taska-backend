@@ -254,6 +254,9 @@ class BillingCatalogIntegrationTest {
     assertEquals(0, count("global_outbox_events"));
     var free = before.getItems(0);
     var paid = before.getItems(1);
+    assertTrue(free.hasMaxAttachmentBytes());
+    assertEquals("20000000", free.getMaxAttachmentBytes());
+    assertEquals("20000000", paid.getMaxAttachmentBytes());
     assertEquals("0", free.getPrice().getAmountMinor());
     assertEquals("2000", paid.getPrice().getAmountMinor());
     assertEquals(PlanVersion.KindValue.KIND_FREE, free.getKind());

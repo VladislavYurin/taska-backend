@@ -43,6 +43,42 @@ class StructuredErrorResponseTest {
   }
 
   @Test
+  void storageQuotaProblemIsLimitedToTrustedUploadAdmission() {
+    var details = Map.of("code", "QUOTA_EXCEEDED", "quota.kind", "STORAGE_BYTES");
+    var error = GrpcExceptionMapper.toStatusRuntimeException(
+        new DomainException(DomainStatus.FAILED_PRECONDITION, "Storage limit reached", details));
+    String upload = "/api/v1/projects/p/issues/i/attachments/upload-url";
+    org.springframework.test.util.ReflectionTestUtils.setField(handler, "trustedEnabled", true);
+    var admitted = MockServerWebExchange.from(MockServerHttpRequest.post(upload));
+    handler.handleError(admitted, error, "quota-trace").block();
+    assertThat(admitted.getResponse().getStatusCode().value()).isEqualTo(422);
+    assertThat(admitted.getResponse().getHeaders().getContentType())
+        .isEqualTo(org.springframework.http.MediaType.APPLICATION_PROBLEM_JSON);
+    var body = json.readTree(admitted.getResponse().getBodyAsString().block());
+    assertThat(body.path("code").asString()).isEqualTo("QUOTA_EXCEEDED");
+    assertThat(body.path("details").path("quota.kind").asString()).isEqualTo("STORAGE_BYTES");
+    assertThat(body.path("status").asInt()).isEqualTo(422);
+    assertThat(body.path("requestId").asString()).isEqualTo("quota-trace");
+    for (String path : new String[]{upload.replace("upload-url", "confirm"),
+        "/api/v1/projects", upload + "/extra"}) {
+      var legacy = MockServerWebExchange.from(MockServerHttpRequest.post(path));
+      handler.handleError(legacy, error, "legacy-trace").block();
+      assertThat(legacy.getResponse().getStatusCode().value()).as(path).isEqualTo(400);
+    }
+    var read = MockServerWebExchange.from(MockServerHttpRequest.get(upload));
+    handler.handleError(read, error, "read-trace").block();
+    assertThat(read.getResponse().getStatusCode().value()).isEqualTo(400);
+    var other = MockServerWebExchange.from(MockServerHttpRequest.post(upload));
+    handler.handleError(other, GrpcExceptionMapper.toStatusRuntimeException(
+        new DomainException(DomainStatus.FAILED_PRECONDITION, "Closed", Map.of("code", "UPLOAD_CLOSED"))), "closed-trace").block();
+    assertThat(other.getResponse().getStatusCode().value()).isEqualTo(400);
+    org.springframework.test.util.ReflectionTestUtils.setField(handler, "trustedEnabled", false);
+    var untrusted = MockServerWebExchange.from(MockServerHttpRequest.post(upload));
+    handler.handleError(untrusted, error, "untrusted-trace").block();
+    assertThat(untrusted.getResponse().getStatusCode().value()).isEqualTo(400);
+  }
+
+  @Test
   void trustedProblemCodeRefinesTheAuthoritativeTransportStatus() {
     org.springframework.test.util.ReflectionTestUtils.setField(handler, "trustedEnabled", true);
     Object[][] rows = {

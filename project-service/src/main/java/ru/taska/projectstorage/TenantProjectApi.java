@@ -203,7 +203,8 @@ public final class TenantProjectApi {
   }
 
   public Mono<CheckProjectMemberRoleResponse> check(String project, String actor) {
-    return facts.currentAdministrative("read")
+    return facts
+        .currentAdministrative("read")
         .flatMap(
             f -> {
               actor(f, actor);
@@ -252,7 +253,7 @@ public final class TenantProjectApi {
 
   private String visibleSql(Frame f) {
     return "SELECT p.* FROM taska.projects p WHERE p.tenant_id=:t AND p.admission_state='OPEN' AND"
-               + " (("
+        + " (("
         + (f.implicitAdmin() ? "true" : "false")
         + ") OR EXISTS(SELECT 1 FROM taska.project_members m WHERE m.tenant_id=p.tenant_id AND"
         + " m.project_id=p.id AND m.user_id=:u AND m.root_membership_version=:g))";

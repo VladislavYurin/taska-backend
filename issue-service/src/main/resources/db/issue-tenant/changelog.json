@@ -426,6 +426,60 @@
     },
     {
       "changeSet": {
+        "id": "issue-attachment-upload-0023",
+        "author": "taska",
+        "changes": [
+          {
+            "sqlFile": {
+              "path": "attachment-upload.sql",
+              "relativeToChangelogFile": true,
+              "splitStatements": false
+            }
+          },
+          {
+            "sqlFile": {
+              "path": "db/tenant/v2/protect-table.sql",
+              "splitStatements": false
+            }
+          },
+          {
+            "sql": {
+              "sql": "SET LOCAL ROLE taska_issue_migrator; SELECT set_config('taska.guard_service','issue',true),set_config('taska.guard_schema','taska',true),set_config('taska.guard_table','issue_attachments',true),set_config('taska.guard_column','tenant_id',true),set_config('taska.guard_app_access','append_only',true);"
+            }
+          },
+          {
+            "sqlFile": {
+              "path": "db/tenant/v2/protect-table.sql",
+              "splitStatements": false
+            }
+          },
+          {
+            "sql": {
+              "sql": "SET LOCAL ROLE taska_issue_migrator; SELECT set_config('taska.audit_service','issue',true),set_config('taska.audit_schema','taska',true),set_config('taska.audit_table','attachment_uploads',true),set_config('taska.audit_column','tenant_id',true),set_config('taska.audit_app_access','read_write',true);"
+            }
+          },
+          {
+            "sqlFile": {
+              "path": "db/tenant/v2/audit.sql",
+              "splitStatements": false
+            }
+          },
+          {
+            "sql": {
+              "sql": "SET LOCAL ROLE taska_issue_migrator; SELECT set_config('taska.audit_service','issue',true),set_config('taska.audit_schema','taska',true),set_config('taska.audit_table','issue_attachments',true),set_config('taska.audit_column','tenant_id',true),set_config('taska.audit_app_access','append_only',true);"
+            }
+          },
+          {
+            "sqlFile": {
+              "path": "db/tenant/v2/audit.sql",
+              "splitStatements": false
+            }
+          }
+        ]
+      }
+    },
+    {
+      "changeSet": {
         "id": "issue-labels-watchers-0024",
         "author": "taska",
         "changes": [

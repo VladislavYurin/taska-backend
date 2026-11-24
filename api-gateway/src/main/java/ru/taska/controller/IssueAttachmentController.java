@@ -55,10 +55,15 @@ public class IssueAttachmentController implements AttachmentsApi {
             UUID projectId,
             UUID issueId,
             Mono<CreateAttachmentUploadUrlRequestDto> request,
+            String idempotencyKey,
             ServerWebExchange exchange
     ) {
+        var keys=exchange.getRequest().getHeaders().get("Idempotency-Key");
+        if(keys!=null && (keys.size()!=1 || idempotencyKey==null || idempotencyKey.isBlank()
+            || idempotencyKey.length()>128 || !idempotencyKey.equals(keys.getFirst())))
+          return Mono.error(new org.springframework.web.server.ResponseStatusException(HttpStatus.BAD_REQUEST,"INVALID_IDEMPOTENCY_KEY"));
         return executor.execute(exchange, EndpointSecurity.PROTECTED, context ->
-                attachmentClient.createAttachmentUploadUrl(issueId.toString(), request, context)
+                attachmentClient.createAttachmentUploadUrl(projectId.toString(),issueId.toString(), request, context,idempotencyKey)
                         .map(ResponseEntity::ok));
 
     }
@@ -74,7 +79,7 @@ public class IssueAttachmentController implements AttachmentsApi {
             ServerWebExchange exchange
     ) {
         return executor.execute(exchange, EndpointSecurity.PROTECTED, context ->
-                attachmentClient.confirmAttachmentUpload(issueId.toString(), request, context)
+                attachmentClient.confirmAttachmentUpload(projectId.toString(),issueId.toString(), request, context)
                         .map(responseBody ->
                                 ResponseEntity.status(HttpStatus.CREATED).body(responseBody)
                         ));

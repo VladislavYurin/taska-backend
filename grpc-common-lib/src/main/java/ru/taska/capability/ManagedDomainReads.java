@@ -1,15 +1,46 @@
 package ru.taska.capability;
 
 import com.google.protobuf.Message;
-import io.grpc.*;
+import io.grpc.ClientInterceptor;
+import io.grpc.ManagedChannel;
+import io.grpc.Metadata;
 import io.grpc.stub.MetadataUtils;
-import java.time.*;
-import java.util.*;
-import java.util.function.*;
+import java.time.Duration;
+import java.util.Collection;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
+import java.util.function.BiFunction;
+import java.util.function.Function;
 import reactor.core.publisher.Mono;
-import ru.taska.api.b2b.v1.*;
-import ru.taska.exception.*;
-import ru.taska.security.tenant.*;
+import ru.taska.api.b2b.v1.BatchValidateMembershipsRpcRequest;
+import ru.taska.api.b2b.v1.BillingServiceGrpc;
+import ru.taska.api.b2b.v1.Entitlement;
+import ru.taska.api.b2b.v1.EntitlementServiceGrpc;
+import ru.taska.api.b2b.v1.GetEntitlementSnapshotRequest;
+import ru.taska.api.b2b.v1.GetPlatformConfigurationSnapshotRequest;
+import ru.taska.api.b2b.v1.Membership;
+import ru.taska.api.b2b.v1.MembershipValidation;
+import ru.taska.api.b2b.v1.MembershipValidationBatch;
+import ru.taska.api.b2b.v1.PlanVersion;
+import ru.taska.api.b2b.v1.PlatformConfigurationSnapshot;
+import ru.taska.api.b2b.v1.PlatformServiceGrpc;
+import ru.taska.api.b2b.v1.ReactorBillingServiceGrpc;
+import ru.taska.api.b2b.v1.ReactorEntitlementServiceGrpc;
+import ru.taska.api.b2b.v1.ReactorPlatformServiceGrpc;
+import ru.taska.api.b2b.v1.ReactorTenantMembershipServiceGrpc;
+import ru.taska.api.b2b.v1.RequestContext;
+import ru.taska.api.b2b.v1.ResolvePublishedPlanRpcRequest;
+import ru.taska.api.b2b.v1.RestrictionCode;
+import ru.taska.api.b2b.v1.TenantMembershipServiceGrpc;
+import ru.taska.exception.DomainException;
+import ru.taska.exception.DomainStatus;
+import ru.taska.security.tenant.ManagedServiceContexts;
+import ru.taska.security.tenant.RpcContextBridge;
+import ru.taska.security.tenant.RpcContextSecurity;
+import ru.taska.security.tenant.VerifiedTenantContext;
 
 /** Narrow primary reads using operator-managed service identities and exact purposes. */
 public final class ManagedDomainReads implements AutoCloseable {
@@ -184,7 +215,7 @@ public final class ManagedDomainReads implements AutoCloseable {
                 .getPlatformConfigurationSnapshot(q));
   }
 
-  public Mono<CapabilityFacts.PlanKind> plan(String version) {
+  public Mono<PlanVersion> referencedPlan(String version) {
     return service(
             "billing",
             "billing-service",
@@ -202,6 +233,18 @@ public final class ManagedDomainReads implements AutoCloseable {
                     .withDeadlineAfter(5, java.util.concurrent.TimeUnit.SECONDS)
                     .withInterceptors(auth)
                     .readReferencedPlanVersion(q))
+        .map(
+            plan -> {
+              if (!version.equals(plan.getId())
+                  || (plan.getState() != PlanVersion.StateValue.STATE_PUBLISHED
+                      && plan.getState() != PlanVersion.StateValue.STATE_RETIRED))
+                throw new DomainException(DomainStatus.UNAVAILABLE, "Referenced plan unavailable");
+              return plan;
+            });
+  }
+
+  public Mono<CapabilityFacts.PlanKind> plan(String version) {
+    return referencedPlan(version)
         .map(
             plan -> {
               if (!version.equals(plan.getId())

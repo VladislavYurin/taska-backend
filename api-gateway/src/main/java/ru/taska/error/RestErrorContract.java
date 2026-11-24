@@ -24,6 +24,9 @@ final class RestErrorContract {
 
     // Эти новые ошибки lifecycle опубликованы рядом с прежним контрактом проекта.
     String code = details.getOrDefault("code", details.get("reason"));
+    if (exchange.getRequest().getMethod() == org.springframework.http.HttpMethod.POST
+        && path.matches("/api/v1/projects/[^/]+/issues/[^/]+/attachments/upload-url")
+        && "QUOTA_EXCEEDED".equals(code)) return true;
     boolean lifecycle =
         (exchange.getRequest().getMethod() == org.springframework.http.HttpMethod.DELETE
                 && path.matches("/api/v1/projects/[^/]+"))
