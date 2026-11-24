@@ -132,7 +132,7 @@
 
 ### Native variant TAS-340
 
-Owned local tier: `python3 scripts/harness/project_acl_e2e.py`; [runtime/setup/cleanup](../../project-service/TENANT-API.md). The ordinary HTTP runner retains its legacy subset.
+Owned local tier: `python3 scripts/harness/project_acl_e2e.py`; [runtime/setup/cleanup](../../project-service/TENANT-API.md). Обычный `harness.py e2e --tier local --scenario E2E-08` возвращает BLOCKED до provisioning/записи: legacy fixture не предоставляет verified tenant, обязательный для outbox v2 (TAS-545). Это ограничение runner, а не успешная приёмка пунктов выше. Opt-in stage сохраняет прежний поднабор с отдельными prerequisites; [границы runner](../agents/e2e.md).
 
 Against real Auth/Root/Billing and native project/workflow/issue app roles, verify implicit tenant administration, current grant generations, same-company member targets, path/context/batch/stats/direct RPC isolation, actual administrative MFA/audit and current authority on create replay. A retry with the same UUID key uses one resource/slot/event; a different payload conflicts. Settings/types and the complete workflow graph must exist before OPEN. Confirmed initialization rejection compensates owned resources/reservation. Unknown outcome retains the slot; the scoped worker completes the same accepted operation after initiating-credential revocation and creation flag-off, without another admission.
 
