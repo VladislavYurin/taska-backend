@@ -12,9 +12,17 @@ import ru.taska.exception.DomainException;
 import ru.taska.exception.DomainStatus;
 import ru.taska.security.trust.GrpcMembershipAuthority;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
-import static ru.taska.util.DirectoryFixturesTest.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
+import static org.mockito.Mockito.when;
+import static ru.taska.util.DirectoryFixturesTest.ACTOR;
+import static ru.taska.util.DirectoryFixturesTest.TENANT_A;
+import static ru.taska.util.DirectoryFixturesTest.assertDomain;
+import static ru.taska.util.DirectoryFixturesTest.id;
 
 /**
  * Проверяет допуск пользователя к справочнику на основании membership authority.

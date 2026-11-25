@@ -23,10 +23,23 @@ import ru.taska.transport.grpc.GrpcUserProfileServiceClient;
 import java.util.List;
 import java.util.UUID;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.ArgumentMatchers.*;
-import static org.mockito.Mockito.*;
-import static ru.taska.util.DirectoryFixturesTest.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
+import static ru.taska.util.DirectoryFixturesTest.TENANT_A;
+import static ru.taska.util.DirectoryFixturesTest.TENANT_B;
+import static ru.taska.util.DirectoryFixturesTest.assertDomain;
+import static ru.taska.util.DirectoryFixturesTest.batch;
+import static ru.taska.util.DirectoryFixturesTest.id;
 
 /**
  * Проверяет объединение страницы membership с глобальными профилями.
@@ -295,6 +308,21 @@ class TenantMembersServiceImplTest {
                         assertSame(failure, error);
                     }
                 })
+                .verify();
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"", "not-a-uuid", "1-1-1-1-1"})
+    @DisplayName("Некорректный UUID membership даёт UNAVAILABLE без частичной страницы")
+    void rejectsInvalidMembershipId(String membershipId) {
+        page(MembershipPage.newBuilder()
+                .addItems(member(TENANT_A, 10))
+                .addItems(member(TENANT_A, 11).toBuilder().setId(membershipId))
+                .build());
+        profileResponse(profile(10), profile(11));
+
+        StepVerifier.create(service.list(TENANT_A, null, 50, context))
+                .expectErrorSatisfies(error -> assertDomain(error, DomainStatus.UNAVAILABLE))
                 .verify();
     }
 

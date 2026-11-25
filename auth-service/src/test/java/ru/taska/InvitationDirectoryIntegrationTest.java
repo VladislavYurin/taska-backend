@@ -17,8 +17,15 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
-import ru.taska.api.auth.admin.inviteuser.v1.*;
-import ru.taska.api.auth.v1.*;
+import ru.taska.api.auth.admin.inviteuser.v1.InviteUserRequest;
+import ru.taska.api.auth.admin.inviteuser.v1.InviteUserRequestBody;
+import ru.taska.api.auth.admin.inviteuser.v1.InviteUserResponse;
+import ru.taska.api.auth.admin.inviteuser.v1.ReactorAdminInviteUserServiceGrpc;
+import ru.taska.api.auth.v1.LoginRequest;
+import ru.taska.api.auth.v1.LoginRequestBody;
+import ru.taska.api.auth.v1.ReactorAuthServiceGrpc;
+import ru.taska.api.auth.v1.SetPasswordByTokenRequest;
+import ru.taska.api.auth.v1.SetPasswordByTokenRequestBody;
 import ru.taska.api.common.v1.Header;
 import ru.taska.api.directory.v1.ReactorUserDirectoryServiceGrpc;
 import ru.taska.api.directory.v1.SearchUsersRequest;
@@ -52,7 +59,10 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE, properties = "jwt.invite-token-ttl=PT2H")
 class InvitationDirectoryIntegrationTest extends AbstractIT {

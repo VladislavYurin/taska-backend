@@ -15,7 +15,11 @@ import ru.taska.service.TenantMembersService;
 import ru.taska.service.grpc.client.TenantMembershipsClient;
 import ru.taska.transport.grpc.GrpcUserProfileServiceClient;
 
-import java.util.*;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
@@ -117,7 +121,7 @@ public class TenantMembersServiceImpl implements TenantMembersService {
         };
 
         var item = new TenantMemberDto()
-                .id(UUID.fromString(member.getId()))
+                .id(parseResponseUuid(member.getId()))
                 .tenantId(parseResponseUuid(member.getTenantId()))
                 .userId(parseResponseUuid(member.getUserId()))
                 .role(role)
