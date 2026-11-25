@@ -71,9 +71,17 @@ public class GatewayErrorHandler {
       log.error("[{}] Unexpected error: {}", requestId, error.getMessage());
     }
 
+    boolean uploadDependency =
+        trustedEnabled && RestErrorContract.isUploadDependencyError(exchange, transportCode);
+    if (uploadDependency) {
+      details = Map.of("code", "DEPENDENCY_UNAVAILABLE");
+      message = "Dependency unavailable";
+    }
     String reason = details.getOrDefault("code", details.get("reason"));
     if (reason != null && !reason.matches("[A-Z][A-Z0-9_]{1,79}")) reason = null;
-    boolean problem = trustedEnabled && RestErrorContract.usesProblemContract(exchange, details);
+    boolean problem =
+        trustedEnabled
+            && (uploadDependency || RestErrorContract.usesProblemContract(exchange, details));
     if (trustedEnabled && reason != null && !details.containsKey("code")) {
       details = new java.util.LinkedHashMap<>(details);
       details.put("code", reason);
@@ -120,8 +128,7 @@ public class GatewayErrorHandler {
     response.setStatusCode(httpStatus);
     response
         .getHeaders()
-        .setContentType(
-            problem ? MediaType.APPLICATION_PROBLEM_JSON : MediaType.APPLICATION_JSON);
+        .setContentType(problem ? MediaType.APPLICATION_PROBLEM_JSON : MediaType.APPLICATION_JSON);
     response.getHeaders().set(REQUEST_ID, requestId);
     String retryAfter = details.get("retryAfterSeconds");
     if (httpStatus == HttpStatus.TOO_MANY_REQUESTS

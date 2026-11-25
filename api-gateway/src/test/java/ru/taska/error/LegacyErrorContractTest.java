@@ -30,7 +30,11 @@ class LegacyErrorContractTest {
       {"/api/v1/issues/i/transitions", Status.FAILED_PRECONDITION, "INVALID_STATE", 400},
       {"/api/v1/issues/i", Status.NOT_FOUND, null, 404},
       {"/api/v1/projects", Status.UNAVAILABLE, null, 503},
-      {"/api/v1/projects", Status.DEADLINE_EXCEEDED, null, 504}
+      {"/api/v1/projects", Status.DEADLINE_EXCEEDED, null, 504},
+      {"/api/v1/projects/p/issues/i/attachments/upload-url", Status.PERMISSION_DENIED, "CURRENT_ACL_DENIED", 403},
+      {"/api/v1/projects/p/issues/i/attachments/upload-url", Status.FAILED_PRECONDITION, "CAPABILITY_DISABLED", 400},
+      {"/api/v1/projects/p/issues/i/attachments/confirm", Status.UNAVAILABLE, null, 503},
+      {"/api/v1/projects/p/issues/i/attachments/confirm", Status.DEADLINE_EXCEEDED, null, 504}
     };
     for (var row : cases) {
       var status = (Status) row[1];

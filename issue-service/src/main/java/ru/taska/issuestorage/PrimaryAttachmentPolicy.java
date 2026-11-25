@@ -48,6 +48,14 @@ public final class PrimaryAttachmentPolicy implements AttachmentUploadPolicy {
 
   public Mono<Grant> check(
       UUID project, UUID issue, AttachmentUploadStore.Upload upload, String phase) {
+    return Mono.defer(() -> current(project, issue, upload, phase))
+        .onErrorMap(
+            java.util.concurrent.TimeoutException.class,
+            e -> new DomainException(DomainStatus.UNAVAILABLE, "STORAGE_POLICY_UNAVAILABLE"));
+  }
+
+  private Mono<Grant> current(
+      UUID project, UUID issue, AttachmentUploadStore.Upload upload, String phase) {
     if (lifecycle != null)
       return lifecycle
           .bound(upload, phase)
