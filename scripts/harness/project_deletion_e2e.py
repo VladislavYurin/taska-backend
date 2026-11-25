@@ -47,6 +47,15 @@ class ProjectDeletionLocal(AttachmentLifecycleLocal):
     def operation(self, owner, tenant, operation):
         return owner.expect('GET', '/api/v1/tenants/' + tenant + '/operations/' + operation, 200).json()
 
+    def exhaust_free_tasks(self, client, project):
+        url = '/api/v1/projects/' + project + '/issues'
+        body = {'issueType': 'TASK', 'summary': 'Owned FREE lifetime fixture',
+                'priority': 'MEDIUM', 'description': 'Owned fixture'}
+        for _ in range(49):
+            self.positive(client, 'POST', url, 201, body, {'Idempotency-Key': str(uuid.uuid4())})
+        refused = client.expect('POST', url, 422, body, {'Idempotency-Key': str(uuid.uuid4())}).json()
+        e.require(refused['code'] == 'QUOTA_EXCEEDED', 'FREE project accepted more than 50 lifetime tasks')
+
     def scenarios(self):
         initial = e.ASSERTIONS
         actor, clients = self.seed()
@@ -67,6 +76,7 @@ class ProjectDeletionLocal(AttachmentLifecycleLocal):
         tenant, owner, project, issue, path, attachment = fixtures[0]
         other_tenant, other, foreign, foreign_issue, foreign_path, foreign_attachment = fixtures[1]
         project_id = project['id']
+        self.exhaust_free_tasks(owner, project_id)
         abandoned_key = str(uuid.uuid4())
         abandoned_data = b'owned-unconfirmed'
         abandoned = self.positive(owner, 'POST', path + 'upload-url', 200,
@@ -144,9 +154,10 @@ class ProjectDeletionLocal(AttachmentLifecycleLocal):
         owner.expect('POST', '/api/v1/projects/' + new_project + '/issues', 201,
                      {'issueType': 'TASK', 'summary': 'New lifetime', 'priority': 'MEDIUM', 'description': 'Owned fixture'}, {'Idempotency-Key': str(uuid.uuid4())})
         e.require(self.sql('issue_db', "SELECT lifetime_created FROM taska.project_counters WHERE tenant_id='%s' AND project_id='%s';" % (tenant, new_project)).strip() == '1', 'New project inherited old lifetime usage')
+        self.exhaust_free_tasks(owner, new_project)
         return {'scenario': 'project-deletion', 'admissionAndRefusals': 'PASS', 'durableReplay': 'PASS',
                 'crashAndLostAck': 'PASS', 'physicalResourceCleanup': 'PASS', 'expiredIsNotCleanupAck': 'PASS', 'quotaRelease': 'PASS',
-                'tenantAndAvatarIsolation': 'PASS', 'lifetimeTombstone': 'PASS', 'newProjectCounter': 'PASS',
+                'tenantAndAvatarIsolation': 'PASS', 'lifetimeTombstone': 'PASS', 'newProjectCounter': 'PASS', 'oldAndNewFreeLimit50': 'PASS',
                 'testCount': e.ASSERTIONS - initial}
 
 

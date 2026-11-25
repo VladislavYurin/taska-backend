@@ -124,7 +124,12 @@ public final class IssueProjectCleanup
                                         .flatMap(
                                             ready ->
                                                 ready
-                                                    ? finish(tenant,project,operation).map(batchDone -> result(tenant,project,operation,batchDone))
+                                                    ? finish(tenant, project, operation)
+                                                        .map(
+                                                            batchDone ->
+                                                                result(
+                                                                    tenant, project, operation,
+                                                                    batchDone))
                                                     : Mono.just(
                                                         result(
                                                             tenant, project, operation, false))));
@@ -217,7 +222,7 @@ public final class IssueProjectCleanup
                         .then()));
   }
 
-  private Mono<Void> acceptAttachments(UUID t, UUID p) {
+  Mono<Void> acceptAttachments(UUID t, UUID p) {
     return tx.execute(
         db ->
             lock(db, t, p)
@@ -232,6 +237,26 @@ public final class IssueProjectCleanup
                                 + " m.project_id=:p AND m.state IN"
                                 + " ('CONFIRMED','DELETE_PENDING','DELETED') ON CONFLICT DO"
                                 + " NOTHING")
+                        .bind("t", t)
+                        .bind("p", p)
+                        .then())
+                .then(
+                    db.sql(
+                            "WITH changed AS (UPDATE taska.attachment_object_manifest m SET"
+                                + " state='DELETE_PENDING' WHERE m.tenant_id=:t AND m.project_id=:p"
+                                + " AND m.state='CONFIRMED' AND EXISTS (SELECT 1 FROM"
+                                + " taska.attachment_deletion_jobs j WHERE j.tenant_id=m.tenant_id"
+                                + " AND j.attachment_id=m.id AND j.operation_id=m.operation_id)"
+                                + " RETURNING m.tenant_id,m.operation_id), events AS (INSERT INTO"
+                                + " taska.storage_quota_outbox"
+                                + " (tenant_id,operation_id,event_type,actor_id,issuer) SELECT"
+                                + " d.tenant_id,d.operation_id,'AttachmentDeletionRequested',"
+                                + " c.initiator_id,'issue-service' FROM changed d JOIN"
+                                + " taska.project_cleanup_receipts c ON c.tenant_id=d.tenant_id AND"
+                                + " c.project_id=:p ON CONFLICT DO NOTHING RETURNING tenant_id)"
+                                + " INSERT INTO taska.storage_manifest_versions(tenant_id) SELECT"
+                                + " DISTINCT tenant_id FROM changed ON CONFLICT(tenant_id) DO"
+                                + " UPDATE SET version=taska.storage_manifest_versions.version+1")
                         .bind("t", t)
                         .bind("p", p)
                         .then()));
