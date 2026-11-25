@@ -197,6 +197,23 @@ class ProjectDeletionHttpTest {
   }
 
   @Test
+  void oversizedOtherwiseValidBodyDoesNotDispatch() {
+    http.post()
+        .uri(url())
+        .header("Idempotency-Key", UUID.randomUUID().toString())
+        .header("If-Match", "\"0\"")
+        .contentType(MediaType.APPLICATION_JSON)
+        .bodyValue(" ".repeat(17000) + "{\"confirmed\":true,\"confirmedProjectKey\":\"DEL\"}")
+        .exchange()
+        .expectStatus()
+        .isBadRequest()
+        .expectBody()
+        .jsonPath("$.code")
+        .isEqualTo("VALIDATION_FAILED");
+    assertThat(writes.get()).isZero();
+  }
+
+  @Test
   void unknownDuplicateAndWrongBodyTypesDoNotDispatch() {
     for (String value :
         List.of(

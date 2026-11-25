@@ -51,10 +51,7 @@ public class ProjectDeletionController {
               return DataBufferUtils.join(exchange.getRequest().getBody(), 16384)
                   .onErrorMap(
                       org.springframework.core.io.buffer.DataBufferLimitException.class,
-                      e ->
-                          new org.springframework.web.server.ResponseStatusException(
-                              org.springframework.http.HttpStatus.PAYLOAD_TOO_LARGE,
-                              "Тело подтверждения слишком велико"))
+                      e -> invalid())
                   .map(
                       buffer -> {
                         byte[] bytes = new byte[buffer.readableByteCount()];

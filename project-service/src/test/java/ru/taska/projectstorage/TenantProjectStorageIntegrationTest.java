@@ -641,6 +641,70 @@ class TenantProjectStorageIntegrationTest {
   }
 
   @Test
+  void completedDeletionReplayIsStillBoundToItsActorAndOriginalKey() {
+    var p = create(A, "REPLAY");
+    var owners = org.mockito.Mockito.mock(ProjectDeletions.Owners.class);
+    var deletion = new ProjectDeletions(store, lifecycleApi(true, false), owners);
+    var key = UUID.randomUUID();
+    var original =
+        as(A, ACTOR, deletion.start(deleteRequest(p, key, p.getVersion(), "REPLAY"))).block(WAIT);
+    // Завершённое состояние fixture; фактические owner effects проверяет native E2E.
+    operator
+        .sql(
+            "UPDATE taska.project_deletion_operations SET"
+                + " state='RESOURCES_DELETED',issue_done=true,workflow_done=true WHERE id=:id")
+        .bind("id", UUID.fromString(original.getId()))
+        .then()
+        .block(WAIT);
+    for (String table : List.of("project_settings", "project_members", "project_issue_types")) {
+      operator
+          .sql("DELETE FROM taska." + table + " WHERE tenant_id=:t AND project_id=:p")
+          .bind("t", A)
+          .bind("p", p.getId())
+          .then()
+          .block(WAIT);
+    }
+    operator
+        .sql("DELETE FROM taska.projects WHERE tenant_id=:t AND id=:p")
+        .bind("t", A)
+        .bind("p", p.getId())
+        .then()
+        .block(WAIT);
+    operator
+        .sql("UPDATE taska.project_deletion_operations SET state='SUCCEEDED' WHERE id=:id")
+        .bind("id", UUID.fromString(original.getId()))
+        .then()
+        .block(WAIT);
+    var replay =
+        as(A, ACTOR, deletion.start(deleteRequest(p, key, p.getVersion(), "REPLAY"))).block(WAIT);
+    assertEquals(original.getId(), replay.getId());
+    assertEquals("STATE_SUCCEEDED", replay.getState().name());
+    for (var candidate : List.of(ACTOR, UUID.randomUUID())) {
+      UUID requestKey = candidate.equals(ACTOR) ? UUID.randomUUID() : key;
+      assertEquals(
+          DomainStatus.NOT_FOUND,
+          assertThrows(
+                  DomainException.class,
+                  () ->
+                      as(
+                              A,
+                              candidate,
+                              deletion.start(
+                                  deleteRequest(p, requestKey, p.getVersion(), "REPLAY")))
+                          .block(WAIT))
+              .getStatus());
+    }
+    assertEquals(
+        1L,
+        operator
+            .sql("SELECT count(*) n FROM taska.project_deletion_operations")
+            .map((r, m) -> r.get("n", Long.class))
+            .one()
+            .block(WAIT));
+    org.mockito.Mockito.verifyNoInteractions(owners);
+  }
+
+  @Test
   void deletionReceiptFailureRollsBackAdmissionAndAudit() {
     var p = create(A, "ROLLBACK");
     var key = UUID.randomUUID();
