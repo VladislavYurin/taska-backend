@@ -8,8 +8,8 @@
 
 ## 2. Сквозная проверка и ревью
 
-- [ ] 2.1 Выполнить выбранные tenant-service/gateway/storage проверки, harness и strict OpenSpec validation; сверить свежие отчёты без skips.
-- [ ] 2.2 Подготовить отдельный PR, разобрать current-head CI/AI review и повторить owned native timeout/upload E2E на финальном head после review; подтвердить cleanup.
+- [x] 2.1 Выполнить выбранные tenant-service/gateway/storage проверки, harness и strict OpenSpec validation; сверить свежие отчёты без skips.
+- [x] 2.2 Подготовить отдельный PR, разобрать current-head CI/AI review и повторить owned native timeout/upload E2E на финальном head после review; подтвердить cleanup.
 
 ## Workflow follow-up
 

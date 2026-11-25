@@ -4,7 +4,7 @@
 
 ### Requirement: Dependency timeout сохраняет управляемый отказ и исходную операцию
 
-Система SHALL ограничивать ожидание upload policy, billing и owner прежним deadline 5s и возвращать при временной недоступности HTTP 503 с code=DEPENDENCY_UNAVAILABLE. Timeout SHALL сохранять intent и подтверждённое состояние учёта; повтор исходного ключа SHALL не создавать вторую reservation или повторный расход.
+В trusted-режиме upload-url система SHALL сохранять действующие dependency deadlines 5s и возвращать при временной недоступности HTTP 503 с code=DEPENDENCY_UNAVAILABLE. Timeout SHALL сохранять intent и подтверждённое состояние учёта; повтор исходного ключа SHALL не создавать вторую reservation или повторный расход. Legacy-профиль SHALL сохранять прежний формат ошибок.
 
 #### Scenario: Policy не отвечает до и после поиска reservation
 - **WHEN** текущий actor вызывает upload-url, а policy не завершает начальную проверку, admission либо replay в пределах deadline
