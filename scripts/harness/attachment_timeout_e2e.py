@@ -17,7 +17,8 @@ class AttachmentTimeoutLocal(AttachmentUploadLocal):
         try:
             response = client.request('POST', path + 'upload-url', body=payload,
                                       headers={'Idempotency-Key': key})
-            e.require(response.status == 503, 'Billing timeout did not return HTTP 503')
+            e.require(response.status == 503,
+                      'Billing timeout expected HTTP 503, got %s' % response.status)
             problem = response.json()
             e.require(problem.get('code') == 'DEPENDENCY_UNAVAILABLE'
                       and problem.get('details', {}).get('code') == 'DEPENDENCY_UNAVAILABLE'

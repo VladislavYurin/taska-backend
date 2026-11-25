@@ -12,6 +12,8 @@
 
 Преобразовать только TimeoutException на двух локальных dependency-границах в DomainException UNAVAILABLE с существующими безопасными phase codes. Остальные DomainException и gRPC statuses сохраняются. На trusted POST upload-url статусы UNAVAILABLE/DEADLINE_EXCEEDED выбирают Problem/503 DEPENDENCY_UNAVAILABLE и безопасное сообщение. Legacy-профиль, другие маршруты и ACL/quota/integrity отказы не меняются. Это учитывает внешний gRPC deadline 5s, способный сработать раньше внутреннего deadline.
 
+Native fault injection выявила дополнительную границу до root admission: PrimaryAttachmentPolicy запрашивает текущие primary facts и catalog plan через ManagedDomainReads, чей deadline 5s также выбрасывает TimeoutException. Нормализация добавляется в attachment policy, с тестом виртуального времени и сохранности бизнес-ошибок; общий ManagedDomainReads и остальные домены не меняются.
+
 Детерминированные регрессии используют управляемый незавершающийся источник для policy/billing/owner, реальные PostgreSQL app roles и mTLS root RPC. Проверяются initial/admission/replay, rollback, retained intent и повтор исходного ключа до и после восстановления. REST boundary проверяется отдельно и собственным native E2E со сбоем только собственного billing. Существующие transaction/outbox boundaries не перестраиваются; новые сетевые эффекты в БД-транзакции не добавляются.
 
 ## Risks / Trade-offs

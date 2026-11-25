@@ -22,4 +22,4 @@ TAS-547: при native upload-url наблюдался HTTP 500 рядом с и
 
 ## Impact
 
-Владельцы изменения — tenant-service StorageQuotaStore и узкий REST error mapping api-gateway. Проверяются gRPC boundary и issue-service upload saga. OpenAPI описывает новый dependency Problem/503 только на trusted upload-url. Новые proto/REST поля, миграции, изменения TTL, ослабление guards, изменения TAS-459 и активация общего стенда не входят в scope. Отдельный PR; deployment возможен только после разрешённого merge.
+Владельцы изменения — tenant-service StorageQuotaStore, issue-service PrimaryAttachmentPolicy и узкий REST error mapping api-gateway. Проверяются gRPC boundary и issue-service upload saga. OpenAPI описывает новый dependency Problem/503 только на trusted upload-url. Новые proto/REST поля, миграции, изменения TTL, ослабление guards, изменения TAS-459 и активация общего стенда не входят в scope. Отдельный PR; deployment возможен только после разрешённого merge.
