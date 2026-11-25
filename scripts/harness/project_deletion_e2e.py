@@ -1,4 +1,5 @@
 """TAS-459: собственный REST/mTLS/PostgreSQL/S3 прогон удаления проекта и повторов."""
+import base64
 import json
 import time
 import uuid
@@ -47,7 +48,22 @@ class ProjectDeletionLocal(AttachmentLifecycleLocal):
     def operation(self, owner, tenant, operation):
         return owner.expect('GET', '/api/v1/tenants/' + tenant + '/operations/' + operation, 200).json()
 
+    def renew_owned_access(self, client):
+        encoded = client.token.split('.')[1]
+        claims = json.loads(base64.urlsafe_b64decode(encoded + '=' * (-len(encoded) % 4)))
+        e.require(claims['iss'] == 'taska-auth' and claims['kind'] == 'WEB_TENANT'
+                  and claims['tenant_id'] in self.cleanup_tenants, 'Only owned fixture access may be renewed')
+        claims.update(iat=int(time.time()), exp=int(time.time()) + 600)
+        b64 = lambda b: base64.urlsafe_b64encode(b).rstrip(b'=')
+        data = b64(e.canonical({'alg': 'EdDSA', 'kid': 'owned-access', 'typ': 'JWT'})) + b'.' + b64(e.canonical(claims))
+        source, signature = self.material / 'jwt-input', self.material / 'jwt-signature'
+        source.write_bytes(data)
+        self.command('java', str(self.root / 'scripts/harness/RpcFixtureKey.java'), 'sign',
+                     str(self.material / 'auth-service/jwt.pem'), str(source), str(signature))
+        client.token = (data + b'.' + b64(signature.read_bytes())).decode()
+
     def exhaust_free_tasks(self, client, project):
+        self.renew_owned_access(client)
         url = '/api/v1/projects/' + project + '/issues'
         body = {'issueType': 'TASK', 'summary': 'Owned FREE lifetime fixture',
                 'priority': 'MEDIUM', 'description': 'Owned fixture'}
