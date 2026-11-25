@@ -235,8 +235,10 @@ public final class IssueProjectCleanup
                                 + " taska.project_cleanup_receipts c ON c.tenant_id=m.tenant_id AND"
                                 + " c.project_id=m.project_id WHERE m.tenant_id=:t AND"
                                 + " m.project_id=:p AND m.state IN"
-                                + " ('CONFIRMED','DELETE_PENDING','DELETED') ON CONFLICT DO"
-                                + " NOTHING")
+                                + " ('CONFIRMED','DELETE_PENDING','DELETED') AND NOT EXISTS (SELECT"
+                                + " 1 FROM taska.attachment_deletion_jobs j WHERE"
+                                + " j.tenant_id=m.tenant_id AND j.attachment_id=m.id) ORDER BY m.id"
+                                + " LIMIT 10 ON CONFLICT DO NOTHING")
                         .bind("t", t)
                         .bind("p", p)
                         .then())

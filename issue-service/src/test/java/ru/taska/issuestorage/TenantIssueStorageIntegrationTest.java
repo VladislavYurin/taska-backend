@@ -1854,33 +1854,35 @@ class TenantIssueStorageIntegrationTest {
   }
 
   @Test
-  void projectAttachmentIntentTransitionsManifestAndEmitsAuditOnlyOnce() {
+  void projectAttachmentIntentIsBoundedAndIdempotent() {
     var own = create(A, "attachment-delete-own");
     var foreign = create(B, "attachment-delete-foreign");
     UUID operation = UUID.randomUUID();
     for (var fixture : java.util.Map.of(A, own.id(), B, foreign.id()).entrySet()) {
-      operator
-          .sql(
-              """
-              INSERT INTO taska.attachment_object_manifest
-              (id,tenant_id,project_id,issue_id,actor_id,object_key,staging_object_key,
-               reservation_id,operation_id,generation,state,expected_bytes,confirmed_bytes,
-               content_type,checksum_sha256,expires_at,created_at,staging_version_id,
-               final_object_version,maximum_attachment_bytes,policy_version,request_hash,reservation_version)
-              VALUES(:id,:t,:p,:i,:a,:key,:staging,:r,:op,1,'CONFIRMED',1,1,
-               'text/plain',repeat('a',64),now()+interval '1 hour',now(),'staging-v','final-v',1,1,repeat('b',64),1)
-              """)
-          .bind("id", UUID.randomUUID())
-          .bind("t", fixture.getKey())
-          .bind("p", PROJECT)
-          .bind("i", fixture.getValue())
-          .bind("a", ACTOR)
-          .bind("key", UUID.randomUUID().toString())
-          .bind("staging", UUID.randomUUID().toString())
-          .bind("r", UUID.randomUUID())
-          .bind("op", UUID.randomUUID())
-          .then()
-          .block(WAIT);
+      for (int index = 0; index < (fixture.getKey().equals(A) ? 11 : 1); index++) {
+        operator
+            .sql(
+                """
+                INSERT INTO taska.attachment_object_manifest
+                (id,tenant_id,project_id,issue_id,actor_id,object_key,staging_object_key,
+                 reservation_id,operation_id,generation,state,expected_bytes,confirmed_bytes,
+                 content_type,checksum_sha256,expires_at,created_at,staging_version_id,
+                 final_object_version,maximum_attachment_bytes,policy_version,request_hash,reservation_version)
+                VALUES(:id,:t,:p,:i,:a,:key,:staging,:r,:op,1,'CONFIRMED',1,1,
+                 'text/plain',repeat('a',64),now()+interval '1 hour',now(),'staging-v','final-v',1,1,repeat('b',64),1)
+                """)
+            .bind("id", UUID.randomUUID())
+            .bind("t", fixture.getKey())
+            .bind("p", PROJECT)
+            .bind("i", fixture.getValue())
+            .bind("a", ACTOR)
+            .bind("key", UUID.randomUUID().toString())
+            .bind("staging", UUID.randomUUID().toString())
+            .bind("r", UUID.randomUUID())
+            .bind("op", UUID.randomUUID())
+            .then()
+            .block(WAIT);
+      }
     }
     operator
         .sql(
@@ -1894,14 +1896,27 @@ class TenantIssueStorageIntegrationTest {
         .then()
         .block(WAIT);
     var cleanup = new IssueProjectCleanup(tx, null, null, null, null, null, null);
-    for (int attempt = 0; attempt < 2; attempt++) {
+    for (int attempt = 0; attempt < 3; attempt++) {
       as(A, ACTOR, "cleanupProjectResources", cleanup.acceptAttachments(A, PROJECT)).block(WAIT);
+      long expected = attempt == 0 ? 10L : 11L;
       assertEquals(
-          "DELETE_PENDING",
+          expected,
           operator
-              .sql("SELECT state FROM taska.attachment_object_manifest WHERE tenant_id=:t")
+              .sql(
+                  "SELECT count(*) n FROM taska.attachment_object_manifest WHERE tenant_id=:t AND"
+                      + " state='DELETE_PENDING'")
               .bind("t", A)
-              .map((r, m) -> r.get("state", String.class))
+              .map((r, m) -> r.get("n", Long.class))
+              .one()
+              .block(WAIT));
+      assertEquals(
+          11L - expected,
+          operator
+              .sql(
+                  "SELECT count(*) n FROM taska.attachment_object_manifest WHERE tenant_id=:t AND"
+                      + " state='CONFIRMED'")
+              .bind("t", A)
+              .map((r, m) -> r.get("n", Long.class))
               .one()
               .block(WAIT));
       assertEquals(
@@ -1913,7 +1928,7 @@ class TenantIssueStorageIntegrationTest {
               .one()
               .block(WAIT));
       assertEquals(
-          1L,
+          expected,
           operator
               .sql("SELECT count(*) n FROM taska.attachment_deletion_jobs WHERE initiator_id=:a")
               .bind("a", ACTOR)
@@ -1921,7 +1936,7 @@ class TenantIssueStorageIntegrationTest {
               .one()
               .block(WAIT));
       assertEquals(
-          1L,
+          attempt == 0 ? 1L : 2L,
           operator
               .sql("SELECT version FROM taska.storage_manifest_versions WHERE tenant_id=:t")
               .bind("t", A)
@@ -1929,7 +1944,7 @@ class TenantIssueStorageIntegrationTest {
               .one()
               .block(WAIT));
       assertEquals(
-          1L,
+          expected,
           operator
               .sql(
                   "SELECT count(*) n FROM taska.storage_quota_outbox WHERE tenant_id=:t AND"

@@ -39,7 +39,9 @@ ProjectDeletionService перед локальными эффектами.
    использует исходный receipt. Отдельный append-only cleanup ACK появляется лишь
    после подтверждённого завершения/отмены: одно EXPIRED не считается ACK.
    Confirmed objects проходят обычный durable
-   attachment deletion protocol. Сохраняется настоящее PUT window до 5 минут.
+   attachment deletion protocol. Новые задания удаления создаются порциями по
+   10 вложений; повтор выбирает только ещё не принятые manifest. Сохраняется
+   настоящее PUT window до 5 минут.
 2. Пока исход S3/root неизвестен, committed bytes и PROJECT usage удерживаются.
    После terminal object proof и RELEASE_USAGE tasks/history/metadata удаляются;
    lifetime counter становится вечным tombstone. Строки задач удаляются порциями
