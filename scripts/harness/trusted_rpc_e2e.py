@@ -289,12 +289,12 @@ class TrustedLocal(e.Local):
             time.sleep(1)
         raise e.Blocked('Local service readiness deadline exceeded')
 
-    def seed(self):
+    def seed(self, tenants=None):
         actor, web = str(uuid.uuid4()), str(uuid.uuid4())
         self.sql('auth_db', "INSERT INTO taska.users(id,email,display_name,status,global_role) VALUES('%s','owned@harness.invalid','Owned','ACTIVE','USER');INSERT INTO taska.web_sessions(id,user_id,state,assurance,auth_version,created_at,expires_at) VALUES('%s','%s','ACTIVE','PASSWORD',1,now(),now()+interval '1 hour');" % (actor, web, actor))
         clients = []
-        for _ in range(2):
-            tenant, session = str(uuid.uuid4()), str(uuid.uuid4())
+        for tenant in tenants or [str(uuid.uuid4()), str(uuid.uuid4())]:
+            session = str(uuid.uuid4())
             self.sql('tenant_db', "BEGIN;INSERT INTO taska.tenants(id,name,owner_id,lifecycle,creation_kind,plan_version_id,creation_actor_id,creation_request_hash,creation_operation_id) VALUES('%s','Owned','%s','ACTIVE','FREE','%s','%s',decode('00','hex'),'%s');INSERT INTO taska.tenant_memberships(tenant_id,user_id,role,status) VALUES('%s','%s','TENANT_ADMIN','ACTIVE');COMMIT;" % (tenant, actor, str(uuid.uuid4()), actor, str(uuid.uuid4()), tenant, actor))
             self.sql('auth_db', "INSERT INTO taska.tenant_sessions(id,web_session_id,user_id,tenant_id,membership_version,created_at,expires_at) VALUES('%s','%s','%s','%s',1,now(),now()+interval '1 hour');" % (session, web, actor, tenant))
             claims = {'sub': actor, 'iss': 'taska-auth', 'aud': ['taska-api'], 'iat': int(time.time()), 'exp': int(time.time()) + 600,

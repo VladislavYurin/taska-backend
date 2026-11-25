@@ -1296,6 +1296,24 @@
       "mutation": false,
       "action": "readAttachmentContent",
       "requestClass": "ru.taska.api.issue.attachment.v1.ReadAttachmentContentRequest"
+    },
+    {
+      "rpc": "ru.taska.b2b.v1.ProjectDeletionService/DeleteProject",
+      "audience": "project-service",
+      "scope": "TENANT_PROJECT_ACL_CAPABILITY",
+      "tenantRequired": true,
+      "mutation": true,
+      "action": "deleteProject",
+      "requestClass": "ru.taska.api.b2b.v1.DeleteProjectRpcRequest"
+    },
+    {
+      "rpc": "ru.taska.b2b.v1.ProjectDeletionService/GetDeletion",
+      "audience": "project-service",
+      "scope": "TENANT_PROJECT_ACL_CAPABILITY",
+      "tenantRequired": true,
+      "mutation": false,
+      "action": "getProjectDeletion",
+      "requestClass": "ru.taska.api.b2b.v1.ProjectDeletionRequest"
     }
   ]
 }

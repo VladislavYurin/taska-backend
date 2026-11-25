@@ -1,10 +1,17 @@
 package ru.taska.workflowbootstrap;
 
-import io.grpc.*;
+import io.grpc.Metadata;
+import io.grpc.ServerCall;
+import io.grpc.ServerCallHandler;
+import io.grpc.ServerInterceptor;
+import io.grpc.Status;
 import io.r2dbc.spi.ConnectionFactory;
 import java.time.Duration;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.context.annotation.*;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.DependsOn;
+import org.springframework.context.annotation.Profile;
 import org.springframework.grpc.server.GlobalServerInterceptor;
 import org.springframework.r2dbc.core.DatabaseClient;
 import ru.taska.r2dbc.TenantTransactionExecutor;
@@ -110,6 +117,10 @@ public class TenantStorageConfiguration {
           ru.taska.api.b2b.v1.ProjectWorkflowBootstrapServiceGrpc.getReadMethod()
               .getFullMethodName(),
           new ru.taska.security.tenant.RpcContextSecurity.Policy(true, false));
+      policies.put(
+          ru.taska.api.b2b.v1.ProjectResourceCleanupServiceGrpc.getCleanupProjectMethod()
+              .getFullMethodName(),
+          new ru.taska.security.tenant.RpcContextSecurity.Policy(true, true));
       return new ru.taska.security.tenant.TenantServerInterceptor(security, policies, environment);
     }
     return new ServerInterceptor() {

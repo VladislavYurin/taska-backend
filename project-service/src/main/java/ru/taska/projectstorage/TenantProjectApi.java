@@ -79,6 +79,10 @@ public final class TenantProjectApi {
     this.json = json;
   }
 
+  Mono<Frame> deletionFrame(String scope) {
+    return facts.currentAdministrative(scope);
+  }
+
   public Mono<Frame> frame(String scope) {
     return facts.current(scope);
   }
@@ -130,7 +134,17 @@ public final class TenantProjectApi {
 
   private Mono<Authorized> authorize(
       TenantProjectStore.Session s, Frame f, UUID id, Action action, boolean lock) {
-    return (lock ? s.lock(id) : s.find(id))
+    return s.database()
+        .sql(
+            "SELECT EXISTS(SELECT 1 FROM taska.project_deletion_operations WHERE tenant_id=:t AND"
+                + " project_id=:p) AS deleting")
+        .bind("t", tenant(f))
+        .bind("p", id)
+        .map((r, m) -> r.get("deleting", Boolean.class))
+        .one()
+        .flatMap(
+            deleting ->
+                deleting ? Mono.<Project>error(missing()) : (lock ? s.lock(id) : s.find(id)))
         .switchIfEmpty(Mono.error(missing()))
         .flatMap(
             p ->
@@ -152,6 +166,34 @@ public final class TenantProjectApi {
                                     decision ->
                                         audit(s, f, action, id, decision)
                                             .thenReturn(new Authorized(p, role)))));
+  }
+
+  /** Текущее право удаления проверяется и для архивного проекта. */
+  Mono<Project> deletionAdmission(TenantProjectStore.Session s, Frame f, UUID id) {
+    return s.lock(id)
+        .switchIfEmpty(Mono.error(missing()))
+        .flatMap(
+            p ->
+                role(s, f, id)
+                    .flatMap(
+                        r ->
+                            facts
+                                .decision(
+                                    f,
+                                    Action.PROJECT_DELETE,
+                                    new CapabilityFacts.Target(tenant(f), id, null, null),
+                                    r,
+                                    Set.of())
+                                .flatMap(
+                                    d -> audit(s, f, Action.PROJECT_DELETE, id, d).thenReturn(p))));
+  }
+
+  /** Replay требует действующего principal и текущего права, пока проект существует. */
+  Mono<Void> deletionReplay(TenantProjectStore.Session s, Frame f, UUID id) {
+    return s.find(id)
+        .flatMap(p -> deletionAdmission(s, f, id).thenReturn(true))
+        .switchIfEmpty(Mono.just(true))
+        .then();
   }
 
   private Mono<Void> audit(
@@ -241,7 +283,9 @@ public final class TenantProjectApi {
                           .concatMap(
                               p ->
                                   authorize(s, f, p.getId(), Action.PROJECT_READ, false)
-                                      .map(this::response))
+                                      .map(this::response)
+                                      .onErrorResume(
+                                          DomainException.class, TenantProjectApi::skipMissing))
                           .collectList()
                           .map(
                               all ->
@@ -251,9 +295,14 @@ public final class TenantProjectApi {
             });
   }
 
+  private static <T> Mono<T> skipMissing(DomainException error) {
+    return error.getStatus() == DomainStatus.NOT_FOUND ? Mono.empty() : Mono.error(error);
+  }
+
   private String visibleSql(Frame f) {
     return "SELECT p.* FROM taska.projects p WHERE p.tenant_id=:t AND p.admission_state='OPEN' AND"
-        + " (("
+        + " NOT EXISTS(SELECT 1 FROM taska.project_deletion_operations d WHERE"
+               + " d.tenant_id=p.tenant_id AND d.project_id=p.id) AND (("
         + (f.implicitAdmin() ? "true" : "false")
         + ") OR EXISTS(SELECT 1 FROM taska.project_members m WHERE m.tenant_id=p.tenant_id AND"
         + " m.project_id=p.id AND m.user_id=:u AND m.root_membership_version=:g))";
@@ -307,7 +356,9 @@ public final class TenantProjectApi {
                                                   .setKey(p.getProjectKey())
                                                   .setName(p.getName())
                                                   .addAllIssueTypes(types)
-                                                  .build()))
+                                                  .build())
+                                      .onErrorResume(
+                                          DomainException.class, TenantProjectApi::skipMissing))
                           .collectMap(ProjectShortInfo::getId)
                           .map(
                               all ->
@@ -386,7 +437,9 @@ public final class TenantProjectApi {
             });
   }
 
-  /** Authorize every replay before reading its immutable response. No remote waits under SQL locks. */
+  /**
+   * Authorize every replay before reading its immutable response. No remote waits under SQL locks.
+   */
   public Mono<ProjectResponse> lifecycle(
       String project, String actor, boolean archive, Integer expected, String key) {
     UUID id = uuid(project);
@@ -406,10 +459,11 @@ public final class TenantProjectApi {
           .bind("key", tenant(f) + "/lifecycle/" + user(f) + "/" + authority + "/" + command)
           .fetch().rowsUpdated()
           .then(authorize(s, f, id, action, true))
-          .flatMap(a -> s.database().sql("""
-              SELECT project_id,action,expected_version,response FROM taska.project_lifecycle_commands
-              WHERE tenant_id=:t AND actor_id=:u AND authority=:g AND command_key=:k
-              """).bind("t",tenant(f)).bind("u",user(f)).bind("g",authority).bind("k",command)
+          .flatMap(a -> s.database().sql(
+                                          """
+                                          SELECT project_id,action,expected_version,response FROM taska.project_lifecycle_commands
+                                          WHERE tenant_id=:t AND actor_id=:u AND authority=:g AND command_key=:k
+                                          """).bind("t",tenant(f)).bind("u",user(f)).bind("g",authority).bind("k",command)
               .map((r,m) -> {
                 if (!id.equals(r.get("project_id",UUID.class)) || !action.wire().equals(r.get("action",String.class))
                     || expected.intValue() != r.get("expected_version",Integer.class))
@@ -421,9 +475,12 @@ public final class TenantProjectApi {
                 if (!expected.equals(current.getVersion())) return Mono.error(versionProblem(false));
                 Mono<Project> update;
                 if ((current.getArchivedAt() != null) == archive) update = Mono.just(current);
-                else update = s.database().sql("UPDATE taska.projects SET archived_at="
+                else update = s.database().sql(
+                                                              "UPDATE taska.projects SET"
+                                                                  + " archived_at="
                         + (archive ? "now()" : "NULL") + ",updated_at=now(),version=version+1"
-                        + " WHERE tenant_id=:t AND id=:p AND version=:v RETURNING *")
+                        + " WHERE tenant_id=:t AND id=:p"
+                                                                  + " AND version=:v RETURNING *")
                     .bind("t",tenant(f)).bind("p",id).bind("v",expected)
                     .map((r,m) -> TenantProjectStore.project(r)).one()
                     .switchIfEmpty(Mono.error(versionProblem(false)))
@@ -438,11 +495,12 @@ public final class TenantProjectApi {
                       return event.thenReturn(saved);
                     });
                 return update.map(saved -> response(new Authorized(saved,a.role())))
-                    .flatMap(result -> s.database().sql("""
-                        INSERT INTO taska.project_lifecycle_commands
-                          (tenant_id,actor_id,authority,command_key,project_id,action,expected_version,response)
-                        VALUES(:t,:u,:g,:k,:p,:a,:v,:r)
-                        """).bind("t",tenant(f)).bind("u",user(f)).bind("g",authority).bind("k",command)
+                    .flatMap(result -> s.database().sql(
+                                                                    """
+                                                                    INSERT INTO taska.project_lifecycle_commands
+                                                                      (tenant_id,actor_id,authority,command_key,project_id,action,expected_version,response)
+                                                                    VALUES(:t,:u,:g,:k,:p,:a,:v,:r)
+                                                                    """).bind("t",tenant(f)).bind("u",user(f)).bind("g",authority).bind("k",command)
                         .bind("p",id).bind("a",action.wire()).bind("v",expected).bind("r",result.toByteArray())
                         .then().thenReturn(result));
               }))));

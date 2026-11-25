@@ -107,7 +107,8 @@ public final class TenantIssueStore {
                       var session = new Session(db, context);
                       return Mono.defer(() -> work.apply(session))
                           .doFinally(signal -> session.active.set(false));
-                    }));
+                    }))
+        .onErrorMap(ru.taska.r2dbc.ProjectCleanupFailures::map);
   }
 
   private static DomainException failure(DomainStatus status, String reason) {

@@ -29,7 +29,7 @@ Harness объединяет инструкции, доступные инстр
 | Квоты проектов | [PROJECT saga](../../tenant-service/PROJECT-QUOTAS.md), `tenant-service` / `project-service` | Hidden provision, owner-confirmed expiry, durable effects и current policy |
 | Квоты мест | [SEAT admission](../../tenant-service/SEAT-QUOTAS.md), `tenant-service` | Membership + reservation atomicity, replay/fence/expiry, scoped admin bypass and safe quota read |
 | Пользователь и доступ | `auth-service` | сессии, refresh rotation, статус пользователя, PAT scopes; [приглашения](../tas-204-invitations-and-directory.md) |
-| Проекты и роли | `project-service` | ADMIN/MEMBER/VIEWER, последний ADMIN, собственность типов задач |
+| Проекты и роли | `project-service`, [необратимое удаление](../../project-service/PROJECT-DELETION.md) | ADMIN/MEMBER/VIEWER, последний ADMIN, собственность типов задач |
 | Workflow | `workflow-service` | граф, типы, версии, резервирования; [привязки](../tas-436-workflow-type-bindings.md), [native RPC/ACL](../../workflow-service/TENANT-API.md) |
 | Задачи | `issue-service` | [Native CRUD/ACL](../../issue-service/TENANT-API.md), If-Match, идемпотентность, поиск/доска, история, связи, worklogs; [удаление типа](../tas-433-issue-type-deletion.md) |
 | События и уведомления | `common-lib`, `kafka-lib`, `notification-service` | атомарность outbox, дедупликация, каналы; [Telegram](../tas-387-telegram-notifications.md) |

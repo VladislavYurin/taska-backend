@@ -1,11 +1,19 @@
 package ru.taska.projectstorage;
 
-import java.util.*;
+import java.util.List;
+import java.util.Set;
+import java.util.UUID;
 import reactor.core.publisher.Mono;
-import ru.taska.api.b2b.v1.*;
-import ru.taska.capability.*;
-import ru.taska.exception.*;
-import ru.taska.security.tenant.*;
+import ru.taska.api.b2b.v1.CredentialKind;
+import ru.taska.api.b2b.v1.Membership;
+import ru.taska.api.b2b.v1.Tenant;
+import ru.taska.capability.ManagedDomainReads;
+import ru.taska.capability.TenantDecisionFacts;
+import ru.taska.exception.DomainException;
+import ru.taska.exception.DomainStatus;
+import ru.taska.security.tenant.RpcContextBridge;
+import ru.taska.security.tenant.RpcContextSecurity;
+import ru.taska.security.tenant.VerifiedTenantContext;
 
 /** Owner continuation validates current authority plus the immutable local creation identity. */
 public final class ProjectOwnerPolicy implements ProjectQuotaOwner.Policy {
@@ -29,6 +37,28 @@ public final class ProjectOwnerPolicy implements ProjectQuotaOwner.Policy {
       VerifiedTenantContext c, ProjectQuotaOwner.Use use, UUID operation, UUID project) {
     var claim = RpcContextBridge.details(c).getContext();
     if (claim.getCredentialKind() == CredentialKind.CREDENTIAL_KIND_SERVICE) {
+      if (claim.getServicePurpose().equals("PROJECT_CLEANUP")) {
+        if (use != ProjectQuotaOwner.Use.INSPECT
+            && use != ProjectQuotaOwner.Use.DELETE_RECEIPT
+            && use != ProjectQuotaOwner.Use.INVENTORY) return Mono.error(denied());
+        return ru.taska.quota.ProjectDeletionAuthority.service()
+            .then(
+                store.execute(
+                    s ->
+                        s.database()
+                            .sql(
+                                "SELECT d.id FROM taska.project_deletion_operations d JOIN"
+                                    + " taska.project_creation_operations c ON"
+                                    + " c.tenant_id=d.tenant_id AND c.project_id=d.project_id WHERE"
+                                    + " d.tenant_id=:t AND d.project_id=:p AND c.operation_id=:op")
+                            .bind("t", UUID.fromString(c.tenantId()))
+                            .bind("p", project)
+                            .bind("op", operation)
+                            .fetch()
+                            .one()
+                            .switchIfEmpty(Mono.error(denied()))))
+            .then();
+      }
       if (!claim.getServicePurpose().equals("provisioning")
           || !c.scopes().contains("project:recover")
           || !Set.of("tenant-service", "project-service").contains(claim.getServiceIdentity()))

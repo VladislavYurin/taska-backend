@@ -180,6 +180,20 @@ public class TenantStorageConfiguration {
     policies.put(
         ru.taska.api.b2b.v1.ProjectQuotaOwnerServiceGrpc.getInventoryMethod().getFullMethodName(),
         new ru.taska.security.tenant.RpcContextSecurity.Policy(true, false));
+    policies.put(
+        ru.taska.api.b2b.v1.ProjectDeletionServiceGrpc.getDeleteProjectMethod().getFullMethodName(),
+        new ru.taska.security.tenant.RpcContextSecurity.Policy(true, true));
+    policies.put(
+        ru.taska.api.b2b.v1.ProjectDeletionServiceGrpc.getGetDeletionMethod().getFullMethodName(),
+        new ru.taska.security.tenant.RpcContextSecurity.Policy(true, false));
+    policies.put(
+        ru.taska.api.b2b.v1.ProjectDeletionServiceGrpc.getInspectDeletionMethod()
+            .getFullMethodName(),
+        new ru.taska.security.tenant.RpcContextSecurity.Policy(true, false));
+    policies.put(
+        ru.taska.api.b2b.v1.ProjectDeletionServiceGrpc.getRecoverDeletionMethod()
+            .getFullMethodName(),
+        new ru.taska.security.tenant.RpcContextSecurity.Policy(true, true));
     var apiRpc =
         java.util.Set.of(
             "CreateProject",

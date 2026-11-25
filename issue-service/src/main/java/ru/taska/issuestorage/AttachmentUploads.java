@@ -254,6 +254,38 @@ public final class AttachmentUploads {
         .then(store.operation(u.operation()));
   }
 
+  /** Продолжение только конкретного upload в manifest принятого удаления проекта. */
+  public Mono<Void> cleanupProjectUpload(UUID operation) {
+    return AttachmentLifecyclePolicy.service()
+        .then(store.operation(operation))
+        .flatMap(
+            u ->
+                authority
+                    .get(operation)
+                    .flatMap(
+                        r ->
+                            store
+                                .accepted(u, r)
+                                .flatMap(
+                                    current -> {
+                                      if (r.state() == State.COMMITTED)
+                                        return owner
+                                            .inspect(r)
+                                            .flatMap(
+                                                receipt ->
+                                                    receipt.state()
+                                                            == ru.taska.quota.StorageQuotaProtocol
+                                                                .OwnerState.DELETED
+                                                        ? Mono.empty()
+                                                        : finish(current).then());
+                                      if (r.state() == State.ACTIVE)
+                                        return recoverCopy(current)
+                                            .then(authority.release(r))
+                                            .then();
+                                      return owner.cancel(r).then();
+                                    })));
+  }
+
   public record Recovery(int processed, int failed, int dataLoss, String next) {}
 
   public Mono<Recovery> reconcile(UUID after, int limit) {
