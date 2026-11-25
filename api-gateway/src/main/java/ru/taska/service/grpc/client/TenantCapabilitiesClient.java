@@ -1,16 +1,26 @@
-package ru.taska.service;
+package ru.taska.service.grpc.client;
 
-import io.grpc.*;
+import io.grpc.ManagedChannel;
+import io.grpc.Metadata;
+import io.grpc.Status;
 import io.grpc.stub.MetadataUtils;
 import java.nio.file.Path;
-import java.util.*;
+import java.util.HashSet;
+import java.util.UUID;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
-import ru.taska.api.b2b.v1.*;
+import ru.taska.api.b2b.v1.Capabilities;
+import ru.taska.api.b2b.v1.ErrorCode;
+import ru.taska.api.b2b.v1.GetTenantCapabilitiesRpcRequest;
+import ru.taska.api.b2b.v1.ReactorTenantCapabilitiesServiceGrpc;
+import ru.taska.api.b2b.v1.RestrictionCode;
+import ru.taska.api.b2b.v1.TenantCapabilitiesServiceGrpc;
 import ru.taska.domain.GatewayContext;
-import ru.taska.security.tenant.*;
+import ru.taska.security.tenant.FileMtlsRpcChannels;
+import ru.taska.security.tenant.RpcContextSecurity;
+import ru.taska.security.tenant.VerifiedTenantContext;
 
 /** Client owns a private mTLS channel. Legacy mode cannot synthesize a tenant principal. */
 @Service

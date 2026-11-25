@@ -5,18 +5,26 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 import ru.taska.AbstractIT;
+import ru.taska.api.b2b.v1.Membership;
+import ru.taska.api.b2b.v1.MembershipSnapshot;
+import ru.taska.api.b2b.v1.MembershipValidation;
+import ru.taska.api.b2b.v1.MembershipValidationBatch;
 import ru.taska.domain.GlobalRole;
 import ru.taska.dto.AvatarDto;
 import ru.taska.dto.UserProfileDto;
-import ru.taska.exception.DomainException;
-import ru.taska.exception.DomainStatus;
 import ru.taska.entity.User;
 import ru.taska.entity.UserAvatar;
 import ru.taska.entity.UserStatus;
+import ru.taska.exception.DomainException;
+import ru.taska.exception.DomainStatus;
 import ru.taska.repository.UserAvatarRepository;
 import ru.taska.repository.UserRepository;
+import ru.taska.security.tenant.VerifiedTenantContext;
+import ru.taska.security.trust.GrpcTenantServiceClient;
 import ru.taska.storage.client.StorageClient;
 import ru.taska.storage.dto.PresignedUploadResult;
 import software.amazon.awssdk.core.async.AsyncRequestBody;
@@ -26,9 +34,15 @@ import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.argThat;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 @DisplayName("ProfileServiceImpl Integration Tests")
 @org.springframework.boot.test.context.SpringBootTest(
@@ -58,6 +72,12 @@ class ProfileServiceImplIntegrationTest extends AbstractIT {
     private S3AsyncClient s3AsyncClient;
 
     private UUID userId;
+
+    @MockitoBean
+    private DirectoryMembershipAccess membershipAccess;
+
+    @MockitoBean
+    private GrpcTenantServiceClient tenantClient;
 
     @BeforeEach
     void setUp() {
@@ -183,8 +203,20 @@ class ProfileServiceImplIntegrationTest extends AbstractIT {
         assertThat(userAvatarRepository.findByUserId(userId).block()).isNull();
     }
 
+    /**
+     * Проверяет чтение профилей из настоящей БД, обогащение аватара
+     * подписанным URL через настроенное S3-хранилище и сохранение
+     * порядка запрошенных пользователей.
+     *
+     * <p>Tenant-контекст и успешные проверки membership заданы
+     * тестовыми объектами. Проверка JWT, mTLS и фактического
+     * членства через tenant-service в этот тест не входит.
+     */
     @Test
-    @DisplayName("getUserDetailsByIds должен возвращать данные пользователей с обогащенными аватарами и сохранять порядок")
+    @DisplayName(
+            "getUserDetailsByIds: возвращает профили в порядке запроса, "
+            + "обогащает существующий аватар и сохраняет отсутствие аватара"
+    )
     void getUserDetailsByIds_shouldReturnEnrichedUserDetailsInOrder() {
         String objectKey = uploadFileToS3(FILE_CONTENT);
 
@@ -204,10 +236,58 @@ class ProfileServiceImplIntegrationTest extends AbstractIT {
                 .status(UserStatus.ACTIVE)
                 .globalRole(GlobalRole.USER)
                 .build();
-        UUID user2Id = userRepository.save(userWithoutAvatar).block().getId();
 
-        profileService.getUserDetailsByIds(List.of(userId, user2Id))
-                .as(StepVerifier::create)
+        User savedUser = userRepository.save(userWithoutAvatar).block();
+        assertThat(savedUser).isNotNull();
+
+        UUID user2Id = savedUser.getId();
+        UUID tenantId = UUID.randomUUID();
+        String tenantIdValue = tenantId.toString();
+        List<UUID> requestedIds = List.of(userId, user2Id);
+
+        // Текущий пользователь — первый пользователь,
+        VerifiedTenantContext verifiedContext = mock(VerifiedTenantContext.class);
+
+        when(verifiedContext.tenantId()).thenReturn(tenantIdValue);
+        when(verifiedContext.actorId()).thenReturn(userId.toString());
+        when(verifiedContext.scopes()).thenReturn(Set.of("read"));
+
+        when(membershipAccess.check(
+                argThat(user -> user != null && userId.equals(user.getId())),
+                eq(tenantIdValue)
+        )).thenReturn(Mono.empty());
+
+        var batchBuilder = MembershipValidationBatch.newBuilder()
+                .setTenantId(tenantIdValue);
+
+        for (UUID requestedId : requestedIds) {
+            batchBuilder.addItems(
+                    MembershipValidation.newBuilder()
+                            .setUserId(requestedId.toString())
+                            .setFound(true)
+                            .setMembership(
+                                    MembershipSnapshot.newBuilder()
+                                            .setTenantId(tenantIdValue)
+                                            .setUserId(requestedId.toString())
+                                            .setState(
+                                                    Membership.StateValue.STATE_ACTIVE
+                                            )
+                            )
+            );
+        }
+
+        when(tenantClient.batchValidateMemberships(
+                tenantIdValue,
+                requestedIds
+        )).thenReturn(Mono.just(batchBuilder.build()));
+
+        StepVerifier.create(
+                        profileService.getUserDetailsByIds(requestedIds)
+                                .contextWrite(context -> context.put(
+                                        VerifiedTenantContext.class,
+                                        verifiedContext
+                                ))
+                )
                 .assertNext(dto -> {
                     assertThat(dto.userId()).isEqualTo(userId);
                     assertThat(dto.displayName()).isEqualTo(TEST_USER_DISPLAY_NAME);
@@ -217,9 +297,10 @@ class ProfileServiceImplIntegrationTest extends AbstractIT {
                     assertThat(dto.avatar().getId()).isNotNull();
                     assertThat(dto.avatar().getFileName()).isEqualTo(FILE_NAME);
                     assertThat(dto.avatar().getContentType()).isEqualTo(CONTENT_TYPE);
-                    assertThat(dto.avatar().getSizeBytes()).isEqualTo(FILE_CONTENT.length);
+                    assertThat(dto.avatar().getSizeBytes())
+                            .isEqualTo((long) FILE_CONTENT.length);
                     assertThat(dto.avatar().getDownloadUrl())
-                            .isNotNull()
+                            .isNotBlank()
                             .contains(BUCKET_NAME)
                             .contains("http");
                 })
@@ -230,6 +311,15 @@ class ProfileServiceImplIntegrationTest extends AbstractIT {
                     assertThat(dto.avatar()).isNull();
                 })
                 .verifyComplete();
+
+        verify(membershipAccess).check(
+                argThat(user -> user != null && userId.equals(user.getId())),
+                eq(tenantIdValue)
+        );
+        verify(tenantClient).batchValidateMemberships(
+                tenantIdValue,
+                requestedIds
+        );
     }
 
     @Test

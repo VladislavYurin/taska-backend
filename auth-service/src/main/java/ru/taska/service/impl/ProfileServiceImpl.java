@@ -2,10 +2,12 @@ package ru.taska.service.impl;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.reactive.TransactionalOperator;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import ru.taska.api.b2b.v1.Membership;
 import ru.taska.dto.AvatarDto;
 import ru.taska.dto.UserDetailsDto;
 import ru.taska.dto.UserProfileDto;
@@ -16,6 +18,10 @@ import ru.taska.exception.DomainStatus;
 import ru.taska.mapper.ProfileMapper;
 import ru.taska.repository.UserAvatarRepository;
 import ru.taska.repository.UserRepository;
+import ru.taska.security.tenant.VerifiedTenantContext;
+import ru.taska.security.trust.GrpcTenantServiceClient;
+import ru.taska.service.DirectoryAccess;
+import ru.taska.service.DirectoryMembershipAccess;
 import ru.taska.service.ProfileService;
 import ru.taska.storage.client.StorageClient;
 import ru.taska.storage.dto.PresignedUploadResult;
@@ -35,6 +41,10 @@ public class ProfileServiceImpl implements ProfileService {
     private final StorageClient storageClient;
     private final ProfileMapper profileMapper;
     private final TransactionalOperator transactionalOperator;
+    private final DirectoryMembershipAccess membership;
+    private final DirectoryAccess access;
+    private final ObjectProvider<GrpcTenantServiceClient> grpcTenantServiceClientsProvider;
+    private static final int MEMBERSHIP_BATCH_SIZE = 100;
 
     @Override
     public Mono<User> updateMyProfile(UUID actorUserId, String displayName) {
@@ -174,24 +184,101 @@ public class ProfileServiceImpl implements ProfileService {
      * Возвращает данные пользователей по переданным идентификаторам.
      * Пользователи, которые не найдены в базе данных, не включаются в результат.
      * <p>
+     * Алгоритм метода:
+     * <li>
+     *     Имеет пользователь, который послал запрос, право выполнять запрос
+     * </li>
+     * <li>
+     *     Находится пользователь, выполнивший запрос, в tenant с которого выполняет запрос
+     * </li>
+     * <li>
+     *     Выполняется запрос в grpcTenantServiceClient, после чего проверяется, находятся ли запрошенные пользователи в том же tenant, что и пользователь, выполнивший запрос
+     * </li>
+     * <li>
+     *     Если до, то запрашивается остальная информация и формируется ответ, иначе формируется ошибка RESOURCE_NOT_FOUND
+     * </li>
+     *
+     * <p>
      * Метод автоматически удаляет дубликаты из входного списка {@code userIds} и сохраняет
      * исходный порядок найденных пользователей при возврате результата.
      * Если {@code userIds} равен {@code null} или пуст, возвращает пустой результат.
      */
     @Override
     public Flux<UserDetailsDto> getUserDetailsByIds(List<UUID> userIds) {
-        if (userIds == null || userIds.isEmpty()) {
-            return Flux.empty();
-        }
 
-        List<UUID> distinctIds = userIds.stream().distinct().toList();
+        return Flux.deferContextual(context -> {
+            if (!context.hasKey(VerifiedTenantContext.class))
+                return Mono.error(new DomainException(
+                        DomainStatus.UNAUTHENTICATED,
+                        "Verified tenant context is required"
+                ));
 
-        return userRepository.findUsersWithAvatars(distinctIds)
-                .collectMap(UserDetailsDto::userId)
-                .flatMapMany(usersMap -> filterFoundUsersInOrder(usersMap, distinctIds))
-                .flatMapSequential(this::enrichWithAvatarUrl)
-                .doOnError(ex -> log.error("Failed to execute getUserDetailsByIds for userIds: {}", distinctIds, ex))
-                .doOnComplete(() -> log.info("Successfully completed getUserDetailsByIds for requested IDs"));
+            VerifiedTenantContext verifiedTenantContext = VerifiedTenantContext.require(context);
+            String tenantId = verifiedTenantContext.tenantId();
+            String actorId = verifiedTenantContext.actorId();
+
+            if (actorId == null || actorId.isBlank() || !verifiedTenantContext.scopes().contains("read")) {
+                return Flux.error(new DomainException(
+                        DomainStatus.PERMISSION_DENIED,
+                        "Tenant directory read access is required"
+                ));
+            }
+
+            return access.requireActor(parseResponseUuid(actorId), false)
+                    .flatMapMany(user ->
+                            membership.check(user, tenantId)
+                                    .thenMany(Flux.defer(() -> {
+                                                GrpcTenantServiceClient grpcTenantServiceClient = grpcTenantServiceClientsProvider.getIfAvailable();
+                                                if (grpcTenantServiceClient == null) {
+                                                    return Mono.error(new DomainException(
+                                                            DomainStatus.UNAVAILABLE,
+                                                            "Tenant membership verification is unavailable"
+                                                    ));
+                                                }
+                                                if (userIds == null || userIds.isEmpty()) {
+                                                            return Flux.empty();
+                                                        }
+                                                List<UUID> distinctIds = userIds.stream()
+                                                                .distinct()
+                                                                .toList();
+                                                return Flux.fromIterable(distinctIds)
+                                                        .buffer(MEMBERSHIP_BATCH_SIZE)
+                                                        .concatMap(uuids ->
+                                                                        grpcTenantServiceClient.batchValidateMemberships(tenantId, uuids)
+                                                                                .switchIfEmpty(Mono.error(new DomainException(
+                                                                                        DomainStatus.UNAVAILABLE,
+                                                                                        "Tenant service returned no membership batch"
+                                                                                )))
+                                                                , 0
+                                                        )
+                                                        .any(membershipBatch ->
+                                                                membershipBatch.getItemsList()
+                                                                        .stream()
+                                                                        .anyMatch(membership -> {
+                                                                            var state = membership.getMembership().getState();
+                                                                            return !membership.getFound() ||
+                                                                                   (state != Membership.StateValue.STATE_ACTIVE &&
+                                                                                    state != Membership.StateValue.STATE_SUSPENDED);
+                                                                        })
+                                                        )
+                                                        .flatMapMany(hasForbidden -> {
+                                                            if (hasForbidden) {
+                                                                return Flux.error(new DomainException(
+                                                                        DomainStatus.NOT_FOUND,
+                                                                        "Resource not found",
+                                                                        Map.of("reason", "RESOURCE_NOT_FOUND")
+                                                                ));
+                                                            }
+                                                            return userRepository.findUsersWithAvatars(distinctIds)
+                                                                    .collectMap(UserDetailsDto::userId)
+                                                                    .flatMapMany(usersMap -> filterFoundUsersInOrder(usersMap, distinctIds))
+                                                                    .flatMapSequential(this::enrichWithAvatarUrl)
+                                                                    .doOnError(ex -> log.error("Failed to execute getUserDetailsByIds for userIds: {}", distinctIds, ex))
+                                                                    .doOnComplete(() -> log.info("Successfully completed getUserDetailsByIds for requested IDs"));
+                                                        });
+                                            })
+                                    ));
+        });
     }
 
     private Flux<UserDetailsDto> filterFoundUsersInOrder(Map<UUID, UserDetailsDto> usersMap, List<UUID> distinctIds) {
@@ -219,6 +306,32 @@ public class ProfileServiceImpl implements ProfileService {
     private Mono<User> verifyUserExists(UUID userId) {
         return userRepository.findById(userId)
                 .switchIfEmpty(Mono.error(new DomainException(DomainStatus.NOT_FOUND, "User not found: " + userId)));
+    }
+
+    private static UUID parseResponseUuid(String value) {
+        if (value == null) {
+            throw invalidDirectoryResponse();
+        }
+
+        final UUID parsed;
+        try {
+            parsed = UUID.fromString(value);
+        } catch (IllegalArgumentException exception) {
+            throw invalidDirectoryResponse();
+        }
+
+        if (!parsed.toString().equalsIgnoreCase(value)) {
+            throw invalidDirectoryResponse();
+        }
+
+        return parsed;
+    }
+
+    private static DomainException invalidDirectoryResponse() {
+        return new DomainException(
+                DomainStatus.UNAVAILABLE,
+                "Incomplete or invalid directory response"
+        );
     }
 
     /**

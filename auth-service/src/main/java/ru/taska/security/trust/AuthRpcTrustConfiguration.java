@@ -5,8 +5,9 @@ import java.nio.file.Path;
 import java.time.Clock;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.boot.autoconfigure.condition.*;
-import org.springframework.context.annotation.*;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
 import org.springframework.r2dbc.core.DatabaseClient;
 import org.springframework.scheduling.annotation.Scheduled;
 import ru.taska.security.session.WebSessionStore;
@@ -33,6 +34,23 @@ public class AuthRpcTrustConfiguration {
             .create(host, port, "tenant-service"),
         security::getIfAvailable,
         trust);
+  }
+
+  @Bean(destroyMethod = "close")
+  GrpcTenantServiceClient grpcTenantServiceClient(
+          ObjectProvider<RpcContextSecurity> security,
+          ManagedRpcTrust trust,
+          @Value("${taska.rpc.tls.ca-certificate:}") String ca,
+          @Value("${taska.rpc.tls.certificate:}") String cert,
+          @Value("${taska.rpc.tls.private-key:}") String key,
+          @Value("${DEPLOY_ENVIRONMENT:local}") String environment,
+          @Value("${taska.rpc.trust.tenant-host:tenant-service}") String host,
+          @Value("${taska.rpc.trust.tenant-port:9099}") int port) {
+    return new GrpcTenantServiceClient(
+            new FileMtlsRpcChannels(Path.of(ca), Path.of(cert), Path.of(key), environment)
+                    .create(host, port, "tenant-service"),
+            security::getIfAvailable,
+            trust);
   }
 
   @Bean
