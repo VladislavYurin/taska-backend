@@ -1,13 +1,26 @@
 package ru.taska.security.trust;
 
-import io.r2dbc.spi.*;
-import java.time.*;
-import java.util.*;
+import io.r2dbc.spi.ConnectionFactory;
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.UUID;
 import org.springframework.r2dbc.core.DatabaseClient;
 import reactor.core.publisher.Mono;
-import ru.taska.api.b2b.v1.*;
+import ru.taska.api.b2b.v1.AdminGrant;
+import ru.taska.api.b2b.v1.AdminScope;
+import ru.taska.api.b2b.v1.CredentialKind;
+import ru.taska.api.b2b.v1.RequestContext;
+import ru.taska.api.b2b.v1.RpcActorFacts;
 import ru.taska.security.session.WebSessionStore;
-import ru.taska.security.tenant.*;
+import ru.taska.security.tenant.ManagedRpcTrust;
+import ru.taska.security.tenant.RpcContextSecurity;
+import ru.taska.security.tenant.RpcTrustBackend;
 
 /** Uncached primary-state validation. An active account alone never validates a credential. */
 public final class AuthRpcTrustBackend implements RpcTrustBackend {
@@ -54,8 +67,7 @@ public final class AuthRpcTrustBackend implements RpcTrustBackend {
               var c = request.getContext();
               if (c.getCredentialKind() == CredentialKind.CREDENTIAL_KIND_SERVICE)
                 return Mono.just(true);
-              if (!c.hasActorUserId()
-                  || !c.hasCredentialId()) return Mono.just(false);
+              if (!c.hasActorUserId() || !c.hasCredentialId()) return Mono.just(false);
               UUID user = id(c.getActorUserId());
               long generation = Long.parseLong(c.getActorGeneration());
               UUID credential = id(c.getCredentialId());
@@ -79,8 +91,7 @@ public final class AuthRpcTrustBackend implements RpcTrustBackend {
                   && (c.hasTenantId()
                       || c.hasGrantId()
                       || c.hasGrantGeneration()
-                      || c.hasMembershipGeneration()))
-                return Mono.just(false);
+                      || c.hasMembershipGeneration())) return Mono.just(false);
               if ((tenant || global)
                   && (!c.hasSessionId()
                       || !c.getSessionId().equals(c.getCredentialId())
@@ -209,12 +220,19 @@ public final class AuthRpcTrustBackend implements RpcTrustBackend {
       return "gatewayRequest".equals(c.getAction()) && policy.mutation() == modify;
     if (TENANT_SERVICE_RPC.concat("GetTenant").equals(rpc))
       return "getTenant".equals(c.getAction()) && !policy.mutation();
-    var mutations=Map.of(
-        TENANT_SERVICE_RPC.concat("RenameTenant"),"renameTenant",
-        TENANT_SERVICE_RPC.concat("PauseTenant"),"pauseTenant",
-        TENANT_SERVICE_RPC.concat("ResumeTenant"),"resumeTenant",
-        "ru.taska.b2b.v1.PlatformService/SetPlatformBlock","setPlatformBlock");
-    return Objects.equals(mutations.get(rpc),c.getAction()) && modify && policy.mutation();
+    var mutations =
+        Map.of(
+            TENANT_SERVICE_RPC.concat("RenameTenant"),
+            "renameTenant",
+            TENANT_SERVICE_RPC.concat("TransferTenantOwnership"),
+            "transferTenantOwnership",
+            TENANT_SERVICE_RPC.concat("PauseTenant"),
+            "pauseTenant",
+            TENANT_SERVICE_RPC.concat("ResumeTenant"),
+            "resumeTenant",
+            "ru.taska.b2b.v1.PlatformService/SetPlatformBlock",
+            "setPlatformBlock");
+    return Objects.equals(mutations.get(rpc), c.getAction()) && modify && policy.mutation();
   }
 
   public Mono<RpcActorFacts> actorFacts(
