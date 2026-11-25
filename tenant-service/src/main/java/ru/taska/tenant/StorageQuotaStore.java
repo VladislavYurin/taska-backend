@@ -792,12 +792,18 @@ COALESCE((SELECT sum(amount) FROM taska.quota_reservations WHERE tenant_id=:t AN
     return policy
         .current(c, command, request)
         .timeout(Duration.ofSeconds(5))
+        .onErrorMap(
+            java.util.concurrent.TimeoutException.class,
+            e -> fail(DomainStatus.UNAVAILABLE, "STORAGE_POLICY_UNAVAILABLE"))
         .switchIfEmpty(Mono.error(fail(DomainStatus.UNAVAILABLE, "STORAGE_POLICY_UNAVAILABLE")));
   }
 
   private <T> Mono<T> remote(Mono<T> result) {
     return result
         .timeout(Duration.ofSeconds(5))
+        .onErrorMap(
+            java.util.concurrent.TimeoutException.class,
+            e -> fail(DomainStatus.UNAVAILABLE, "STORAGE_OWNER_UNAVAILABLE"))
         .switchIfEmpty(Mono.error(fail(DomainStatus.UNAVAILABLE, "STORAGE_OWNER_UNAVAILABLE")));
   }
 

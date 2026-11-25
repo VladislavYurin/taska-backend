@@ -13,6 +13,10 @@ from issue_acl_e2e import IssueAclLocal
 
 
 class AttachmentUploadLocal(IssueAclLocal):
+    def before_upload(self, client, path, payload, key, tenant):
+        """Optional fault injection confined to this run's own services."""
+        pass
+
     def compose(self, *args, timeout=600, input_text=None):
         return e.run_command(['docker', 'compose', '--env-file', '/dev/null', '-p', self.project,
                               '-f', str(self.compose_file), *args], self.root, timeout, input_text,
@@ -111,6 +115,7 @@ class AttachmentUploadLocal(IssueAclLocal):
                      {'Idempotency-Key': str(uuid.uuid4())})
         e.require(self.sql('issue_db', "SELECT count(*) FROM taska.attachment_uploads WHERE tenant_id='%s';" % tenant).strip() == '0', 'Rejected MIME persisted an intent')
         key = str(uuid.uuid4())
+        self.before_upload(owner, path, payload, key, tenant)
         uploaded = positive(owner, path + 'upload-url', 200, payload, {'Idempotency-Key': key})
         repeated = positive(owner, path + 'upload-url', 200, payload, {'Idempotency-Key': key})
         e.require(uploaded['objectKey'] == repeated['objectKey'], 'Upload retry allocated another resource')

@@ -17,6 +17,15 @@ TAS-347, а не отдельный счётчик.
 из пути и primary источников. Ключи S3 выдаёт только сервер. Ответ содержит временную
 PUT capability и `objectKey`, который служит идентификатором подтверждения.
 
+В trusted-режиме временная недоступность dependency либо gRPC deadline на upload-url
+возвращает HTTP 503 `application/problem+json`, `code=DEPENDENCY_UNAVAILABLE`,
+`details.code` и requestId без внутреннего timeout/transport текста. Локальные deadline
+storage policy/billing/owner остаются 5s. Legacy-профиль сохраняет JSON UNAVAILABLE/503
+и DEADLINE_EXCEEDED/504; соседние операции и ACL/quota отказы не меняются.
+После timeout нельзя считать reservation отсутствующей или отправлять новый ключ:
+повторить исходные key/body, чтобы продолжить сохранённый intent. Незавершённый root
+admission откатывается; уже принятое состояние удерживается до положительного proof.
+
 Клиент выполняет PUT с исходными Content-Type и размером, затем POST `.../confirm`
 с теми же `objectKey`, `fileName`, `contentType`. Подтвердить загрузку может исходный
 actor при актуальном доступе к tenant, проекту и issue. Чужой key не становится
@@ -88,3 +97,8 @@ PostgreSQL/Kafka/S3 и проверяет REST → текущие primary ист
 и тело; число таких повторов выводится отдельно. Постоянная ошибка не считается PASS.
 Оба runner очищают только
 свои ресурсы; общая stage среда не используется. Результаты хранятся в ignored target.
+
+`python3 scripts/harness/attachment_timeout_e2e.py` повторяет native upload-приёмку,
+приостанавливая только собственный billing-service перед первой командой. Проверяет
+Problem/503, неизменность quota/metadata после отказа и восстановление тем же ключом
+с последующим signed PUT/confirm и однократным учётом.

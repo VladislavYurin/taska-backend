@@ -91,6 +91,9 @@ class StorageQuotaIntegrationTest {
   static final AtomicBoolean loseCancelResponse = new AtomicBoolean();
   static final AtomicBoolean loseUsageResponse = new AtomicBoolean();
   static final AtomicBoolean expireOnInspect = new AtomicBoolean();
+  static final AtomicReference<StorageQuotaStore.Command> stalledPolicy = new AtomicReference<>();
+  static final AtomicBoolean billingStalled = new AtomicBoolean();
+  static final AtomicBoolean ownerStalled = new AtomicBoolean();
   static final AtomicReference<CredentialKind> lastCredential = new AtomicReference<>();
   static final AtomicLong limit = new AtomicLong(1),
       entitlement = new AtomicLong(1),
@@ -399,11 +402,30 @@ class StorageQuotaIntegrationTest {
             rootSecurity,
             Clock.systemUTC(),
             "tenant-service");
+    Owner ownerPort =
+        new Owner() {
+          public Mono<Receipt> inspect(Reservation r) {
+            return ownerStalled.get() ? Mono.never() : ownerClient.inspect(r);
+          }
+
+          public Mono<Receipt> activate(Reservation r) {
+            return ownerClient.activate(r);
+          }
+
+          public Mono<Receipt> cancel(Reservation r) {
+            return ownerClient.cancel(r);
+          }
+
+          public Mono<ManifestPage> manifests(UUID tenant, UUID after, long version) {
+            return ownerClient.manifests(tenant, after, version);
+          }
+        };
     root =
         new StorageQuotaStore(
             rootTx,
             (c, command, op) -> {
               lastCredential.set(RpcContextBridge.details(c).getContext().getCredentialKind());
+              if (command == stalledPolicy.get()) return Mono.never();
               if (!permitted.get())
                 return Mono.error(
                     new DomainException(DomainStatus.PERMISSION_DENIED, "current policy revoked"));
@@ -414,11 +436,14 @@ class StorageQuotaIntegrationTest {
                   new StorageQuotaStore.Grant(
                       bypass.get(), Duration.ofMinutes(15), 20000000, policyVersion.get()));
             },
-            ownerClient,
+            ownerPort,
             (tenant, min) ->
-                billingOnline.get()
-                    ? Mono.just(terms(tenant))
-                    : Mono.error(new DomainException(DomainStatus.UNAVAILABLE, "billing offline")),
+                billingStalled.get()
+                    ? Mono.never()
+                    : billingOnline.get()
+                        ? Mono.just(terms(tenant))
+                        : Mono.error(
+                            new DomainException(DomainStatus.UNAVAILABLE, "billing offline")),
             clock);
     var rootPolicies = new HashMap<String, RpcContextSecurity.Policy>();
     for (String method :
@@ -510,6 +535,9 @@ class StorageQuotaIntegrationTest {
 
   @BeforeEach
   void seed() {
+    stalledPolicy.set(null);
+    billingStalled.set(false);
+    ownerStalled.set(false);
     loseCancelResponse.set(false);
     loseUsageResponse.set(false);
     expireOnInspect.set(false);

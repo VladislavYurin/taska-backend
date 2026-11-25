@@ -1,6 +1,8 @@
 package ru.taska.tenant;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static ru.taska.tenant.StorageQuotaIntegrationTest.A;
@@ -198,6 +200,158 @@ class AttachmentUploadIntegrationTest {
 
   void sql(String s) {
     StorageQuotaIntegrationTest.ownerAdmin.sql(s).then().block(WAIT);
+  }
+
+  @Test
+  void billingTimeoutRetainsIntentAndSameKeyResumesWithoutDuplicateAccounting() throws Exception {
+    StorageQuotaIntegrationTest.billingStalled.set(true);
+    // Direct root boundary observes its own 5s deadline, rather than a racing client deadline.
+    var before =
+        new AttachmentUploads(
+            store,
+            StorageQuotaIntegrationTest.owner,
+            StorageQuotaIntegrationTest.root,
+            new S3UploadObjects(
+                StorageQuotaIntegrationTest.s3,
+                signer,
+                StorageQuotaIntegrationTest.objectStore,
+                BUCKET,
+                StorageQuotaIntegrationTest.clock),
+            policy,
+            StorageQuotaIntegrationTest.clock);
+    var error =
+        assertThrows(
+            Exception.class,
+            () ->
+                as(
+                        A,
+                        ACTOR,
+                        "createAttachmentUploadUrl",
+                        before.initiate(request("billing-timeout")))
+                    .block(WAIT));
+    assertEquals(1, rows("attachment_uploads"));
+    assertEquals(
+        0,
+        StorageQuotaIntegrationTest.rows(
+            StorageQuotaIntegrationTest.rootAdmin, "quota_reservations"));
+    assertEquals(
+        0,
+        StorageQuotaIntegrationTest.rows(StorageQuotaIntegrationTest.rootAdmin, "quota_effects"));
+    assertEquals(
+        0,
+        StorageQuotaIntegrationTest.rows(StorageQuotaIntegrationTest.rootAdmin, "quota_counters"));
+    var domain = assertInstanceOf(DomainException.class, reactor.core.Exceptions.unwrap(error));
+    assertEquals(DomainStatus.UNAVAILABLE, domain.getStatus());
+    assertFalse(domain.getMessage().contains("5000ms"));
+    StorageQuotaIntegrationTest.billingStalled.set(false);
+    // Recovery goes through the real root gRPC transport and original upload key.
+    var upload = begin("billing-timeout");
+    assertEquals(upload.getObjectKey(), begin("billing-timeout").getObjectKey());
+    put(upload);
+    as(A, ACTOR, "confirmAttachmentUpload", uploads.confirm(confirmation(upload))).block(WAIT);
+    as(A, ACTOR, "confirmAttachmentUpload", uploads.confirm(confirmation(upload))).block(WAIT);
+    assertEquals(1, rows("attachment_uploads"));
+    assertEquals(1, rows("issue_attachments"));
+    assertEquals(
+        1,
+        StorageQuotaIntegrationTest.rows(
+            StorageQuotaIntegrationTest.rootAdmin, "quota_reservations"));
+    assertEquals(
+        1,
+        StorageQuotaIntegrationTest.rows(StorageQuotaIntegrationTest.rootAdmin, "quota_effects"));
+    assertEquals("10", StorageQuotaIntegrationTest.usage(A).getUsed());
+    assertEquals("0", StorageQuotaIntegrationTest.usage(A).getReserved());
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.EnumSource(
+      value = StorageQuotaStore.Command.class,
+      names = {"MUTATION_CONTEXT", "RESERVE", "REPLAY"})
+  void policyDeadlinePreservesAdmissionOrReplay(StorageQuotaStore.Command phase) {
+    var request =
+        new ru.taska.quota.StorageQuotaProtocol.Request(
+            UUID.randomUUID(),
+            UUID.randomUUID(),
+            PROJECT,
+            ISSUE,
+            10,
+            StorageQuotaIntegrationTest.time.get().plusSeconds(60));
+    var existing =
+        phase == StorageQuotaStore.Command.REPLAY
+            ? StorageQuotaIntegrationTest.as(
+                    A, StorageQuotaIntegrationTest.authorityClient.reserve(request))
+                .block(WAIT)
+            : null;
+    StorageQuotaIntegrationTest.stalledPolicy.set(phase);
+    var error =
+        assertThrows(
+            Exception.class,
+            () ->
+                StorageQuotaIntegrationTest.as(A, StorageQuotaIntegrationTest.root.reserve(request))
+                    .block(WAIT));
+    assertEquals(
+        existing == null ? 0 : 1,
+        StorageQuotaIntegrationTest.rows(
+            StorageQuotaIntegrationTest.rootAdmin, "quota_reservations"));
+    assertEquals(
+        0,
+        StorageQuotaIntegrationTest.rows(StorageQuotaIntegrationTest.rootAdmin, "quota_effects"));
+    var domain = assertInstanceOf(DomainException.class, reactor.core.Exceptions.unwrap(error));
+    assertEquals(DomainStatus.UNAVAILABLE, domain.getStatus());
+    StorageQuotaIntegrationTest.stalledPolicy.set(null);
+    var recovered =
+        StorageQuotaIntegrationTest.as(
+                A, StorageQuotaIntegrationTest.authorityClient.reserve(request))
+            .block(WAIT);
+    if (existing != null) assertEquals(existing, recovered);
+    assertEquals(
+        recovered,
+        StorageQuotaIntegrationTest.as(
+                A, StorageQuotaIntegrationTest.authorityClient.reserve(request))
+            .block(WAIT));
+    assertEquals("10", StorageQuotaIntegrationTest.usage(A).getReserved());
+    assertEquals("0", StorageQuotaIntegrationTest.usage(A).getUsed());
+  }
+
+  @Test
+  void ownerDeadlineDoesNotReleaseAcceptedReservationAndConfirmResumes() throws Exception {
+    var upload = begin("owner-timeout");
+    put(upload);
+    var intent =
+        as(A, ACTOR, "confirmAttachmentUpload", store.staging(upload.getObjectKey())).block(WAIT);
+    var reservation =
+        StorageQuotaIntegrationTest.as(
+                A, StorageQuotaIntegrationTest.authorityClient.get(intent.operation()))
+            .block(WAIT);
+    StorageQuotaIntegrationTest.ownerStalled.set(true);
+    var error =
+        assertThrows(
+            Exception.class,
+            () ->
+                StorageQuotaIntegrationTest.as(
+                        A, StorageQuotaIntegrationTest.root.commit(reservation))
+                    .block(WAIT));
+    StorageQuotaIntegrationTest.ownerStalled.set(false);
+    assertEquals(
+        reservation,
+        StorageQuotaIntegrationTest.as(
+                A, StorageQuotaIntegrationTest.authorityClient.get(intent.operation()))
+            .block(WAIT));
+    assertEquals("10", StorageQuotaIntegrationTest.usage(A).getReserved());
+    assertEquals("0", StorageQuotaIntegrationTest.usage(A).getUsed());
+    assertEquals(
+        0,
+        StorageQuotaIntegrationTest.rows(StorageQuotaIntegrationTest.rootAdmin, "quota_effects"));
+    var domain = assertInstanceOf(DomainException.class, reactor.core.Exceptions.unwrap(error));
+    assertEquals(DomainStatus.UNAVAILABLE, domain.getStatus());
+    as(A, ACTOR, "confirmAttachmentUpload", uploads.confirm(confirmation(upload))).block(WAIT);
+    as(A, ACTOR, "confirmAttachmentUpload", uploads.confirm(confirmation(upload))).block(WAIT);
+    assertEquals("10", StorageQuotaIntegrationTest.usage(A).getUsed());
+    assertEquals("0", StorageQuotaIntegrationTest.usage(A).getReserved());
+    assertEquals(
+        1,
+        StorageQuotaIntegrationTest.rows(StorageQuotaIntegrationTest.rootAdmin, "quota_effects"));
+    assertEquals(1, rows("issue_attachments"));
   }
 
   @Test
