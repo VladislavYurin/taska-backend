@@ -1,13 +1,21 @@
 package ru.taska.tenant;
 
-import static ru.taska.quota.ProjectQuotaWire.*;
+import static ru.taska.quota.ProjectQuotaWire.instant;
+import static ru.taska.quota.ProjectQuotaWire.invalid;
+import static ru.taska.quota.ProjectQuotaWire.number;
+import static ru.taska.quota.ProjectQuotaWire.uuid;
 
 import mapper.GrpcExceptionMapper;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
-import ru.taska.api.b2b.v1.*;
-import ru.taska.exception.*;
-import ru.taska.quota.ProjectQuotaProtocol.*;
+import ru.taska.api.b2b.v1.FinalizeQuotaRpcRequest;
+import ru.taska.api.b2b.v1.GetQuotaReservationRequest;
+import ru.taska.api.b2b.v1.QuotaReservation;
+import ru.taska.api.b2b.v1.ReactorQuotaAuthorityServiceGrpc;
+import ru.taska.api.b2b.v1.ReserveQuotaRequest;
+import ru.taska.api.b2b.v1.ReserveQuotaRpcRequest;
+import ru.taska.exception.DomainException;
+import ru.taska.exception.DomainStatus;
 import ru.taska.security.tenant.RpcContextBridge;
 
 @Service
@@ -163,6 +171,32 @@ public final class ProjectQuotaGrpcService
                                   new DomainException(
                                       DomainStatus.FAILED_PRECONDITION, "STALE_FENCE"));
                             return storage()
+                                .releaseUsage(current)
+                                .thenReturn(com.google.protobuf.Empty.getDefaultInstance());
+                          });
+                })));
+  }
+
+  @Override
+  public Mono<com.google.protobuf.Empty> releaseProjectUsage(
+      Mono<FinalizeQuotaRpcRequest> requests) {
+    return errors(
+        RpcContextBridge.inbound(
+            requests.flatMap(
+                r -> {
+                  if (r.getKind() != QuotaReservation.KindValue.KIND_PROJECT
+                      || r.getPayload().hasActualQuantity()) return Mono.error(invalid());
+                  return store
+                      .get(uuid(r.getPayload().getOperationId()))
+                      .flatMap(
+                          current -> {
+                            if (!current.id().equals(uuid(r.getReservationId()))
+                                || !current.resource().equals(uuid(r.getPayload().getResourceId()))
+                                || current.fence() != number(r.getFence()))
+                              return Mono.error(
+                                  new DomainException(
+                                      DomainStatus.FAILED_PRECONDITION, "STALE_FENCE"));
+                            return store
                                 .releaseUsage(current)
                                 .thenReturn(com.google.protobuf.Empty.getDefaultInstance());
                           });

@@ -844,3 +844,33 @@ Cleanup: закрыть каналы/серверы/pools и удалить со
 Дополнительные проверки модулей: scopes/срок/лимит, receipt conflict/expiry, актуальность
 membership/credential, source outage и startup; HTTP→gRPC OAuth metadata и scoped revoke;
 production OAuth admission отвергает FREE_MCP до записи. Полный браузерный consent — TAS-543.
+
+
+## E2E-49. Безвозвратное удаление проекта (TAS-459)
+
+**Уровень:** изолированный local REST/mTLS/JWS/PostgreSQL/S3.
+**Команда:** `python3 scripts/harness/project_deletion_e2e.py`.
+
+**Дано:** собственные компании A/B с native проектами, задачами и подтверждёнными
+вложениями, действующие сессии, исходные project versions и real PUT windows.
+
+**Проверить:**
+
+1. Missing/stale If-Match, неверный project key, чужой tenant/project не создают
+   operation, не меняют содержимое и usage.
+2. Успех возвращает 202 PROJECT_DELETE с правильными resourceId/tenantId;
+   исходный key повторяется, другой key конфликтует. Новые content mutations закрыты.
+3. Недоступность S3 и restart owner не освобождают PROJECT usage по timeout.
+   Фактическая очистка ждёт исходное PUT window и подтверждённые object receipts.
+   EXPIRED после неуспешного purge неподтверждённого upload не является cleanup
+   ACK: reservation и PROJECT usage продолжают удерживаться.
+4. После physical cleanup tasks/workflow/project content отсутствует, tenant
+   templates, B и avatar sentinel сохраняются; counter A остаётся tombstone.
+5. Потеря финального локального ACK после root release и повтор не дают второго
+   RELEASE_USAGE. Operation в итоге SUCCEEDED.
+6. Replacement project имеет новый UUID и собственный lifetime counter.
+
+**Ограничения:** общий stage и frontend не используются. Отчёт содержит точный
+source head/tree, revisions JAR и cleanup. Результат отдельного запуска хранится
+в ignored target; описание сценария не является отчётом PASS. Протокол и
+активация: [PROJECT-DELETION.md](../../project-service/PROJECT-DELETION.md).

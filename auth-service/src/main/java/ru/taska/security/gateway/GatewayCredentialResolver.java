@@ -2,13 +2,26 @@ package ru.taska.security.gateway;
 
 import io.jsonwebtoken.Jwts;
 import java.security.PublicKey;
-import java.time.*;
-import java.util.*;
+import java.time.Clock;
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.List;
+import java.util.Set;
+import java.util.UUID;
 import org.springframework.r2dbc.core.DatabaseClient;
 import reactor.core.publisher.Mono;
-import ru.taska.api.b2b.v1.*;
-import ru.taska.api.common.v1.*;
-import ru.taska.exception.*;
+import ru.taska.api.b2b.v1.AdminGrant;
+import ru.taska.api.b2b.v1.AdminScope;
+import ru.taska.api.b2b.v1.CredentialKind;
+import ru.taska.api.b2b.v1.GatewayCredential;
+import ru.taska.api.b2b.v1.TrustedTenantContext;
+import ru.taska.api.common.v1.AccessTokenKind;
+import ru.taska.api.common.v1.GlobalRoleProto;
+import ru.taska.api.common.v1.UserContext;
+import ru.taska.api.common.v1.UserStatus;
+import ru.taska.exception.DomainException;
+import ru.taska.exception.DomainStatus;
 import ru.taska.repository.UserRepository;
 import ru.taska.security.pat.TenantPersonalTokenStore;
 import ru.taska.security.session.WebSessionStore;
@@ -24,7 +37,9 @@ public final class GatewayCredentialResolver {
   private final PublicKey publicKey;
   private final String kid;
   private final Clock clock;
-  private static final Set<String> TENANT_TARGET_ACTIONS = Set.of("getTenant", "renameTenant", "pauseTenant", "resumeTenant", "setPlatformBlock");
+  private static final Set<String> TENANT_TARGET_ACTIONS = Set.of("getTenant", "renameTenant", "pauseTenant", "resumeTenant", "setPlatformBlock",
+          "deleteProject",
+          "getProjectDeletion");
   private static final Set<String> WEB_TENANT_SCOPES = Set.of("read", "write");
   private static final Set<String> WEB_GLOBAL_SCOPES =
       Set.of("tenants:select", "tenants:create", "account:read");
@@ -70,9 +85,9 @@ public final class GatewayCredentialResolver {
   }
 
   /**
-   * Resolve a credential for one route target. Only tenant detail actions may request this
-   * binding. A global web session receives an admin target scope only after auth primary verifies
-   * its current role and completed email MFA.
+   * Resolve a credential for one route target. Only tenant detail actions may request this binding.
+   * A global web session receives an admin target scope only after auth primary verifies its
+   * current role and completed email MFA.
    */
   public Mono<GatewayCredential> resolve(
       String secret, String targetTenantId, String targetAction) {
@@ -179,19 +194,19 @@ public final class GatewayCredentialResolver {
                               : CredentialKind.CREDENTIAL_KIND_WEB_GLOBAL);
               String query =
                   tenant
-                      ? "SELECT s.membership_version,u.global_role,w.assurance FROM taska.tenant_sessions s JOIN"
-                          + " taska.web_sessions w ON w.id=s.web_session_id AND"
-                          + " w.user_id=s.user_id JOIN taska.users u ON u.id=s.user_id WHERE"
-                          + " s.id=:sid AND s.user_id=:user AND s.tenant_id=:tenant AND"
-                          + " s.revoked_at IS NULL AND s.expires_at>:now AND w.state='ACTIVE' AND"
-                          + " w.revoked_at IS NULL AND w.expires_at>:now AND"
-                          + " w.auth_version=:version AND u.auth_version=:version AND"
-                          + " u.status='ACTIVE'"
-                      : "SELECT 0::bigint AS membership_version,u.global_role,w.assurance FROM taska.web_sessions w JOIN"
-                          + " taska.users u ON u.id=w.user_id WHERE w.id=:sid AND w.user_id=:user"
+                      ? "SELECT s.membership_version,u.global_role,w.assurance FROM"
+                          + " taska.tenant_sessions s JOIN taska.web_sessions w ON"
+                          + " w.id=s.web_session_id AND w.user_id=s.user_id JOIN taska.users u ON"
+                          + " u.id=s.user_id WHERE s.id=:sid AND s.user_id=:user AND"
+                          + " s.tenant_id=:tenant AND s.revoked_at IS NULL AND s.expires_at>:now"
                           + " AND w.state='ACTIVE' AND w.revoked_at IS NULL AND w.expires_at>:now"
                           + " AND w.auth_version=:version AND u.auth_version=:version AND"
-                          + " u.status='ACTIVE'";
+                          + " u.status='ACTIVE'"
+                      : "SELECT 0::bigint AS membership_version,u.global_role,w.assurance FROM"
+                          + " taska.web_sessions w JOIN taska.users u ON u.id=w.user_id WHERE"
+                          + " w.id=:sid AND w.user_id=:user AND w.state='ACTIVE' AND w.revoked_at"
+                          + " IS NULL AND w.expires_at>:now AND w.auth_version=:version AND"
+                          + " u.auth_version=:version AND u.status='ACTIVE'";
               var q =
                   db.sql(query)
                       .bind("sid", session)
@@ -223,11 +238,11 @@ public final class GatewayCredentialResolver {
                                   .addTenantIds(target.toString())
                                   .build();
                           var level =
-                              !"getTenant".equals(targetAction)
+                              !Set.of("getTenant", "getProjectDeletion").contains(targetAction)
                                   ? AdminGrant.LevelValue.LEVEL_MODIFY
                                   : AdminGrant.LevelValue.LEVEL_READ;
                           var targetScopes =
-                              !"getTenant".equals(targetAction)
+                              !Set.of("getTenant", "getProjectDeletion").contains(targetAction)
                                   ? List.of("read", "write")
                                   : List.of("read");
                           return profile(
@@ -284,7 +299,7 @@ public final class GatewayCredentialResolver {
   }
 
   private static String requiredScope(String action) {
-    return "getTenant".equals(action) ? "read" : "write";
+    return Set.of( "getTenant", "getProjectDeletion").contains(action) ? "read" : "write";
   }
 
   private record SessionFacts(Long membershipGeneration, String globalRole, String assurance) {}

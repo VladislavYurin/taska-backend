@@ -27,3 +27,12 @@ Scheduler выбирает до 100 due deletion jobs на tenant, получа�
 Метрики без tenant/user/file labels: `taska.attachments.cleanup.pending` (последний полный scan настроенной worklist), `last_scan_epoch_seconds`, `attempts{kind,outcome}`, `scan_failures`. Старый last_scan при ненулевых failures означает, что pending snapshot не свежий. В job `last_code` содержит только bounded protocol code с фазой PURGE/RELEASE/ATTEMPT; DATA_LOSS требует расследования immutable manifest/receipt и ledger, не сброса квоты. Exception text, keys и credentials не сохраняются.
 
 При сбое проверить readiness S3/versioning и primary authority, дождаться конца PUT window и next_attempt_at, повторить bounded reconcile либо дождаться scheduler. После restart job подбирается после истечения lease. Нельзя сбрасывать общие counters, менять immutable keys/versions, удалять receipt или сканировать bucket по tenant prefix. Rollback: остановить worklist и закрыть новые методы, сохранив очередь/учёт; destructive data rollback не нужен.
+
+
+Очистку проекта оркестрирует [TAS-459](../project-service/PROJECT-DELETION.md).
+Она подтверждает primary project intent, сохраняет локальный fence и создаёт
+accepted attachment deletion jobs по своему manifest. Далее работает тот же
+STORAGE_CLEANUP с retained object/usage receipts. Прямой вызов
+Use.PROJECT_CLEANUP остаётся закрыт: наличие такого enum само по себе не даёт
+права удалять объекты. Metadata физически удаляется только по принятому project intent и terminal
+object proof; retirement фиксируется после очистки содержимого; retained identities/receipts сохраняются.

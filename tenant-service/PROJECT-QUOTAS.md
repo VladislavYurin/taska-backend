@@ -109,3 +109,9 @@ SEAT/membership integration tests повторяют существующие ч
 PROVISIONING→OPEN без owner admission marker отвергается PostgreSQL.
 
 Изолированные сценарии не доказывают публичный REST, Kafka-доставку или общий stage.
+
+
+Физическое удаление реализует [TAS-459 coordinator](../project-service/PROJECT-DELETION.md):
+owner сохраняет DELETED вместе с удалением business rows, а ReleaseProjectUsage
+проверяет original reservation/fence и primary receipt. По timeout usage не
+освобождается. Старый cancellation flow для PROVISIONING остаётся отдельным.

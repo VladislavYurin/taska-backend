@@ -211,7 +211,7 @@ class TenantIssueStorageIntegrationTest {
     restrictions.set(java.util.List.of());
     sql(
         "TRUNCATE"
-            + " taska.task_lifetime_quota_state,taska.task_quota_outbox,taska.issue_authorization_audit");
+            + " taska.task_lifetime_quota_state,taska.task_quota_outbox,taska.issue_authorization_audit,taska.project_cleanup_receipts,taska.project_cleanup_uploads");
     sql(
         "TRUNCATE "
             + String.join(",", TABLES.stream().map(t -> "taska." + t).toList())
@@ -718,7 +718,10 @@ class TenantIssueStorageIntegrationTest {
         java.util.stream.Stream.concat(
                 TABLES.stream(),
                 java.util.stream.Stream.of(
-                    "task_lifetime_quota_state", "task_quota_outbox", "project_labels"))
+                    "task_lifetime_quota_state", "task_quota_outbox", "project_labels",
+                    "project_cleanup_receipts",
+                    "project_cleanup_uploads",
+                    "issue_resource_identities"))
             .toList()) {
       assertTrue(
           operator
@@ -741,7 +744,7 @@ class TenantIssueStorageIntegrationTest {
                 .safeIssueRuntime(factory(pg.getUsername(), pg.getPassword()))
                 .afterPropertiesSet());
     assertEquals(
-        9L,
+        10L,
         operator
             .sql("SELECT count(*) n FROM issue_liquibase.databasechangelog")
             .map((r, m) -> r.get("n", Long.class))
@@ -1848,5 +1851,138 @@ class TenantIssueStorageIntegrationTest {
         "createIssue",
         DomainStatus.FAILED_PRECONDITION);
     for (String table : TABLES) assertEquals(0L, count(table));
+  }
+
+  @Test
+  void projectCleanupRetiresLifetimeAndPreservesForeignRowsWithoutBilling() {
+    var own = create(A, "delete-own");
+    var other = create(B, "delete-other");
+    UUID operation = UUID.randomUUID();
+    retirement.set(true);
+    online.set(false);
+    long readsBefore = billingReads.get();
+    var primary = org.mockito.Mockito.mock(ru.taska.quota.ProjectDeletionAuthority.class);
+    org.mockito.Mockito.when(primary.accepted(A, PROJECT, operation))
+        .thenReturn(
+            Mono.just(
+                ru.taska.api.b2b.v1.ProjectDeletionProof.newBuilder()
+                    .setInitiatorId(ACTOR.toString())
+                    .build()));
+    var cleanup =
+        new IssueProjectCleanup(tx, primary, null, null, null, quota(Clock.systemUTC()), null);
+    assertTrue(
+        as(A, ACTOR, "cleanupProjectResources", cleanup.cleanup(PROJECT, operation))
+            .block(WAIT)
+            .getComplete());
+    assertTrue(
+        as(A, ACTOR, "cleanupProjectResources", cleanup.cleanup(PROJECT, operation))
+            .block(WAIT)
+            .getComplete());
+    assertNull(as(A, ACTOR, "read", store.execute(s -> s.findActive(own.id()))).block(WAIT));
+    assertNotNull(as(B, ACTOR, "read", store.execute(s -> s.findActive(other.id()))).block(WAIT));
+    assertTrue(
+        operator
+            .sql(
+                "SELECT retired_at IS NOT NULL AS retired FROM taska.project_counters WHERE"
+                    + " tenant_id=:t AND project_id=:p")
+            .bind("t", A)
+            .bind("p", PROJECT)
+            .map((r, m) -> r.get("retired", Boolean.class))
+            .one()
+            .block(WAIT));
+    assertEquals(readsBefore, billingReads.get());
+    assertThrows(
+        Exception.class,
+        () ->
+            as(
+                    A,
+                    ACTOR,
+                    "createIssue",
+                    tx.execute(
+                        db ->
+                            db.sql(
+                                    "INSERT INTO"
+                                        + " taska.issues(tenant_id,project_id,issue_number,issue_key,issue_type,summary,status_key,priority,reporter_id)"
+                                        + " VALUES(:t,:p,9,'P-9','TASK','Поздняя"
+                                        + " задача','TODO','MEDIUM',:a)")
+                                .bind("t", A)
+                                .bind("p", PROJECT)
+                                .bind("a", ACTOR)
+                                .then()))
+                .block(WAIT));
+    assertEquals(
+        1L,
+        operator
+            .sql("SELECT count(*) n FROM taska.issues")
+            .map((r, m) -> r.get("n", Long.class))
+            .one()
+            .block(WAIT));
+}
+
+  @Test
+  void projectCleanupRetiresOnlyAfterTheFinalBoundedBatch() {
+    var own = create(A, "batch-source");
+    UUID operation = UUID.randomUUID();
+    sql(
+        "INSERT INTO"
+            + " taska.issues(tenant_id,project_id,issue_number,issue_key,issue_type,summary,status_key,priority,reporter_id)"
+            + " SELECT '"
+            + A
+            + "','"
+            + PROJECT
+            + "',n,'PRJ-'||n,'TASK','Удаляемая задача','TODO','MEDIUM','"
+            + ACTOR
+            + "' FROM generate_series(2,201) n");
+    sql(
+        "UPDATE taska.project_counters SET lifetime_created=201,next_issue_number=202 WHERE"
+            + " tenant_id='"
+            + A
+            + "' AND project_id='"
+            + PROJECT
+            + "'");
+    retirement.set(true);
+    online.set(false);
+    var primary = org.mockito.Mockito.mock(ru.taska.quota.ProjectDeletionAuthority.class);
+    org.mockito.Mockito.when(primary.accepted(A, PROJECT, operation))
+        .thenReturn(
+            Mono.just(
+                ru.taska.api.b2b.v1.ProjectDeletionProof.newBuilder()
+                    .setInitiatorId(ACTOR.toString())
+                    .build()));
+    var cleanup =
+        new IssueProjectCleanup(tx, primary, null, null, null, quota(Clock.systemUTC()), null);
+    for (int remaining : new int[] {101, 1}) {
+      assertFalse(
+          as(A, ACTOR, "cleanupProjectResources", cleanup.cleanup(PROJECT, operation))
+              .block(WAIT)
+              .getComplete());
+      assertEquals((long) remaining, count("issues"));
+      assertFalse(
+          operator
+              .sql(
+                  "SELECT retired_at IS NOT NULL AS retired FROM taska.project_counters WHERE"
+                      + " tenant_id=:t AND project_id=:p")
+              .bind("t", A)
+              .bind("p", PROJECT)
+              .map((r, m) -> r.get("retired", Boolean.class))
+              .one()
+              .block(WAIT));
+    }
+    assertTrue(
+        as(A, ACTOR, "cleanupProjectResources", cleanup.cleanup(PROJECT, operation))
+            .block(WAIT)
+            .getComplete());
+    assertEquals(0L, count("issues"));
+    assertEquals(
+        201L,
+        operator
+            .sql(
+                "SELECT lifetime_created FROM taska.project_counters WHERE tenant_id=:t AND"
+                    + " project_id=:p")
+            .bind("t", A)
+            .bind("p", PROJECT)
+            .map((r, m) -> r.get("lifetime_created", Long.class))
+            .one()
+            .block(WAIT));
   }
 }

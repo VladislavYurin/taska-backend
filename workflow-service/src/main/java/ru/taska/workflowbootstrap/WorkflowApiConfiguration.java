@@ -4,19 +4,29 @@ import io.r2dbc.spi.ConnectionFactory;
 import java.time.Clock;
 import java.util.Map;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
-import org.springframework.context.annotation.*;
-import ru.taska.api.project.v1.*;
-import ru.taska.capability.*;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Import;
+import org.springframework.context.annotation.Profile;
+import ru.taska.api.project.v1.CheckProjectMemberRoleResponse;
+import ru.taska.api.project.v1.ListProjectIssueTypesResponse;
+import ru.taska.capability.ManagedDomainReads;
+import ru.taska.capability.ProjectAccessClient;
+import ru.taska.capability.TenantDecisionFacts;
 import ru.taska.r2dbc.TenantTransactionExecutor;
-import ru.taska.security.tenant.*;
-import ru.taska.workflowstorage.*;
+import ru.taska.security.tenant.RpcContextSecurity;
+import ru.taska.security.tenant.RpcTrustBackend;
+import ru.taska.workflowstorage.TenantWorkflowApi;
+import ru.taska.workflowstorage.TenantWorkflowGrpc;
+import ru.taska.workflowstorage.TenantWorkflowStore;
+import ru.taska.workflowstorage.WorkflowProjectAccess;
 import tools.jackson.databind.ObjectMapper;
 
 @Configuration(proxyBeanMethods = false)
 @Profile("tenant-storage")
 @ConditionalOnExpression(
     "${taska.rpc.context.enabled:false} && '${taska.rpc.trust.snapshot:}' != ''")
-@Import(TenantWorkflowGrpc.class)
+@Import({TenantWorkflowGrpc.class, ru.taska.workflowstorage.WorkflowProjectCleanup.class})
 public class WorkflowApiConfiguration {
   @Bean
   TenantDecisionFacts workflowFacts(

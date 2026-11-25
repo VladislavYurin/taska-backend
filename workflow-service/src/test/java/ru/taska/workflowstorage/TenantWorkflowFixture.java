@@ -1,20 +1,30 @@
 package ru.taska.workflowstorage;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static ru.taska.security.tenant.WorkflowTestContext.as;
 
-import io.r2dbc.pool.*;
-import io.r2dbc.spi.*;
+import io.r2dbc.pool.ConnectionPool;
+import io.r2dbc.pool.ConnectionPoolConfiguration;
+import io.r2dbc.spi.ConnectionFactories;
+import io.r2dbc.spi.ConnectionFactory;
+import io.r2dbc.spi.ConnectionFactoryOptions;
+import io.r2dbc.spi.R2dbcException;
 import java.time.Duration;
-import java.util.*;
-import org.junit.jupiter.api.*;
+import java.util.List;
+import java.util.UUID;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Timeout;
 import org.springframework.r2dbc.core.DatabaseClient;
 import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.junit.jupiter.*;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.MountableFile;
-import reactor.core.publisher.*;
-import ru.taska.domain.*;
-import ru.taska.exception.*;
+import reactor.core.publisher.Mono;
 import ru.taska.r2dbc.TenantTransactionExecutor;
 import ru.taska.workflowbootstrap.TenantStorageConfiguration;
 import tools.jackson.databind.ObjectMapper;
@@ -42,7 +52,9 @@ abstract class TenantWorkflowFixture {
           "workflow_provisioning_receipts",
           "project_initializations",
           "workflow_authorization_audit",
-          "workflow_creation_receipts");
+          "workflow_creation_receipts",
+          "project_cleanup_receipts",
+          "workflow_resource_identities");
   static ConnectionPool pool;
   static DatabaseClient raw, operator;
   static TenantTransactionExecutor tx;

@@ -1,13 +1,10 @@
 package ru.taska.event;
 
+import java.util.Arrays;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 
-import java.util.Arrays;
-
-/**
- * Типы событий, публикуемых через transactional outbox в Kafka.
- */
+/** Типы событий, публикуемых через transactional outbox в Kafka. */
 @Getter
 @RequiredArgsConstructor
 public enum EventType {
@@ -25,6 +22,8 @@ public enum EventType {
     PROJECT_CREATED("ProjectCreated"),
     PROJECT_ARCHIVED("ProjectArchived"),
     PROJECT_RESTORED("ProjectRestored"),
+  PROJECT_DELETION_ACCEPTED("ProjectDeletionAccepted"),
+  PROJECT_DELETED("ProjectDeleted"),
     MEMBER_ADDED("MemberAdded"),
     MEMBER_REMOVED("MemberRemoved"),
     MEMBER_UPDATED("MemberUpdated"),

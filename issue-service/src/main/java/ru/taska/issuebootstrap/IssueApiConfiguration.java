@@ -26,7 +26,8 @@ import ru.taska.security.tenant.RpcTrustBackend;
 @Import({
   TenantIssueGrpc.class,
   ru.taska.issuestorage.TenantAttachmentGrpc.class,
-  ru.taska.issuestorage.AttachmentAdmissionGrpc.class
+  ru.taska.issuestorage.AttachmentAdmissionGrpc.class,
+  ru.taska.issuestorage.IssueProjectCleanup.class
 })
 public class IssueApiConfiguration {
   @Bean

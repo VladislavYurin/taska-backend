@@ -1,7 +1,6 @@
 package ru.taska.config;
 
 import io.grpc.ManagedChannel;
-import io.grpc.ManagedChannelBuilder;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -9,10 +8,10 @@ import ru.taska.api.admin.v1.ReactorAdminServiceGrpc;
 import ru.taska.api.auth.profile.v1.ReactorProfileServiceGrpc;
 import ru.taska.api.auth.v1.ReactorAuthServiceGrpc;
 import ru.taska.api.issue.attachment.v1.ReactorIssueAttachmentServiceGrpc;
-import ru.taska.api.workflow.v1.ReactorWorkflowServiceGrpc;
-import ru.taska.api.notification.v1.ReactorNotificationServiceGrpc;
 import ru.taska.api.issue.v1.ReactorIssueServiceGrpc;
+import ru.taska.api.notification.v1.ReactorNotificationServiceGrpc;
 import ru.taska.api.project.v1.ReactorProjectServiceGrpc;
+import ru.taska.api.workflow.v1.ReactorWorkflowServiceGrpc;
 import ru.taska.config.props.GrpcClientProperties;
 
 @org.springframework.context.annotation.Import(ru.taska.security.tenant.TrustedRpcTlsConfiguration.class)
@@ -71,6 +70,19 @@ public class GrpcClientConfig {
     public ManagedChannel projectManagedChannel() {
         return trustedChannel(properties.projectService().host(),properties.projectService().port(),"project-service");
     }
+
+  /** Новый RPC подписывает payload самостоятельно; legacy interceptor повторно его не меняет. */
+  @Bean
+  @org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(
+      name = "taska.rpc.context.enabled",
+      havingValue = "true")
+  public ManagedChannel projectDeletionManagedChannel() {
+    var factory = trustedChannels.getIfAvailable();
+    if (factory == null || rpcSecurity.getIfAvailable() == null)
+      throw new IllegalStateException("Trusted RPC channel/security must be provisioned");
+    return factory.create(
+        properties.projectService().host(), properties.projectService().port(), "project-service");
+  }
 
     @Bean
     public ManagedChannel adminManagedChannel() {

@@ -1,13 +1,24 @@
 package ru.taska.tenant;
 
-import java.time.*;
-import java.util.*;
+import java.time.Clock;
+import java.time.Duration;
+import java.util.HashMap;
+import java.util.Set;
+import java.util.UUID;
 import reactor.core.publisher.Mono;
-import ru.taska.api.b2b.v1.*;
-import ru.taska.capability.*;
-import ru.taska.exception.*;
+import ru.taska.api.b2b.v1.CredentialKind;
+import ru.taska.api.b2b.v1.Membership;
+import ru.taska.api.b2b.v1.QuotaAuthorityServiceGrpc;
+import ru.taska.capability.Action;
+import ru.taska.capability.ManagedDomainReads;
+import ru.taska.capability.TenantDecisionFacts;
+import ru.taska.exception.DomainException;
+import ru.taska.exception.DomainStatus;
 import ru.taska.r2dbc.TenantTransactionExecutor;
-import ru.taska.security.tenant.*;
+import ru.taska.security.tenant.RpcContextBridge;
+import ru.taska.security.tenant.RpcContextSecurity;
+import ru.taska.security.tenant.RpcTrustBackend;
+import ru.taska.security.tenant.VerifiedTenantContext;
 
 /**
  * The root independently admits new resources; accepted-operation continuation cannot reserve anew.
@@ -47,6 +58,11 @@ public final class NativeProjectAdmission implements ProjectQuotaStore.Policy {
         new TenantDecisionFacts.Binding(
             QuotaAuthorityServiceGrpc.getReleaseQuotaMethod().getFullMethodName(),
             new RpcContextSecurity.Policy(true, true)));
+    b.put(
+        "releaseProjectUsage",
+        new TenantDecisionFacts.Binding(
+            QuotaAuthorityServiceGrpc.getReleaseProjectUsageMethod().getFullMethodName(),
+            new RpcContextSecurity.Policy(true, true)));
     facts = new TenantDecisionFacts(tx, reads, identities, b, Clock.systemUTC());
   }
 
@@ -55,6 +71,13 @@ public final class NativeProjectAdmission implements ProjectQuotaStore.Policy {
       VerifiedTenantContext c, ProjectQuotaStore.Command command, UUID operation) {
     var claim = RpcContextBridge.details(c).getContext();
     if (claim.getCredentialKind() == CredentialKind.CREDENTIAL_KIND_SERVICE) {
+      if (claim.getServicePurpose().equals("PROJECT_CLEANUP")) {
+        if (command != ProjectQuotaStore.Command.LOOKUP
+            && command != ProjectQuotaStore.Command.RELEASE_USAGE) return Mono.error(denied());
+        return ru.taska.quota.ProjectDeletionAuthority.service()
+            .then(accepted(c, operation, false, false))
+            .thenReturn(grant(false));
+      }
       if (command == ProjectQuotaStore.Command.RESERVE_NEW
           || command == ProjectQuotaStore.Command.MUTATION_CONTEXT
           || command == ProjectQuotaStore.Command.REPLAY

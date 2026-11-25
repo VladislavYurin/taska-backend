@@ -3929,8 +3929,57 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/AssignUnmatchedWireReceiptRequest'
+  /api/v1/tenants/{tenantId}/projects/{projectId}/deletion:
+    post:
+      tags: [Project Deletion]
+      operationId: deleteProjectIrreversibly
+      x-pat-scope: write
+      summary: Подтвердить безвозвратное удаление проекта
+      description: Отдельная операция PROJECT_DELETE. Содержимое закрывается для новых изменений; квоты освобождаются после подтверждённой очистки владельцев. Архивирование прежним DELETE не изменяется. Повтор actor-bound ключа возвращает ту же операцию; другой ключ для удаляемого проекта получает 409.
+      security:
+        - bearerAuth: []
+      parameters:
+        - { name: tenantId, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: projectId, in: path, required: true, schema: { type: string, format: uuid } }
+        - { name: Idempotency-Key, in: header, required: true, schema: { type: string, format: uuid } }
+        - name: If-Match
+          in: header
+          description: Сильная quoted decimal версия проекта; отсутствие даёт 428, stale версия — 412.
+          required: false
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProjectDeletionConfirmationDto'
+      responses:
+        '202':
+          description: Принятая или повторная операция удаления
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Operation'
+        '400': { description: Некорректный запрос }
+        '401': { description: Требуется аутентификация }
+        '403': { description: Недостаточно прав или capability }
+        '404': { description: Проект недоступен }
+        '409': { description: Конфликт ключа или проект уже удаляется }
+        '412': { description: Устаревшая версия }
+        '422': { description: Требуется подтверждение ключа проекта }
+        '428': { description: Отсутствует If-Match }
+        '503': { description: Primary authority временно недоступна }
+
 components:
   schemas:
+    ProjectDeletionConfirmationDto:
+      type: object
+      additionalProperties: false
+      required: [confirmed, confirmedProjectKey]
+      properties:
+        confirmed: { type: boolean }
+        confirmedProjectKey: { type: string, minLength: 1, maxLength: 64 }
+
     ErrorCode:
       type: string
       enum:

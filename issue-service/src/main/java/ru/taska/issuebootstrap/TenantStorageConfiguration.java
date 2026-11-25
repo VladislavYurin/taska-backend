@@ -86,8 +86,14 @@ SELECT current_user='taska_issue_app' AND NOT
   @org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
   ru.taska.issuestorage.LifetimeTaskQuota.Authority taskQuotaAuthority(
       org.springframework.beans.factory.ObjectProvider<ru.taska.issuestorage.TenantIssueAccess>
-          policies) {
+          policies,
+      org.springframework.beans.factory.ObjectProvider<ru.taska.issuestorage.IssueProjectCleanup>
+          cleanups) {
     return (c, use, project) -> {
+      if (use == ru.taska.issuestorage.LifetimeTaskQuota.Use.RETIRE) {
+        var cleanup = cleanups.getIfAvailable();
+        if (cleanup != null && project != null) return cleanup.retirement(c, project);
+      }
       var policy = policies.getIfAvailable();
       if (policy == null
           || project == null
@@ -338,6 +344,10 @@ SELECT current_user='taska_issue_app' AND NOT
     policies.put(
         ru.taska.api.b2b.v1.IssueRecipientServiceGrpc.getResolveMethod().getFullMethodName(),
         new ru.taska.security.tenant.RpcContextSecurity.Policy(true, false));
+    policies.put(
+        ru.taska.api.b2b.v1.ProjectResourceCleanupServiceGrpc.getCleanupProjectMethod()
+            .getFullMethodName(),
+        new ru.taska.security.tenant.RpcContextSecurity.Policy(true, true));
     ServerInterceptor quotaSecurity =
         trust == null
             ? null

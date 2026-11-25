@@ -1,23 +1,50 @@
 package ru.taska.projectstorage;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 import static ru.taska.security.tenant.ProjectTestContext.as;
 
-import io.r2dbc.pool.*;
-import io.r2dbc.spi.*;
+import io.r2dbc.pool.ConnectionPool;
+import io.r2dbc.pool.ConnectionPoolConfiguration;
+import io.r2dbc.spi.ConnectionFactories;
+import io.r2dbc.spi.ConnectionFactory;
+import io.r2dbc.spi.ConnectionFactoryOptions;
+import io.r2dbc.spi.R2dbcException;
 import java.time.Duration;
-import java.util.*;
-import org.junit.jupiter.api.*;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 import org.springframework.boot.WebApplicationType;
 import org.springframework.boot.builder.SpringApplicationBuilder;
 import org.springframework.r2dbc.core.DatabaseClient;
 import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.junit.jupiter.*;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.MountableFile;
-import reactor.core.publisher.*;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
+import reactor.core.publisher.Signal;
 import ru.taska.ProjectServiceApplication;
-import ru.taska.domain.*;
-import ru.taska.exception.*;
+import ru.taska.domain.ActionMetadata;
+import ru.taska.domain.IssueTypeCreation;
+import ru.taska.domain.IssueTypeDeletion;
+import ru.taska.domain.Project;
+import ru.taska.domain.ProjectIssueType;
+import ru.taska.domain.ProjectRole;
+import ru.taska.exception.DomainException;
+import ru.taska.exception.DomainStatus;
 import ru.taska.projectbootstrap.TenantStorageConfiguration;
 import ru.taska.r2dbc.TenantTransactionExecutor;
 import tools.jackson.databind.ObjectMapper;
@@ -30,7 +57,9 @@ class TenantProjectStorageIntegrationTest {
   static final Duration WAIT=Duration.ofSeconds(20);
   static final String APP=UUID.randomUUID().toString(), DEPLOY=UUID.randomUUID().toString();
   static final List<String> TABLES=List.of("projects","project_members","project_settings","project_issue_types",
-      "project_type_operations","issue_type_creations","issue_type_deletions","outbox_events","project_creation_operations","project_authorization_audit","project_lifecycle_commands");
+      "project_type_operations","issue_type_creations","issue_type_deletions","outbox_events","project_creation_operations","project_authorization_audit","project_lifecycle_commands",
+          "project_deletion_operations",
+          "project_resource_identities");
   static DatabaseClient operator, raw;
   static ConnectionPool pool;
   static TenantTransactionExecutor tx;
@@ -115,8 +144,10 @@ class TenantProjectStorageIntegrationTest {
       assertEquals(DomainStatus.NOT_FOUND,assertThrows(DomainException.class,()->as(A,ACTOR,store.execute(s->s.addMember(project,UUID.randomUUID(),ProjectRole.MEMBER,ACTOR))).block(WAIT)).getStatus());
       // Also bypass repository prechecks to prove real PostgreSQL FK rejection as the app LOGIN.
       for(String statement:List.of(
-          "INSERT INTO taska.project_settings(tenant_id,project_id,updated_by) VALUES(:t,:p,:actor)",
-          "INSERT INTO taska.project_members(tenant_id,project_id,user_id,role,added_by) VALUES(:t,:p,:actor,'MEMBER',:actor)")) {
+              "INSERT INTO taska.project_settings(tenant_id,project_id,updated_by)"
+                  + " VALUES(:t,:p,:actor)",
+              "INSERT INTO taska.project_members(tenant_id,project_id,user_id,role,added_by)"
+                  + " VALUES(:t,:p,:actor,'MEMBER',:actor)")) {
         var rejected=assertThrows(Exception.class,()->as(A,ACTOR,tx.execute(db->db.sql(statement)
             .bind("t",A).bind("p",project).bind("actor",ACTOR).then())).block(WAIT));
         assertEquals("23503",sqlState(rejected));
@@ -124,11 +155,15 @@ class TenantProjectStorageIntegrationTest {
     }
     assertThrows(Exception.class,()->as(A,ACTOR,tx.execute(db->db.sql("UPDATE taska.projects SET tenant_id=:b WHERE id=:id")
         .bind("b",B).bind("id",a.getId()).then())).block(WAIT));
-    assertThrows(Exception.class,()->as(A,ACTOR,tx.execute(db->db.sql("INSERT INTO taska.projects(project_key,name,created_by) VALUES('MISSING','x',:actor)")
+    assertThrows(Exception.class,()->as(A,ACTOR,tx.execute(db->db.sql(
+                                    "INSERT INTO taska.projects(project_key,name,created_by)"
+                                        + " VALUES('MISSING','x',:actor)")
         .bind("actor",ACTOR).then())).block(WAIT));
     assertEquals(0L,raw.sql("SELECT count(*) n FROM taska.projects").map((r,m)->r.get("n",Long.class)).one().block(WAIT));
     assertThrows(Exception.class,()->store.execute(s->s.countProjects()).block(WAIT));
-    assertThrows(Exception.class,()->raw.sql("INSERT INTO taska.projects(tenant_id,project_key,name,created_by) VALUES(:t,'NO_CONTEXT','x',:a)")
+    assertThrows(Exception.class,()->raw.sql(
+                    "INSERT INTO taska.projects(tenant_id,project_key,name,created_by)"
+                        + " VALUES(:t,'NO_CONTEXT','x',:a)")
         .bind("t",A).bind("a",ACTOR).then().block(WAIT));
     assertEquals(a.getId(),as(A,ACTOR,store.execute(s->s.findByKey("A"))).block(WAIT).getId());
   }
@@ -187,7 +222,9 @@ class TenantProjectStorageIntegrationTest {
     for(String statement:List.of("SET ROLE taska_project_migrator","TRUNCATE taska.projects","ALTER TABLE taska.projects DISABLE ROW LEVEL SECURITY",
         "CREATE TABLE taska.unsafe(id int)","UPDATE taska.outbox_events SET status='PUBLISHED'"))
       assertThrows(Exception.class,()->raw.sql(statement).then().block(WAIT));
-    assertEquals((long) TABLES.size()+3,operator.sql("SELECT count(*) n FROM pg_class WHERE relnamespace='taska'::regnamespace AND relrowsecurity AND relforcerowsecurity")
+    assertEquals((long) TABLES.size()+3,operator.sql(
+                "SELECT count(*) n FROM pg_class WHERE relnamespace='taska'::regnamespace AND"
+                    + " relrowsecurity AND relforcerowsecurity")
         .map((r,m)->r.get("n",Long.class)).one().block(WAIT));
     for(String table:TABLES) assertEquals(0L,raw.sql("SELECT count(*) n FROM taska."+table).map((r,m)->r.get("n",Long.class)).one().block(WAIT));
   }
@@ -222,7 +259,9 @@ class TenantProjectStorageIntegrationTest {
     assertEquals(1L,as(A,ACTOR,store.execute(s->s.deletions().recoverable().count())).block(WAIT));
     var authority=as(A,ACTOR,store.execute(s->s.operationAuthority(a.getId(),operation))).block(WAIT);
     assertEquals(3L,authority.actorVersion());assertEquals(5L,authority.membershipVersion());assertEquals(1L,authority.fence());
-    assertThrows(Exception.class,()->as(A,ACTOR,tx.execute(db->db.sql("UPDATE taska.project_type_operations SET actor_auth_version=99 WHERE tenant_id=:t AND id=:id")
+    assertThrows(Exception.class,()->as(A,ACTOR,tx.execute(db->db.sql(
+                                    "UPDATE taska.project_type_operations SET actor_auth_version=99"
+                                        + " WHERE tenant_id=:t AND id=:id")
         .bind("t",A).bind("id",operation).then())).block(WAIT));
     as(B,ACTOR,store.execute(s->s.deletions().find(a.getId(),operation).doOnNext(x->fail("foreign journal"))
         .then(s.deletions().recoverable().count()).doOnNext(n->assertEquals(0L,n))
@@ -232,7 +271,9 @@ class TenantProjectStorageIntegrationTest {
     assertEquals(operation,as(A,ACTOR,store.execute(s->s.types().find(a.getId(),"TASK"))).block(WAIT).pendingOperationId());
     // Even within one tenant a fence cannot reference an operation owned by another project.
     var other=create(A,"OTHER");
-    assertThrows(Exception.class,()->as(A,ACTOR,tx.execute(db->db.sql("UPDATE taska.project_issue_types SET pending_operation_id=:o WHERE tenant_id=:t AND project_id=:p")
+    assertThrows(Exception.class,()->as(A,ACTOR,tx.execute(db->db.sql(
+                                    "UPDATE taska.project_issue_types SET pending_operation_id=:o"
+                                        + " WHERE tenant_id=:t AND project_id=:p")
         .bind("o",operation).bind("t",A).bind("p",other.getId()).then())).block(WAIT));
     as(A,ACTOR,store.execute(s->s.deletions().deleteSource(intent).doOnNext(n->assertEquals(1L,n))
         .then(s.deletions().clearFence(intent)).then(s.deletions().terminal(intent,"COMPLETED"))
@@ -268,14 +309,21 @@ class TenantProjectStorageIntegrationTest {
   @Test void selectiveQueryPlansUseTenantLeadingIndexesWithoutPlannerOverrides() {
     for(UUID tenant:List.of(A,B)) {
       sql("INSERT INTO taska.projects(tenant_id,id,project_key,name,created_by) SELECT '"+tenant+"',md5('"+tenant+"'||n::text)::uuid,'P'||n,'plan','"+ACTOR+"' FROM generate_series(1,20000) n");
-      sql("INSERT INTO taska.project_members(tenant_id,project_id,user_id,role,added_by) SELECT tenant_id,id,md5(project_key)::uuid,'ADMIN',created_by FROM taska.projects WHERE tenant_id='"+tenant+"'");
+      sql(
+          "INSERT INTO taska.project_members(tenant_id,project_id,user_id,role,added_by) SELECT"
+              + " tenant_id,id,md5(project_key)::uuid,'ADMIN',created_by FROM taska.projects WHERE"
+              + " tenant_id='"+tenant+"'");
     }
     sql("ANALYZE taska.projects");sql("ANALYZE taska.project_members");
-    var keyPlan=as(A,ACTOR,tx.execute(db->db.sql("EXPLAIN SELECT id FROM taska.projects WHERE tenant_id=:t AND project_key='P19321'")
+    var keyPlan=as(A,ACTOR,tx.execute(db->db.sql(
+                                "EXPLAIN SELECT id FROM taska.projects WHERE tenant_id=:t AND"
+                                    + " project_key='P19321'")
         .bind("t",A).map((r,m)->r.get(0,String.class)).all().collectList())).block(WAIT).toString();
     assertTrue(keyPlan.contains("tenant_id"),keyPlan);assertFalse(keyPlan.contains("Seq Scan"),keyPlan);
     assertTrue(keyPlan.contains("projects_tenant_id_project_key_key"),keyPlan);
-    var memberPlan=as(A,ACTOR,tx.execute(db->db.sql("EXPLAIN SELECT project_id FROM taska.project_members WHERE tenant_id=:t AND user_id=md5('P19321')::uuid")
+    var memberPlan=as(A,ACTOR,tx.execute(db->db.sql(
+                                "EXPLAIN SELECT project_id FROM taska.project_members WHERE"
+                                    + " tenant_id=:t AND user_id=md5('P19321')::uuid")
         .bind("t",A).map((r,m)->r.get(0,String.class)).all().collectList())).block(WAIT).toString();
     assertTrue(memberPlan.contains("project_members_user_idx"),memberPlan);
     assertFalse(memberPlan.contains("Seq Scan"),memberPlan);
@@ -304,26 +352,34 @@ class TenantProjectStorageIntegrationTest {
     String url=pg.getJdbcUrl().replace("/"+pg.getDatabaseName(),"/legacy_guard");
     try(var connection=java.sql.DriverManager.getConnection(url,pg.getUsername(),pg.getPassword());var statement=connection.createStatement()) {
       statement.execute("CREATE SCHEMA project_liquibase AUTHORIZATION taska_project_migrator");
-      statement.execute("CREATE TABLE taska.projects(id uuid PRIMARY KEY,project_key text);INSERT INTO taska.projects VALUES('00000000-0000-0000-0000-000000000099','KEEP')");
+      statement.execute(
+          "CREATE TABLE taska.projects(id uuid PRIMARY KEY,project_key text);INSERT INTO"
+              + " taska.projects VALUES('00000000-0000-0000-0000-000000000099','KEEP')");
       var migration=new TenantStorageConfiguration().projectTenantLiquibase(url,"taska_project_deployer",DEPLOY);
       migration.setResourceLoader(new org.springframework.core.io.DefaultResourceLoader());
       assertThrows(Exception.class,migration::afterPropertiesSet);
       try(var rows=statement.executeQuery("SELECT project_key FROM taska.projects")) {assertTrue(rows.next());assertEquals("KEEP",rows.getString(1));assertFalse(rows.next());}
-      try(var rows=statement.executeQuery("SELECT count(*) FROM information_schema.columns WHERE table_schema='taska' AND table_name='projects' AND column_name='tenant_id'")) {
+      try(var rows=statement.executeQuery(
+              "SELECT count(*) FROM information_schema.columns WHERE table_schema='taska' AND"
+                  + " table_name='projects' AND column_name='tenant_id'")) {
         rows.next();assertEquals(0L,rows.getLong(1));
       }
     }
   }
-  // SQL/transaction regression: primary authority is controlled here; real authority is covered by mTLS E2E.
+
+  // SQL/transaction regression: primary authority is controlled here; real authority is covered by
+  // mTLS E2E.
   TenantProjectApi lifecycleApi(boolean implicit, boolean audited) {
     var facts=org.mockito.Mockito.mock(ru.taska.capability.TenantDecisionFacts.class);
-    org.mockito.Mockito.when(facts.current("write")).thenAnswer(invocation -> Mono.deferContextual(c -> {
+    org.mockito.Mockito.when(facts.current(org.mockito.ArgumentMatchers.anyString())).thenAnswer(invocation -> Mono.deferContextual(c -> {
       var f=org.mockito.Mockito.mock(ru.taska.capability.TenantDecisionFacts.Frame.class);
       org.mockito.Mockito.when(f.context()).thenReturn(ru.taska.security.tenant.VerifiedTenantContext.require(c));
       org.mockito.Mockito.when(f.implicitAdmin()).thenReturn(implicit);
       org.mockito.Mockito.when(f.membership()).thenReturn(ru.taska.api.b2b.v1.MembershipSnapshot.newBuilder().setVersion("1").build());
       return Mono.just(f);
     }));
+    org.mockito.Mockito.when(facts.currentAdministrative(org.mockito.ArgumentMatchers.anyString()))
+        .thenAnswer(i -> facts.current("write"));
     org.mockito.Mockito.when(facts.decision(org.mockito.ArgumentMatchers.any(),org.mockito.ArgumentMatchers.any(),
         org.mockito.ArgumentMatchers.any(ru.taska.capability.CapabilityFacts.Target.class),
         org.mockito.ArgumentMatchers.any(),org.mockito.ArgumentMatchers.any())).thenAnswer(invocation -> {
@@ -393,15 +449,157 @@ class TenantProjectStorageIntegrationTest {
     assertEquals(1,results.stream().filter(Signal::isOnError).count());
     var archived=as(A,ACTOR,store.execute(q->q.find(p.getId()))).block(WAIT);
     var rejected=UUID.randomUUID().toString();
-    sql("ALTER TABLE taska.project_lifecycle_commands ADD CONSTRAINT injected_receipt_failure CHECK(command_key<>'"+rejected+"'::uuid)");
+    sql(
+        "ALTER TABLE taska.project_lifecycle_commands ADD CONSTRAINT injected_receipt_failure"
+            + " CHECK(command_key<>'"+rejected+"'::uuid)");
     try { assertThrows(Exception.class,()->transition(api,A,ACTOR,p.getId(),false,archived.getVersion(),rejected)); }
     finally { sql("ALTER TABLE taska.project_lifecycle_commands DROP CONSTRAINT injected_receipt_failure"); }
     var after=as(A,ACTOR,store.execute(q->q.find(p.getId()))).block(WAIT);
     assertEquals(archived.getVersion(),after.getVersion());assertEquals(archived.getArchivedAt(),after.getArchivedAt());
     assertEquals(1L,as(A,ACTOR,store.execute(q->q.eventIds(p.getId()).count())).block(WAIT));
     assertFalse(transition(api,A,ACTOR,p.getId(),false,archived.getVersion(),rejected).hasArchivedAt());
-    assertThrows(Exception.class,()->as(A,ACTOR,tx.execute(db->db.sql("UPDATE taska.project_lifecycle_commands SET action='project.restore'").then())).block(WAIT));
+    assertThrows(Exception.class,()->as(A,ACTOR,tx.execute(db->db.sql(
+                                    "UPDATE taska.project_lifecycle_commands SET"
+                                        + " action='project.restore'").then())).block(WAIT));
     assertEquals(0L,raw.sql("SELECT count(*) n FROM taska.project_lifecycle_commands").map((r,m)->r.get("n",Long.class)).one().block(WAIT));
   }
 
+  ru.taska.api.b2b.v1.DeleteProjectRpcRequest deleteRequest(
+      Project p, UUID key, int version, String confirmed) {
+    return ru.taska.api.b2b.v1.DeleteProjectRpcRequest.newBuilder()
+        .setProjectId(p.getId().toString())
+        .setConfirmed(true)
+        .setConfirmedProjectKey(confirmed)
+        .setMutation(
+            ru.taska.api.b2b.v1.MutationOptions.newBuilder()
+                .setIdempotencyKey(key.toString())
+                .setExpectedVersion(Integer.toString(version)))
+        .build();
+
+}
+
+  @Test
+  void deletionAdmissionIsVersionedScopedAndReplayDoesNotDuplicateIntent() {
+    var p = create(A, "DELETE");
+    var b = create(B, "DELETE");
+    var owners = org.mockito.Mockito.mock(ProjectDeletions.Owners.class);
+    var api = lifecycleApi(true, true);
+    var deletion = new ProjectDeletions(store, api, owners);
+    var key = UUID.randomUUID();
+    assertEquals(
+        "VERSION_CONFLICT",
+        assertThrows(
+                DomainException.class,
+                () ->
+                    as(
+                            A,
+                            ACTOR,
+                            deletion.start(deleteRequest(p, key, p.getVersion() + 1, "DELETE")))
+                        .block(WAIT))
+            .getDetails()
+            .get("code"));
+    assertEquals(
+        "CONFIRMATION_REQUIRED",
+        assertThrows(
+                DomainException.class,
+                () ->
+                    as(A, ACTOR, deletion.start(deleteRequest(p, key, p.getVersion(), "WRONG")))
+                        .block(WAIT))
+            .getDetails()
+            .get("code"));
+    assertEquals(
+        DomainStatus.NOT_FOUND,
+        assertThrows(
+                DomainException.class,
+                () ->
+                    as(A, ACTOR, deletion.start(deleteRequest(b, key, b.getVersion(), "DELETE")))
+                        .block(WAIT))
+            .getStatus());
+    assertEquals(
+        0L,
+        operator
+            .sql("SELECT count(*) n FROM taska.project_deletion_operations")
+            .map((r, m) -> r.get("n", Long.class))
+            .one()
+            .block(WAIT));
+    var op =
+        as(A, ACTOR, deletion.start(deleteRequest(p, key, p.getVersion(), "DELETE"))).block(WAIT);
+    assertEquals(
+        op,
+        as(A, ACTOR, deletion.start(deleteRequest(p, key, p.getVersion(), "DELETE"))).block(WAIT));
+    assertEquals(
+        "PROJECT_DELETING",
+        assertThrows(
+                DomainException.class,
+                () ->
+                    as(
+                            A,
+                            ACTOR,
+                            deletion.start(
+                                deleteRequest(p, UUID.randomUUID(), p.getVersion(), "DELETE")))
+                        .block(WAIT))
+            .getDetails()
+            .get("code"));
+    assertEquals(1L, as(A, ACTOR, store.execute(q -> q.eventIds(p.getId()).count())).block(WAIT));
+    assertThrows(
+        Exception.class,
+        () -> as(A, ACTOR, store.execute(q -> q.settings(p.getId(), "{}", ACTOR))).block(WAIT));
+    assertThrows(
+        Exception.class,
+        () ->
+            as(
+                    A,
+                    ACTOR,
+                    tx.execute(
+                        db ->
+                            db.sql("DELETE FROM taska.projects WHERE tenant_id=:t AND id=:p")
+                                .bind("t", A)
+                                .bind("p", p.getId())
+                                .then()))
+                .block(WAIT));
+    assertNotNull(as(B, ACTOR, store.execute(q -> q.find(b.getId()))).block(WAIT));
+    assertEquals(0, as(A, ACTOR, api.list(ACTOR.toString())).block(WAIT).getProjectResponseCount());
+    assertEquals(1, as(B, ACTOR, api.list(ACTOR.toString())).block(WAIT).getProjectResponseCount());
+    org.mockito.Mockito.verifyNoInteractions(owners);
+  }
+
+  @Test
+  void deletionReceiptFailureRollsBackAdmissionAndAudit() {
+    var p = create(A, "ROLLBACK");
+    var key = UUID.randomUUID();
+    var deletion =
+        new ProjectDeletions(
+            store,
+            lifecycleApi(true, true),
+            org.mockito.Mockito.mock(ProjectDeletions.Owners.class));
+    sql(
+        "ALTER TABLE taska.project_deletion_operations ADD CONSTRAINT rejected_delete"
+            + " CHECK(request_key<>'"
+            + key
+            + "'::uuid)");
+    try {
+      assertThrows(
+          Exception.class,
+          () ->
+              as(A, ACTOR, deletion.start(deleteRequest(p, key, p.getVersion(), "ROLLBACK")))
+                  .block(WAIT));
+    } finally {
+      sql("ALTER TABLE taska.project_deletion_operations DROP CONSTRAINT rejected_delete");
+    }
+    assertEquals(
+        0L,
+        operator
+            .sql("SELECT count(*) n FROM taska.project_deletion_operations")
+            .map((r, m) -> r.get("n", Long.class))
+            .one()
+            .block(WAIT));
+    assertEquals(
+        0L,
+        operator
+            .sql("SELECT count(*) n FROM taska.project_authorization_audit")
+            .map((r, m) -> r.get("n", Long.class))
+            .one()
+            .block(WAIT));
+    as(A, ACTOR, store.execute(q -> q.settings(p.getId(), "{}", ACTOR))).block(WAIT);
+  }
 }

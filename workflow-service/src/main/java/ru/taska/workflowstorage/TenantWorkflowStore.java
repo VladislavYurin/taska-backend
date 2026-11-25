@@ -1,12 +1,19 @@
 package ru.taska.workflowstorage;
 
 import io.r2dbc.spi.Row;
-import java.util.*;
+import java.util.Arrays;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
 import java.util.function.Function;
 import org.springframework.r2dbc.core.DatabaseClient;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
-import ru.taska.exception.*;
+import ru.taska.exception.DomainException;
+import ru.taska.exception.DomainStatus;
 import ru.taska.r2dbc.TenantTransactionExecutor;
 import ru.taska.security.tenant.VerifiedTenantContext;
 import tools.jackson.databind.ObjectMapper;
@@ -31,7 +38,8 @@ public final class TenantWorkflowStore {
 
   public <T> Mono<T> execute(Function<Session,Mono<T>> work) {
     return VerifiedTenantContext.current().flatMap(c -> transactions.execute(db ->
-        work.apply(new Session(db,UUID.fromString(c.tenantId()),c))));
+        work.apply(new Session(db,UUID.fromString(c.tenantId()),c))))
+        .onErrorMap(ru.taska.r2dbc.ProjectCleanupFailures::map);
   }
 
   public final class Session {
@@ -43,27 +51,32 @@ public final class TenantWorkflowStore {
     }
     DatabaseClient database(){return db;}
     public Mono<Void> lockProject(UUID project) {
-      return sql("SELECT pg_advisory_xact_lock(hashtextextended(:tenant::text||'/workflow/'||:p,418))")
+      return sql("SELECT"
+              + " pg_advisory_xact_lock(hashtextextended(:tenant::text||'/workflow/'||:p,418))")
           .bind("p", project.toString()).then();
     }
     public Mono<Void> lockProjectRead(UUID project) {
-      return sql("SELECT pg_advisory_xact_lock_shared(hashtextextended(:tenant::text||'/workflow/'||:p,418))")
+      return sql("SELECT"
+                     + " pg_advisory_xact_lock_shared(hashtextextended(:tenant::text||'/workflow/'||:p,418))")
           .bind("p",project.toString()).then();
     }
     public Mono<Void> requireReadable(UUID project) {
-      return sql("SELECT EXISTS(SELECT 1 FROM taska.workflow_binding_changes WHERE tenant_id=:tenant AND project_id=:p AND reservation_released=false)")
+      return sql("SELECT EXISTS(SELECT 1 FROM taska.workflow_binding_changes WHERE"
+              + " tenant_id=:tenant AND project_id=:p AND reservation_released=false)")
           .bind("p",project).map((r,m)->r.get(0,Boolean.class)).one()
           .flatMap(pending -> pending ? Mono.error(new DomainException(DomainStatus.ABORTED,
               "Project workflow operation pending",Map.of("reason","ISSUE_TYPE_OPERATION_PENDING"))) : Mono.empty());
     }
     public Mono<Void> requireWritable(UUID project) {
-      return requireReadable(project).then(sql("SELECT EXISTS(SELECT 1 FROM taska.issue_type_move_workflow_pins WHERE tenant_id=:tenant AND project_id=:p AND released=false)")
+      return requireReadable(project).then(sql("SELECT EXISTS(SELECT 1 FROM taska.issue_type_move_workflow_pins WHERE"
+                      + " tenant_id=:tenant AND project_id=:p AND released=false)")
           .bind("p",project).map((r,m)->r.get(0,Boolean.class)).one())
           .flatMap(pinned -> pinned ? Mono.error(new DomainException(DomainStatus.ABORTED,
               "Project workflow is pinned",Map.of("reason","ISSUE_TYPE_OPERATION_PENDING"))) : Mono.empty());
     }
     public Mono<List<java.time.OffsetDateTime>> timestamps(UUID id) {
-      return sql("SELECT created_at,updated_at FROM taska.workflows WHERE tenant_id=:tenant AND id=:id")
+      return sql("SELECT created_at,updated_at FROM taska.workflows WHERE tenant_id=:tenant AND"
+              + " id=:id")
           .bind("id",id).map((r,m)->List.of(r.get("created_at",java.time.OffsetDateTime.class),
               r.get("updated_at",java.time.OffsetDateTime.class))).one();
     }
@@ -74,12 +87,14 @@ public final class TenantWorkflowStore {
       return insertTransition(edge.id(),edge.workflow(),edge.from(),edge.to(),edge.name(),edge.hidden(),edge.order());
     }
     public Mono<Void> updateStatus(Status node) {
-      return sql("UPDATE taska.statuses SET name=:n,category=:c,sort_order=:o,updated_at=now() WHERE tenant_id=:tenant AND workflow_id=:w AND id=:id")
+      return sql("UPDATE taska.statuses SET name=:n,category=:c,sort_order=:o,updated_at=now()"
+              + " WHERE tenant_id=:tenant AND workflow_id=:w AND id=:id")
           .bind("n",node.name()).bind("c",node.category()).bind("o",node.order())
           .bind("w",node.workflow()).bind("id",node.id()).then();
     }
     public Mono<Void> updateTransition(Transition edge) {
-      return sql("UPDATE taska.transitions SET name=:n,is_hidden=:h,sort_order=:o,updated_at=now() WHERE tenant_id=:tenant AND workflow_id=:w AND id=:id")
+      return sql("UPDATE taska.transitions SET name=:n,is_hidden=:h,sort_order=:o,updated_at=now()"
+              + " WHERE tenant_id=:tenant AND workflow_id=:w AND id=:id")
           .bind("n",edge.name()).bind("h",edge.hidden()).bind("o",edge.order())
           .bind("w",edge.workflow()).bind("id",edge.id()).then();
     }
@@ -88,21 +103,26 @@ public final class TenantWorkflowStore {
           .bind("w",workflow).bind("id",id).then();
     }
     public Mono<Void> deleteTransition(UUID workflow,UUID id) {
-      return sql("DELETE FROM taska.transitions WHERE tenant_id=:tenant AND workflow_id=:w AND id=:id")
+      return sql("DELETE FROM taska.transitions WHERE tenant_id=:tenant AND workflow_id=:w AND"
+              + " id=:id")
           .bind("w",workflow).bind("id",id).then();
     }
     public Mono<Void> deactivate(UUID workflow,int version) {
-      return sql("UPDATE taska.workflows SET is_active=false,version=version+1,updated_at=now() WHERE tenant_id=:tenant AND id=:w AND version=:v")
+      return sql("UPDATE taska.workflows SET is_active=false,version=version+1,updated_at=now()"
+              + " WHERE tenant_id=:tenant AND id=:w AND version=:v")
           .bind("w",workflow).bind("v",version).fetch().rowsUpdated()
           .flatMap(n->n==1?Mono.empty():Mono.error(new DomainException(DomainStatus.ABORTED,"Workflow changed")));
     }
     public Mono<CreationReceipt> creation(UUID project,UUID actor,String request) {
-      return sql("SELECT id,command_hash,result_bytes FROM taska.workflow_creation_receipts WHERE tenant_id=:tenant AND project_id=:p AND actor_id=:u AND request_id=:r")
+      return sql("SELECT id,command_hash,result_bytes FROM taska.workflow_creation_receipts WHERE"
+              + " tenant_id=:tenant AND project_id=:p AND actor_id=:u AND request_id=:r")
           .bind("p",project).bind("u",actor).bind("r",request)
           .map((r,m)->new CreationReceipt(r.get("id",UUID.class),r.get("command_hash",String.class),r.get("result_bytes",byte[].class))).one();
     }
     public Mono<Void> recordCreation(UUID project,UUID actor,String request,String hash,byte[] result) {
-      return sql("INSERT INTO taska.workflow_creation_receipts(tenant_id,project_id,actor_id,request_id,command_hash,result_bytes) VALUES(:tenant,:p,:u,:r,:h,:result)")
+      return sql("INSERT INTO"
+                     + " taska.workflow_creation_receipts(tenant_id,project_id,actor_id,request_id,command_hash,result_bytes)"
+                     + " VALUES(:tenant,:p,:u,:r,:h,:result)")
           .bind("p",project).bind("u",actor).bind("r",request).bind("h",hash).bind("result",result).then();
     }
     /** Fresh graph from this company's immutable copy, never a shared/default project fallback. */
@@ -154,9 +174,13 @@ public final class TenantWorkflowStore {
                                               .thenReturn(copy)))));
     }
 
-    /** One immutable private copy per tenant/published version; concurrent repeats share its UUID. */
+    /**
+     * One immutable private copy per tenant/published version; concurrent repeats share its UUID.
+     */
     public Mono<TemplateCopy> provisionTemplate(UUID template) {
-      return db.sql("SELECT graph::text graph,graph_schema_version FROM taska.workflow_templates WHERE id=:id AND published_at IS NOT NULL")
+      return db.sql(
+              "SELECT graph::text graph,graph_schema_version FROM taska.workflow_templates WHERE"
+                  + " id=:id AND published_at IS NOT NULL")
           .bind("id",template).map((r,m)->decode(r.get("graph",String.class),r.get("graph_schema_version",Integer.class)))
           .one().switchIfEmpty(Mono.error(missing())).flatMap(graph ->
               sql("""
@@ -169,15 +193,18 @@ public final class TenantWorkflowStore {
     }
 
     public Mono<TemplateCopy> copy(UUID id) {
-      return sql("SELECT *,graph::text graph_text FROM taska.tenant_workflow_templates WHERE tenant_id=:tenant AND id=:id")
+      return sql("SELECT *,graph::text graph_text FROM taska.tenant_workflow_templates WHERE"
+              + " tenant_id=:tenant AND id=:id")
           .bind("id",id).map((r,m)->copyRow(r)).one();
     }
     private Mono<TemplateCopy> copyForTemplate(UUID id) {
-      return sql("SELECT *,graph::text graph_text FROM taska.tenant_workflow_templates WHERE tenant_id=:tenant AND template_id=:id")
+      return sql("SELECT *,graph::text graph_text FROM taska.tenant_workflow_templates WHERE"
+              + " tenant_id=:tenant AND template_id=:id")
           .bind("id",id).map((r,m)->copyRow(r)).one();
     }
     public Flux<TemplateCopy> copies() {
-      return sql("SELECT *,graph::text graph_text FROM taska.tenant_workflow_templates WHERE tenant_id=:tenant ORDER BY code,version")
+      return sql("SELECT *,graph::text graph_text FROM taska.tenant_workflow_templates WHERE"
+              + " tenant_id=:tenant ORDER BY code,version")
           .map((r,m)->copyRow(r)).all();
     }
 
@@ -187,12 +214,14 @@ public final class TenantWorkflowStore {
       return copy(templateCopy).switchIfEmpty(Mono.error(missing())).flatMap(template -> {
         var graph=decode(template.graph(),template.schema()); UUID candidate=UUID.randomUUID();
         return sql("""
-            INSERT INTO taska.workflow_template_instances(tenant_id,project_id,template_copy_id,workflow_id)
-            VALUES(:tenant,:project,:copy,:workflow)
-            ON CONFLICT(tenant_id,project_id,template_copy_id) DO NOTHING
-            """).bind("project",project).bind("copy",templateCopy).bind("workflow",candidate).fetch().rowsUpdated()
+                INSERT INTO taska.workflow_template_instances(tenant_id,project_id,template_copy_id,workflow_id)
+                VALUES(:tenant,:project,:copy,:workflow)
+                ON CONFLICT(tenant_id,project_id,template_copy_id) DO NOTHING
+                """).bind("project",project).bind("copy",templateCopy).bind("workflow",candidate).fetch().rowsUpdated()
             .flatMap(n -> n==1 ? materialize(candidate,project,template.name(),graph)
-                : sql("SELECT workflow_id FROM taska.workflow_template_instances WHERE tenant_id=:tenant AND project_id=:project AND template_copy_id=:copy")
+                : sql("SELECT workflow_id FROM taska.workflow_template_instances"
+                                        + " WHERE tenant_id=:tenant AND project_id=:project AND"
+                                        + " template_copy_id=:copy")
                     .bind("project",project).bind("copy",templateCopy).map((r,m)->r.get("workflow_id",UUID.class)).one()
                     .flatMap(this::find).switchIfEmpty(Mono.error(missing())));
       });
@@ -214,12 +243,14 @@ public final class TenantWorkflowStore {
     }
     public Mono<Workflow> insertWorkflow(UUID id,UUID project,String name,boolean active) {
       requireProject(project);
-      return sql("INSERT INTO taska.workflows(tenant_id,id,owner_project_id,name,is_active) VALUES(:tenant,:id,:project,:name,:active) RETURNING *")
+      return sql("INSERT INTO taska.workflows(tenant_id,id,owner_project_id,name,is_active)"
+              + " VALUES(:tenant,:id,:project,:name,:active) RETURNING *")
           .bind("id",id).bind("project",project).bind("name",name).bind("active",active).map((r,m)->workflow(r)).one();
     }
     /** Cancellation of an unpublished CREATE graph retains its terminal journal as provenance. */
     public Mono<Long> discardPrepared(UUID project,UUID id) {
-      return sql("DELETE FROM taska.workflows WHERE tenant_id=:tenant AND owner_project_id=:project AND id=:id AND is_active=false")
+      return sql("DELETE FROM taska.workflows WHERE tenant_id=:tenant AND owner_project_id=:project"
+              + " AND id=:id AND is_active=false")
           .bind("project",project).bind("id",id).fetch().rowsUpdated();
     }
     public Mono<Workflow> find(UUID id) {
@@ -231,11 +262,13 @@ public final class TenantWorkflowStore {
           .bind("id",id).map((r,m)->workflow(r)).one();
     }
     public Flux<Workflow> list(UUID project) {
-      return sql("SELECT * FROM taska.workflows WHERE tenant_id=:tenant AND owner_project_id=:project AND is_active ORDER BY created_at,id")
+      return sql("SELECT * FROM taska.workflows WHERE tenant_id=:tenant AND"
+              + " owner_project_id=:project AND is_active ORDER BY created_at,id")
           .bind("project",project).map((r,m)->workflow(r)).all();
     }
     public Mono<Workflow> rename(UUID id,int version,String name) {
-      return sql("UPDATE taska.workflows SET name=:name,version=version+1,updated_at=now() WHERE tenant_id=:tenant AND id=:id AND version=:version RETURNING *")
+      return sql("UPDATE taska.workflows SET name=:name,version=version+1,updated_at=now() WHERE"
+              + " tenant_id=:tenant AND id=:id AND version=:version RETURNING *")
           .bind("id",id).bind("version",version).bind("name",name).map((r,m)->workflow(r)).one()
           .switchIfEmpty(Mono.error(new DomainException(DomainStatus.ABORTED,"Workflow changed or unavailable")));
     }
@@ -243,101 +276,119 @@ public final class TenantWorkflowStore {
       return insertStatus(UUID.randomUUID(),workflow,key,name,category,order);
     }
     private Mono<Status> insertStatus(UUID id,UUID workflow,String key,String name,String category,int order) {
-      return sql("INSERT INTO taska.statuses(tenant_id,id,workflow_id,status_key,name,category,sort_order) VALUES(:tenant,:id,:workflow,:key,:name,:category,:order) RETURNING *")
+      return sql("INSERT INTO"
+              + " taska.statuses(tenant_id,id,workflow_id,status_key,name,category,sort_order)"
+              + " VALUES(:tenant,:id,:workflow,:key,:name,:category,:order) RETURNING *")
           .bind("id",id).bind("workflow",workflow).bind("key",key).bind("name",name).bind("category",category).bind("order",order)
           .map((r,m)->status(r)).one();
     }
     public Flux<Status> statuses(UUID workflow) {
-      return sql("SELECT * FROM taska.statuses WHERE tenant_id=:tenant AND workflow_id=:workflow ORDER BY sort_order,status_key")
+      return sql("SELECT * FROM taska.statuses WHERE tenant_id=:tenant AND workflow_id=:workflow"
+              + " ORDER BY sort_order,status_key")
           .bind("workflow",workflow).map((r,m)->status(r)).all();
     }
     public Mono<Long> renameStatus(UUID workflow,UUID id,String name) {
       return lock(workflow).switchIfEmpty(Mono.error(missing())).flatMap(w ->
-          sql("UPDATE taska.statuses SET name=:name,updated_at=now() WHERE tenant_id=:tenant AND workflow_id=:workflow AND id=:id")
+          sql("UPDATE taska.statuses SET name=:name,updated_at=now() WHERE"
+                          + " tenant_id=:tenant AND workflow_id=:workflow AND id=:id")
               .bind("workflow",workflow).bind("id",id).bind("name",name).fetch().rowsUpdated());
     }
     public Mono<Transition> addTransition(UUID workflow,UUID from,UUID to,String name,boolean hidden,int order) {
       return insertTransition(UUID.randomUUID(),workflow,from,to,name,hidden,order);
     }
     private Mono<Transition> insertTransition(UUID id,UUID workflow,UUID from,UUID to,String name,boolean hidden,int order) {
-      return sql("INSERT INTO taska.transitions(tenant_id,id,workflow_id,from_status_id,to_status_id,name,is_hidden,sort_order) VALUES(:tenant,:id,:workflow,:from,:to,:name,:hidden,:order) RETURNING *")
+      return sql("INSERT INTO"
+                     + " taska.transitions(tenant_id,id,workflow_id,from_status_id,to_status_id,name,is_hidden,sort_order)"
+                     + " VALUES(:tenant,:id,:workflow,:from,:to,:name,:hidden,:order) RETURNING *")
           .bind("id",id).bind("workflow",workflow).bind("from",from).bind("to",to).bind("name",name).bind("hidden",hidden).bind("order",order)
           .map((r,m)->transition(r)).one();
     }
     public Flux<Transition> transitions(UUID workflow) {
-      return sql("SELECT * FROM taska.transitions WHERE tenant_id=:tenant AND workflow_id=:workflow ORDER BY sort_order,id")
+      return sql("SELECT * FROM taska.transitions WHERE tenant_id=:tenant AND workflow_id=:workflow"
+              + " ORDER BY sort_order,id")
           .bind("workflow",workflow).map((r,m)->transition(r)).all();
     }
     public Mono<Rule> addRule(UUID transition,String type,String config,String errorCode,String errorMessage,int order) {
-      return nullable(nullable(sql("""
-          INSERT INTO taska.validator_rules(tenant_id,transition_id,rule_type,config,error_code,error_message,sort_order)
-          VALUES(:tenant,:transition,:type,CAST(:config AS jsonb),:code,:message,:order)
-          RETURNING *,config::text config_text
-          """),"code",errorCode),"message",errorMessage).bind("transition",transition).bind("type",type)
+      return nullable(nullable(sql(
+                      """
+                      INSERT INTO taska.validator_rules(tenant_id,transition_id,rule_type,config,error_code,error_message,sort_order)
+                      VALUES(:tenant,:transition,:type,CAST(:config AS jsonb),:code,:message,:order)
+                      RETURNING *,config::text config_text
+                      """),"code",errorCode),"message",errorMessage).bind("transition",transition).bind("type",type)
           .bind("config",config).bind("order",order).map((r,m)->rule(r)).one();
     }
     public Flux<Rule> rules(UUID workflow) {
       return sql("""
-          SELECT r.*,r.config::text config_text FROM taska.validator_rules r
-          JOIN taska.transitions t ON t.tenant_id=r.tenant_id AND t.id=r.transition_id
-          WHERE r.tenant_id=:tenant AND t.tenant_id=:tenant AND t.workflow_id=:workflow ORDER BY t.sort_order,r.sort_order,r.id
-          """).bind("workflow",workflow).map((r,m)->rule(r)).all();
+      SELECT r.*,r.config::text config_text FROM taska.validator_rules r
+      JOIN taska.transitions t ON t.tenant_id=r.tenant_id AND t.id=r.transition_id
+      WHERE r.tenant_id=:tenant AND t.tenant_id=:tenant AND t.workflow_id=:workflow ORDER BY t.sort_order,r.sort_order,r.id
+      """).bind("workflow",workflow).map((r,m)->rule(r)).all();
     }
 
     public Mono<Void> bind(UUID project,String type,UUID generation,UUID workflow) {
       requireProject(project);
       return sql("""
-          INSERT INTO taska.workflow_bindings(tenant_id,project_id,issue_type,issue_type_generation,workflow_id)
-          SELECT :tenant,:project,:type,:generation,id FROM taska.workflows
-          WHERE tenant_id=:tenant AND owner_project_id=:project AND id=:workflow AND is_active
-          ON CONFLICT(tenant_id,project_id,issue_type) DO UPDATE SET workflow_id=EXCLUDED.workflow_id,
-            issue_type_generation=EXCLUDED.issue_type_generation,updated_at=now()
-          """).bind("project",project).bind("type",type).bind("generation",generation).bind("workflow",workflow)
+      INSERT INTO taska.workflow_bindings(tenant_id,project_id,issue_type,issue_type_generation,workflow_id)
+      SELECT :tenant,:project,:type,:generation,id FROM taska.workflows
+      WHERE tenant_id=:tenant AND owner_project_id=:project AND id=:workflow AND is_active
+      ON CONFLICT(tenant_id,project_id,issue_type) DO UPDATE SET workflow_id=EXCLUDED.workflow_id,
+        issue_type_generation=EXCLUDED.issue_type_generation,updated_at=now()
+      """).bind("project",project).bind("type",type).bind("generation",generation).bind("workflow",workflow)
           .fetch().rowsUpdated().flatMap(n->n==1?Mono.empty():Mono.error(missing()));
     }
-    /** Exact current generation only. Missing binding stays missing; there is no default fallback. */
+
+    /**
+     * Exact current generation only. Missing binding stays missing; there is no default fallback.
+     */
     public Mono<Workflow> resolve(UUID project,String type,UUID generation) {
       return sql("""
-          SELECT w.* FROM taska.workflow_bindings b JOIN taska.workflows w
-            ON w.tenant_id=b.tenant_id AND w.id=b.workflow_id AND w.owner_project_id=b.project_id
-          WHERE b.tenant_id=:tenant AND w.tenant_id=:tenant AND b.project_id=:project
-            AND b.issue_type=:type AND b.issue_type_generation=:generation AND w.is_active
-          """).bind("project",project).bind("type",type).bind("generation",generation).map((r,m)->workflow(r)).one();
+      SELECT w.* FROM taska.workflow_bindings b JOIN taska.workflows w
+        ON w.tenant_id=b.tenant_id AND w.id=b.workflow_id AND w.owner_project_id=b.project_id
+      WHERE b.tenant_id=:tenant AND w.tenant_id=:tenant AND b.project_id=:project
+        AND b.issue_type=:type AND b.issue_type_generation=:generation AND w.is_active
+      """).bind("project",project).bind("type",type).bind("generation",generation).map((r,m)->workflow(r)).one();
     }
     public Flux<Binding> bindings(Collection<UUID> projects) {
       if(projects.isEmpty())return Flux.empty();
-      return sql("SELECT * FROM taska.workflow_bindings WHERE tenant_id=:tenant AND project_id IN (:projects) ORDER BY project_id,issue_type")
+      return sql("SELECT * FROM taska.workflow_bindings WHERE tenant_id=:tenant AND project_id IN"
+              + " (:projects) ORDER BY project_id,issue_type")
           .bind("projects",projects).map((r,m)->new Binding(r.get("id",UUID.class),r.get("project_id",UUID.class),
               r.get("issue_type",String.class),r.get("issue_type_generation",UUID.class),r.get("workflow_id",UUID.class))).all();
     }
     public Mono<Long> unbind(UUID project,String type,UUID generation) {
-      return sql("DELETE FROM taska.workflow_bindings WHERE tenant_id=:tenant AND project_id=:project AND issue_type=:type AND issue_type_generation=:generation")
+      return sql("DELETE FROM taska.workflow_bindings WHERE tenant_id=:tenant AND"
+              + " project_id=:project AND issue_type=:type AND"
+              + " issue_type_generation=:generation")
           .bind("project",project).bind("type",type).bind("generation",generation).fetch().rowsUpdated();
     }
 
     public Mono<Pin> pin(UUID project,UUID operation,UUID workflow) {
       var stamp=RecoveryStamp.from(context);
       return lock(workflow).filter(w->w.project().equals(project)).switchIfEmpty(Mono.error(missing()))
-          .flatMap(w->stamp.bind(sql("""
-              INSERT INTO taska.issue_type_move_workflow_pins(tenant_id,operation_id,project_id,workflow_id,valid_status_keys,grant_id,actor_auth_version,membership_version)
-              SELECT :tenant,:operation,:project,:workflow,array_agg(status_key ORDER BY sort_order,status_key),:grant,:authVersion,:memberVersion
-              FROM taska.statuses WHERE tenant_id=:tenant AND workflow_id=:workflow HAVING count(*)>0
-              ON CONFLICT(tenant_id,operation_id) DO NOTHING
-              """)).bind("operation",operation).bind("project",project).bind("workflow",workflow).then())
+          .flatMap(w->stamp.bind(sql(
+                              """
+                              INSERT INTO taska.issue_type_move_workflow_pins(tenant_id,operation_id,project_id,workflow_id,valid_status_keys,grant_id,actor_auth_version,membership_version)
+                              SELECT :tenant,:operation,:project,:workflow,array_agg(status_key ORDER BY sort_order,status_key),:grant,:authVersion,:memberVersion
+                              FROM taska.statuses WHERE tenant_id=:tenant AND workflow_id=:workflow HAVING count(*)>0
+                              ON CONFLICT(tenant_id,operation_id) DO NOTHING
+                              """)).bind("operation",operation).bind("project",project).bind("workflow",workflow).then())
           .then(pin(project,operation)).filter(p->p.workflow().equals(workflow)&&!p.released())
           .switchIfEmpty(Mono.error(new DomainException(DomainStatus.ABORTED,"Workflow pin identity changed or closed")));
     }
     public Mono<Pin> pin(UUID project,UUID operation) {
-      return sql("SELECT * FROM taska.issue_type_move_workflow_pins WHERE tenant_id=:tenant AND project_id=:project AND operation_id=:operation")
+      return sql("SELECT * FROM taska.issue_type_move_workflow_pins WHERE tenant_id=:tenant AND"
+              + " project_id=:project AND operation_id=:operation")
           .bind("project",project).bind("operation",operation).map((r,m)->new Pin(operation,project,r.get("workflow_id",UUID.class),
               Arrays.asList(r.get("valid_status_keys",String[].class)),r.get("released",Boolean.class))).one();
     }
     public Mono<Void> releasePin(UUID project,UUID operation) {
-      return sql("UPDATE taska.issue_type_move_workflow_pins SET released=true WHERE tenant_id=:tenant AND project_id=:project AND operation_id=:operation")
+      return sql("UPDATE taska.issue_type_move_workflow_pins SET released=true WHERE"
+              + " tenant_id=:tenant AND project_id=:project AND operation_id=:operation")
           .bind("project",project).bind("operation",operation).then();
     }
     public Mono<Receipt> receipt(UUID project,UUID operation) {
-      return sql("SELECT * FROM taska.issue_type_creation_workflow_receipts WHERE tenant_id=:tenant AND project_id=:project AND operation_id=:operation")
+      return sql("SELECT * FROM taska.issue_type_creation_workflow_receipts WHERE tenant_id=:tenant"
+              + " AND project_id=:project AND operation_id=:operation")
           .bind("project",project).bind("operation",operation).map((r,m)->new Receipt(operation,project,r.get("state",String.class),
               r.get("workflow_id",UUID.class),r.get("code",String.class),r.get("generation",UUID.class))).one();
     }
@@ -351,11 +402,12 @@ public final class TenantWorkflowStore {
       })).filter(value::equals).switchIfEmpty(Mono.error(new DomainException(DomainStatus.ABORTED,"Workflow receipt identity mismatch")));
     }
     private Mono<Receipt> insertReceipt(Receipt value) {
-      var query=RecoveryStamp.from(context).bind(sql("""
-          INSERT INTO taska.issue_type_creation_workflow_receipts(tenant_id,operation_id,project_id,state,workflow_id,code,generation,grant_id,actor_auth_version,membership_version)
-          VALUES(:tenant,:operation,:project,:state,:workflow,:code,:generation,:grant,:authVersion,:memberVersion)
-          ON CONFLICT(tenant_id,operation_id) DO NOTHING
-          """)).bind("operation",value.operation()).bind("project",value.project()).bind("state",value.state());
+      var query=RecoveryStamp.from(context).bind(sql(
+                      """
+                      INSERT INTO taska.issue_type_creation_workflow_receipts(tenant_id,operation_id,project_id,state,workflow_id,code,generation,grant_id,actor_auth_version,membership_version)
+                      VALUES(:tenant,:operation,:project,:state,:workflow,:code,:generation,:grant,:authVersion,:memberVersion)
+                      ON CONFLICT(tenant_id,operation_id) DO NOTHING
+                      """)).bind("operation",value.operation()).bind("project",value.project()).bind("state",value.state());
       query=value.workflow()==null?query.bindNull("workflow",UUID.class):query.bind("workflow",value.workflow());
       query=value.generation()==null?query.bindNull("generation",UUID.class):query.bind("generation",value.generation());
       query=nullable(query,"code",value.code());

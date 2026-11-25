@@ -1,13 +1,12 @@
 package ru.taska.transport.kafka;
 
-import org.springframework.beans.factory.annotation.Value;
-import ru.taska.event.EventType;
-import ru.taska.event.EventScopeKind;
-import ru.taska.event.TaskaEvent;
-import ru.taska.event.TaskaEventContract;
-
 import java.util.EnumSet;
 import java.util.Set;
+import org.springframework.beans.factory.annotation.Value;
+import ru.taska.event.EventScopeKind;
+import ru.taska.event.EventType;
+import ru.taska.event.TaskaEvent;
+import ru.taska.event.TaskaEventContract;
 
 /** Validates the trusted producer/topic/scope part of an incoming event contract. */
 final class TaskaEventRegistry {
@@ -41,6 +40,8 @@ final class TaskaEventRegistry {
             EventType.PROJECT_CREATED,
             EventType.PROJECT_UPDATED,
             EventType.PROJECT_ARCHIVED,
+          EventType.PROJECT_DELETION_ACCEPTED,
+          EventType.PROJECT_DELETED,
             EventType.MEMBER_ADDED,
             EventType.MEMBER_UPDATED,
             EventType.MEMBER_REMOVED);

@@ -1,0 +1,42 @@
+syntax = "proto3";
+package ru.taska.b2b.v1;
+import "v1/tenant-context.proto";
+import "v1/tenant-registry.proto";
+option java_multiple_files = true;
+option java_package = "ru.taska.api.b2b.v1";
+
+// Операция принадлежит project-service; потребители сверяют её с primary перед эффектом.
+message DeleteProjectRpcRequest {
+ RequestContext context=1;
+ string project_id=2;
+ bool confirmed=3;
+ string confirmed_project_key=4;
+ MutationOptions mutation=5;
+}
+message ProjectDeletionRequest {
+ RequestContext context=1;
+ string project_id=2;
+ string operation_id=3;
+}
+message ProjectDeletionProof {
+ Operation operation=1;
+ string project_id=2;
+ bool accepted=3;
+ bool resources_deleted=4;
+ string initiator_id=5;
+}
+message ProjectCleanupResult {
+ string tenant_id=1;
+ string project_id=2;
+ string operation_id=3;
+ bool complete=4;
+}
+service ProjectDeletionService {
+ rpc DeleteProject(DeleteProjectRpcRequest) returns(Operation);
+ rpc GetDeletion(ProjectDeletionRequest) returns(Operation);
+ rpc InspectDeletion(ProjectDeletionRequest) returns(ProjectDeletionProof);
+ rpc RecoverDeletion(ProjectDeletionRequest) returns(Operation);
+}
+service ProjectResourceCleanupService {
+ rpc CleanupProject(ProjectDeletionRequest) returns(ProjectCleanupResult);
+}

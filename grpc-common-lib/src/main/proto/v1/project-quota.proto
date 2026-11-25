@@ -35,6 +35,8 @@ service QuotaAuthorityService {
  rpc GetQuotaReservation(GetQuotaReservationRequest) returns(QuotaReservation);
  // Only primary DELETED receipt releases committed bytes; never client-supplied amounts.
  rpc ReleaseStorageUsage(FinalizeQuotaRpcRequest) returns(google.protobuf.Empty);
+ // Только primary DELETED receipt владельца освобождает committed PROJECT usage.
+ rpc ReleaseProjectUsage(FinalizeQuotaRpcRequest) returns(google.protobuf.Empty);
 }
 service ProjectQuotaOwnerService {
  rpc Inspect(ProjectQuotaOwnerRequest) returns(ProjectQuotaOwnerReceipt);

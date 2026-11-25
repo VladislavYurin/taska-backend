@@ -96,7 +96,8 @@ public final class ManagedRpcTrust implements RpcContextSecurity.Keys {
           "admin",
           "membership",
           "NOTIFICATION_DELIVERY",
-          "STORAGE_CLEANUP");
+          "STORAGE_CLEANUP",
+          "PROJECT_CLEANUP");
   private final Path snapshotFile, privateKeyFile;
   private final String service, environment;
   private final Clock clock;

@@ -101,7 +101,21 @@ public class GatewayContextFactory {
   }
 
   private static TenantTarget tenantTarget(String path,String method){
-    if("PUT".equals(method)||"DELETE".equals(method)) {
+    if("POST".equals(method)) {
+      var deletion =
+          java.util.regex.Pattern.compile("^/api/v1/tenants/([^/]+)/projects/[^/]+/deletion$")
+              .matcher(path);
+      if (deletion.matches())
+        return new TenantTarget(canonicalTenantId(deletion.group(1)), "deleteProject");
+    }
+    if ("GET".equals(method)) {
+      var operation =
+          java.util.regex.Pattern.compile("^/api/v1/tenants/([^/]+)/operations/[^/]+$")
+              .matcher(path);
+      if (operation.matches())
+        return new TenantTarget(canonicalTenantId(operation.group(1)), "getProjectDeletion");
+    }
+    if ("PUT".equals(method)||"DELETE".equals(method)) {
       var pause=java.util.regex.Pattern.compile("^/api/v1/tenants/([^/]+)/pause$").matcher(path);
       if(pause.matches()) return new TenantTarget(canonicalTenantId(pause.group(1)),"PUT".equals(method)?"pauseTenant":"resumeTenant");
       var block=java.util.regex.Pattern.compile("^/api/v1/admin/tenants/([^/]+)/platform-block$").matcher(path);
@@ -147,7 +161,8 @@ public class GatewayContextFactory {
               || binding.getCredentialKind()!=ru.taska.api.b2b.v1.CredentialKind.CREDENTIAL_KIND_WEB_GLOBAL
               || !binding.getScopesList().contains("tenants:select")))return Mono.error(Status.PERMISSION_DENIED.asRuntimeException());
           if(target!=null && (!binding.hasTenantId() || !sameTenant(binding.getTenantId(),target.id())))return Mono.error(Status.PERMISSION_DENIED.asRuntimeException());
-          if(target!=null && !binding.getScopesList().contains("getTenant".equals(target.action())?"read":"write"))return Mono.error(Status.PERMISSION_DENIED.asRuntimeException());
+          if(target!=null && !binding.getScopesList().contains(
+                                java.util.Set.of("getTenant", "getProjectDeletion").contains(target.action())?"read":"write"))return Mono.error(Status.PERMISSION_DENIED.asRuntimeException());
           var suppliedTenants=exchange.getRequest().getHeaders().getOrEmpty("X-Tenant-Id");
           if(suppliedTenants.size()>1)return Mono.error(Status.PERMISSION_DENIED.asRuntimeException());
           String selected=exchange.getRequest().getHeaders().getFirst("X-Tenant-Id");
