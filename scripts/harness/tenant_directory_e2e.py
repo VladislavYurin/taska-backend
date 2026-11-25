@@ -37,12 +37,12 @@ class TenantDirectoryLocal(TenantRenameLocal):
             {'limit': 1, 'cursor': page['nextCursor']}), 200).json()
         members = page['items'] + following['items']
         e.require({item['userId'] for item in members} == {owner_id, member_a}, 'Directory leaked or lost users')
-        e.require(all(item['tenantId'] == company_a and item['displayName'] == 'Owned fixture'
+        e.require(all(item['tenantId'] == company_a and item['displayName'] == ('Owned' if item['userId'] == owner_id else 'Owned fixture')
                       and item['email'] for item in members), 'Incomplete member profiles')
         other.expect('GET', path, 403)
         query = '/api/v1/users?' + urlencode({'query': 'directory-', 'pageSize': 1})
         result = owner.expect('GET', query, 200).json()
-        e.require([item['userId'] for item in result['items']] == [member_a]
+        e.require([item['id'] for item in result['items']] == [member_a]
                   and result['hasMore'] is False, 'Search includes foreign company or wrong hasMore')
         self.sql('tenant_db', "UPDATE taska.tenant_memberships SET status='SUSPENDED',version=version+1"
                  " WHERE tenant_id='%s' AND user_id='%s';" % (company_a, owner_id))

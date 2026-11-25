@@ -1,8 +1,6 @@
 package ru.taska.security.trust;
 
 import io.grpc.ManagedChannel;
-import io.grpc.Status;
-import io.grpc.StatusRuntimeException;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 import ru.taska.api.b2b.v1.BatchValidateMembershipsRpcRequest;
@@ -97,14 +95,7 @@ public class GrpcTenantServiceClient implements AutoCloseable{
                                                                 .addAllUserIds(userIds.stream().map(UUID::toString).toList())
                                                                 .build()
                                                 );
-                                            })
-                                    .onErrorResume(
-                                            StatusRuntimeException.class,
-                                            e ->
-                                                    e.getStatus().getCode() == Status.Code.NOT_FOUND
-                                                            ? Mono.empty()
-                                                            : Mono.error(e)
-                                    );
+                                            });
                         })
                 .subscribeOn(Schedulers.boundedElastic());
     }
