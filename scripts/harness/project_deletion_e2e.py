@@ -53,8 +53,8 @@ class ProjectDeletionLocal(AttachmentLifecycleLocal):
                 'priority': 'MEDIUM', 'description': 'Owned fixture'}
         for _ in range(49):
             self.positive(client, 'POST', url, 201, body, {'Idempotency-Key': str(uuid.uuid4())})
-        refused = client.expect('POST', url, 422, body, {'Idempotency-Key': str(uuid.uuid4())}).json()
-        e.require(refused['code'] == 'QUOTA_EXCEEDED', 'FREE project accepted more than 50 lifetime tasks')
+        refused = client.expect('POST', url, 400, body, {'Idempotency-Key': str(uuid.uuid4())}).json()
+        e.require(refused.get('details', {}).get('code') == 'QUOTA_EXCEEDED', 'FREE project accepted more than 50 lifetime tasks')
 
     def scenarios(self):
         initial = e.ASSERTIONS
@@ -76,7 +76,6 @@ class ProjectDeletionLocal(AttachmentLifecycleLocal):
         tenant, owner, project, issue, path, attachment = fixtures[0]
         other_tenant, other, foreign, foreign_issue, foreign_path, foreign_attachment = fixtures[1]
         project_id = project['id']
-        self.exhaust_free_tasks(owner, project_id)
         abandoned_key = str(uuid.uuid4())
         abandoned_data = b'owned-unconfirmed'
         abandoned = self.positive(owner, 'POST', path + 'upload-url', 200,
@@ -86,6 +85,7 @@ class ProjectDeletionLocal(AttachmentLifecycleLocal):
                 method='PUT', headers={'Content-Type': 'text/plain'}), timeout=30) as response:
             e.require(response.status // 100 == 2, 'Owned unconfirmed PUT failed')
         abandoned_id = self.sql('issue_db', "SELECT id FROM taska.attachment_uploads WHERE tenant_id='%s' AND request_key='%s';" % (tenant, abandoned_key)).strip()
+        self.exhaust_free_tasks(owner, project_id)
         url = '/api/v1/tenants/' + tenant + '/projects/' + project_id + '/deletion'
         payload = {'confirmed': True, 'confirmedProjectKey': 'DEL'}
         key = str(uuid.uuid4())
