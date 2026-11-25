@@ -89,7 +89,11 @@ class StorageQuotaIntegrationTest {
       billingOnline = new AtomicBoolean(true),
       failOpen = new AtomicBoolean();
   static final AtomicBoolean loseCancelResponse = new AtomicBoolean();
+  static final AtomicBoolean loseUsageResponse = new AtomicBoolean();
   static final AtomicBoolean expireOnInspect = new AtomicBoolean();
+  static final AtomicReference<StorageQuotaStore.Command> stalledPolicy = new AtomicReference<>();
+  static final AtomicBoolean billingStalled = new AtomicBoolean();
+  static final AtomicBoolean ownerStalled = new AtomicBoolean();
   static final AtomicReference<CredentialKind> lastCredential = new AtomicReference<>();
   static final AtomicLong limit = new AtomicLong(1),
       entitlement = new AtomicLong(1),
@@ -398,11 +402,30 @@ class StorageQuotaIntegrationTest {
             rootSecurity,
             Clock.systemUTC(),
             "tenant-service");
+    Owner ownerPort =
+        new Owner() {
+          public Mono<Receipt> inspect(Reservation r) {
+            return ownerStalled.get() ? Mono.never() : ownerClient.inspect(r);
+          }
+
+          public Mono<Receipt> activate(Reservation r) {
+            return ownerClient.activate(r);
+          }
+
+          public Mono<Receipt> cancel(Reservation r) {
+            return ownerClient.cancel(r);
+          }
+
+          public Mono<ManifestPage> manifests(UUID tenant, UUID after, long version) {
+            return ownerClient.manifests(tenant, after, version);
+          }
+        };
     root =
         new StorageQuotaStore(
             rootTx,
             (c, command, op) -> {
               lastCredential.set(RpcContextBridge.details(c).getContext().getCredentialKind());
+              if (command == stalledPolicy.get()) return Mono.never();
               if (!permitted.get())
                 return Mono.error(
                     new DomainException(DomainStatus.PERMISSION_DENIED, "current policy revoked"));
@@ -413,11 +436,14 @@ class StorageQuotaIntegrationTest {
                   new StorageQuotaStore.Grant(
                       bypass.get(), Duration.ofMinutes(15), 20000000, policyVersion.get()));
             },
-            ownerClient,
+            ownerPort,
             (tenant, min) ->
-                billingOnline.get()
-                    ? Mono.just(terms(tenant))
-                    : Mono.error(new DomainException(DomainStatus.UNAVAILABLE, "billing offline")),
+                billingStalled.get()
+                    ? Mono.never()
+                    : billingOnline.get()
+                        ? Mono.just(terms(tenant))
+                        : Mono.error(
+                            new DomainException(DomainStatus.UNAVAILABLE, "billing offline")),
             clock);
     var rootPolicies = new HashMap<String, RpcContextSecurity.Policy>();
     for (String method :
@@ -425,14 +451,42 @@ class StorageQuotaIntegrationTest {
             QuotaAuthorityServiceGrpc.getReserveQuotaMethod().getFullMethodName(),
             QuotaAuthorityServiceGrpc.getCommitQuotaMethod().getFullMethodName(),
             QuotaAuthorityServiceGrpc.getReleaseQuotaMethod().getFullMethodName(),
-            QuotaAuthorityServiceGrpc.getGetQuotaReservationMethod().getFullMethodName()))
+            QuotaAuthorityServiceGrpc.getGetQuotaReservationMethod().getFullMethodName(),
+            QuotaAuthorityServiceGrpc.getReleaseStorageUsageMethod().getFullMethodName()))
       rootPolicies.put(method, new RpcContextSecurity.Policy(true, false));
     rootServer =
         server("tenant-service")
             .addService(
                 ServerInterceptors.intercept(
                     new ProjectQuotaGrpcService(null, root),
-                    new TenantServerInterceptor(rootSecurity, rootPolicies, "test")))
+                    new TenantServerInterceptor(rootSecurity, rootPolicies, "test"),
+                    new ServerInterceptor() {
+                      public <Q, S> ServerCall.Listener<Q> interceptCall(
+                          ServerCall<Q, S> call, Metadata headers, ServerCallHandler<Q, S> next) {
+                        if (!loseUsageResponse.get()
+                            || !call.getMethodDescriptor()
+                                .getFullMethodName()
+                                .equals(
+                                    QuotaAuthorityServiceGrpc.getReleaseStorageUsageMethod()
+                                        .getFullMethodName())) return next.startCall(call, headers);
+                        return next.startCall(
+                            new ForwardingServerCall.SimpleForwardingServerCall<Q, S>(call) {
+                              @Override
+                              public void sendMessage(S message) {}
+
+                              @Override
+                              public void close(Status status, Metadata trailers) {
+                                super.close(
+                                    status.isOk()
+                                        ? Status.UNAVAILABLE.withDescription(
+                                            "fixture lost committed release acknowledgement")
+                                        : status,
+                                    new Metadata());
+                              }
+                            },
+                            headers);
+                      }
+                    }))
             .build()
             .start();
     rootChannel = channel("issue-service", rootServer.getPort());
@@ -481,7 +535,11 @@ class StorageQuotaIntegrationTest {
 
   @BeforeEach
   void seed() {
+    stalledPolicy.set(null);
+    billingStalled.set(false);
+    ownerStalled.set(false);
     loseCancelResponse.set(false);
+    loseUsageResponse.set(false);
     expireOnInspect.set(false);
     time.set(Instant.now());
     enabled.set(true);
@@ -498,7 +556,7 @@ class StorageQuotaIntegrationTest {
     rootAdmin
         .sql(
             "TRUNCATE"
-                + " taska.quota_effects,taska.quota_reservations,taska.quota_counters,taska.tenant_creation_receipts,taska.tenant_provisioning_dispatch,taska.tenant_operations,taska.free_admission_subjects,taska.free_plan_admissions,taska.tenants,taska.tenant_memberships,taska.idempotency_records,taska.outbox_events")
+                + " taska.quota_effects,taska.quota_reservations,taska.quota_counters,taska.tenant_creation_receipts,taska.tenant_provisioning_dispatch,taska.tenant_operations,taska.free_admission_subjects,taska.free_plan_admissions,taska.tenant_restrictions,taska.tenant_restriction_audit,taska.tenants,taska.tenant_memberships,taska.idempotency_records,taska.outbox_events")
         .then()
         .block(WAIT);
     ownerAdmin

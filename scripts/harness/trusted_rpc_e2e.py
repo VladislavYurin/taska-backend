@@ -42,7 +42,7 @@ def wait_protected_read(client, path, expected):
             break
         if status == expected:
             return attempts
-        e.require(status == 503, 'Protected readiness returned unexpected status %s' % status)
+        e.require(status in (503, 504), 'Protected readiness returned unexpected status %s' % status)
         time.sleep(1)
     raise e.Blocked('Protected RPC readiness deadline exceeded')
 
@@ -55,6 +55,9 @@ class TrustedLocal(e.Local):
         pass
 
     def prepare_extra_databases(self):
+        pass
+
+    def configure_container(self, name, service):
         pass
 
     def __init__(self, root, store, state):
@@ -135,7 +138,7 @@ class TrustedLocal(e.Local):
         self.store.save(self.state)
         with e.mutex(self.store.directory / '.build-lock', wait=True):
             e.run_command(['./mvnw', '-B', '-ntp', '-pl', ','.join(self.modules), '-am',
-                           'package', '-DskipTests'], self.root, 1800)
+                           'package', '-DskipTests'], self.root, 1800, diagnostic_path=self.dir / 'build-diagnostic.json')
             jars = self.dir / 'jars'
             jars.mkdir()
             for module in self.modules:
@@ -226,6 +229,7 @@ class TrustedLocal(e.Local):
             self.configure_service(name, env, props)
             path = self.material / name / 'application.properties'
             path.write_text(''.join(k + '=' + v + '\n' for k, v in props.items()))
+            self.configure_container(name, s)
             compose['services'][name] = s
         for name, s in compose['services'].items():
             s['labels'], s['networks'] = {e.LABEL: self.state['ownerNonce']}, ['default']
@@ -254,16 +258,19 @@ class TrustedLocal(e.Local):
         for name in self.modules:
             self.compose('cp', str(install), name + ':/run/trust')
         self.runtime_trust = True
-        self.compose('up', '-d', *self.modules, timeout=180)
         self.refresh()
         self.refresh_thread = threading.Thread(target=self.refresh_loop, daemon=True)
         self.refresh_thread.start()
+        self.start_applications()
         for name in self.modules:
             endpoint = 'http://' + self.compose('port', name, '8080').strip()
             self.wait_ready(endpoint)
             if name == 'api-gateway':
                 self.state['origin'] = endpoint
         self.store.save(self.state)
+
+    def start_applications(self):
+        self.compose('up', '-d', *self.modules, timeout=180)
 
     def sql(self, database, sql):
         return self.compose('exec', '-T', 'database', 'psql', '-X', '-qAt', '-U', 'taska', '-d', database,
@@ -385,8 +392,8 @@ class TrustedLocal(e.Local):
                 'protectedReadinessAttempts': readiness}
 
 
-def main():
-    parser = argparse.ArgumentParser(description=__doc__)
+def main(*, description=None, scenario='trusted-rpc', local_cls=None):
+    parser = argparse.ArgumentParser(description=description or __doc__)
     parser.add_argument('--cleanup', help='Signed state.json from an interrupted owned run')
     args = parser.parse_args()
     root = Path(__file__).resolve().parents[2]
@@ -400,8 +407,8 @@ def main():
         print(json.dumps({'cleanup': 'PASS'}))
         return
     state = store.create(secrets.token_hex(8), 'local', 'isolated-trusted-rpc', '')
-    local = TrustedLocal(root, store, state)
-    report = {'source': e.source(root), 'scenario': 'trusted-rpc', 'status': 'FAIL'}
+    local = (local_cls or TrustedLocal)(root, store, state)
+    report = {'source': e.source(root), 'scenario': scenario, 'status': 'FAIL'}
     print(json.dumps({'runState': str(store.path(state['runId'])), 'status': 'RUNNING'}), flush=True)
     with e.mutex(local.dir / '.run-lock'):
         try:

@@ -1256,6 +1256,9 @@
               "items" : {
                 "$ref" : "#/$defs/ProjectWorkflowEntryDto"
               }
+            },
+            "taskQuota" : {
+              "$ref" : "#/$defs/TaskQuotaDto"
             }
           }
         },
@@ -1439,6 +1442,11 @@
               }, {
                 "type" : "null"
               } ]
+            },
+            "version" : {
+              "type" : "string",
+              "pattern" : "^(0|[1-9][0-9]*)$",
+              "description" : "Current project version as decimal string; native archive/restore use a strong quoted If-Match. Existing projects start at zero."
             }
           }
         },
@@ -1579,6 +1587,24 @@
           "type" : "string",
           "description" : "Форма метки типа. Встроенные типы новых проектов — TASK и STORY square, BUG circle, без значка.",
           "enum" : [ "square", "circle", "diamond" ]
+        },
+        "TaskQuotaDto" : {
+          "type" : "object",
+          "required" : [ "used", "unlimited" ],
+          "properties" : {
+            "used" : {
+              "type" : "integer",
+              "minimum" : 0,
+              "description" : "Lifetime-число успешных созданий задач в проекте, включая удалённые."
+            },
+            "limit" : {
+              "type" : "integer",
+              "minimum" : 0
+            },
+            "unlimited" : {
+              "type" : "boolean"
+            }
+          }
         }
       }
     },
@@ -2432,6 +2458,11 @@
               }, {
                 "type" : "null"
               } ]
+            },
+            "version" : {
+              "type" : "string",
+              "pattern" : "^(0|[1-9][0-9]*)$",
+              "description" : "Current project version as decimal string; native archive/restore use a strong quoted If-Match. Existing projects start at zero."
             }
           }
         }

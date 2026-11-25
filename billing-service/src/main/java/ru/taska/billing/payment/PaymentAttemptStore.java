@@ -199,6 +199,29 @@ public final class PaymentAttemptStore {
                 .one());
   }
 
+  /**
+   * Привязка согласия и claim выполняются одним UPDATE; состояние ACCEPTED не переписывается
+   * отдельно.
+   */
+  public Mono<Attempt> claimRecurring(Attempt attempt, UUID mandate) {
+    Objects.requireNonNull(mandate);
+    return transactions.execute(
+        db ->
+            db.sql(
+                    """
+UPDATE taska.payment_attempts SET mandate_id=:mandate,state='SUBMITTED',version=version+1,updated_at=:now
+ WHERE tenant_id=:tenant AND id=:id AND state='ACCEPTED' AND version=:version AND mandate_id IS NULL
+ RETURNING *,invoice_snapshot::text AS snapshot_document
+""")
+                .bind("mandate", mandate)
+                .bind("tenant", attempt.tenantId())
+                .bind("id", attempt.id())
+                .bind("version", attempt.version())
+                .bind("now", clock.instant())
+                .map((r, m) -> read(r))
+                .one());
+  }
+
   public Mono<Attempt> find(UUID tenant, UUID id) {
     return transactions.execute(db -> find(db, tenant, id, false));
   }

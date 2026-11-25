@@ -1,0 +1,48 @@
+syntax = "proto3";
+package ru.taska.b2b.v1;
+import "v1/tenant-context.proto";
+import "v1/tenant-registry.proto";
+option java_multiple_files = true;
+option java_package = "ru.taska.api.b2b.v1";
+
+// Additive subset of docs/b2b/contracts/b2b.proto for TAS-498. Blueprint field numbers are preserved.
+message OAuthConsentRequest {
+  enum ScopesValue { SCOPES_UNSPECIFIED = 0; SCOPES_read = 1; SCOPES_write = 2; }
+  string client_id = 1;
+  string tenant_id = 2;
+  repeated ScopesValue scopes = 3;
+  string authorization_request_id = 4;
+  bool approved = 5;
+}
+message OAuthConsentResult {
+  string grant_id = 1;
+  string redirect_path = 2;
+  string tenant_id = 3;
+}
+message ApproveTenantOAuthGrantRpcRequest {
+  RequestContext context = 1;
+  OAuthConsentRequest payload = 2;
+  MutationOptions mutation = 3;
+}
+
+// Internal edge authentication (gateway/MCP, TAS-316), the OAuth counterpart of
+// AuthenticateTenantPersonalToken. The binding is immutable; membership, ACL, flags and
+// entitlement are still checked per operation by the capability policy.
+message AuthenticateTenantOAuthTokenRequest { string access_token = 1; }
+message TenantOAuthTokenBinding {
+  CredentialKind credential_kind = 1;
+  string actor_user_id = 2;
+  string tenant_id = 3;
+  // Authorization-server grant (refresh family) that issued the presented token.
+  string credential_id = 4;
+  string grant_id = 5;
+  string grant_generation = 6;
+  string actor_generation = 7;
+  repeated string scopes = 8;
+  string expires_at = 9;
+}
+
+service TenantOAuthGrantService {
+  rpc ApproveTenantOAuthGrant(ApproveTenantOAuthGrantRpcRequest) returns (OAuthConsentResult);
+  rpc AuthenticateTenantOAuthToken(AuthenticateTenantOAuthTokenRequest) returns (TenantOAuthTokenBinding);
+}

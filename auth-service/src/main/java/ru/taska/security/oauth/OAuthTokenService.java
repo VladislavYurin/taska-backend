@@ -44,12 +44,24 @@ public class OAuthTokenService {
   public Mono<UserContext> validateOriginal(String token) {
     return introspection
         .introspect(token)
+        .flatMap(OAuthTokenService::unbound)
         .flatMap(identity -> context(identity, AccessTokenKind.ACCESS_TOKEN_KIND_OAUTH));
+  }
+
+  /**
+   * A tenant-bound grant (TAS-498) never authenticates as an unbound global credential: a missing
+   * tenant must not mean "all companies".
+   */
+  private static Mono<OAuthGrantIdentity> unbound(OAuthGrantIdentity identity) {
+    return identity.integrationGrant() == null
+        ? Mono.just(identity)
+        : Mono.error(OAuthIntrospectionClient.invalid());
   }
 
   public Mono<ExchangeOAuthTokenResponse> exchange(String token) {
     return introspection
         .introspect(token)
+        .flatMap(OAuthTokenService::unbound)
         .flatMap(
             identity ->
                 context(identity, AccessTokenKind.ACCESS_TOKEN_KIND_OAUTH)
@@ -91,6 +103,7 @@ public class OAuthTokenService {
               if (!scopes.contains("read")) return Mono.error(OAuthIntrospectionClient.invalid());
               return introspection
                   .validateParent(grant, tokenId)
+                  .flatMap(OAuthTokenService::unbound)
                   .filter(
                       parent ->
                           parent.subject().equals(subject)

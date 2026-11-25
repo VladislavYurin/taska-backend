@@ -1,0 +1,33 @@
+syntax = "proto3";
+package ru.taska.b2b.v1;
+import "v1/tenant-context.proto";
+import "v1/project-quota.proto";
+import "v1/project-service.proto";
+option java_multiple_files = true;
+option java_package = "ru.taska.api.b2b.v1";
+
+// Private, message-bound service paths. Tenant is always the verified context's tenant.
+message ProjectInitializationRequest { RequestContext context=1; QuotaReservation reservation=2; }
+message InitializedProjectType { string code=1; string generation=2; }
+message ProjectInitializationDescriptor {
+  string tenant_id=1; string project_id=2; string operation_id=3;
+  string creator_id=4; string request_hash=5; repeated InitializedProjectType types=6;
+}
+message ProjectWorkflowInitialization { string workflow_id=1; }
+message ProjectFacetRequest { RequestContext context=1; string project_id=2; repeated InitializedProjectType types=3; }
+message ProjectWorkflowFacets { repeated ru.taska.project.v1.ProjectWorkflowEntryResponse items=1; }
+message ProjectLabelFacets { repeated ru.taska.project.v1.ProjectLabelResponse items=1; }
+message ProjectProfileRequest { RequestContext context=1; repeated string user_ids=2; }
+message ProjectProfileFacets { repeated ru.taska.project.v1.ProjectMemberDetailsResponse items=1; }
+message RecoverProjectCreationRequest { RequestContext context=1; string operation_id=2; }
+service ProjectInitializationService {
+  rpc Describe(ProjectInitializationRequest) returns(ProjectInitializationDescriptor);
+  rpc Recover(RecoverProjectCreationRequest) returns(ru.taska.project.v1.ProjectResponse);
+}
+service ProjectWorkflowBootstrapService {
+  rpc Ensure(ProjectInitializationRequest) returns(ProjectWorkflowInitialization);
+  rpc Cancel(ProjectInitializationRequest) returns(ProjectWorkflowInitialization);
+  rpc Read(ProjectFacetRequest) returns(ProjectWorkflowFacets);
+}
+service ProjectDirectoryService { rpc Profiles(ProjectProfileRequest) returns(ProjectProfileFacets); }
+service ProjectLabelsService { rpc Read(ProjectFacetRequest) returns(ProjectLabelFacets); }

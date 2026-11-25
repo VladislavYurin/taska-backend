@@ -405,7 +405,7 @@
   {
     "action": "issue.search",
     "effect": "READ",
-    "scope": "ISSUE",
+    "scope": "PROJECT",
     "profile": "CONTENT_READ",
     "roles": [
       "OWNER",
@@ -420,7 +420,7 @@
   {
     "action": "issue.board",
     "effect": "READ",
-    "scope": "ISSUE",
+    "scope": "PROJECT",
     "profile": "CONTENT_READ",
     "roles": [
       "OWNER",
@@ -450,7 +450,7 @@
   {
     "action": "issue.create",
     "effect": "MODIFY",
-    "scope": "ISSUE",
+    "scope": "PROJECT",
     "profile": "NORMAL",
     "roles": [
       "OWNER",

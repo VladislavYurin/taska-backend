@@ -209,7 +209,9 @@ class TenantIssueStorageIntegrationTest {
     catalogLimit.set(50);
     billingReads.set(0);
     restrictions.set(java.util.List.of());
-    sql("TRUNCATE taska.task_lifetime_quota_state,taska.task_quota_outbox");
+    sql(
+        "TRUNCATE"
+            + " taska.task_lifetime_quota_state,taska.task_quota_outbox,taska.issue_authorization_audit");
     sql(
         "TRUNCATE "
             + String.join(",", TABLES.stream().map(t -> "taska." + t).toList())
@@ -261,7 +263,13 @@ class TenantIssueStorageIntegrationTest {
     for (String table :
         java.util.stream.Stream.concat(
                 TABLES.stream(),
-                java.util.stream.Stream.of("task_lifetime_quota_state", "task_quota_outbox"))
+                java.util.stream.Stream.of(
+                    "task_lifetime_quota_state",
+                    "task_quota_outbox",
+                    "project_labels",
+                    "attachment_uploads",
+                    "issue_attachments",
+                    "attachment_deletion_jobs"))
             .toList()) assertEquals(0, count(table), table);
   }
 
@@ -309,6 +317,73 @@ class TenantIssueStorageIntegrationTest {
                             .map((r, m) -> r.get("n", Long.class))
                             .one()))
             .block(WAIT));
+  }
+
+  @Test
+  void activeLookupByKeyAndIdNeverCrossesTenantOrFallsBackGlobally() {
+    var a = create(A, "lookup-a");
+    var b = create(B, "lookup-b");
+    var own = as(A, ACTOR, store.execute(s -> s.findActiveByKey(a.key()))).block(WAIT);
+    assertNotNull(own);
+    assertEquals(a, own.identity());
+    assertEquals("Private summary", own.summary());
+    assertEquals("private description", own.description());
+    assertEquals(ACTOR, own.reporterId());
+    assertEquals("TASK", own.issueType());
+    assertEquals("TODO", own.statusKey());
+    assertEquals("MEDIUM", own.priority());
+    assertNotNull(own.createdAt());
+    assertNotNull(own.updatedAt());
+    assertNull(own.assigneeId());
+    assertNull(own.storyPoints());
+    assertNull(own.startDate());
+    assertNull(own.dueDate());
+    assertNull(own.originalEstimateMinutes());
+    assertNull(own.remainingEstimateMinutes());
+    assertEquals(0, own.timeSpentMinutes());
+    assertEquals(own, as(A, ACTOR, store.execute(s -> s.findActive(a.id()))).block(WAIT));
+    assertEquals(
+        b, as(B, ACTOR, store.execute(s -> s.findActiveByKey(a.key()))).block(WAIT).identity());
+    assertNull(as(B, ACTOR, store.execute(s -> s.findActive(a.id()))).block(WAIT));
+    var onlyA = create(A, "only-a");
+    assertNull(as(B, ACTOR, store.execute(s -> s.findActiveByKey(onlyA.key()))).block(WAIT));
+    assertEquals(3, count("issues"));
+  }
+
+  @Test
+  void activeLookupHidesSoftDeletedIssueWithoutRemovingItsHistoryOrQuota() {
+    var a = create(A, "deleted-lookup");
+    sql("UPDATE taska.issues SET deleted_at=now() WHERE id='" + a.id() + "'");
+    assertNull(as(A, ACTOR, store.execute(s -> s.findActive(a.id()))).block(WAIT));
+    assertNull(as(A, ACTOR, store.execute(s -> s.findActiveByKey(a.key()))).block(WAIT));
+    assertEquals(1, count("issues"));
+    assertEquals(1, count("issue_history"));
+    assertEquals(1, count("outbox_events"));
+    assertEquals(2, create(A, "after-deleted-lookup").number());
+  }
+
+  @Test
+  void activeLookupValidatesIdentifiersAndRequiresVerifiedContext() {
+    for (String key : List.of("", "ABC-0", "abc-1", "ABC-1' OR true --"))
+      assertEquals(
+          DomainStatus.INVALID_ARGUMENT,
+          assertThrows(
+                  DomainException.class,
+                  () -> as(A, ACTOR, store.execute(s -> s.findActiveByKey(key))).block(WAIT))
+              .getStatus());
+    assertEquals(
+        DomainStatus.INVALID_ARGUMENT,
+        assertThrows(
+                DomainException.class,
+                () -> as(A, ACTOR, store.execute(s -> s.findActive(new UUID(0, 0)))).block(WAIT))
+            .getStatus());
+    assertEquals(
+        DomainStatus.UNAUTHENTICATED,
+        assertThrows(
+                DomainException.class,
+                () -> store.execute(s -> s.findActiveByKey("ABC-1")).block(WAIT))
+            .getStatus());
+    assertEmpty();
   }
 
   @Test
@@ -642,7 +717,8 @@ class TenantIssueStorageIntegrationTest {
     for (String table :
         java.util.stream.Stream.concat(
                 TABLES.stream(),
-                java.util.stream.Stream.of("task_lifetime_quota_state", "task_quota_outbox"))
+                java.util.stream.Stream.of(
+                    "task_lifetime_quota_state", "task_quota_outbox", "project_labels"))
             .toList()) {
       assertTrue(
           operator
@@ -665,7 +741,7 @@ class TenantIssueStorageIntegrationTest {
                 .safeIssueRuntime(factory(pg.getUsername(), pg.getPassword()))
                 .afterPropertiesSet());
     assertEquals(
-        4L,
+        9L,
         operator
             .sql("SELECT count(*) n FROM issue_liquibase.databasechangelog")
             .map((r, m) -> r.get("n", Long.class))
@@ -1264,5 +1340,513 @@ class TenantIssueStorageIntegrationTest {
       assertEquals(200, response.statusCode());
       assertTrue(response.body().contains("UP"));
     }
+  }
+
+  TenantIssueAccess access;
+  TenantIssueApi api;
+  boolean writes = true, adminAudit = false;
+  java.time.Instant expiry;
+  final UUID assignee = UUID.randomUUID();
+
+  @BeforeEach
+  void businessBoundary() {
+    expiry = java.time.Instant.now().plusSeconds(30);
+    access = org.mockito.Mockito.mock(TenantIssueAccess.class);
+    org.mockito.Mockito.when(
+            access.authorize(
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.nullable(UUID.class)))
+        .thenAnswer(
+            call ->
+                ru.taska.security.tenant.VerifiedTenantContext.current()
+                    .flatMap(
+                        c -> {
+                          var action = call.getArgument(0, ru.taska.capability.Action.class);
+                          var project = call.getArgument(1, UUID.class);
+                          if (!project.equals(PROJECT))
+                            return Mono.error(
+                                new DomainException(DomainStatus.NOT_FOUND, "PROJECT_NOT_FOUND"));
+                          if (!writes
+                              && action != ru.taska.capability.Action.ISSUE_READ
+                              && action != ru.taska.capability.Action.ISSUE_HISTORY)
+                            return Mono.error(
+                                new DomainException(
+                                    DomainStatus.PERMISSION_DENIED, "CURRENT_ACL_DENIED"));
+                          return Mono.just(
+                              new TenantIssueAccess.Permit(
+                                  UUID.fromString(c.tenantId()),
+                                  UUID.fromString(c.actorId()),
+                                  c.action(),
+                                  project,
+                                  expiry,
+                                  false,
+                                  adminAudit,
+                                  adminAudit ? java.util.Set.of("READ_ONLY") : java.util.Set.of()));
+                        }));
+    org.mockito.Mockito.when(access.projectKey(PROJECT)).thenReturn(Mono.just("ABC"));
+    org.mockito.Mockito.when(
+            access.initialStatus(
+                org.mockito.ArgumentMatchers.eq(PROJECT),
+                org.mockito.ArgumentMatchers.eq("TASK"),
+                org.mockito.ArgumentMatchers.nullable(String.class)))
+        .thenReturn(Mono.just("TODO"));
+    org.mockito.Mockito.when(
+            access.assignee(
+                org.mockito.ArgumentMatchers.eq(PROJECT),
+                org.mockito.ArgumentMatchers.nullable(UUID.class)))
+        .thenAnswer(
+            call ->
+                call.getArgument(1) == null || assignee.equals(call.getArgument(1))
+                    ? Mono.empty()
+                    : Mono.error(
+                        new DomainException(DomainStatus.INVALID_ARGUMENT, "ASSIGNEE_NOT_ACTIVE")));
+    org.mockito.Mockito.when(
+            access.transition(
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.any(),
+                org.mockito.ArgumentMatchers.anyString()))
+        .thenAnswer(
+            call ->
+                "TODO".equals(call.getArgument(0, TenantIssueStore.Snapshot.class).statusKey())
+                    ? Mono.just("DONE")
+                    : Mono.error(
+                        new DomainException(
+                            DomainStatus.FAILED_PRECONDITION, "TRANSITION_DENIED")));
+    org.mockito.Mockito.when(access.readMany(org.mockito.ArgumentMatchers.anyList()))
+        .thenAnswer(
+            call ->
+                ru.taska.security.tenant.VerifiedTenantContext.current()
+                    .map(
+                        c -> {
+                          java.util.List<UUID> ids = call.getArgument(0);
+                          return new TenantIssueAccess.ReadBatch(
+                              ids.stream()
+                                  .map(
+                                      project ->
+                                          new TenantIssueAccess.Permit(
+                                              UUID.fromString(c.tenantId()),
+                                              UUID.fromString(c.actorId()),
+                                              c.action(),
+                                              project,
+                                              expiry,
+                                              false,
+                                              false,
+                                              java.util.Set.of()))
+                                  .toList(),
+                              50L,
+                              false);
+                        }));
+    api = new TenantIssueApi(store, access);
+  }
+
+  ru.taska.api.issue.v1.CreateIssueRequestBody createRequest(String key) {
+    return ru.taska.api.issue.v1.CreateIssueRequestBody.newBuilder()
+        .setIdempotencyKey(key)
+        .setProjectId(PROJECT.toString())
+        .setReporterId(ACTOR.toString())
+        .setIssueTypeKey("TASK")
+        .setSummary("Native issue")
+        .setPriority(ru.taska.api.issue.v1.IssuePriority.ISSUE_PRIORITY_MEDIUM)
+        .build();
+  }
+
+  TenantIssueStore.Snapshot nativeCreate(String key) {
+    return as(A, ACTOR, "createIssue", api.create(createRequest(key))).block(WAIT);
+  }
+
+  ru.taska.api.issue.v1.PatchIssueRequestBody patch(TenantIssueStore.Snapshot r, String summary) {
+    return ru.taska.api.issue.v1.PatchIssueRequestBody.newBuilder()
+        .setIssueId(r.identity().id().toString())
+        .setActorUserId(ACTOR.toString())
+        .setVersion(r.identity().version())
+        .setSummary(summary)
+        .build();
+  }
+
+  DomainException denied(Mono<?> work, String operation, DomainStatus expected) {
+    var e = assertThrows(DomainException.class, () -> as(A, ACTOR, operation, work).block(WAIT));
+    assertEquals(expected, e.getStatus());
+    return e;
+  }
+
+  @Test
+  void createPatchReplayAndHistoryRemainExactAfterLaterChanges() {
+    var first = nativeCreate("native-create");
+    var q = patch(first, "Changed");
+    var changed = as(A, ACTOR, "patchIssue", api.patch(q, "patch-1")).block(WAIT);
+    assertEquals(2, changed.identity().version());
+    var newer =
+        as(A, ACTOR, "patchIssue", api.patch(patch(changed, "Newer"), "patch-2")).block(WAIT);
+    assertEquals(3, newer.identity().version());
+    assertEquals(changed, as(A, ACTOR, "patchIssue", api.patch(q, "patch-1")).block(WAIT));
+    assertEquals(first, nativeCreate("native-create"));
+    assertEquals(3, count("issue_history"));
+    assertEquals(3, count("outbox_events"));
+    assertEquals(1, count("project_counters"));
+    assertEquals(2, create(A, "next-create").number());
+    denied(
+        api.patch(q.toBuilder().setSummary("Conflict").build(), "patch-1"),
+        "patchIssue",
+        DomainStatus.ALREADY_EXISTS);
+    assertEquals(4, count("issue_history"));
+  }
+
+  @Test
+  void foreignIdsActorMismatchCurrentAclAndInvalidAssigneeLeaveStateUntouched() {
+    var first = nativeCreate("access");
+    assertNull(as(B, ACTOR, store.execute(s -> s.findActive(first.identity().id()))).block(WAIT));
+    assertEquals(
+        DomainStatus.NOT_FOUND,
+        assertThrows(
+                DomainException.class,
+                () ->
+                    as(
+                            B,
+                            ACTOR,
+                            "getIssue",
+                            api.get(first.identity().id().toString(), ACTOR.toString()))
+                        .block(WAIT))
+            .getStatus());
+    denied(
+        api.patch(
+            patch(first, "x").toBuilder().setActorUserId(UUID.randomUUID().toString()).build(),
+            "forged"),
+        "patchIssue",
+        DomainStatus.PERMISSION_DENIED);
+    writes = false;
+    denied(api.patch(patch(first, "x"), "revoked"), "patchIssue", DomainStatus.PERMISSION_DENIED);
+    writes = true;
+    var bad =
+        ru.taska.api.issue.v1.AssignIssueRequestBody.newBuilder()
+            .setIssueId(first.identity().id().toString())
+            .setActorUserId(ACTOR.toString())
+            .setAssigneeId(UUID.randomUUID().toString())
+            .build();
+    denied(api.assign(bad, "bad-assignee"), "assignIssue", DomainStatus.INVALID_ARGUMENT);
+    assertEquals(
+        first,
+        as(A, ACTOR, "getIssue", api.get(first.identity().id().toString(), ACTOR.toString()))
+            .block(WAIT));
+    assertEquals(1, count("issue_history"));
+    assertEquals(1, count("outbox_events"));
+    assertEquals(1, count("idempotency_keys"));
+  }
+
+  @Test
+  void transitionAndSoftDeleteAreIdempotentAndDoNotReclaimLifetimeQuota() {
+    var first = nativeCreate("transition");
+    var q =
+        ru.taska.api.issue.v1.TransitionIssueRequestBody.newBuilder()
+            .setIssueId(first.identity().id().toString())
+            .setActorUserId(ACTOR.toString())
+            .setTransitionId(UUID.randomUUID().toString())
+            .setExpectedVersion(1)
+            .build();
+    var done = as(A, ACTOR, "transitionIssue", api.transition(q, "transition-1")).block(WAIT);
+    assertEquals("DONE", done.statusKey());
+    assertEquals(
+        done, as(A, ACTOR, "transitionIssue", api.transition(q, "transition-1")).block(WAIT));
+    org.mockito.Mockito.verify(access, org.mockito.Mockito.times(1))
+        .transition(
+            org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.any(),
+            org.mockito.ArgumentMatchers.anyString());
+    var delete =
+        ru.taska.api.issue.v1.DeleteIssueRequestBody.newBuilder()
+            .setIssueId(first.identity().id().toString())
+            .setActorUserId(ACTOR.toString())
+            .build();
+    var tombstone = as(A, ACTOR, "deleteIssue", api.delete(delete, "delete-1")).block(WAIT);
+    assertNotNull(tombstone.deletedAt());
+    assertEquals(
+        tombstone, as(A, ACTOR, "deleteIssue", api.delete(delete, "delete-1")).block(WAIT));
+    denied(
+        api.getByKey(first.identity().key(), ACTOR.toString()),
+        "getIssueByKey",
+        DomainStatus.NOT_FOUND);
+    assertEquals(3, count("issue_history"));
+    assertEquals(3, count("outbox_events"));
+    assertEquals(1, count("issues"));
+    assertEquals(2, create(A, "after-delete").number());
+  }
+
+  @Test
+  void staleVersionAndExpiredAuthorityDoNotLeavePendingReceipts() {
+    var first = nativeCreate("version");
+    var updated = as(A, ACTOR, "patchIssue", api.patch(patch(first, "won"), "winner")).block(WAIT);
+    denied(api.patch(patch(first, "lost"), "loser"), "patchIssue", DomainStatus.ABORTED);
+    expiry = java.time.Instant.now().minusSeconds(1);
+    denied(api.patch(patch(updated, "expired"), "expired"), "patchIssue", DomainStatus.UNAVAILABLE);
+    assertEquals(2, count("idempotency_keys"));
+    assertEquals(2, count("issue_history"));
+    assertEquals(2, count("outbox_events"));
+  }
+
+  @Test
+  void outboxFailureRollsBackIssueVersionHistoryReceiptAndAudit() {
+    var first = nativeCreate("rollback");
+    sql(
+        "ALTER TABLE taska.outbox_events ADD CONSTRAINT test_deny_update"
+            + " CHECK(event_type<>'UPDATED') NOT VALID");
+    adminAudit = true;
+    try {
+      assertThrows(
+          RuntimeException.class,
+          () ->
+              as(A, ACTOR, "patchIssue", api.patch(patch(first, "must rollback"), "failure"))
+                  .block(WAIT));
+    } finally {
+      sql("ALTER TABLE taska.outbox_events DROP CONSTRAINT test_deny_update");
+    }
+    assertEquals(1, count("issue_history"));
+    assertEquals(1, count("outbox_events"));
+    assertEquals(1, count("idempotency_keys"));
+    assertEquals(0, count("issue_authorization_audit"));
+    adminAudit = false;
+    assertEquals(
+        first,
+        as(A, ACTOR, "getIssue", api.get(first.identity().id().toString(), ACTOR.toString()))
+            .block(WAIT));
+  }
+
+  @Test
+  void adminAuthorizationAuditIsCommittedWithMutationAndCannotBeChangedByApp() {
+    adminAudit = true;
+    var first = nativeCreate("audit");
+    assertEquals(1, count("issue_authorization_audit"));
+    as(A, ACTOR, "patchIssue", api.patch(patch(first, "audit changed"), "audit-patch")).block(WAIT);
+    assertEquals(2, count("issue_authorization_audit"));
+    assertThrows(
+        RuntimeException.class,
+        () ->
+            as(
+                    A,
+                    ACTOR,
+                    tx.execute(
+                        db ->
+                            db.sql("DELETE FROM taska.issue_authorization_audit WHERE tenant_id=:t")
+                                .bind("t", A)
+                                .fetch()
+                                .rowsUpdated()))
+                .block(WAIT));
+    assertEquals(2, count("issue_authorization_audit"));
+  }
+
+  @Test
+  void concurrentPatchesHaveOneWinnerAndNoDuplicateHistory() {
+    var first = nativeCreate("race");
+    var q = patch(first, "winner");
+    var outcomes =
+        Flux.just("race-a", "race-b")
+            .flatMap(
+                key ->
+                    as(A, ACTOR, "patchIssue", api.patch(q, key))
+                        .map(v -> "PASS")
+                        .onErrorResume(DomainException.class, e -> Mono.just(e.getStatus().name())),
+                2)
+            .collectList()
+            .block(WAIT);
+    assertEquals(1, outcomes.stream().filter("PASS"::equals).count());
+    assertEquals(1, outcomes.stream().filter("ABORTED"::equals).count());
+    assertEquals(2, count("issue_history"));
+    assertEquals(2, count("outbox_events"));
+    assertEquals(2, count("idempotency_keys"));
+  }
+
+  @Test
+  void assignmentAndNullablePatchPreserveOtherFieldsAndSupportUnassignment() {
+    var first = nativeCreate("assign");
+    var detailRequest =
+        ru.taska.api.issue.v1.GetIssueRequestBody.newBuilder()
+            .setIssueId(first.identity().id().toString())
+            .setActorUserId(ACTOR.toString())
+            .build();
+    assertTrue(
+        as(A, ACTOR, "getIssueDetails", api.details(detailRequest))
+            .block(WAIT)
+            .getIssue()
+            .hasDescription());
+    var q =
+        ru.taska.api.issue.v1.AssignIssueRequestBody.newBuilder()
+            .setIssueId(first.identity().id().toString())
+            .setActorUserId(ACTOR.toString())
+            .setAssigneeId(assignee.toString())
+            .build();
+    var assigned = as(A, ACTOR, "assignIssue", api.assign(q, "assign-1")).block(WAIT);
+    assertEquals(assignee, assigned.assigneeId());
+    var clear =
+        patch(assigned, "same issue").toBuilder()
+            .setAssigneeId(ru.taska.api.common.v1.NullableString.newBuilder().setIsNull(true))
+            .setDescription(ru.taska.api.common.v1.NullableString.newBuilder().setIsNull(true))
+            .build();
+    var result = as(A, ACTOR, "patchIssue", api.patch(clear, "clear")).block(WAIT);
+    assertNull(result.assigneeId());
+    assertNull(result.description());
+    assertEquals("TODO", result.statusKey());
+    var details = as(A, ACTOR, "getIssueDetails", api.details(detailRequest)).block(WAIT);
+    assertFalse(details.getIssue().hasDescription());
+    assertEquals(3, details.getIssue().getVersion());
+    assertEquals(3, details.getHistoryCount());
+  }
+
+  @Test
+  void batchQuotaCountsLifetimeCreationsAndKeepsEmptyAccessibleProjects() {
+    var first = nativeCreate("bulk-usage");
+    var q =
+        ru.taska.api.issue.v1.DeleteIssueRequestBody.newBuilder()
+            .setIssueId(first.identity().id().toString())
+            .setActorUserId(ACTOR.toString())
+            .build();
+    as(A, ACTOR, "deleteIssue", api.delete(q, "bulk-delete")).block(WAIT);
+    UUID empty = UUID.randomUUID();
+    var batch =
+        ru.taska.api.issue.v1.GetProjectTaskQuotasRequest.newBuilder()
+            .addProjectIds(PROJECT.toString())
+            .addProjectIds(empty.toString())
+            .build();
+    var result = as(A, ACTOR, "getProjectTaskQuotas", api.quotas(batch)).block(WAIT);
+    assertEquals(2, result.getItemsCount());
+    assertEquals(1, result.getItems(0).getUsed());
+    assertEquals(50, result.getItems(0).getLimit());
+    assertFalse(result.getItems(0).getUnlimited());
+    assertEquals(0, result.getItems(1).getUsed());
+    var counts =
+        as(
+                A,
+                ACTOR,
+                "countProjectIssuesBatchInternal",
+                api.counts(
+                    ru.taska.api.issue.v1.CountProjectIssuesBatchInternalRequest.newBuilder()
+                        .addProjectIds(PROJECT.toString())
+                        .build()))
+            .block(WAIT);
+    assertEquals(0, counts.getItems(0).getIssueCount());
+    assertTrue(counts.getFiltersApplied());
+    var other = as(B, ACTOR, "getProjectTaskQuotas", api.quotas(batch)).block(WAIT);
+    assertEquals(0, other.getItems(0).getUsed());
+  }
+
+  @Test
+  void workflowDenialAndAuditFailureLeaveNoIssueHistoryOutboxOrQuota() {
+    org.mockito.Mockito.when(
+            access.initialStatus(
+                org.mockito.ArgumentMatchers.eq(PROJECT),
+                org.mockito.ArgumentMatchers.eq("TASK"),
+                org.mockito.ArgumentMatchers.nullable(String.class)))
+        .thenReturn(
+            Mono.error(new DomainException(DomainStatus.FAILED_PRECONDITION, "WORKFLOW_DENIED")));
+    denied(
+        api.create(createRequest("workflow-denied")),
+        "createIssue",
+        DomainStatus.FAILED_PRECONDITION);
+    assertEmpty();
+    org.mockito.Mockito.when(
+            access.initialStatus(
+                org.mockito.ArgumentMatchers.eq(PROJECT),
+                org.mockito.ArgumentMatchers.eq("TASK"),
+                org.mockito.ArgumentMatchers.nullable(String.class)))
+        .thenReturn(Mono.just("TODO"));
+    adminAudit = true;
+    sql(
+        "ALTER TABLE taska.issue_authorization_audit ADD CONSTRAINT test_deny_create_audit"
+            + " CHECK(action<>'createIssue') NOT VALID");
+    try {
+      assertThrows(RuntimeException.class, () -> nativeCreate("audit-failed-create"));
+    } finally {
+      sql("ALTER TABLE taska.issue_authorization_audit DROP CONSTRAINT test_deny_create_audit");
+    }
+    assertEmpty();
+    assertEquals(0, count("issue_authorization_audit"));
+  }
+
+  @Test
+  void waitingForIssueLockCannotExtendAnAuthorizationLease() throws Exception {
+    var first = nativeCreate("lease-lock");
+    var held = new java.util.concurrent.CountDownLatch(1);
+    var release = Sinks.<Void>one();
+    var blocker =
+        as(
+                A,
+                ACTOR,
+                "holdIssue",
+                store.execute(
+                    s ->
+                        s.stored(first.identity().id(), true)
+                            .doOnNext(r -> held.countDown())
+                            .then(release.asMono())))
+            .toFuture();
+    assertTrue(held.await(5, TimeUnit.SECONDS));
+    expiry = java.time.Instant.now().plusMillis(300);
+    var waiting =
+        as(A, ACTOR, "patchIssue", api.patch(patch(first, "expired while waiting"), "wait-expiry"))
+            .toFuture();
+    try {
+      Mono.delay(Duration.ofMillis(700)).block(WAIT);
+    } finally {
+      release.tryEmitEmpty();
+      blocker.get(5, TimeUnit.SECONDS);
+    }
+    var failure =
+        assertThrows(
+            java.util.concurrent.ExecutionException.class, () -> waiting.get(5, TimeUnit.SECONDS));
+    assertEquals(
+        DomainStatus.UNAVAILABLE,
+        assertInstanceOf(DomainException.class, failure.getCause()).getStatus());
+    assertEquals(1, count("idempotency_keys"));
+    assertEquals(1, count("issue_history"));
+    assertEquals(1, count("outbox_events"));
+  }
+
+  @Test
+  void concurrentIdenticalCreatesFreezeOneResponseAndConsumeOneLifetimeSlot() {
+    var request = createRequest("concurrent-native");
+    var responses =
+        Flux.range(0, 6)
+            .flatMap(i -> as(A, ACTOR, "createIssue", api.create(request)), 6)
+            .collectList()
+            .block(WAIT);
+    assertNotNull(responses);
+    assertEquals(1, responses.stream().distinct().count());
+    assertEquals(1, count("issues"));
+    assertEquals(1, count("issue_history"));
+    assertEquals(1, count("outbox_events"));
+    assertEquals(1, count("idempotency_keys"));
+    denied(
+        api.create(request.toBuilder().setSummary("Different command").build()),
+        "createIssue",
+        DomainStatus.ALREADY_EXISTS);
+    assertEquals(2, create(A, "after-concurrent-native").number());
+  }
+
+  @Test
+  void legacyCreateReceiptCannotAcquireANewNativeSnapshot() {
+    var first = nativeCreate("legacy-receipt");
+    operator
+        .sql(
+            "UPDATE taska.idempotency_keys SET response=response-'wireHash'-'snapshot' WHERE"
+                + " tenant_id='"
+                + A
+                + "' AND key='legacy-receipt'")
+        .fetch()
+        .rowsUpdated()
+        .block(WAIT);
+    denied(api.create(createRequest("legacy-receipt")), "createIssue", DomainStatus.ALREADY_EXISTS);
+    assertEquals(
+        first,
+        as(A, ACTOR, "getIssue", api.get(first.identity().id().toString(), ACTOR.toString()))
+            .block(WAIT));
+  }
+
+  @Test
+  void quotaRecheckCannotIntroduceBypassAbsentFromAuditedPermit() {
+    unlimited.set(false);
+    catalogLimit.set(0);
+    bypass.set(true);
+    denied(
+        api.create(createRequest("no-new-bypass")),
+        "createIssue",
+        DomainStatus.FAILED_PRECONDITION);
+    for (String table : TABLES) assertEquals(0L, count(table));
   }
 }

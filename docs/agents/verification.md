@@ -79,7 +79,7 @@ storage-lib `S3StorageClientIT` по-прежнему запускается я�
 | Проекты и типы | `project-service` | `IssueTypeDeletionIT`, `IssueTypeCreationIT`; связанные workflow/issue проверки |
 | Project tenant storage | `project-service` | обязательный `TenantProjectStorageIntegrationTest`: app LOGIN/RLS/FK, A/B, archive/rollback, query plans и чистый профиль |
 | Workflow и привязки типов | `workflow-service`, `project-service`, `issue-service`, gateway при изменении REST | reservation/binding IT из списка ниже; версии, повторы, перенос/восстановление |
-| Workflow tenant storage/templates | `workflow-service`, common RLS templates | обязательный `TenantWorkflowStorageIntegrationTest`: app LOGIN/RLS/FK, parallel provision/instantiate, immutable snapshots, rollback и profile health; `TenantRlsTemplatesIntegrationTest` проверяет v1/v2 |
+| Workflow tenant storage/templates | `workflow-service`, common RLS templates | обязательный `TenantWorkflowStorageIntegrationTest` и `TenantWorkflowApiIntegrationTest`: app LOGIN/RLS/FK, current RPC/ACL, parallel provision/instantiate, immutable snapshots, rollback и profile health; `TenantRlsTemplatesIntegrationTest` проверяет v1/v2 |
 | Доска, issue migration | `issue-service` | `ListIssuesForBoardIT`, `IssueTypeMoveIT`, `WorkflowBindingMigrationIT` по изменённой логике |
 | Блокировка приглашённого | `auth-service`, gateway при изменении REST | `InvitedUnblockIT`; online access и сохранность credentials |
 | Outbox retry/admin | `admin-service`, `kafka-lib` и затронутые владельцы | `OutboxRetryServiceIT`, `OutboxRetryRepositoryIT`; аудит и повторный вызов |
@@ -166,6 +166,8 @@ TAS-311: `tenant-service.verify` также требует свежий `TenantM
 
 TAS-312: тот же `TenantMembershipIntegrationTest` проверяет role/leave RPC на PostgreSQL: ACTIVE admin, owner guard, stale version, идемпотентный повтор, отказ постороннему/неактивному actor, атомарный outbox и одновременный выход двух администраторов. Проверка публичного REST остаётся неприменимой до gateway adapter. [Контракт мутаций](../../tenant-service/README.md#изменение-роли-и-выход--tas-312).
 
+TAS-323: `TenantMembershipIntegrationTest` проверяет suspend/re-activation/remove на PostgreSQL: owner/last-admin guards, stale version без side effects, сохранение/однократное освобождение SEAT, `TENANT_ADMIN → MEMBER`, идемпотентный replay, append-only audit и schema v2 cleanup contract (`previousVersion`, `revokedAt`, `cleanupScopes`). Реальный loopback mTLS/JWS запускает membership mutations через production policy map. Публичный REST, tenant outbox publisher и downstream Kafka consumers остаются отдельными activation scopes. [Контракт lifecycle](../../tenant-service/README.md#suspend-remove-и-reactivation--tas-323).
+
 ## Billing catalog
 
 `python3 scripts/harness.py check --module billing-service` requires fresh nonempty `BillingCatalogIntegrationTest`, `SubscriptionIntegrationTest`, `InvoiceIntegrationTest` and `FinancialLedgerIntegrationTest` reports. It exercises real PostgreSQL 16, Liquibase, app role/RLS, concurrent catalog mutations and mTLS/JWS production policies. See [billing-service](../../billing-service/README.md) for the delivered RPCs and activation boundaries. Public REST/PSP E2E is not established by these checks.
@@ -189,6 +191,8 @@ TAS-478: `tenant-service.verify` additionally requires `TenantCreationLifecycleI
 TAS-359: `grpc-common-lib.verify` requires fresh `EntitlementProjectionIntegrationTest` (real PostgreSQL/RLS, restart, duplicate/reordered events, conflicting versions, bounded cache, membership revocation, clock expiry and fail-closed reconciliation) and `GrpcEntitlementSourceTest` (real mTLS/JWS, current service authority, tenant/minimum version and uncached membership/role revocation). Owner migrations also run under `TenantProjectStorageIntegrationTest`, `TenantIssueStorageIntegrationTest`, `TenantWorkflowStorageIntegrationTest` and `TenantMembershipIntegrationTest`. See [projection activation and contracts](../data/entitlement-projection.md). These isolated checks do not establish shared Kafka/stage/public REST readiness.
 
 TAS-322: `tenant-service.verify` requires `SeatQuotaIntegrationTest` (real PostgreSQL/Liquibase/RLS, last-seat concurrency, unique ACTIVE/SUSPENDED usage, reserve/commit/release/expiry replay, atomic membership/outbox rollback, scoped admin bypass and billing failure guards). `TenantMembershipIntegrationTest` additionally tests GetTenantQuotas through production mTLS/JWS policy and current primary membership revocation. See [SEAT quota contracts and activation](../../tenant-service/SEAT-QUOTAS.md). External invitation/PSP/public REST/stage coverage remains separate.
+
+TAS-338: `tenant-service.verify` через `TenantMembershipIntegrationTest` и `TenantRegistryIntegrationTest` проверяет собственное membership вызывающего в ListTenants и member GetTenant (в том числе через production mTLS/JWS), правило списка по lifecycle и SUSPENDED/REMOVED, независимость компаний, смену роли и выход на следующем вызове, устаревшую прямую ссылку и отсутствие membership в административном чтении. `api-gateway.verify` включает `TenantRegistryClientMappingTest`: membership переносится в REST без изменений, некорректный ответ отклоняется как UNAVAILABLE.
 
 TAS-360: `grpc-common-lib.verify` requires `CapabilityEvaluatorTest` and `CapabilityEvaluatorTransportTest`: current-source decisions, READ_ONLY recovery/D244, independent reasons, exact admin grant/scope/level/MFA, user PAT/MCP flags, explicit quota bypass with integrity/audit, and real mTLS/JWS negative trust paths. [Policy/source contracts and activation](../security/capabilities.md). Domain API wiring and shared stage E2E remain TAS-491/493/495/463.
 
@@ -229,3 +233,19 @@ TAS-316: `grpc-common-lib.verify`, `auth-service.verify`, `api-gateway.verify` �
 Большой security PR должен получить полный AI review: default `DEEPSEEK_MAX_DIFF_LINES=12000` в workflow и shell runner. При превышении предела runner сокращает окружающий контекст 40 → 10 → 3 строки, сохраняя изменённые строки. Если diff всё же обрезан, зелёный job не закрывает непроверенные файлы; `publish-review` перечисляет пропуски. Настройка repository variable может переопределить предел.
 
 TAS-317: `python3 scripts/harness/trusted_rpc_e2e.py` — отдельный изолированный local REST/auth/RPC/RLS/outbox/Kafka acceptance на production providers; prerequisites, signed cleanup и scope описаны в [контракте service identity](../security/rpc-service-identity.md). Это не stage activation. Required selectors дополнены ManagedRpcTrustTest и AuthRpcTrustIntegrationTest.
+
+TAS-343: native issue CRUD/ACL and lifetime project reads require `issue-service`, `api-gateway`
+and `billing-service` checks plus affected shared-proto consumers. The owned local tier
+`python3 scripts/harness/issue_acl_e2e.py` exercises real primaries/mTLS/JWS and signed cleanup;
+see [native issue API](../../issue-service/TENANT-API.md). Test doubles alone do not establish
+this transport path or shared-stage activation.
+
+## OpenSpec
+
+CLI закреплён в `.openspec-version`; настройка — [openspec.md](openspec.md). Перед PR выполнить `OPENSPEC_TELEMETRY=0 openspec validate --all --strict --no-interactive && openspec validate --archived --no-interactive`. CI повторяет эту проверку закреплённым CLI. Для config/skills/specs и impact mapping также выполнить `python3 scripts/harness.py check --group harness` и `docs-check`. Известные metadata не требуют Java сами по себе; неизвестный executable внутри openspec сохраняет полный impact.
+
+Для изменения ошибок legacy project context выполнить `python3 scripts/harness/project_context_e2e.py` в собственном локальном Docker. Scope: context RPC и HTTP mapping отказа workflow, восстановление и сохранность состояния; полный native context с task quota проверяется отдельным native сценарием. Повторить на финальном PR head после review.
+
+Для native archive/restore проекта использовать `python3 scripts/harness/project_lifecycle_e2e.py`: REST→managed mTLS, current root/project ACL, archive/restore CAS, replay, last ADMIN, admin audit, quota/history. Дополнительно выполнить TenantProjectStorageIntegrationTest и gateway ProjectArchiveControllerTest. После ревью повторить на финальном head.
+
+TAS-480: tenant restrictions требуют tenant-service, billing-service, auth-service, gateway и grpc-common-lib проверок, а также native project/workflow/issue consumers текущего root snapshot. `TenantRegistryIntegrationTest` покрывает независимые причины, current scope, replay/CAS и atomic rollback; `ManagedMembershipSnapshotTest` — fail-closed старого/несогласованного root; `AutopayIntegrationTest` — запрет нового charge при pause/block/offline root и сохранение accepted reconciliation. Owned tier: `python3 scripts/harness/tenant_restrictions_e2e.py`; контракт и rollout — [tenant restrictions](../../tenant-service/RESTRICTIONS.md). Повторить affected E2E на финальном head после review.

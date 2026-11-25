@@ -30,7 +30,7 @@ class TenantProjectStorageIntegrationTest {
   static final Duration WAIT=Duration.ofSeconds(20);
   static final String APP=UUID.randomUUID().toString(), DEPLOY=UUID.randomUUID().toString();
   static final List<String> TABLES=List.of("projects","project_members","project_settings","project_issue_types",
-      "project_type_operations","issue_type_creations","issue_type_deletions","outbox_events");
+      "project_type_operations","issue_type_creations","issue_type_deletions","outbox_events","project_creation_operations","project_authorization_audit","project_lifecycle_commands");
   static DatabaseClient operator, raw;
   static ConnectionPool pool;
   static TenantTransactionExecutor tx;
@@ -314,4 +314,94 @@ class TenantProjectStorageIntegrationTest {
       }
     }
   }
+  // SQL/transaction regression: primary authority is controlled here; real authority is covered by mTLS E2E.
+  TenantProjectApi lifecycleApi(boolean implicit, boolean audited) {
+    var facts=org.mockito.Mockito.mock(ru.taska.capability.TenantDecisionFacts.class);
+    org.mockito.Mockito.when(facts.current("write")).thenAnswer(invocation -> Mono.deferContextual(c -> {
+      var f=org.mockito.Mockito.mock(ru.taska.capability.TenantDecisionFacts.Frame.class);
+      org.mockito.Mockito.when(f.context()).thenReturn(ru.taska.security.tenant.VerifiedTenantContext.require(c));
+      org.mockito.Mockito.when(f.implicitAdmin()).thenReturn(implicit);
+      org.mockito.Mockito.when(f.membership()).thenReturn(ru.taska.api.b2b.v1.MembershipSnapshot.newBuilder().setVersion("1").build());
+      return Mono.just(f);
+    }));
+    org.mockito.Mockito.when(facts.decision(org.mockito.ArgumentMatchers.any(),org.mockito.ArgumentMatchers.any(),
+        org.mockito.ArgumentMatchers.any(ru.taska.capability.CapabilityFacts.Target.class),
+        org.mockito.ArgumentMatchers.any(),org.mockito.ArgumentMatchers.any())).thenAnswer(invocation -> {
+      var role=invocation.getArgument(3,ru.taska.capability.CapabilityFacts.ProjectRole.class);
+      if(role!=ru.taska.capability.CapabilityFacts.ProjectRole.ADMIN)
+        return Mono.error(new DomainException(DomainStatus.PERMISSION_DENIED,"SCOPE_DENIED"));
+      var decision=org.mockito.Mockito.mock(ru.taska.capability.CapabilityEvaluator.Decision.class);
+      org.mockito.Mockito.when(decision.auditRequired()).thenReturn(audited);
+      org.mockito.Mockito.when(decision.bypassedRestrictions()).thenReturn(Set.of());
+      return Mono.just(decision);
+    });
+    var mapper=new ru.taska.mapper.ProjectMapperImpl();
+    org.springframework.test.util.ReflectionTestUtils.setField(mapper,"projectMemberMapper",new ru.taska.mapper.ProjectMemberMapperImpl());
+    return new TenantProjectApi(store,facts,org.mockito.Mockito.mock(ru.taska.capability.ManagedDomainReads.class),
+        mapper,null,new ObjectMapper());
+  }
+
+  ru.taska.api.project.v1.ProjectResponse transition(TenantProjectApi api,UUID tenant,UUID actor,UUID id,
+      boolean archive,Integer version,String key) {
+    return as(tenant,actor,api.lifecycle(id.toString(),actor.toString(),archive,version,key)).block(WAIT);
+  }
+
+  @Test void lifecycleEffectiveAdminReplayPreservesDataQuotaAndAudits() {
+    var p=create(A,"LIFE");
+    sql("DELETE FROM taska.project_members WHERE project_id='"+p.getId()+"'");
+    var api=lifecycleApi(true,true);var key=UUID.randomUUID().toString();
+    var archived=transition(api,A,ACTOR,p.getId(),true,p.getVersion(),key);
+    assertTrue(archived.hasArchivedAt());assertEquals(p.getVersion()+1,archived.getVersion());
+    var restored=transition(api,A,ACTOR,p.getId(),false,archived.getVersion(),UUID.randomUUID().toString());
+    assertFalse(restored.hasArchivedAt());assertEquals(archived.getVersion()+1,restored.getVersion());
+    assertEquals(archived,transition(api,A,ACTOR,p.getId(),true,p.getVersion(),key));
+    assertEquals(restored,transition(api,A,ACTOR,p.getId(),false,restored.getVersion(),UUID.randomUUID().toString()));
+    assertEquals(1L,as(A,ACTOR,store.execute(TenantProjectStore.Session::countProjects)).block(WAIT));
+    assertEquals(2L,as(A,ACTOR,store.execute(q->q.eventIds(p.getId()).count())).block(WAIT));
+    assertTrue(as(A,ACTOR,store.execute(q->q.settings(p.getId()))).block(WAIT).contains("retained"));
+    assertEquals(3L,as(A,ACTOR,store.execute(q->q.types().list(p.getId()).count())).block(WAIT));
+    assertEquals(4L,operator.sql("SELECT count(*) n FROM taska.project_authorization_audit").map((r,m)->r.get("n",Long.class)).one().block(WAIT));
+    var conflict=assertThrows(DomainException.class,()->transition(api,A,ACTOR,p.getId(),false,p.getVersion(),key));
+    assertEquals("IDEMPOTENCY_CONFLICT",conflict.getDetails().get("code"));
+  }
+
+  @Test void lifecycleDeniedForeignStaleAndMissingVersionHaveNoEffects() {
+    var p=create(A,"LIFE");var foreign=create(B,"OTHER");var api=lifecycleApi(false,false);
+    sql("UPDATE taska.project_members SET root_membership_version=1 WHERE project_id='"+p.getId()+"'");
+    assertEquals(DomainStatus.NOT_FOUND,assertThrows(DomainException.class,()->
+        transition(api,A,ACTOR,foreign.getId(),true,0,UUID.randomUUID().toString())).getStatus());
+    assertEquals(DomainStatus.PERMISSION_DENIED,assertThrows(DomainException.class,()->
+        transition(api,A,UUID.randomUUID(),p.getId(),true,0,UUID.randomUUID().toString())).getStatus());
+    assertEquals(DomainStatus.FAILED_PRECONDITION,assertThrows(DomainException.class,()->
+        transition(api,A,ACTOR,p.getId(),true,null,UUID.randomUUID().toString())).getStatus());
+    assertEquals(DomainStatus.ABORTED,assertThrows(DomainException.class,()->
+        transition(api,A,ACTOR,p.getId(),true,9,UUID.randomUUID().toString())).getStatus());
+    assertNull(as(A,ACTOR,store.execute(q->q.find(p.getId()))).block(WAIT).getArchivedAt());
+    assertEquals(0L,as(A,ACTOR,store.execute(q->q.eventIds(p.getId()).count())).block(WAIT));
+    // A grant from an earlier root membership incarnation is insufficient.
+    sql("UPDATE taska.project_members SET root_membership_version=2 WHERE project_id='"+p.getId()+"'");
+    assertEquals(DomainStatus.PERMISSION_DENIED,assertThrows(DomainException.class,()->
+        transition(api,A,ACTOR,p.getId(),true,0,UUID.randomUUID().toString())).getStatus());
+  }
+
+  @Test void lifecycleParallelCommandsDoNotOverwriteAndReceiptFailureRollsBack() {
+    var p=create(A,"LIFE");var api=lifecycleApi(true,false);
+    var results=Flux.merge(as(A,ACTOR,api.lifecycle(p.getId().toString(),ACTOR.toString(),true,0,UUID.randomUUID().toString())).materialize(),
+        as(A,ACTOR,api.lifecycle(p.getId().toString(),ACTOR.toString(),true,0,UUID.randomUUID().toString())).materialize())
+        .filter(signal->!signal.isOnComplete()).collectList().block(WAIT);
+    assertEquals(1,results.stream().filter(Signal::isOnNext).count());
+    assertEquals(1,results.stream().filter(Signal::isOnError).count());
+    var archived=as(A,ACTOR,store.execute(q->q.find(p.getId()))).block(WAIT);
+    var rejected=UUID.randomUUID().toString();
+    sql("ALTER TABLE taska.project_lifecycle_commands ADD CONSTRAINT injected_receipt_failure CHECK(command_key<>'"+rejected+"'::uuid)");
+    try { assertThrows(Exception.class,()->transition(api,A,ACTOR,p.getId(),false,archived.getVersion(),rejected)); }
+    finally { sql("ALTER TABLE taska.project_lifecycle_commands DROP CONSTRAINT injected_receipt_failure"); }
+    var after=as(A,ACTOR,store.execute(q->q.find(p.getId()))).block(WAIT);
+    assertEquals(archived.getVersion(),after.getVersion());assertEquals(archived.getArchivedAt(),after.getArchivedAt());
+    assertEquals(1L,as(A,ACTOR,store.execute(q->q.eventIds(p.getId()).count())).block(WAIT));
+    assertFalse(transition(api,A,ACTOR,p.getId(),false,archived.getVersion(),rejected).hasArchivedAt());
+    assertThrows(Exception.class,()->as(A,ACTOR,tx.execute(db->db.sql("UPDATE taska.project_lifecycle_commands SET action='project.restore'").then())).block(WAIT));
+    assertEquals(0L,raw.sql("SELECT count(*) n FROM taska.project_lifecycle_commands").map((r,m)->r.get("n",Long.class)).one().block(WAIT));
+  }
+
 }

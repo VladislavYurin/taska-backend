@@ -22,6 +22,8 @@ message PersonalToken {
   string created_at = 5;
   string expires_at = 6;
   bool revoked = 7;
+  string token_prefix = 8;
+  optional string last_used_at = 9;
 }
 message PersonalTokenCreated {
   PersonalToken metadata = 1;

@@ -51,6 +51,14 @@ Snapshot соответствует Java records `ManagedRpcTrust.Snapshot/Servi
 делегирует уже проверенную session/PAT binding. Каждый recipient проверяет primary
 account auth_version, точный credential/session/grant, expiry/revocation и membership
 заново через auth. Чтения также uncached; отзыв не ждёт 30-секундного TTL assertion.
+
+`ManagedRpcTrust` на каждом обращении заново читает файл и сверяет SHA-256. При
+неизменных bytes переиспользуется только неизменяемая проверенная модель JSON;
+expiry и допустимость текущего ключа проверяются заново. Изменение файла требует
+полной проверки generation/содержимого; missing, corrupt, expired, rollback или
+замена bytes с прежней generation закрывают вызов, без last-known-good fallback.
+Это не кэш решений actor/grant/ACL, primary-проверки не пропускаются.
+
 Auth запрашивает `TenantMembershipService.GetMembership` с собственной SERVICE
 identity, purpose=`membership`, scope=`memberships:read`, через mTLS/JWS. Этот путь
 не рекурсирует через user authority. Текущие USER_OAUTH/ADMIN credentials без реализованной
@@ -98,6 +106,36 @@ pool должен иметь запас соединений для control plan
 business transactions. Отказ auth не обходится локальной in-memory таблицей.
 Планировщик не запускает следующий cleanup до завершения предыдущего; timeout освобождает
 локальный guard для следующей попытки. Очистка не меняет срок приёма assertion.
+
+## Реестр компаний — TAS-333
+
+Для списка используется глобальная веб-сессия со scope `tenants:select`. Сервис компаний
+выбирает актуальные записи членства пользователя. Карточка и переименование привязаны к
+компании из проверенного контекста. Шлюз возвращает список и карточку с
+`Cache-Control: private, no-store`, поэтому следующее чтение получает зафиксированное имя
+и версию напрямую из реестра.
+
+Для административной карточки или переименования auth primary выдаёт контекст на одну
+целевую компанию после проверки текущей роли `GLOBAL_ADMIN` и активной веб-сессии с
+`ADMIN_EMAIL_MFA`. Операция чтения получает уровень `READ`, переименование — `MODIFY`.
+Получатель повторно проверяет актуальность этой авторизации по точному RPC и действию.
+
+Добавьте следующие рёбра в управляемый snapshot перед включением маршрутов.
+У всех рёбер issuer — `api-gateway`, purpose — `USER`, `serviceIdentities` пуст.
+
+| Audience | RPC | Action | Credential kinds | Допустимые scopes | Tenant mode |
+| --- | --- | --- | --- | --- | --- |
+| api-gateway | `gatewayRequest` | `gatewayRequest` | `WEB_GLOBAL` | `tenants:select`, `tenants:create`, `account:read` | `NONE` |
+| api-gateway | `gatewayRequest` | `gatewayRequest` | `WEB_GLOBAL` | `read`, `write` | `BOUND` |
+| tenant-service | `ru.taska.b2b.v1.TenantService/ListTenants` | `listTenants` | `WEB_GLOBAL` | `tenants:select` | `NONE` |
+| tenant-service | `ru.taska.b2b.v1.TenantService/GetTenant` | `getTenant` | `WEB_TENANT`, `USER_PAT`, `WEB_GLOBAL` | `read`, `write` | `BOUND` |
+| tenant-service | `ru.taska.b2b.v1.TenantService/RenameTenant` | `renameTenant` | `WEB_TENANT`, `USER_PAT`, `WEB_GLOBAL` | `read`, `write` | `BOUND` |
+
+Команда локальной приёмки на изолированных сервисах и собственных данных.
+
+```bash
+python3 scripts/harness/tenant_rename_e2e.py
+```
 
 ## Ротация и emergency revoke
 
@@ -154,3 +192,5 @@ actor/key/idempotency key, foreign denial, ротация/отзыв, membership
 отзыв старого assertion; `AuthRpcTrustIntegrationTest` — concurrent consume двух реплик,
 сохранность consume после rollback и revoke уже открытой mTLS connection. Эти проверки
 не заменяют stage rollout/cutover и downstream feature acceptance будущих B2B задач.
+
+TAS-363 добавляет закрытый purpose `NOTIFICATION_DELIVERY`: прямой notification-service → issue-service `IssueRecipientService.Resolve`, только read/notifications:recipients и bound tenant. Распознанный purpose сам по себе не создаёт grant: нужны точный RPC/issuer/service identity/scopes в операторском snapshot и отдельный message-bound guard.

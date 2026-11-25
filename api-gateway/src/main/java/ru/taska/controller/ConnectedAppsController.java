@@ -35,14 +35,19 @@ public class ConnectedAppsController implements ConnectedAppsApi {
   }
 
   @Override
-  public Mono<ResponseEntity<Void>> revokeConnectedApp(UUID appId, ServerWebExchange exchange) {
+  public Mono<ResponseEntity<Void>> revokeConnectedApp(UUID appId, UUID tenantId, ServerWebExchange exchange) {
     return executor.execute(
         exchange,
         EndpointSecurity.JWT_SESSION_REQUIRED,
-        context ->
-            client
-                .revoke(appId, tokens.extract(exchange, context.requestId()), context)
+        context -> {
+          var tenantValues = exchange.getRequest().getQueryParams().get("tenantId");
+          if (tenantValues != null && (tenantValues.size() != 1 || tenantId == null
+              || !tenantId.toString().equalsIgnoreCase(tenantValues.getFirst())))
+            return Mono.error(io.grpc.Status.INVALID_ARGUMENT.withDescription("Invalid tenantId").asRuntimeException());
+          return client
+                .revoke(appId, tenantId, tokens.extract(exchange, context.requestId()), context)
                 .thenReturn(
-                    ResponseEntity.noContent().cacheControl(CacheControl.noStore()).build()));
+                    ResponseEntity.noContent().cacheControl(CacheControl.noStore()).build());
+        });
   }
 }

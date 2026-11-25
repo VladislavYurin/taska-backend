@@ -6,6 +6,12 @@ info:
     Авторитетный контракт API — этот документ /openapi.yml.
     /v3/api-docs публикует тот же контракт в JSON; совпадение проверяется в CI.
     /v3/api-docs/generated — справочная модель springdoc из Java-аннотаций.
+    Включение taska.rpc.context.enabled не меняет code, HTTP-статус и details.reason
+    существующих REST-операций. Доменный код при наличии дополнительно доступен в details.code.
+    Маршруты компаний (/tenants, /admin/tenants), сессий компаний, tenant-tokens и
+    tenant-oauth-consents используют Problem (application/problem+json) в доверенном режиме.
+    Ошибки VERSION_CONFLICT и IDEMPOTENCY_CONFLICT архивирования/восстановления проекта
+    сохраняют опубликованные статусы 412/428 и 409 соответственно.
 
 servers:
   - url: /
@@ -63,7 +69,7 @@ paths:
       x-pat-scope: session
       operationId: listConnectedApps
       summary: Подключённые OAuth-приложения
-      description: Только JWT-сессия. Одна строка на приложение по активным grants; scopes объединены и отсортированы. Порядок connectedAt desc, appId desc. OAuth выключен — available false и пустой items. lastUsedAt — последняя выдача access token (код или refresh), точность 10 минут. Ответ не кэшируется.
+      description: Только JWT-сессия. Одна строка на приложение по активным grants; scopes объединены и отсортированы. Порядок connectedAt desc, appId desc, tenantId nulls first. OAuth выключен — available false и пустой items. lastUsedAt — последняя выдача access token (код или refresh), точность 10 минут. Ответ не кэшируется.
       tags: [connected-apps]
       security: [{bearerAuth: []}]
       responses:
@@ -96,6 +102,11 @@ paths:
         - name: appId
           in: path
           required: true
+          schema: {type: string, format: uuid}
+        - name: tenantId
+          in: query
+          required: false
+          description: Отозвать только подключение этой компании; без параметра — во всех компаниях.
           schema: {type: string, format: uuid}
       responses:
         '204':
@@ -1137,6 +1148,15 @@ paths:
         - project
       security:
         - bearerAuth: []
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: false
+          description: Native tenant API retry identity. Reuse with the same project payload; a different payload returns a conflict.
+          schema:
+            type: string
+            format: uuid
+            pattern: '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
       requestBody:
         required: true
         content:
@@ -1200,11 +1220,49 @@ paths:
         default:
           $ref: '#/components/responses/ErrorResponse'
 
+  /api/v1/projects/{projectId}/restore:
+    post:
+      x-pat-scope: write
+      operationId: restoreProject
+      summary: Восстановить архивный проект в native tenant profile
+      description: >
+        Требуются актуальные права ADMIN проекта/компании либо явный административный путь.
+        Версия и ключ обязательны. Повтор с тем же payload возвращает сохранённый ответ после
+        текущей авторизации. UUID, история и использованная квота сохраняются; новая квота не резервируется.
+        Новый ключ с текущей версией для уже восстановленного проекта не создаёт событие и не увеличивает версию.
+      tags: [project-archive]
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+        - name: If-Match
+          in: header
+          required: false
+          description: Semantically required; missing returns 428 VERSION_CONFLICT, stale returns 412. Strong quoted ProjectResponseDto.version.
+          schema: {type: string}
+        - name: Idempotency-Key
+          in: header
+          required: false
+          description: Semantically required canonical lowercase UUID; conflicting payload returns 409 IDEMPOTENCY_CONFLICT.
+          schema: {type: string}
+      responses:
+        '200':
+          description: Проект восстановлен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectResponseDto'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
   /api/v1/projects/{projectId}:
     delete:
       x-pat-scope: write
       operationId: archiveProject
-      summary: Архивировать проект — только ADMIN проекта, идемпотентно
+      summary: Архивировать проект — ADMIN проекта или компании, идемпотентно
       description: >
         Проект и его данные сохраняются. Архивный проект скрыт из списка проектов, но доступен
         участникам по прямой ссылке для чтения. Запись отклоняется с FAILED_PRECONDITION и
@@ -1219,6 +1277,16 @@ paths:
           schema:
             type: string
             format: uuid
+        - name: If-Match
+          in: header
+          required: false
+          description: Required in native tenant profile; strong quoted ProjectResponseDto.version. Missing returns 428, stale returns 412 VERSION_CONFLICT.
+          schema: {type: string}
+        - name: Idempotency-Key
+          in: header
+          required: false
+          description: Required in native tenant profile; canonical lowercase UUID. Replay returns the saved response after current authorization; changed payload returns 409.
+          schema: {type: string}
       responses:
         '200':
           description: Проект в архиве
@@ -2692,6 +2760,13 @@ paths:
           schema:
             type: string
             format: uuid
+        - name: Idempotency-Key
+          in: header
+          required: false
+          description: Ключ повтора нативной загрузки. Повтор использует тот же ключ и неизменное тело; иначе конфликт. Без заголовка используется X-Request-Id, который клиент обязан сохранить и передать при повторе. Новый X-Request-Id означает новую загрузку.
+          schema:
+            type: string
+            maxLength: 128
       requestBody:
         required: true
         content:
@@ -2716,6 +2791,34 @@ paths:
           $ref: '#/components/responses/ErrorResponse'
         '404':
           $ref: '#/components/responses/ErrorResponse'
+        '422':
+          description: В доверенном режиме used bytes и reservations исчерпали STORAGE_BYTES; code=QUOTA_EXCEEDED, details содержит quota.kind, quota.used, quota.reserved и quota.limit.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/RestErrorResponse'
+
+        '503':
+          description: В доверенном режиме dependency UNAVAILABLE или DEADLINE_EXCEEDED возвращает DEPENDENCY_UNAVAILABLE без внутренней диагностики. Повторить исходный Idempotency-Key (либо X-Request-Id) и неизменное тело; timeout не подтверждает отсутствие reservation. Legacy-профиль сохраняет JSON UNAVAILABLE.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/X-RequestId-Header'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/RestErrorResponse'
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestErrorResponse'
+        '504':
+          description: Legacy-профиль сохраняет прежний ответ DEADLINE_EXCEEDED; в доверенном режиме dependency deadline возвращает 503.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RestErrorResponse'
 
   /api/v1/projects/{projectId}/issues/{issueId}/attachments/confirm:
     post:
@@ -2764,10 +2867,135 @@ paths:
         '404':
           $ref: '#/components/responses/ErrorResponse'
 
+  /api/v1/projects/{projectId}/issues/{issueId}/attachments/{attachmentId}/content:
+    get:
+      x-pat-scope: read
+      operationId: readAttachmentContent
+      summary: Авторизованное чтение закреплённой версии вложения (native)
+      description: Повторная проверка доступа во время потока. Требуется Bearer; S3 URL не выдаётся. Ответ private, no-store.
+      tags: [ attachment-content ]
+      security:
+        - bearerAuth: [ ]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: issueId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: attachmentId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: Range
+          in: header
+          description: Одиночный диапазон bytes=start-end, bytes=start- либо bytes=-suffix. Несколько диапазонов не поддерживаются.
+          schema: { type: string, maxLength: 128 }
+      responses:
+        '200':
+          description: Содержимое файла (HEAD возвращает только заголовки)
+          headers:
+            Accept-Ranges:
+              schema: { type: string, enum: [ bytes ] }
+            Content-Length:
+              schema: { type: integer, format: int64 }
+            Content-Disposition:
+              schema: { type: string }
+            Cache-Control:
+              schema: { type: string }
+          content:
+            '*/*':
+              schema: { type: string, format: binary }
+        '206':
+          description: Запрошенный диапазон (HEAD возвращает только заголовки)
+          headers:
+            Content-Range:
+              schema: { type: string }
+          content:
+            '*/*':
+              schema: { type: string, format: binary }
+        '416':
+          description: Недопустимый диапазон; проверяется после авторизации
+          headers:
+            Content-Range:
+              schema: { type: string }
+        '401':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+        '503':
+          $ref: '#/components/responses/ErrorResponse'
+    head:
+      x-pat-scope: read
+      operationId: headAttachmentContent
+      summary: Авторизованное чтение закреплённой версии вложения (native)
+      description: Повторная проверка доступа во время потока. Требуется Bearer; S3 URL не выдаётся. Ответ private, no-store.
+      tags: [ attachment-content ]
+      security:
+        - bearerAuth: [ ]
+      parameters:
+        - name: projectId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: issueId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: attachmentId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+        - name: Range
+          in: header
+          description: Одиночный диапазон bytes=start-end, bytes=start- либо bytes=-suffix. Несколько диапазонов не поддерживаются.
+          schema: { type: string, maxLength: 128 }
+      responses:
+        '200':
+          description: Содержимое файла (HEAD возвращает только заголовки)
+          headers:
+            Accept-Ranges:
+              schema: { type: string, enum: [ bytes ] }
+            Content-Length:
+              schema: { type: integer, format: int64 }
+            Content-Disposition:
+              schema: { type: string }
+            Cache-Control:
+              schema: { type: string }
+          content:
+            '*/*':
+              schema: { type: string, format: binary }
+        '206':
+          description: Запрошенный диапазон (HEAD возвращает только заголовки)
+          headers:
+            Content-Range:
+              schema: { type: string }
+          content:
+            '*/*':
+              schema: { type: string, format: binary }
+        '416':
+          description: Недопустимый диапазон; проверяется после авторизации
+          headers:
+            Content-Range:
+              schema: { type: string }
+        '401':
+          $ref: '#/components/responses/ErrorResponse'
+        '403':
+          $ref: '#/components/responses/ErrorResponse'
+        '404':
+          $ref: '#/components/responses/ErrorResponse'
+        '503':
+          $ref: '#/components/responses/ErrorResponse'
+
   /api/v1/projects/{projectId}/issues/{issueId}/attachments/{attachmentId}/download-url:
     get:
       x-pat-scope: read
-      summary: Получение Presigned URL для скачивания файла
+      summary: Получение пути для скачивания файла
+      description: Native возвращает относительный authenticated gateway path; legacy возвращает presigned URL. Для native GET/HEAD нужен Bearer и текущий ACL.
       operationId: getAttachmentDownloadUrl
       tags:
         - attachments
@@ -2839,7 +3067,7 @@ paths:
             format: uuid
       responses:
         '204':
-          description: Вложение успешно удалено
+          description: Удаление принято и вложение скрыто. Native очистка S3 выполняется повторяемо; bytes освобождаются только после подтверждённой очистки.
           headers:
             X-Request-Id:
               $ref: '#/components/headers/X-RequestId-Header'
@@ -4587,7 +4815,7 @@ paths:
           description: Идентификатор пользователя, чей аватар запрашивается
       responses:
         '200':
-          description: Presigned URL для скачивания успешно сгенерирован
+          description: Native authenticated gateway path или legacy presigned URL успешно сгенерирован
           headers:
             X-Request-Id:
               $ref: '#/components/headers/X-RequestId-Header'
@@ -5009,6 +5237,295 @@ paths:
         default:
           $ref: '#/components/responses/ErrorResponse'
 
+  /api/v1/account/tenant-tokens:
+    post:
+      operationId: createTenantPersonalToken
+      tags: [tenant-personal-token]
+      x-pat-scope: session
+      summary: Выпустить PAT для одной компании
+      description: >-
+        Только WEB_TENANT сессия той же компании. Idempotency-Key — канонический UUID.
+        Повтор в течение 60 секунд возвращает тот же секрет после текущей авторизации;
+        поздний повтор или отозванный токен даёт 409. Ответы не кэшируются.
+        Просмотр метаданных и отзыв — GET /users/me/access-tokens и DELETE /users/me/access-tokens/{tokenId}.
+      security: [{bearerAuth: []}]
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema: {type: string, format: uuid}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: '#/components/schemas/TenantPersonalTokenRequestDto'}
+      responses:
+        '201':
+          description: Токен выпущен; секрет доступен в пределах окна идемпотентности.
+          content:
+            application/json:
+              schema: {$ref: '#/components/schemas/TenantPersonalTokenCreatedDto'}
+        default: {$ref: '#/components/responses/ErrorResponse'}
+
+  /api/v1/tenants:
+    get:
+      operationId: listTenants
+      tags: [tenant]
+      summary: List companies available to the current account
+      description: >-
+        WEB_GLOBAL account session only. Lists every company where the caller's membership is ACTIVE,
+        in any lifecycle except DELETED: PROVISIONING, AWAITING_PAYMENT, ACTIVE, AUTO_CLOSED,
+        OWNER_CANCELLED and DELETING. SUSPENDED and REMOVED memberships are not listed.
+        Order is (createdAt,id) ascending. Each item carries the caller's membership and restriction codes.
+        Available actions come from getTenantCapabilities; entering a company is decided by the tenant session.
+        Every call reads current memberships and the response is never cached.
+      x-pat-scope: session
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: cursor
+          in: query
+          required: false
+          schema: {type: string, minLength: 1, maxLength: 2048}
+        - name: limit
+          in: query
+          required: false
+          schema: {type: integer, minimum: 1, maximum: 100, default: 50}
+      responses:
+        '200':
+          description: Current active memberships, with no shared cache.
+          headers:
+            Cache-Control:
+              schema: {type: string}
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantPageDto'
+        '400': {$ref: '#/components/responses/ErrorResponse'}
+        '401': {$ref: '#/components/responses/ErrorResponse'}
+        '403': {$ref: '#/components/responses/ErrorResponse'}
+        '429': {$ref: '#/components/responses/ErrorResponse'}
+        '503': {$ref: '#/components/responses/ErrorResponse'}
+        default: {$ref: '#/components/responses/ErrorResponse'}
+
+  /api/v1/tenants/{tenantId}/pause:
+    put:
+      operationId: pauseTenant
+      tags: [tenant-restrictions]
+      x-pat-scope: write
+      summary: pauseTenant
+      description: >
+        Versioned tenant command. Requires current owner or explicit administrative authority;
+        platform-block requires administrative authority. Independent reasons and paid coverage remain unchanged.
+        Strong quoted If-Match and canonical UUID Idempotency-Key are required. Missing version returns 428,
+        stale version 412, conflicting key 409. Authorized replay returns its saved response before new business gates.
+        Resume removes only owner pause and does not charge or extend the paid period.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: tenantId
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+        - name: Idempotency-Key
+          in: header
+          required: false
+          schema: {type: string}
+        - name: If-Match
+          in: header
+          required: false
+          schema: {type: string}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConfirmedActionDto'
+      responses:
+        '200':
+          description: Текущее состояние компании или сохранённый ответ повтора
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantDto'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+    delete:
+      operationId: resumeTenant
+      tags: [tenant-restrictions]
+      x-pat-scope: write
+      summary: resumeTenant
+      description: >
+        Versioned tenant command. Requires current owner or explicit administrative authority;
+        platform-block requires administrative authority. Independent reasons and paid coverage remain unchanged.
+        Strong quoted If-Match and canonical UUID Idempotency-Key are required. Missing version returns 428,
+        stale version 412, conflicting key 409. Authorized replay returns its saved response before new business gates.
+        Resume removes only owner pause and does not charge or extend the paid period.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: tenantId
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+        - name: Idempotency-Key
+          in: header
+          required: false
+          schema: {type: string}
+        - name: If-Match
+          in: header
+          required: false
+          schema: {type: string}
+      responses:
+        '200':
+          description: Текущее состояние компании или сохранённый ответ повтора
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantDto'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /api/v1/admin/tenants/{tenantId}/platform-block:
+    put:
+      operationId: setPlatformBlock
+      tags: [tenant-restrictions]
+      x-pat-scope: write
+      summary: setPlatformBlock
+      description: >
+        Versioned tenant command. Requires current owner or explicit administrative authority;
+        platform-block requires administrative authority. Independent reasons and paid coverage remain unchanged.
+        Strong quoted If-Match and canonical UUID Idempotency-Key are required. Missing version returns 428,
+        stale version 412, conflicting key 409. Authorized replay returns its saved response before new business gates.
+        Resume removes only owner pause and does not charge or extend the paid period.
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: tenantId
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+        - name: Idempotency-Key
+          in: header
+          required: false
+          schema: {type: string}
+        - name: If-Match
+          in: header
+          required: false
+          schema: {type: string}
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AdminRestrictionRequestDto'
+      responses:
+        '200':
+          description: Текущее состояние компании или сохранённый ответ повтора
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantDto'
+        default:
+          $ref: '#/components/responses/ErrorResponse'
+
+  /api/v1/tenants/{tenantId}:
+    get:
+      operationId: getTenant
+      tags: [tenant]
+      summary: Get company details
+      description: >-
+        Tenant access is checked against the current credential binding and membership.
+        A member read includes the caller's membership; an administrative read omits it. Response is never cached.
+      x-pat-scope: read
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: tenantId
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+      responses:
+        '200':
+          description: Current company details and mutation version.
+          headers:
+            Cache-Control:
+              schema: {type: string}
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantDto'
+        '400': {$ref: '#/components/responses/ErrorResponse'}
+        '401': {$ref: '#/components/responses/ErrorResponse'}
+        '403': {$ref: '#/components/responses/ErrorResponse'}
+        '404': {$ref: '#/components/responses/ErrorResponse'}
+        '429': {$ref: '#/components/responses/ErrorResponse'}
+        '503': {$ref: '#/components/responses/ErrorResponse'}
+        default: {$ref: '#/components/responses/ErrorResponse'}
+    patch:
+      operationId: renameTenant
+      tags: [tenant]
+      summary: Rename a company
+      description: >-
+        Only the current owner or a trusted GLOBAL_ADMIN with a target-bound current MFA context may rename the company.
+        TENANT_ADMIN without ownership is denied. The body is closed and contains only name. Name has 1 to 120 Unicode
+        code points, no leading/trailing Java strip whitespace and no ISO control characters. Send the current Tenant.version
+        as a strong quoted If-Match. A missing If-Match returns 428 VERSION_CONFLICT.
+        The request requires a canonical lowercase UUID Idempotency-Key. After authorization, a replay
+        with the original name and If-Match returns the saved response, even if the current version has advanced.
+        Changing the name or If-Match with the same key returns 409 IDEMPOTENCY_CONFLICT.
+        For a new key, a stale If-Match returns 412 VERSION_CONFLICT. Response is never cached.
+        DELETING returns 409 INVALID_STATE for both owners and administrators. DELETED returns 404.
+      x-pat-scope: write
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: tenantId
+          in: path
+          required: true
+          schema: {type: string, format: uuid}
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+            pattern: '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+        - name: If-Match
+          in: header
+          required: true
+          description: Semantically required. Missing header returns 428 VERSION_CONFLICT.
+          schema:
+            type: string
+            pattern: '^"[1-9][0-9]{0,18}"$'
+            maxLength: 21
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RenameTenantRequestDto'
+      responses:
+        '200':
+          description: Company after the rename. Same-name requests preserve the current version.
+          headers:
+            Cache-Control:
+              schema: {type: string}
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TenantDto'
+        '400': {$ref: '#/components/responses/ErrorResponse'}
+        '401': {$ref: '#/components/responses/ErrorResponse'}
+        '403': {$ref: '#/components/responses/ErrorResponse'}
+        '404': {$ref: '#/components/responses/ErrorResponse'}
+        '409': {$ref: '#/components/responses/ErrorResponse'}
+        '412': {$ref: '#/components/responses/ErrorResponse'}
+        '422': {$ref: '#/components/responses/ErrorResponse'}
+        '428': {$ref: '#/components/responses/ErrorResponse'}
+        '429': {$ref: '#/components/responses/ErrorResponse'}
+        '503': {$ref: '#/components/responses/ErrorResponse'}
+        default: {$ref: '#/components/responses/ErrorResponse'}
   /api/v1/tenants/{tenantId}/capabilities:
     get:
       operationId: getTenantCapabilities
@@ -5105,12 +5622,15 @@ components:
 
   responses:
     ErrorResponse:
-      description: Единая схема ошибки гейтвея
+      description: Единая схема ошибки гейтвея; формат и коды определяет контракт операции.
       headers:
         X-Request-Id:
           $ref: '#/components/headers/X-RequestId-Header'
       content:
         application/json:
+          schema:
+            $ref: '#/components/schemas/RestErrorResponse'
+        application/problem+json:
           schema:
             $ref: '#/components/schemas/RestErrorResponse'
 
@@ -5298,6 +5818,114 @@ components:
         - DEPENDENCY_UNAVAILABLE
         - POLICY_NOT_CONFIGURED
         - VALIDATION_FAILED
+    TenantLifecycle:
+      type: string
+      enum: [PROVISIONING, AWAITING_PAYMENT, ACTIVE, AUTO_CLOSED, OWNER_CANCELLED, DELETING, DELETED]
+    TenantRestrictionCode:
+      type: string
+      enum: [PAYMENT_EXPIRED, OVER_QUOTA, OWNER_PAUSE, PLATFORM_BLOCK, PAYMENT_DISPUTE, PENDING_FIRST_PAYMENT]
+    TenantCreationClosureReason:
+      type: string
+      enum: [AUTO_EXPIRED, OWNER_CANCELLED]
+    ConfirmedActionDto:
+      type: object
+      required: [confirmed]
+      properties:
+        confirmed: {type: boolean}
+
+    AdminRestrictionRequestDto:
+      type: object
+      required: [enabled, reason, confirmed]
+      properties:
+        enabled: {type: boolean}
+        reason:
+          type: string
+          minLength: 1
+          maxLength: 2000
+          description: Private administrative audit reason; never included in public events or errors.
+        confirmed: {type: boolean}
+
+    TenantDto:
+      type: object
+      x-class-extra-annotation: '@com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)'
+      additionalProperties: false
+      properties:
+        id: {type: string, format: uuid}
+        name:
+          type: string
+          minLength: 1
+          maxLength: 128
+          description: Response may include pre-existing names stored before the 120-code-point rename limit.
+        ownerId: {type: string, format: uuid}
+        lifecycle: {$ref: '#/components/schemas/TenantLifecycle'}
+        restrictions:
+          type: array
+          maxItems: 20
+          items: {$ref: '#/components/schemas/TenantRestrictionCode'}
+        createdAt: {type: string, format: date-time}
+        creationDeadline: {type: string, format: date-time}
+        creationClosureReason: {$ref: '#/components/schemas/TenantCreationClosureReason'}
+        creationClosedAt: {type: string, format: date-time}
+        version:
+          type: string
+          minLength: 1
+          maxLength: 19
+          pattern: '^[1-9][0-9]{0,18}$'
+          description: Positive int64, returned as a decimal string and used by If-Match.
+        ownerVersion:
+          type: string
+          minLength: 1
+          maxLength: 19
+          pattern: '^[1-9][0-9]{0,18}$'
+        membership: {$ref: '#/components/schemas/TenantCallerMembershipDto'}
+      required: [id, name, ownerId, lifecycle, restrictions, createdAt, version, ownerVersion]
+    TenantMembershipRole:
+      type: string
+      enum: [MEMBER, TENANT_ADMIN]
+    TenantMembershipState:
+      type: string
+      enum: [ACTIVE, SUSPENDED, REMOVED]
+    TenantCallerMembershipDto:
+      type: object
+      additionalProperties: false
+      description: >-
+        The caller's own membership. Returned by listTenants and by getTenant for a member;
+        absent on administrative reads and on rename responses.
+      properties:
+        role: {$ref: '#/components/schemas/TenantMembershipRole'}
+        state: {$ref: '#/components/schemas/TenantMembershipState'}
+        isOwner: {type: boolean}
+        version:
+          type: string
+          minLength: 1
+          maxLength: 19
+          pattern: '^[1-9][0-9]{0,18}$'
+          description: Positive int64 membership version, returned as a decimal string.
+      required: [role, state, isOwner, version]
+    TenantPageDto:
+      type: object
+      x-class-extra-annotation: '@com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)'
+      additionalProperties: false
+      properties:
+        items:
+          type: array
+          maxItems: 100
+          items: {$ref: '#/components/schemas/TenantDto'}
+        nextCursor: {type: string, minLength: 1, maxLength: 2048}
+      required: [items]
+    TenantName:
+      type: string
+      minLength: 1
+      maxLength: 120
+      description: 1 to 120 Unicode code points. No leading or trailing Java strip whitespace or ISO control characters.
+      not:
+        pattern: '[\u0000-\u001F\u007F-\u009F]|^[\u0020\u1680\u2000-\u2006\u2008-\u200A\u2028\u2029\u205F\u3000]|[\u0020\u1680\u2000-\u2006\u2008-\u200A\u2028\u2029\u205F\u3000]$'
+    RenameTenantRequestDto:
+      type: object
+      additionalProperties: false
+      properties:
+        name: {$ref: '#/components/schemas/TenantName'}
+      required: [name]
     CapabilityRestrictionCode:
       type: string
       enum:
@@ -5312,6 +5940,10 @@ components:
       additionalProperties: false
       required: [action, allowed, denialCodes, restrictions]
       properties:
+        disabledFlags:
+          type: array
+          description: Ключи выключенных флагов, объясняющие CAPABILITY_DISABLED для pat.create.
+          items: {type: string}
         action:
           $ref: '#/components/schemas/CapabilityAction'
         allowed: {type: boolean}
@@ -5361,6 +5993,7 @@ components:
       type: object
       required: [appId, name, host, scopes, connectedAt, lastUsedAt, expiresAt]
       properties:
+        tenantId: {type: string, format: uuid, nullable: true, description: 'Компания токена/подключения; отсутствует у прежних без компании.'}
         appId: {type: string, format: uuid}
         name: {type: string}
         host: {type: string, description: 'Host адреса возврата клиента; при нескольких — лексикографически первого URI.'}
@@ -5373,6 +6006,96 @@ components:
         connectedAt: {type: string, format: date-time, description: 'Минимум времени выдачи authorization code активных grants.'}
         lastUsedAt: {type: string, format: date-time}
         expiresAt: {type: string, format: date-time}
+    TenantPersonalTokenRequestDto:
+      type: object
+      additionalProperties: false
+      properties:
+        tenantId:
+          type: string
+          format: uuid
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        scopes:
+          description: write включает read; сервис сохраняет и возвращает канонический набор read,write.
+          type: array
+          items:
+            type: string
+            enum:
+            - read
+            - write
+          maxItems: 2
+          minItems: 1
+          uniqueItems: true
+        expiresInDays:
+          type: integer
+          minimum: 1
+          maximum: 90
+      required:
+      - tenantId
+      - name
+      - scopes
+      - expiresInDays
+    TenantPersonalTokenDto:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+          format: uuid
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        scopes:
+          type: array
+          items:
+            type: string
+            enum:
+            - read
+            - write
+          maxItems: 2
+          minItems: 1
+          uniqueItems: true
+        createdAt:
+          type: string
+          format: date-time
+        expiresAt:
+          type: string
+          format: date-time
+        tokenPrefix:
+          type: string
+        lastUsedAt:
+          type: string
+          format: date-time
+          nullable: true
+        revoked:
+          type: boolean
+      required:
+      - id
+      - tenantId
+      - name
+      - scopes
+      - createdAt
+      - expiresAt
+      - revoked
+    TenantPersonalTokenCreatedDto:
+      type: object
+      additionalProperties: false
+      properties:
+        metadata:
+          $ref: '#/components/schemas/TenantPersonalTokenDto'
+        secret:
+          type: string
+          minLength: 32
+          maxLength: 512
+      required:
+      - metadata
+      - secret
     PersonalAccessTokenScopeDto:
       type: string
       enum: [read, write]
@@ -5402,6 +6125,7 @@ components:
       type: object
       required: [id, name, tokenPrefix, scopes, createdAt, expiresAt]
       properties:
+        tenantId: {type: string, format: uuid, nullable: true, description: 'Компания токена/подключения; отсутствует у прежних без компании.'}
         id: {type: string, format: uuid}
         name: {type: string}
         tokenPrefix:
@@ -6824,6 +7548,10 @@ components:
     ProjectResponseDto:
       type: object
       properties:
+        version:
+          type: string
+          pattern: '^(0|[1-9][0-9]*)$'
+          description: Current project version as decimal string; native archive/restore use a strong quoted If-Match. Existing projects start at zero.
         id:
           type: string
           description: Уникальный идентификатор проекта
@@ -6871,10 +7599,28 @@ components:
           items:
             $ref: '#/components/schemas/ProjectStatsDto'
 
+    TaskQuotaDto:
+      type: object
+      required: [used, unlimited]
+      properties:
+        used:
+          type: integer
+          format: int64
+          minimum: 0
+          description: Lifetime-число успешных созданий задач в проекте, включая удалённые.
+        limit:
+          type: integer
+          format: int64
+          minimum: 0
+        unlimited:
+          type: boolean
+
     ProjectStatsDto:
       type: object
       required: [projectId, issueCount, memberCount, members]
       properties:
+        taskQuota:
+          $ref: '#/components/schemas/TaskQuotaDto'
         projectId:
           type: string
         issueCount:
@@ -7140,6 +7886,8 @@ components:
       type: object
       required: [ project, members, labels, workflows, issueTypes ]
       properties:
+        taskQuota:
+          $ref: '#/components/schemas/TaskQuotaDto'
         project:
           $ref: '#/components/schemas/ProjectResponseDto'
         members:
@@ -7171,11 +7919,29 @@ components:
         workflow:
           $ref: '#/components/schemas/WorkflowResponseDto'
 
+    QuotaErrorDto:
+      type: object
+      required: [kind, limit, used]
+      properties:
+        kind:
+          type: string
+          pattern: '^TASK_LIFETIME$'
+        limit:
+          type: integer
+          format: int64
+          minimum: 0
+        used:
+          type: integer
+          format: int64
+          minimum: 0
+
     RestErrorResponse:
       description: Ошибка API; details содержит необязательные машиночитаемые параметры ошибки.
       type: object
       required: [code, message]
       properties:
+        quota:
+          $ref: '#/components/schemas/QuotaErrorDto'
         code:
           type: string
         message:
@@ -7721,8 +8487,7 @@ components:
           type: integer
           format: int64
           minimum: 1
-          maximum: 2097152
-          description: Размер файла в байтах (максимум 2 МБ)
+          description: Размер файла в байтах; допустимый размер проверяется по актуальной версии тарифа.
 
     CreateAttachmentUploadUrlResponseDto:
       type: object
@@ -8064,14 +8829,14 @@ components:
 
         downloadUrl:
           type: string
-          description: Presigned URL для скачивания аватара
+          description: Native authenticated gateway path или legacy presigned URL аватара
 
     GetAvatarDownloadUrlResponseDto:
       type: object
       properties:
         url:
           type: string
-          description: Presigned URL для скачивания аватара (отсутствует, если у пользователя нет аватара)
+          description: Native authenticated gateway path или legacy presigned URL аватара (отсутствует, если у пользователя нет аватара)
           example: "https://s3.example.com/bucket/path?X-Amz-Algorithm=..."
           nullable: true
 

@@ -52,7 +52,8 @@ public final class TenantCapabilities {
         new EntitlementProjection(
             transactions,
             billing,
-            (actor, use) -> access(actor).map(a -> Set.<RestrictionCode>of()),
+            (actor, use) ->
+                access(actor).map(a -> Set.copyOf(a.membership().getIndependentRestrictionsList())),
             (actor, event) -> Mono.just(false),
             clock,
             Duration.ofSeconds(30),
@@ -67,7 +68,9 @@ public final class TenantCapabilities {
         .execute(
             db ->
                 db.sql(
-                        "SELECT t.lifecycle,t.owner_id,t.membership_version"
+                        "SELECT t.lifecycle,t.owner_id,t.restriction_version,"
+                            + TenantRestrictions.SELECT
+                            + ",t.membership_version"
                             + " AS generation,t.updated_at,m.*, (SELECT"
                             + " count(*) FROM taska.tenant_memberships a"
                             + " WHERE a.tenant_id=t.id AND"
@@ -88,6 +91,9 @@ public final class TenantCapabilities {
                         row -> {
                           var m =
                               MembershipSnapshot.newBuilder()
+                                  .addAllIndependentRestrictions(
+                                      TenantRestrictions.codes(row.get("independent_restrictions")))
+                                  .setRestrictionVersion(row.get("restriction_version").toString())
                                   .setTenantId(actor.tenantId())
                                   .setUserId(actor.actorId())
                                   .setState(Membership.StateValue.STATE_ACTIVE)
@@ -122,7 +128,7 @@ public final class TenantCapabilities {
               if (!tenant.equals(verified.tenantId())
                   || !"getTenantCapabilities".equals(verified.action())
                   || !verified.scopes().contains("read")) return Mono.error(denied());
-              var target = new Target(UUID.fromString(tenant), null, null, null);
+              var target = new Target(UUID.fromString(tenant), null, UUID.fromString(verified.actorId()), null);
               var frame = new AtomicReference<Frame>();
               var source =
                   new VersionedCapabilitySource(
@@ -236,7 +242,7 @@ public final class TenantCapabilities {
                                                                   return new CapabilityFacts(
                                                                       UUID.fromString(
                                                                           context.actorId()),
-                                                                      target,
+                                                                      t,
                                                                       context.requestId(),
                                                                       until,
                                                                       new Identity(
@@ -266,7 +272,10 @@ public final class TenantCapabilities {
                                                                           .view()
                                                                           .snapshot(),
                                                                       kind,
-                                                                      Set.of(),
+                                                                      Set.copyOf(
+                                                                          access
+                                                                              .membership()
+                                                                              .getIndependentRestrictionsList()),
                                                                       inputs
                                                                           .configuration()
                                                                           .flags(),
@@ -287,7 +296,7 @@ public final class TenantCapabilities {
               // broker
               // invalidation.
               return new CapabilityEvaluator(source, clock)
-                  .decisions(CapabilityEvaluator.tenantActions(), target)
+                  .decisions(companyActions(), target)
                   .map(
                       decisions -> {
                         Frame f = frame.get();
@@ -342,6 +351,12 @@ public final class TenantCapabilities {
                 default -> unavailable();
               };
             });
+  }
+
+  public static Set<Action> companyActions() {
+    var actions = EnumSet.copyOf(CapabilityEvaluator.tenantActions());
+    actions.add(Action.PAT_CREATE);
+    return Collections.unmodifiableSet(actions);
   }
 
   private static DomainException denied() {

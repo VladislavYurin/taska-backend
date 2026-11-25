@@ -33,6 +33,8 @@ message PlanVersion {
   StateValue state = 9;
   optional string published_at = 10;
   KindValue kind = 11;
+  // Предельный размер одного вложения из неизменяемого каталога.
+  optional string max_attachment_bytes = 12;
 }
 
 message PlanVersionPage {
@@ -271,7 +273,51 @@ message GetEntitlementRpcRequest {
   RequestContext context = 1;
   string tenant_id = 2;
 }
+message AutopayConsentRequest {
+  bool consent = 1;
+  optional string payment_method_id = 2;
+  optional string terms_version = 3;
+  bool confirmed = 4;
+}
+
+message AutopayMandate {
+  enum StateValue { STATE_UNSPECIFIED = 0; STATE_DISABLED = 1; STATE_CONSENTED = 2; STATE_SUSPENDED = 3; }
+  string id = 1;
+  string owner_id = 2;
+  StateValue state = 3;
+  reserved 4;
+  reserved "terms_version";
+  optional string consented_at = 5;
+  string version = 6;
+  string owner_version = 7;
+  optional ConsentSnapshot.ConsentChannelValue consent_channel = 8;
+  optional ConsentSnapshot consent_snapshot = 9;
+  optional string consent_terms_version = 10;
+}
+
+message ConsentSnapshot {
+ enum ConsentChannelValue { CONSENT_CHANNEL_UNSPECIFIED = 0; CONSENT_CHANNEL_WEB = 1; CONSENT_CHANNEL_PAT = 2; CONSENT_CHANNEL_OAUTH = 3; CONSENT_CHANNEL_MCP = 4; }
+ string owner_id = 1;
+ string owner_version = 2;
+ string actor_user_id = 3;
+ string consent_terms_version = 4;
+ string consent_terms_sha256 = 5;
+ ConsentChannelValue consent_channel = 6;
+ CredentialKind credential_kind = 7;
+ string payment_method_id = 8;
+ string consented_at = 9;
+ string request_id = 10;
+}
+
+message SetAutopayConsentRpcRequest {
+  RequestContext context = 1;
+  string tenant_id = 2;
+  AutopayConsentRequest payload = 3;
+  MutationOptions mutation = 4;
+}
+
 service BillingService {
+ rpc SetAutopayConsent(SetAutopayConsentRpcRequest) returns (AutopayMandate);
  rpc ChangeSubscriptionPlan(ChangeSubscriptionPlanRpcRequest) returns (PlanChange);
  rpc CancelSubscriptionRenewal(CancelSubscriptionRenewalRpcRequest) returns (Subscription);
  rpc ResumeSubscriptionRenewal(ResumeSubscriptionRenewalRpcRequest) returns (Subscription);
@@ -287,4 +333,19 @@ service BillingService {
  rpc ListBillingPlans(ListBillingPlansRpcRequest) returns (PlanVersionPage);
  rpc CreatePlanVersion(CreatePlanVersionRpcRequest) returns (PlanVersion);
  rpc PublishPlanVersion(PublishPlanVersionRpcRequest) returns (PlanVersion);
+}
+
+// Внутренний worker: только billing-service с отдельным scope payment:recurring.
+message AutopayDispatchRpcRequest {
+ RequestContext context = 1;
+ string tenant_id = 2;
+ string invoice_id = 3;
+}
+message AutopayDispatchResult {
+ string attempt_id = 1;
+ string operation_id = 2;
+ string state = 3;
+}
+service AutopayWorkerService {
+ rpc DispatchAutopay(AutopayDispatchRpcRequest) returns (AutopayDispatchResult);
 }

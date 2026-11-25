@@ -71,14 +71,31 @@ public class GatewayErrorHandler {
       log.error("[{}] Unexpected error: {}", requestId, error.getMessage());
     }
 
+    boolean uploadDependency =
+        trustedEnabled && RestErrorContract.isUploadDependencyError(exchange, transportCode);
+    if (uploadDependency) {
+      details = Map.of("code", "DEPENDENCY_UNAVAILABLE");
+      message = "Dependency unavailable";
+    }
     String reason = details.getOrDefault("code", details.get("reason"));
     if (reason != null && !reason.matches("[A-Z][A-Z0-9_]{1,79}")) reason = null;
-    if (trustedEnabled) {
+    boolean problem =
+        trustedEnabled
+            && (uploadDependency || RestErrorContract.usesProblemContract(exchange, details));
+    if (trustedEnabled && reason != null && !details.containsKey("code")) {
+      details = new java.util.LinkedHashMap<>(details);
+      details.put("code", reason);
+    }
+    if (problem) {
       if (reason != null) code = reason;
       else if (transportCode != null) code = restErrorMapper.problemCode(transportCode);
       else if (httpStatus == HttpStatus.UNAUTHORIZED) code = "AUTHENTICATION_REQUIRED";
       else if (httpStatus == HttpStatus.FORBIDDEN) code = "SCOPE_DENIED";
       if (transportCode != null) httpStatus = restErrorMapper.problemStatus(transportCode, code);
+    }
+    if (problem && !details.containsKey("code")) {
+      details = new java.util.LinkedHashMap<>(details);
+      details.put("code", code);
     }
     RestErrorResponse errorResponse = new RestErrorResponse(code, message);
     errorResponse.setRequestId(requestId);
@@ -86,18 +103,32 @@ public class GatewayErrorHandler {
     if (restriction != null && !restriction.matches("[A-Z][A-Z0-9_]{1,79}")) restriction = null;
     errorResponse.setReasons(
         restriction == null ? java.util.List.of() : java.util.List.of(restriction));
-    if (trustedEnabled) {
+    if (problem) {
       errorResponse.setStatus(httpStatus.value());
       errorResponse.setTitle(httpStatus.getReasonPhrase());
     }
     errorResponse.setDetails(details.isEmpty() ? null : details);
+    if ("TASK_LIFETIME".equals(details.get("quotaKind"))) {
+      try {
+        long limit = Long.parseLong(details.getOrDefault("quotaLimit", "-1"));
+        long used = Long.parseLong(details.getOrDefault("quotaUsed", "-1"));
+        if (limit >= 0 && used >= 0) {
+          var quota = new ru.taska.domain.dto.QuotaErrorDto();
+          quota.setKind("TASK_LIFETIME");
+          quota.setLimit(limit);
+          quota.setUsed(used);
+          errorResponse.setQuota(quota);
+        }
+      } catch (NumberFormatException ignored) {
+        // Некорректная необязательная диагностика не должна подменять исходную доменную ошибку.
+      }
+    }
 
     var response = exchange.getResponse();
     response.setStatusCode(httpStatus);
     response
         .getHeaders()
-        .setContentType(
-            trustedEnabled ? MediaType.APPLICATION_PROBLEM_JSON : MediaType.APPLICATION_JSON);
+        .setContentType(problem ? MediaType.APPLICATION_PROBLEM_JSON : MediaType.APPLICATION_JSON);
     response.getHeaders().set(REQUEST_ID, requestId);
     String retryAfter = details.get("retryAfterSeconds");
     if (httpStatus == HttpStatus.TOO_MANY_REQUESTS

@@ -1,20 +1,42 @@
 package ru.taska.tenant;
 
-import static ru.taska.quota.StorageQuotaProtocol.*;
+import static ru.taska.quota.StorageQuotaProtocol.ManifestPage;
+import static ru.taska.quota.StorageQuotaProtocol.Owner;
+import static ru.taska.quota.StorageQuotaProtocol.OwnerState;
+import static ru.taska.quota.StorageQuotaProtocol.Receipt;
+import static ru.taska.quota.StorageQuotaProtocol.Request;
+import static ru.taska.quota.StorageQuotaProtocol.Reservation;
+import static ru.taska.quota.StorageQuotaProtocol.UsageSource;
 
 import java.math.BigDecimal;
-import java.time.*;
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
-import java.util.*;
+import java.util.Collections;
+import java.util.HexFormat;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.UUID;
 import org.springframework.r2dbc.core.DatabaseClient;
-import reactor.core.publisher.*;
-import ru.taska.api.b2b.v1.*;
+import reactor.core.publisher.Flux;
+import reactor.core.publisher.Mono;
+import ru.taska.api.b2b.v1.Entitlement;
+import ru.taska.api.b2b.v1.QuotaLimit;
+import ru.taska.api.b2b.v1.QuotaUsage;
+import ru.taska.api.b2b.v1.RestrictionCode;
 import ru.taska.entitlement.EntitlementProjection;
-import ru.taska.exception.*;
+import ru.taska.exception.DomainException;
+import ru.taska.exception.DomainStatus;
 import ru.taska.quota.ProjectQuotaProtocol.State;
 import ru.taska.quota.StorageQuotaProtocol;
 import ru.taska.r2dbc.TenantTransactionExecutor;
-import ru.taska.security.tenant.*;
+import ru.taska.security.tenant.RpcContextBridge;
+import ru.taska.security.tenant.VerifiedTenantContext;
 
 /**
  * Authoritative byte ledger. A committed effect is measured by the primary resource owner, never by
@@ -142,6 +164,8 @@ public final class StorageQuotaStore implements StorageQuotaProtocol.Authority, 
                                   DomainStatus.FAILED_PRECONDITION,
                                   "QUOTA_EXCEEDED",
                                   Map.of(
+                                      "code",
+                                      "QUOTA_EXCEEDED",
                                       "quota.kind",
                                       "STORAGE_BYTES",
                                       "quota.used",
@@ -154,9 +178,9 @@ public final class StorageQuotaStore implements StorageQuotaProtocol.Authority, 
                         var insert =
                             db.sql(
                                     """
-                                    INSERT INTO taska.quota_reservations(id,tenant_id,resource,scope_id,operation_id,resource_owner,resource_id,request_hash,amount,state,entitlement_version,expires_at,created_at,storage_project_id,storage_issue_id,storage_policy_version,storage_max_attachment_bytes,storage_actor_id,storage_credential_kind,storage_grant_id,storage_bypassed_limit)
-                                    VALUES(:id,:t,'STORAGE_BYTES',:t,:op,'issue-service',:resource,:hash,:amount,'ACTIVE',:ent,:expires,:now,:project,:issue,:policy,:maximum,:actor,:credential,:grant,:bypass)
-                                    """)
+INSERT INTO taska.quota_reservations(id,tenant_id,resource,scope_id,operation_id,resource_owner,resource_id,request_hash,amount,state,entitlement_version,expires_at,created_at,storage_project_id,storage_issue_id,storage_policy_version,storage_max_attachment_bytes,storage_actor_id,storage_credential_kind,storage_grant_id,storage_bypassed_limit)
+VALUES(:id,:t,'STORAGE_BYTES',:t,:op,'issue-service',:resource,:hash,:amount,'ACTIVE',:ent,:expires,:now,:project,:issue,:policy,:maximum,:actor,:credential,:grant,:bypass)
+""")
                                 .bind("id", UUID.randomUUID())
                                 .bind("t", tenant)
                                 .bind("op", request.operation())
@@ -603,9 +627,9 @@ public final class StorageQuotaStore implements StorageQuotaProtocol.Authority, 
         .then(
             db.sql(
                     """
-                    SELECT COALESCE((SELECT sum(CASE WHEN effect_kind='COMMIT' THEN amount ELSE -amount END) FROM taska.quota_effects WHERE tenant_id=:t AND resource='STORAGE_BYTES'),0) used,
-                    COALESCE((SELECT sum(amount) FROM taska.quota_reservations WHERE tenant_id=:t AND resource='STORAGE_BYTES' AND state='ACTIVE'),0) reserved
-                    """)
+SELECT COALESCE((SELECT sum(CASE WHEN effect_kind='COMMIT' THEN amount ELSE -amount END) FROM taska.quota_effects WHERE tenant_id=:t AND resource='STORAGE_BYTES'),0) used,
+COALESCE((SELECT sum(amount) FROM taska.quota_reservations WHERE tenant_id=:t AND resource='STORAGE_BYTES' AND state='ACTIVE'),0) reserved
+""")
                 .bind("t", tenant)
                 .map(
                     (r, m) ->
@@ -768,12 +792,18 @@ public final class StorageQuotaStore implements StorageQuotaProtocol.Authority, 
     return policy
         .current(c, command, request)
         .timeout(Duration.ofSeconds(5))
+        .onErrorMap(
+            java.util.concurrent.TimeoutException.class,
+            e -> fail(DomainStatus.UNAVAILABLE, "STORAGE_POLICY_UNAVAILABLE"))
         .switchIfEmpty(Mono.error(fail(DomainStatus.UNAVAILABLE, "STORAGE_POLICY_UNAVAILABLE")));
   }
 
   private <T> Mono<T> remote(Mono<T> result) {
     return result
         .timeout(Duration.ofSeconds(5))
+        .onErrorMap(
+            java.util.concurrent.TimeoutException.class,
+            e -> fail(DomainStatus.UNAVAILABLE, "STORAGE_OWNER_UNAVAILABLE"))
         .switchIfEmpty(Mono.error(fail(DomainStatus.UNAVAILABLE, "STORAGE_OWNER_UNAVAILABLE")));
   }
 

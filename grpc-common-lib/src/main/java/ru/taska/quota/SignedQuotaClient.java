@@ -8,7 +8,6 @@ import java.util.*;
 import java.util.function.*;
 import reactor.core.publisher.Mono;
 import ru.taska.api.b2b.v1.*;
-import ru.taska.api.common.v1.Header;
 import ru.taska.exception.*;
 import ru.taska.security.tenant.*;
 
@@ -52,25 +51,10 @@ public final class SignedQuotaClient {
               if (!tenant.toString().equals(parent.tenantId()))
                 return Mono.error(
                     new DomainException(DomainStatus.PERMISSION_DENIED, "TENANT_MISMATCH"));
-              var now = clock.instant();
-              var context =
-                  RequestContext.newBuilder()
-                      .setHeader(Header.newBuilder().setRequestId(UUID.randomUUID().toString()))
-                      .setContext(
-                          RpcContextBridge.details(parent).getContext().toBuilder()
-                              .setContextVersion(1)
-                              .setTenantId(tenant.toString())
-                              .setIssuerService(issuer)
-                              .setAudienceService(audience)
-                              .setAction(action)
-                              .setIssuedAt(now.toString())
-                              .setExpiresAt(now.plusSeconds(30).toString())
-                              .setAssertionId(UUID.randomUUID().toString()))
-                      .build();
+              var context = security.delegate(parent, audience, action, parent.scopes());
               Q wire = request.apply(context);
               return security
-                  .authorize(context, rpc, policy)
-                  .flatMap(v -> security.sign(v, wire, rpc, policy))
+                  .sign(parent, wire, rpc, policy)
                   .flatMap(
                       assertion -> {
                         var headers = new Metadata();

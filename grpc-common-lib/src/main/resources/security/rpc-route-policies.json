@@ -713,6 +713,15 @@
       "requestClass": "ru.taska.api.project.v1.ArchiveProjectRequest"
     },
     {
+      "rpc": "ru.taska.project.v1.ProjectService/RestoreProject",
+      "audience": "project-service",
+      "scope": "TENANT_PROJECT_ACL_CAPABILITY",
+      "tenantRequired": true,
+      "mutation": true,
+      "action": "restoreProject",
+      "requestClass": "ru.taska.api.project.v1.RestoreProjectRequest"
+    },
+    {
       "rpc": "ru.taska.project.v1.ProjectService/ChangeProjectMemberRole",
       "audience": "project-service",
       "scope": "TENANT_PROJECT_ACL_CAPABILITY",
@@ -1046,6 +1055,33 @@
       "requestClass": "ru.taska.api.registry.v1.TypeOperationKey"
     },
     {
+      "rpc": "ru.taska.b2b.v1.TenantService/GetTenant",
+      "audience": "tenant-service",
+      "scope": "TENANT_OWNER_OR_ADMIN",
+      "tenantRequired": true,
+      "mutation": false,
+      "action": "getTenant",
+      "requestClass": "ru.taska.api.b2b.v1.GetTenantRpcRequest"
+    },
+    {
+      "rpc": "ru.taska.b2b.v1.TenantService/ListTenants",
+      "audience": "tenant-service",
+      "scope": "GLOBAL_TENANT_LIST",
+      "tenantRequired": false,
+      "mutation": false,
+      "action": "listTenants",
+      "requestClass": "ru.taska.api.b2b.v1.ListTenantsRpcRequest"
+    },
+    {
+      "rpc": "ru.taska.b2b.v1.TenantService/RenameTenant",
+      "audience": "tenant-service",
+      "scope": "TENANT_OWNER_OR_ADMIN",
+      "tenantRequired": true,
+      "mutation": true,
+      "action": "renameTenant",
+      "requestClass": "ru.taska.api.b2b.v1.RenameTenantRpcRequest"
+    },
+    {
       "rpc": "ru.taska.workflow.v1.WorkflowService/AddWorkflowStatus",
       "audience": "workflow-service",
       "scope": "TENANT_PROJECT_ACL_CAPABILITY",
@@ -1179,6 +1215,87 @@
       "mutation": false,
       "action": "validateTransition",
       "requestClass": "ru.taska.api.workflow.v1.ValidateTransitionRequest"
+    },
+    {
+      "rpc": "ru.taska.issue.v1.IssueService/GetProjectTaskQuotas",
+      "audience": "issue-service",
+      "scope": "TENANT_RESOURCE_ACL_CAPABILITY",
+      "tenantRequired": true,
+      "mutation": false,
+      "action": "getProjectTaskQuotas",
+      "requestClass": "ru.taska.api.issue.v1.GetProjectTaskQuotasRequest"
+    },
+    {
+      "rpc": "ru.taska.b2b.v1.TenantService/PauseTenant",
+      "audience": "tenant-service",
+      "scope": "TENANT_OWNER_OR_ADMIN",
+      "tenantRequired": true,
+      "mutation": true,
+      "action": "pauseTenant",
+      "requestClass": "ru.taska.api.b2b.v1.PauseTenantRpcRequest"
+    },
+    {
+      "rpc": "ru.taska.b2b.v1.TenantService/ResumeTenant",
+      "audience": "tenant-service",
+      "scope": "TENANT_OWNER_OR_ADMIN",
+      "tenantRequired": true,
+      "mutation": true,
+      "action": "resumeTenant",
+      "requestClass": "ru.taska.api.b2b.v1.ResumeTenantRpcRequest"
+    },
+    {
+      "rpc": "ru.taska.b2b.v1.PlatformService/SetPlatformBlock",
+      "audience": "tenant-service",
+      "scope": "TENANT_OWNER_OR_ADMIN",
+      "tenantRequired": true,
+      "mutation": true,
+      "action": "setPlatformBlock",
+      "requestClass": "ru.taska.api.b2b.v1.SetPlatformBlockRpcRequest"
+    },
+    {
+      "rpc": "ru.taska.issue.attachment.v1.AttachmentAdmissionService/CheckAdmission",
+      "audience": "issue-service",
+      "scope": "TENANT_STORAGE_ADMISSION",
+      "tenantRequired": true,
+      "mutation": false,
+      "action": "checkAttachmentAdmission",
+      "requestClass": "ru.taska.api.issue.attachment.v1.AttachmentAdmissionRequest"
+    },
+    {
+      "rpc": "ru.taska.issue.attachment.v1.AttachmentAdmissionService/ReconcileUploads",
+      "audience": "issue-service",
+      "scope": "TENANT",
+      "tenantRequired": true,
+      "mutation": true,
+      "action": "reconcileAttachmentUploads",
+      "requestClass": "ru.taska.api.issue.attachment.v1.ReconcileAttachmentUploadsRequest"
+    },
+    {
+      "rpc": "ru.taska.b2b.v1.QuotaAuthorityService/ReleaseStorageUsage",
+      "audience": "tenant-service",
+      "scope": "TENANT",
+      "tenantRequired": true,
+      "mutation": true,
+      "action": "releaseStorageUsage",
+      "requestClass": "ru.taska.api.b2b.v1.FinalizeQuotaRpcRequest"
+    },
+    {
+      "rpc": "ru.taska.issue.attachment.v1.AttachmentAdmissionService/ReconcileDeletions",
+      "audience": "issue-service",
+      "scope": "TENANT",
+      "tenantRequired": true,
+      "mutation": true,
+      "action": "reconcileAttachmentDeletions",
+      "requestClass": "ru.taska.api.issue.attachment.v1.ReconcileAttachmentDeletionsRequest"
+    },
+    {
+      "rpc": "ru.taska.issue.attachment.v1.IssueAttachmentService/ReadAttachmentContent",
+      "audience": "issue-service",
+      "scope": "TENANT",
+      "tenantRequired": true,
+      "mutation": false,
+      "action": "readAttachmentContent",
+      "requestClass": "ru.taska.api.issue.attachment.v1.ReadAttachmentContentRequest"
     }
   ]
 }

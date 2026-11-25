@@ -1,6 +1,6 @@
 # Workflow tenant storage — TAS-330
 
-The `tenant-storage` profile supplies B2B persistence and template provisioning. The default profile keeps the existing API. Tenant RPC/current project ACL and customization capability checks belong to TAS-342; the company provisioning saga belongs to TAS-337. This change does not enable the profile on the shared stage.
+The `tenant-storage` profile supplies B2B persistence and template provisioning. The default profile keeps the existing API. [TAS-342 native RPC/current project ACL and customization checks](TENANT-API.md) use this store; the company provisioning saga belongs to TAS-337. This change does not enable the profile on the shared stage.
 
 ## Stored configuration and identities
 
@@ -22,7 +22,7 @@ Provision a new dedicated workflow database using [TAS-308 bootstrap](../docs/da
 
 Configure the existing `WORKFLOW_SPRING_R2DBC_*` / `WORKFLOW_SPRING_LIQUIBASE_*` properties and `SPRING_PROFILES_ACTIVE=tenant-storage`. The profile fixes its changelog to [db/workflow-tenant/changelog.json](src/main/resources/db/workflow-tenant/changelog.json). It creates the clean target schema and applies/audits the versioned [RLS v2 cores](../common-lib/src/main/resources/db/tenant/v2/) in one transaction. Existing business tables cause a refusal before reassignment or modification. Repeated invocation of the migrated database is a Liquibase no-op. Applied legacy changesets and RLS v1 resources remain byte-identical.
 
-This profile loads no legacy repositories, services, resolver, coordinators or gRPC implementations. Its transport remains closed until TAS-342 supplies verified policy/adapters. Actuator health is available. Cross-tenant worker partition discovery/leases are TAS-489; there is no global recovery scan here. Do not point the legacy profile at a tenant database. Activating public traffic requires coordinated project/issue/gateway contracts, current authorization, capabilities and saga integration. Rollback before traffic selects the previous app/database configuration; preserve any used tenant database and recover forward after traffic. No automatic down migration, reset or test-data backfill exists.
+This profile loads no legacy repositories, services, resolver, coordinators or gRPC implementations. Its [native workflow transport](TENANT-API.md) requires managed trust and current primary authority; unregistered internal mutation/recovery RPCs remain closed. Actuator health is available. Cross-tenant worker partition discovery/leases are TAS-489; there is no global recovery scan here. Do not point the legacy profile at a tenant database. Activating public traffic requires coordinated project/issue/gateway contracts, current authorization, capabilities and saga integration. Rollback before traffic selects the previous app/database configuration; preserve any used tenant database and recover forward after traffic. No automatic down migration, reset or test-data backfill exists.
 
 ## Verification
 

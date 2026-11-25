@@ -76,6 +76,12 @@ public class GrpcIssueServiceClient {
     private final IssueMapper issueMapper;
     private final GrpcClientProperties properties;
 
+    @org.springframework.beans.factory.annotation.Value("${taska.rpc.context.enabled:false}")
+    private boolean trustedContext;
+    @org.springframework.beans.factory.annotation.Value("${taska.issues.context-deadline:20s}")
+    private java.time.Duration contextDeadline = java.time.Duration.ofSeconds(20);
+
+
     /**
      * Получает задачу вместе подробными данными и историей изменений.
      *
@@ -450,7 +456,9 @@ public class GrpcIssueServiceClient {
      * Возвращает gRPC stub с динамически настроенным временем ожидания (deadline).
      */
     private ReactorIssueServiceGrpc.ReactorIssueServiceStub dynamicStub() {
-        return issueServiceStub.withDeadlineAfter(properties.issueService().deadlineDuration().toMillis(), TimeUnit.MILLISECONDS);
+        long deadline = properties.issueService().deadlineDuration().toMillis();
+        if (trustedContext) deadline = Math.max(deadline, contextDeadline.toMillis());
+        return issueServiceStub.withDeadlineAfter(deadline, TimeUnit.MILLISECONDS);
     }
 
     private Header buildGrpcHeader(GatewayContext context) {

@@ -1,0 +1,140 @@
+"""TAS-343: изолированный CRUD задач с реальными сервисами авторизации, арендаторов, проектов, workflow и биллинга."""
+import base64
+import json
+import time
+import uuid
+import zipfile
+
+import e2e as e
+import trusted_rpc_e2e as t
+from workflow_acl_e2e import WorkflowAclLocal
+
+
+class IssueAclLocal(WorkflowAclLocal):
+    def start_applications(self):
+        # Последовательный запуск ограничивает пиковую память семи JVM в локальном Docker.
+        for name in ('auth-service', 'tenant-service', 'billing-service', 'project-service',
+                     'workflow-service', 'issue-service', 'api-gateway'):
+            # Ещё не запущенные контейнеры не получают фоновое обновление снимка доверия.
+            self.refresh()
+            self.compose('cp', str(self.public / 'trust.json'), name + ':/run/trust/trust.json')
+            self.compose('up', '-d', '--no-deps', name, timeout=180)
+            self.wait_ready('http://' + self.compose('port', name, '8080').strip())
+
+    def configure_container(self, name, service):
+        super().configure_container(name, service)
+        if name == 'issue-service':
+            service.setdefault('ports', []).append('127.0.0.1::9090')
+
+    def probe(self, client, actor, tenant, project, **extra):
+        claims = json.loads(base64.urlsafe_b64decode(client.token.split('.')[1] + '=='))
+        libraries = self.material / 'issue-probe-libs'
+        if not libraries.exists():
+            libraries.mkdir(mode=0o700)
+            with zipfile.ZipFile(self.dir / 'jars/issue-service.jar') as archive:
+                for item in archive.infolist():
+                    if item.filename.startswith('BOOT-INF/lib/') and item.filename.endswith('.jar'):
+                        (libraries / item.filename.rsplit('/', 1)[1]).write_bytes(archive.read(item))
+        parameters = self.material / 'issue-probe.json'
+        e.private_json(parameters, {'material': str(self.material), 'actor': actor, 'tenant': tenant,
+            'credential': claims['sid'], 'project': project,
+            'authPort': int(self.compose('port', 'auth-service', '9090').strip().rsplit(':', 1)[1]),
+            'issuePort': int(self.compose('port', 'issue-service', '9090').strip().rsplit(':', 1)[1]), **extra})
+        output = e.run_command(['java', '--class-path', str(libraries / '*'),
+            str(self.root / 'scripts/harness/IssueAclProbe.java'), str(parameters)], self.root, 180,
+            diagnostic_path=self.dir / 'issue-probe-diagnostic.json')
+        return json.loads(next(line for line in reversed(output.splitlines()) if line.startswith('{')))
+
+    def ready_workflow(self, client, project):
+        # Повторяем только чтение готовности; результат последнего успешного чтения сохраняется.
+        deadline = time.monotonic() + 60
+        while time.monotonic() < deadline:
+            response = client.request('GET', '/api/v1/projects/' + project + '/workflows')
+            if response.status == 200:
+                return response.json()
+            e.require(response.status in (503, 504), 'Workflow readiness returned unexpected status %s' % response.status)
+            time.sleep(1)
+        raise e.Blocked('Workflow readiness deadline exceeded')
+
+    def scenarios(self):
+        actor, clients = self.seed()
+        for _, client in clients:
+            client.timeout = 60
+        projects = []
+        for tenant, client in clients:
+            self.sql('billing_db', "INSERT INTO taska.subscriptions(tenant_id,selected_plan_version_id,selected_terms_snapshot,mode) SELECT '%s',id,to_jsonb(p),'FREE' FROM taska.catalog_plan_versions p WHERE id='00000000-0000-8000-8000-000000000001';" % tenant)
+            self.sql('workflow_db', "INSERT INTO taska.tenant_workflow_templates(tenant_id,template_id,code,version,name,graph_schema_version,graph) SELECT '%s',id,code,version,name,graph_schema_version,graph FROM taska.workflow_templates WHERE code='DEFAULT';" % tenant)
+            t.wait_protected_read(client, '/api/v1/projects/' + str(uuid.uuid4()), 404)
+            projects.append(client.expect('POST', '/api/v1/projects', 201,
+                {'projectKey': 'ISS', 'name': 'Owned issue fixture'}, {'Idempotency-Key': str(uuid.uuid4())}).json()['id'])
+        tenant, owner = clients[0]
+        _, other = clients[1]
+        project, foreign = projects
+        # Проверяем готовность чтением до первой записи, не повторяя команды после тайм-аута.
+        workflow = self.ready_workflow(owner, project)['items'][0]['workflow']
+        self.ready_workflow(other, foreign)
+        # Публичное создание проверяет нативный контекст gateway, квоту и выбор реального workflow.
+        foreign_issue = other.expect('POST', '/api/v1/projects/' + foreign + '/issues', 201,
+            {'issueType': 'TASK', 'summary': 'Owned foreign fixture', 'description': 'Owned fixture', 'priority': 'MEDIUM'},
+            {'Idempotency-Key': str(uuid.uuid4())}).json()['id']
+        source = next(s['id'] for s in workflow['statuses'] if s['statusKey'] == 'TODO')
+        transition = next(x['id'] for x in workflow['transitions'] if x['fromStatusId'] == source)
+        core = self.probe(owner, actor, tenant, project, foreignProject=foreign, foreignIssue=foreign_issue, transition=transition)
+        issue = core.pop('issue')
+        panel = owner.expect('GET', '/api/v1/issues/' + issue, 200).json()
+        e.require(panel['issue']['version'] == 3, 'Public panel lost the native version')
+        before = panel
+        conflict = owner.expect('PATCH', '/api/v1/issues/' + issue, 409,
+            {'summary': 'Denied stale version'}, {'If-Match': '1'}).json()
+        e.require(conflict['details']['code'] == 'VERSION_CONFLICT', 'Stale-version refusal lost its structured cause')
+        e.require(owner.expect('GET', '/api/v1/issues/' + issue, 200).json() == before, 'Stale patch changed issue/history')
+        context = owner.expect('GET', '/api/v1/projects/' + project + '/context', 200).json()
+        e.require(context['taskQuota']['used'] == 1 and context['taskQuota']['limit'] == 50, 'Project context invented task usage')
+        stats = owner.expect('GET', '/api/v1/project-stats', 200).json()
+        own = next(item for item in stats['items'] if item['projectId'] == project)
+        e.require(own['taskQuota']['used'] == 1 and own['issueCount'] == 1, 'Project stats lost lifetime task quota')
+        member = str(uuid.uuid4())
+        self.sql('auth_db', "INSERT INTO taska.users(id,email,display_name,status,global_role) VALUES('%s','issue-member@harness.invalid','Owned viewer','ACTIVE','USER');" % member)
+        self.sql('tenant_db', "INSERT INTO taska.tenant_memberships(tenant_id,user_id,role,status) VALUES('%s','%s','MEMBER','ACTIVE');" % (tenant, member))
+        self.sql('project_db', "INSERT INTO taska.project_members(tenant_id,project_id,user_id,role,added_by,root_membership_version) VALUES('%s','%s','%s','VIEWER','%s',1);" % (tenant, project, member, actor))
+        viewer, session = self.member_client(tenant, member, 1)
+        denied = self.probe(viewer, member, tenant, project, mode='denyWrite', issue=issue)
+        self.sql('auth_db', "UPDATE taska.users SET global_role='GLOBAL_ADMIN' WHERE id='%s';" % member)
+        viewer.expect('GET', '/api/v1/issues/' + issue, 403)
+        claims = json.loads(base64.urlsafe_b64decode(viewer.token.split('.')[1] + '=='))
+        self.sql('auth_db', "UPDATE taska.web_sessions SET assurance='ADMIN_EMAIL_MFA' WHERE id=(SELECT web_session_id FROM taska.tenant_sessions WHERE id='%s');" % claims['sid'])
+        admin = self.probe(viewer, member, tenant, project, mode='adminWrite', issue=issue)
+        e.require(int(self.sql('issue_db', "SELECT count(*) FROM taska.issue_authorization_audit WHERE tenant_id='%s' AND actor_id='%s' AND action='patchIssue';" % (tenant, member)).strip()) > 0,
+                  'Administrative issue write was not audited')
+        self.sql('auth_db', "UPDATE taska.users SET global_role='USER' WHERE id='%s';" % member)
+
+        self.sql('project_db', "UPDATE taska.projects SET archived_at=now() WHERE tenant_id='%s' AND id='%s';" % (tenant, project))
+        archived = self.probe(owner, actor, tenant, project, mode='denyWrite', issue=issue)
+        self.sql('project_db', "UPDATE taska.projects SET archived_at=NULL WHERE tenant_id='%s' AND id='%s';" % (tenant, project))
+        self.sql('tenant_db', "UPDATE taska.tenant_memberships SET status='SUSPENDED',version=version+1 WHERE tenant_id='%s' AND user_id='%s';" % (tenant, member))
+        e.require(viewer.request('GET', '/api/v1/issues/by-key/ISS-1').status in (401, 403), 'Revoked member retained access')
+        deleted = self.probe(owner, actor, tenant, project, mode='delete', issue=issue)
+        # История и outbox содержат метаданные; пожизненное использование сохраняется после удаления.
+        e.require(self.sql('issue_db', "SELECT count(*) FROM taska.issue_history WHERE issue_id='%s';" % issue).strip() == '5', 'History lost or duplicated')
+        e.require(self.sql('issue_db', "SELECT lifetime_created FROM taska.project_counters WHERE tenant_id='%s' AND project_id='%s';" % (tenant, project)).strip() == '1', 'Delete reclaimed lifetime quota')
+        self.sql('issue_db', "UPDATE taska.project_counters SET lifetime_created=50 WHERE tenant_id='%s' AND project_id='%s';" % (tenant, project))
+        before = self.issue_state(tenant, project)
+        quota = owner.expect('POST', '/api/v1/projects/' + project + '/issues', 400,
+            {'issueType': 'TASK', 'summary': 'Denied quota fixture', 'description': 'Owned fixture', 'priority': 'MEDIUM'},
+            {'Idempotency-Key': str(uuid.uuid4())}).json()
+        e.require(quota['details']['code'] == 'QUOTA_EXCEEDED' and quota['quota'] == {'kind': 'TASK_LIFETIME', 'limit': 50, 'used': 50},
+                  'Quota refusal lost authoritative usage')
+        e.require(self.issue_state(tenant, project) == before, 'Quota refusal changed issue/history/outbox/lifetime state')
+        return {**core, **denied, **deleted, **admin, 'archivedWriteDenied': archived['aclReadAndWriteDenial'], 'revokedMembership': 'PASS', 'quotaAndVersionRefusalStatePreserved': 'PASS'}
+
+    def issue_state(self, tenant, project):
+        return self.sql('issue_db', "SELECT jsonb_build_object('issues',(SELECT count(*) FROM taska.issues WHERE tenant_id='%s'),'history',(SELECT count(*) FROM taska.issue_history WHERE tenant_id='%s'),'outbox',(SELECT count(*) FROM taska.outbox_events WHERE tenant_id='%s'),'lifetime',(SELECT lifetime_created FROM taska.project_counters WHERE tenant_id='%s' AND project_id='%s'));" % (tenant, tenant, tenant, tenant, project)).strip()
+
+
+def main():
+    t.TrustedLocal = IssueAclLocal
+    t.main()
+
+
+if __name__ == '__main__':
+    main()

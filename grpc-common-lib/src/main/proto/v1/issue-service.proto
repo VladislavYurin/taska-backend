@@ -63,6 +63,9 @@ enum IssueLinkViewType {
 }
 
 service IssueService {
+  // Ограниченное нативное чтение: права на каждый проект проверяются заново; учитываются все создания за всё время.
+  rpc GetProjectTaskQuotas(GetProjectTaskQuotasRequest) returns (GetProjectTaskQuotasResponse);
+
   // Controlled workflow administration: refuses unmapped issues or moves them atomically
   // with history and outbox before workflow-service removes the configuration.
   rpc MigrateWorkflowIssues(MigrateWorkflowIssuesRequest) returns (MigrateWorkflowIssuesResponse);
@@ -1414,6 +1417,8 @@ message AddIssueLabelRequestBody {
    * Идентификатор пользователя, добавляющего метку (MEMBER+).
    */
   string actor_user_id = 3;
+  // Проверенный projectId из публичного REST-пути; не заменяет primary ACL.
+  string project_id = 4;
 }
 
 message AddIssueLabelResponse {
@@ -1471,6 +1476,8 @@ message RemoveIssueLabelRequestBody {
    * Идентификатор пользователя, удаляющего метку (MEMBER+).
    */
   string actor_user_id = 3;
+  // Проверенный projectId из публичного REST-пути; не заменяет primary ACL.
+  string project_id = 4;
 }
 
 message RemoveIssueLabelResponse {
@@ -1513,6 +1520,8 @@ message ListIssueLabelsRequestBody {
    * Идентификатор пользователя, запрашивающего список (VIEWER+).
    */
   string actor_user_id = 2;
+  // Проверенный projectId из публичного REST-пути; не заменяет primary ACL.
+  string project_id = 3;
 }
 
 message ListIssueLabelsResponse {
@@ -2065,6 +2074,8 @@ message WatchIssueRequestBody {
    * Идентификатор подписываемого пользователя (опционально; по умолчанию — актор).
    */
   optional string target_user_id = 3;
+  // Проверенный projectId из публичного REST-пути; не заменяет primary ACL.
+  string project_id = 4;
 }
 
 /**
@@ -2118,6 +2129,8 @@ message UnwatchIssueRequestBody {
    * Идентификатор отписываемого пользователя (опционально; по умолчанию — актор).
    */
   optional string target_user_id = 3;
+  // Проверенный projectId из публичного REST-пути; не заменяет primary ACL.
+  string project_id = 4;
 }
 
 /**
@@ -2181,6 +2194,8 @@ message ListIssueWatchersRequestBody {
    * Номер страницы, начиная с 0 (опционально).
    */
   optional int32 page = 4;
+  // Проверенный projectId из публичного REST-пути; не заменяет primary ACL.
+  string project_id = 5;
 }
 
 /**
@@ -2229,6 +2244,8 @@ message GetIssueWatchStateRequestBody {
    * Идентификатор пользователя, инициировавшего запрос.
    */
   string actor_user_id = 2;
+  // Проверенный projectId из публичного REST-пути; не заменяет primary ACL.
+  string project_id = 3;
 }
 
 /**
@@ -2714,3 +2731,16 @@ message MigrateWorkflowIssuesRequest {
 message MigrateWorkflowIssuesResponse {
   int64 moved_count = 1;
 }
+
+message GetProjectTaskQuotasRequest {
+  ru.taska.b2b.v1.RequestContext context = 100;
+  ru.taska.common.v1.Header header = 1;
+  repeated string project_ids = 2;
+}
+message ProjectTaskQuota {
+  string project_id = 1;
+  int64 used = 2;
+  optional int64 limit = 3;
+  bool unlimited = 4;
+}
+message GetProjectTaskQuotasResponse { repeated ProjectTaskQuota items = 1; }

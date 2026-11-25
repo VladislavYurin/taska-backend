@@ -130,6 +130,18 @@
 
 **Очистка:** P/Q архивировать только после зависимых сценариев; собственных участников удалить до архивации, сохранив одного ADMIN.
 
+### Native project/outbox subset TAS-545
+
+`python3 scripts/harness/project_outbox_e2e.py`: собственная native fixture проверяет tenant provenance, один outbox event на создание, replay/conflict, отказ MEMBER с сохранностью состояния при native создании и bootstrap compensation без проекта/занятой квоты/успешного `ProjectCreated`. История `ProjectProvisioned` сохраняется. [Scope и cleanup](../agents/e2e.md#native-project-outbox-tas-545). Это отдельный поднабор; полный ACL runner требует согласования в [TAS-546](https://jira.ozero.dev/browse/TAS-546).
+
+### Native variant TAS-340
+
+Owned local tier: `python3 scripts/harness/project_acl_e2e.py`; [runtime/setup/cleanup](../../project-service/TENANT-API.md). Обычный `harness.py e2e --tier local --scenario E2E-08` возвращает BLOCKED до provisioning/записи: legacy fixture не предоставляет verified tenant, обязательный для outbox v2 (TAS-545). Это ограничение runner, а не успешная приёмка пунктов выше. Opt-in stage сохраняет прежний поднабор с отдельными prerequisites; [границы runner](../agents/e2e.md).
+
+Against real Auth/Root/Billing and native project/workflow/issue app roles, verify implicit tenant administration, current grant generations, same-company member targets, path/context/batch/stats/direct RPC isolation, actual administrative MFA/audit and current authority on create replay. A retry with the same UUID key uses one resource/slot/event; a different payload conflicts. Settings/types and the complete workflow graph must exist before OPEN. Confirmed initialization rejection compensates owned resources/reservation. Unknown outcome retains the slot; the scoped worker completes the same accepted operation after initiating-credential revocation and creation flag-off, without another admission.
+
+This proves the named subset, not full product E2E, Kafka delivery or stand rollout.
+
 ## E2E-09. Реестр типов, оформление и порядок
 
 **Условия:** ADMIN P; начальный реестр прочитан.
@@ -322,6 +334,8 @@
 
 1. `POST /api/v1/issues/{I1}/links` с `{"targetIssueId":"${I2}","linkType":"BLOCKS"}`: 201; `GET /api/v1/issues/{I1}/links` и `GET /api/v1/issues/{I2}/links` 200, противоположные направления/viewLinkType и targetIssue согласованы. Самоссылка, дубликат, неизвестный linkType и связь в чужой проект отклоняются по правилам доступа.
 2. `DELETE /api/v1/issues/{I1}/links/{linkId}`: 204; связь отсутствует с обеих сторон.
+Native TAS-363: `python3 scripts/harness/issue_metadata_e2e.py` автоматизирует поднабор E2E-21 на собственных семи приложениях: labels/watchers REST, роли, current target/account, mTLS purpose-bound resolver, однократные эффекты и privacy. Это не email/Telegram delivery E2E и не позитивная проверка search/board TAS-344.
+
 3. A `POST /api/v1/projects/{P}/labels` с `{"name":"E2E ${RUN}","color":"#0052CC"}`: 201; `GET /api/v1/projects/{P}/labels`: 200. `PATCH /api/v1/projects/{P}/labels/{labelId}` с name/color: 200; повторное имя/неправильный HEX/слишком длинное имя — отказ без порчи прежней метки. MEMBER не создаёт/редактирует/удаляет проектную метку.
 4. M `POST /api/v1/projects/{P}/issues/{id}/labels` с labelId: 201; list labels и карточка/list/search/board содержат одну метку с актуальными name/color. Чужая project label не привязывается. `DELETE /api/v1/projects/{P}/issues/{id}/labels/{labelId}` у задачи — 204, проектная метка остаётся.
 5. `PUT /api/v1/projects/{P}/issues/{id}/watchers/me`: 200; повтор не дублирует подписку, GET watchers и isWatching согласованы. `DELETE /api/v1/projects/{P}/issues/{id}/watchers/me`: 200, повтор не затрагивает других. Проверить auto-watch reporter/assignee при включённых настройках.
@@ -331,6 +345,24 @@
 **Очистка:** убрать связи, тестовые метки и лишние подписки.
 
 ## E2E-22. Вложения и аватар через object storage
+
+Для native `tenant-storage` TAS-365 реализует upload-url/confirm; размер ограничен
+текущим типизированным catalog cap, а не legacy порогом 2 MiB. Изолированный runner
+`python3 scripts/harness/attachment_upload_e2e.py` проверяет эту часть через REST,
+реальные primary ACL и versioned S3, включая повторы, X-Request-Id fallback, чужие
+tenant/project/issue и административный bypass с честным учётом. Project/issue
+создаются как собственные fixtures. List/download/delete и аватары этим runner
+не покрыты; полный E2E-22 остаётся отдельным набором.
+
+TAS-367: `python3 scripts/harness/attachment_lifecycle_e2e.py` проверяет native list,
+gateway download GET/HEAD/Range и прекращение потока после revoke, durable delete,
+S3 failure/restart, SERVICE continuation и однократное освобождение bytes после
+реального PUT window. Native проверяет все path IDs; MEMBER с attachment.delete
+может удалить вложение другого uploader. Storage READ_ONLY запрещает direct delete.
+Чтение сохраняется при upload flag off. Avatar lifecycle остаётся отдельным, runner
+проверяет только неприкосновенность собственного avatar sentinel. Native semantics
+описаны в [runbook](../../issue-service/ATTACHMENT-LIFECYCLE.md); следующие шаги с
+presigned download и legacy ownership относятся к legacy профилю.
 
 **Условия:** выделенная активная учётная запись без чужого аватара, задача P, небольшой валидный PNG и доступный клиенту S3.
 
@@ -722,6 +754,8 @@
 | `POST /api/v1/projects/{projectId}/issues/{issueId}/attachments/upload-url` | `createAttachmentUploadUrl` | E2E-22 | 200 |
 | `POST /api/v1/projects/{projectId}/issues/{issueId}/attachments/confirm` | `confirmAttachmentUpload` | E2E-22 | 201 |
 | `GET /api/v1/projects/{projectId}/issues/{issueId}/attachments/{attachmentId}/download-url` | `getAttachmentDownloadUrl` | E2E-22 | 200 |
+| `GET /api/v1/projects/{projectId}/issues/{issueId}/attachments/{attachmentId}/content` | `readAttachmentContent` | E2E-22 (native) | 200/206 |
+| `HEAD /api/v1/projects/{projectId}/issues/{issueId}/attachments/{attachmentId}/content` | `headAttachmentContent` | E2E-22 (native) | 200/206 |
 | `DELETE /api/v1/projects/{projectId}/issues/{issueId}/attachments/{attachmentId}` | `deleteAttachment` | E2E-22 | 204 |
 | `GET /api/v1/projects/{projectId}/board` | `getBoard` | E2E-18 | 200 |
 | `GET /api/v1/projects/{projectId}/board/columns/{statusKey}/issues` | `listBoardColumnIssues` | E2E-18 | 200 |
@@ -777,3 +811,36 @@
 5. Рабочее чтение до оплаты даёт `PAYMENT_PENDING` / `PENDING_FIRST_PAYMENT`; PROVISIONING — `INVALID_STATE`; metadata и cancel доступны. Проверено в `TenantMembershipIntegrationTest`.
 
 Cleanup: закрыть каналы/серверы/pools и удалить собственные контейнеры в `AfterAll`. Общий стенд, PSP, refunds и retention не затрагиваются. Контракт и границы: [creation closure](../../tenant-service/CREATION-CLOSURE.md).
+
+## Контекст проекта и отказ workflow (TAS-533)
+
+`python3 scripts/harness/project_context_e2e.py` создаёт собственный локальный Compose стенд с production mTLS/JWS и primary auth/membership. Проверяет успешный legacy ProjectServiceImpl context через прямой RPC, отказ HTTP context при остановленном workflow, requestId, неизменность project/members/outbox, восстановление того же контекста и ownership cleanup. Не повторяет мутации для readiness. Native task-quota enrichment использует другой профиль; обычный полный REST context с этим enrichment данным сценарием не подтверждается. Ошибки частичного/полного workflow и NOT_FOUND дополнительно проверяются ProjectServiceImplTest.
+
+## Tenant archive/restore проекта (TAS-341)
+
+`python3 scripts/harness/project_lifecycle_e2e.py` создаёт семь native приложений и собственные PostgreSQL/Kafka/storage. Проверяет DELETE archive и POST restore с strong quoted If-Match и Idempotency-Key: implicit company ADMIN без project grant, сохранённый ответ повтора после последующего restore, конфликт ключа/версии и параллельных команд, A/B, viewer/revoked membership denial, последний project ADMIN и verified web administrative MFA с аудитом. Квота проекта и issue/history сравниваются до/после. Cleanup использует signed owner state; общий стенд не затрагивается. Unit/SQL regression отдельно проверяет rollback state/outbox/receipt при ошибке записи квитанции и app LOGIN/RLS.
+
+## Независимая пауза и блокировка компании (TAS-480)
+
+`python3 scripts/harness/tenant_restrictions_e2e.py` поднимает семь собственных native приложений с primary auth/root/billing и managed mTLS/JWS. Проверяет owner/admin MFA, независимые причины, CAS/replay/conflict/concurrency, READ_WHILE_RESTRICTED true/false на реальном project read/write, доступность metadata/lifecycle и financial capability, неизменность subscription/period/payment state и отсутствие private audit reason в событиях. Не заявляет отсутствующий members REST или live PSP charges. Admission/reconciliation autopay и missing/offline root отдельно проверяет AutopayIntegrationTest на PostgreSQL; источник payment-state получает причины из root snapshot. Cleanup только ownership-checked, общий стенд не затрагивается.
+
+## E2E-47. Токен одной компании через REST (TAS-542)
+
+Локальный runner: `python3 scripts/harness/tenant_tokens_e2e.py`. Только собственный стек
+с реальными auth/tenant/billing, PostgreSQL и mTLS/JWS; managed trust и receipt key обязательны.
+
+1. WEB_TENANT компании A на FREE без FREE_PERSONAL_API_TOKENS получает 403 CAPABILITY_DISABLED;
+   токен, grant и receipt не создаются. Включить флаг только в собственной fixture.
+2. Выпустить PAT через POST /api/v1/account/tenant-tokens с UUID ключом. Проверить 201,
+   no-store, tenantId, prefix и scopes (write включает read). Повтор в 60 секунд даёт
+   тот же секрет и одну строку токена.
+3. С сессией A указать B: 403 TENANT_MISMATCH без нового токена. По выданному PAT выпуск
+   ещё одного PAT запрещён. GET metadata возвращает компанию, но не секрет.
+4. Отозвать токен обычной веб-сессией; прежний секрет больше не аутентифицирует запрос.
+   Выключить PERSONAL_API_TOKENS в собственной fixture: pat.create и POST запрещены,
+   disabledFlags различает общий и FREE-флаг. После отказов число токенов не растёт.
+5. Cleanup удаляет только owned Compose project и fixtures; отчёты/секреты остаются вне Git.
+
+Дополнительные проверки модулей: scopes/срок/лимит, receipt conflict/expiry, актуальность
+membership/credential, source outage и startup; HTTP→gRPC OAuth metadata и scoped revoke;
+production OAuth admission отвергает FREE_MCP до записи. Полный браузерный consent — TAS-543.

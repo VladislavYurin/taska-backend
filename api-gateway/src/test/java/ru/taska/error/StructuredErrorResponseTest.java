@@ -43,6 +43,42 @@ class StructuredErrorResponseTest {
   }
 
   @Test
+  void storageQuotaProblemIsLimitedToTrustedUploadAdmission() {
+    var details = Map.of("code", "QUOTA_EXCEEDED", "quota.kind", "STORAGE_BYTES");
+    var error = GrpcExceptionMapper.toStatusRuntimeException(
+        new DomainException(DomainStatus.FAILED_PRECONDITION, "Storage limit reached", details));
+    String upload = "/api/v1/projects/p/issues/i/attachments/upload-url";
+    org.springframework.test.util.ReflectionTestUtils.setField(handler, "trustedEnabled", true);
+    var admitted = MockServerWebExchange.from(MockServerHttpRequest.post(upload));
+    handler.handleError(admitted, error, "quota-trace").block();
+    assertThat(admitted.getResponse().getStatusCode().value()).isEqualTo(422);
+    assertThat(admitted.getResponse().getHeaders().getContentType())
+        .isEqualTo(org.springframework.http.MediaType.APPLICATION_PROBLEM_JSON);
+    var body = json.readTree(admitted.getResponse().getBodyAsString().block());
+    assertThat(body.path("code").asString()).isEqualTo("QUOTA_EXCEEDED");
+    assertThat(body.path("details").path("quota.kind").asString()).isEqualTo("STORAGE_BYTES");
+    assertThat(body.path("status").asInt()).isEqualTo(422);
+    assertThat(body.path("requestId").asString()).isEqualTo("quota-trace");
+    for (String path : new String[]{upload.replace("upload-url", "confirm"),
+        "/api/v1/projects", upload + "/extra"}) {
+      var legacy = MockServerWebExchange.from(MockServerHttpRequest.post(path));
+      handler.handleError(legacy, error, "legacy-trace").block();
+      assertThat(legacy.getResponse().getStatusCode().value()).as(path).isEqualTo(400);
+    }
+    var read = MockServerWebExchange.from(MockServerHttpRequest.get(upload));
+    handler.handleError(read, error, "read-trace").block();
+    assertThat(read.getResponse().getStatusCode().value()).isEqualTo(400);
+    var other = MockServerWebExchange.from(MockServerHttpRequest.post(upload));
+    handler.handleError(other, GrpcExceptionMapper.toStatusRuntimeException(
+        new DomainException(DomainStatus.FAILED_PRECONDITION, "Closed", Map.of("code", "UPLOAD_CLOSED"))), "closed-trace").block();
+    assertThat(other.getResponse().getStatusCode().value()).isEqualTo(400);
+    org.springframework.test.util.ReflectionTestUtils.setField(handler, "trustedEnabled", false);
+    var untrusted = MockServerWebExchange.from(MockServerHttpRequest.post(upload));
+    handler.handleError(untrusted, error, "untrusted-trace").block();
+    assertThat(untrusted.getResponse().getStatusCode().value()).isEqualTo(400);
+  }
+
+  @Test
   void trustedProblemCodeRefinesTheAuthoritativeTransportStatus() {
     org.springframework.test.util.ReflectionTestUtils.setField(handler, "trustedEnabled", true);
     Object[][] rows = {
@@ -55,7 +91,7 @@ class StructuredErrorResponseTest {
       {DomainStatus.FAILED_PRECONDITION, "QUOTA_EXCEEDED", 422}
     };
     for (var row : rows) {
-      var exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/api/v1/projects"));
+      var exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/api/v1/tenants"));
       var error =
           GrpcExceptionMapper.toStatusRuntimeException(
               new DomainException(
@@ -66,13 +102,14 @@ class StructuredErrorResponseTest {
           .isEqualTo(org.springframework.http.MediaType.APPLICATION_PROBLEM_JSON);
       var body = json.readTree(exchange.getResponse().getBodyAsString().block());
       assertThat(body.path("code").asString()).isEqualTo(row[1]);
+      assertThat(body.path("details").path("code").asString()).isEqualTo(row[1]);
       assertThat(body.path("status").asInt()).isEqualTo(row[2]);
       assertThat(body.path("requestId").asString()).isEqualTo("owned-trace");
       assertThat(body.path("reasons").get(0).asString()).isEqualTo(row[1]);
       assertThat(exchange.getResponse().getHeaders().getFirst("X-Request-Id"))
           .isEqualTo("owned-trace");
     }
-    var exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/api/v1/projects"));
+    var exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/api/v1/tenants"));
     handler
         .handleError(
             exchange,
@@ -91,7 +128,7 @@ class StructuredErrorResponseTest {
   @Test
   void trustedMissingCredentialAndDependencyTimeoutHaveStableProblemCodes() {
     org.springframework.test.util.ReflectionTestUtils.setField(handler, "trustedEnabled", true);
-    var missing = MockServerWebExchange.from(MockServerHttpRequest.get("/api/v1/projects"));
+    var missing = MockServerWebExchange.from(MockServerHttpRequest.get("/api/v1/tenants"));
     handler
         .handleError(
             missing,
@@ -103,7 +140,7 @@ class StructuredErrorResponseTest {
     assertThat(
             json.readTree(missing.getResponse().getBodyAsString().block()).path("code").asString())
         .isEqualTo("AUTHENTICATION_REQUIRED");
-    var timeout = MockServerWebExchange.from(MockServerHttpRequest.get("/api/v1/projects"));
+    var timeout = MockServerWebExchange.from(MockServerHttpRequest.get("/api/v1/tenants"));
     handler.handleError(timeout, Status.DEADLINE_EXCEEDED.asRuntimeException(), "trace").block();
     assertThat(timeout.getResponse().getStatusCode().value()).isEqualTo(503);
     assertThat(

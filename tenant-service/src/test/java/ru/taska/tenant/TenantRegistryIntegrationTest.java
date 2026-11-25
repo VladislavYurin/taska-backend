@@ -173,7 +173,7 @@ class TenantRegistryIntegrationTest {
     operator
         .sql(
             "TRUNCATE"
-                + " taska.quota_effects,taska.quota_reservations,taska.quota_counters,taska.tenant_creation_receipts,taska.tenant_provisioning_dispatch,taska.tenant_operations,taska.free_admission_subjects,taska.free_plan_admissions,taska.tenants,taska.tenant_memberships,taska.idempotency_records,taska.outbox_events,taska.global_outbox_events,taska.processed_events")
+                + " taska.quota_effects,taska.quota_reservations,taska.quota_counters,taska.tenant_creation_receipts,taska.tenant_provisioning_dispatch,taska.tenant_operations,taska.free_admission_subjects,taska.free_plan_admissions,taska.tenant_restrictions,taska.tenant_restriction_audit,taska.tenants,taska.tenant_memberships,taska.idempotency_records,taska.outbox_events,taska.global_outbox_events,taska.processed_events")
         .fetch()
         .rowsUpdated()
         .block(WAIT);
@@ -260,12 +260,21 @@ class TenantRegistryIntegrationTest {
   }
 
   Mono<Tenant> get(UUID actor, UUID tenant) {
-    return RegistryTestContext.as(
-        actor,
-        tenant,
-        "getTenant",
-        CREDENTIAL_KIND_WEB_TENANT,
-        true,
+    var claims =
+        TrustedTenantContext.newBuilder()
+            .setActorUserId(actor.toString())
+            .setTenantId(tenant.toString())
+            .setActorGeneration("1")
+            .setMembershipGeneration("1")
+            .setCredentialKind(CREDENTIAL_KIND_WEB_TENANT)
+            .setSessionId(UUID.randomUUID().toString())
+            .setIssuerService("api-gateway")
+            .setAudienceService("tenant-service")
+            .addScopes("read")
+            .setAction("getTenant")
+            .build();
+    return RegistryTestContext.withClaims(
+        claims,
         service.get(GetTenantRpcRequest.newBuilder().setTenantId(tenant.toString()).build()));
   }
 
@@ -408,7 +417,9 @@ class TenantRegistryIntegrationTest {
   void getChecksMembershipAndDoesNotGrantWorkAccessToPaid() {
     var created = create(OWNER, "read", PAID).block(WAIT);
     UUID id = UUID.fromString(created.getTenant().getId());
-    assertEquals(created.getTenant(), get(OWNER, id).block(WAIT));
+    var read = get(OWNER, id).block(WAIT);
+    assertEquals(created.getTenant(), read.toBuilder().clearMembership().build());
+    assertTrue(read.getMembership().getIsOwner());
     rejects(DomainStatus.NOT_FOUND, get(OTHER, id));
     operator
         .sql(
@@ -520,7 +531,10 @@ class TenantRegistryIntegrationTest {
         .expectError()
         .verify(WAIT);
     assertEquals(
-        created.getTenant(), get(OWNER, UUID.fromString(created.getTenant().getId())).block(WAIT));
+        created.getTenant(),
+        get(OWNER, UUID.fromString(created.getTenant().getId())).block(WAIT).toBuilder()
+            .clearMembership()
+            .build());
     assertEquals(1, count("tenant_memberships"));
   }
 
@@ -901,8 +915,18 @@ class TenantRegistryIntegrationTest {
             plain.withInterceptors(
                 io.grpc.stub.MetadataUtils.newAttachHeadersInterceptor(
                     signed(sender, read, policies.get(rpc), rpc)));
-        if (actor.equals(OWNER)) assertEquals(result.getTenant(), readStub.getTenant(read));
-        else
+        if (actor.equals(OWNER)) {
+          var current = readStub.getTenant(read);
+          assertEquals(result.getTenant(), current.toBuilder().clearMembership().build());
+          assertEquals(
+              ru.taska.api.b2b.v1.CallerMembership.newBuilder()
+                  .setRole(ru.taska.api.b2b.v1.Membership.RoleValue.ROLE_TENANT_ADMIN)
+                  .setState(ru.taska.api.b2b.v1.Membership.StateValue.STATE_ACTIVE)
+                  .setIsOwner(true)
+                  .setVersion("1")
+                  .build(),
+              current.getMembership());
+        } else
           assertEquals(
               io.grpc.Status.Code.NOT_FOUND,
               assertThrows(io.grpc.StatusRuntimeException.class, () -> readStub.getTenant(read))
@@ -1105,5 +1129,325 @@ class TenantRegistryIntegrationTest {
         }
       }
     }
+  }
+
+  static TrustedTenantContext restrictionClaims(
+      UUID actor, UUID tenant, String action, boolean admin) {
+    var session =
+        UUID.nameUUIDFromBytes(actor.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8))
+            .toString();
+    var c =
+        TrustedTenantContext.newBuilder()
+            .setActorUserId(actor.toString())
+            .setTenantId(tenant.toString())
+            .setAction(action)
+            .setActorGeneration("1")
+            .setSessionId(session)
+            .setCredentialId(session)
+            .addScopes("read")
+            .addScopes("write");
+    if (admin)
+      c.setCredentialKind(CREDENTIAL_KIND_WEB_GLOBAL)
+          .setAdministrativeScope(
+              ru.taska.api.b2b.v1.AdminScope.newBuilder()
+                  .setKind(ru.taska.api.b2b.v1.AdminScope.KindValue.KIND_TENANT_SET)
+                  .addTenantIds(tenant.toString()))
+          .setAdministrativeLevel(ru.taska.api.b2b.v1.AdminGrant.LevelValue.LEVEL_MODIFY);
+    else c.setCredentialKind(CREDENTIAL_KIND_WEB_TENANT).setMembershipGeneration("1");
+    return c.build();
+  }
+
+  Tenant workingRestrictionTenant(String key) {
+    var tenant = create(OWNER, key, FREE).block(WAIT).getTenant();
+    operator
+        .sql("UPDATE taska.tenants SET lifecycle='ACTIVE' WHERE id=:t")
+        .bind("t", UUID.fromString(tenant.getId()))
+        .then()
+        .block(WAIT);
+    return tenant;
+  }
+
+  TenantRestrictionService restrictions() {
+    return new TenantRestrictionService(transactions, Clock.fixed(NOW, ZoneOffset.UTC));
+  }
+
+  Mono<Tenant> pause(UUID tenant, long version, String key) {
+    var q =
+        ru.taska.api.b2b.v1.PauseTenantRpcRequest.newBuilder()
+            .setTenantId(tenant.toString())
+            .setMutation(
+                MutationOptions.newBuilder()
+                    .setIdempotencyKey(key)
+                    .setExpectedVersion(Long.toString(version)))
+            .setPayload(ru.taska.api.b2b.v1.ConfirmedAction.newBuilder().setConfirmed(true))
+            .build();
+    return RegistryTestContext.withClaims(
+        restrictionClaims(OWNER, tenant, "pauseTenant", false), restrictions().pause(q));
+  }
+
+  Mono<Tenant> resume(UUID tenant, long version, String key) {
+    var q =
+        ru.taska.api.b2b.v1.ResumeTenantRpcRequest.newBuilder()
+            .setTenantId(tenant.toString())
+            .setMutation(
+                MutationOptions.newBuilder()
+                    .setIdempotencyKey(key)
+                    .setExpectedVersion(Long.toString(version)))
+            .build();
+    return RegistryTestContext.withClaims(
+        restrictionClaims(OWNER, tenant, "resumeTenant", false), restrictions().resume(q));
+  }
+
+  Mono<Tenant> block(UUID tenant, long version, boolean enabled, String reason, String key) {
+    var q =
+        ru.taska.api.b2b.v1.SetPlatformBlockRpcRequest.newBuilder()
+            .setTenantId(tenant.toString())
+            .setPayload(
+                ru.taska.api.b2b.v1.AdminRestrictionRequest.newBuilder()
+                    .setEnabled(enabled)
+                    .setReason(reason)
+                    .setConfirmed(true))
+            .setMutation(
+                MutationOptions.newBuilder()
+                    .setIdempotencyKey(key)
+                    .setExpectedVersion(Long.toString(version)))
+            .build();
+    return RegistryTestContext.withClaims(
+        restrictionClaims(OTHER, tenant, "setPlatformBlock", true), restrictions().block(q));
+  }
+
+  @Test
+  void pauseAndPlatformBlockRemainIndependentAndReplayDoesNotReapplyEffect() {
+    var tenant = UUID.fromString(workingRestrictionTenant("restrictions").getId());
+    var key = UUID.randomUUID().toString();
+    var paused = pause(tenant, 1, key).block(WAIT);
+    assertEquals(
+        List.of(RestrictionCode.RESTRICTION_CODE_OWNER_PAUSE), paused.getRestrictionsList());
+    var blocked =
+        block(tenant, 2, true, "private operator evidence", UUID.randomUUID().toString())
+            .block(WAIT);
+    assertTrue(
+        blocked
+            .getRestrictionsList()
+            .containsAll(
+                List.of(
+                    RestrictionCode.RESTRICTION_CODE_OWNER_PAUSE,
+                    RestrictionCode.RESTRICTION_CODE_PLATFORM_BLOCK)));
+    assertEquals(
+        DomainStatus.PERMISSION_DENIED,
+        assertThrows(
+                DomainException.class,
+                () -> resume(tenant, 3, UUID.randomUUID().toString()).block(WAIT))
+            .getStatus());
+    var unblocked =
+        block(tenant, 3, false, "closed operator evidence", UUID.randomUUID().toString())
+            .block(WAIT);
+    assertEquals(
+        List.of(RestrictionCode.RESTRICTION_CODE_OWNER_PAUSE), unblocked.getRestrictionsList());
+    var resumed = resume(tenant, 4, UUID.randomUUID().toString()).block(WAIT);
+    assertTrue(resumed.getRestrictionsList().isEmpty());
+    assertEquals("5", resumed.getVersion());
+    assertEquals(paused, pause(tenant, 1, key).block(WAIT));
+    assertTrue(get(OWNER, tenant).block(WAIT).getRestrictionsList().isEmpty());
+    assertEquals(
+        4L,
+        operator
+            .sql(
+                "SELECT count(*) n FROM taska.outbox_events WHERE"
+                    + " event_type='TenantRestrictionChanged'")
+            .map((r, m) -> r.get("n", Long.class))
+            .one()
+            .block(WAIT));
+    assertEquals(
+        0L,
+        operator
+            .sql(
+                "SELECT count(*) n FROM taska.outbox_events WHERE payload::text LIKE '%operator"
+                    + " evidence%'")
+            .map((r, m) -> r.get("n", Long.class))
+            .one()
+            .block(WAIT));
+    assertThrows(
+        Exception.class,
+        () ->
+            RegistryTestContext.withClaims(
+                    restrictionClaims(OWNER, tenant, "pauseTenant", false),
+                    transactions.execute(
+                        db -> db.sql("DELETE FROM taska.tenant_restriction_audit").then()))
+                .block(WAIT));
+  }
+
+  @Test
+  void parallelPauseUsesCasAndDisabledFlagDoesNotPreventResumeOrReplay() {
+    var tenant = UUID.fromString(workingRestrictionTenant("restriction-race").getId());
+    var keys = List.of(UUID.randomUUID().toString(), UUID.randomUUID().toString());
+    var results =
+        Flux.merge(
+                pause(tenant, 1, keys.get(0)).materialize(),
+                pause(tenant, 1, keys.get(1)).materialize())
+            .filter(s -> !s.isOnComplete())
+            .collectList()
+            .block(WAIT);
+    assertEquals(1, results.stream().filter(reactor.core.publisher.Signal::isOnNext).count());
+    assertEquals(1, results.stream().filter(reactor.core.publisher.Signal::isOnError).count());
+    operator
+        .sql(
+            "INSERT INTO"
+                + " taska.platform_configuration_versions(key,version,value_type,value,effective_at,changed_by,created_at)"
+                + " SELECT key,999,value_type,'false'::jsonb,:now,:actor,:now FROM"
+                + " taska.platform_configuration_definitions WHERE key='OWNER_PAUSE'")
+        .bind("now", NOW.atOffset(ZoneOffset.UTC))
+        .bind("actor", OWNER)
+        .then()
+        .block(WAIT);
+    try {
+      String winner = results.get(0).isOnNext() ? keys.get(0) : keys.get(1);
+      // Identify the winning receipt independently of emission ordering.
+      winner =
+          operator
+              .sql(
+                  "SELECT key FROM taska.idempotency_records WHERE tenant_id=:t AND operation_code"
+                      + " LIKE 'tenantRestriction/%'")
+              .bind("t", tenant)
+              .map((r, m) -> r.get("key", String.class))
+              .one()
+              .block(WAIT);
+      assertEquals("2", pause(tenant, 1, winner).block(WAIT).getVersion());
+      assertEquals(
+          DomainStatus.PERMISSION_DENIED,
+          assertThrows(
+                  DomainException.class,
+                  () -> pause(tenant, 2, UUID.randomUUID().toString()).block(WAIT))
+              .getStatus());
+      assertTrue(
+          resume(tenant, 2, UUID.randomUUID().toString())
+              .block(WAIT)
+              .getRestrictionsList()
+              .isEmpty());
+    } finally {
+      operator
+          .sql(
+              "INSERT INTO"
+                  + " taska.platform_configuration_versions(key,version,value_type,value,effective_at,changed_by,created_at)"
+                  + " SELECT key,1000,value_type,'true'::jsonb,:now,:actor,:now FROM"
+                  + " taska.platform_configuration_definitions WHERE key='OWNER_PAUSE'")
+          .bind("now", NOW.atOffset(ZoneOffset.UTC))
+          .bind("actor", OWNER)
+          .then()
+          .block(WAIT);
+    }
+  }
+
+  @Test
+  void restrictionScopeAndReceiptFailurePreserveStateAndOtherReasons() {
+    var tenant = UUID.fromString(workingRestrictionTenant("restriction-rollback").getId());
+    var key = UUID.randomUUID().toString();
+    var q =
+        ru.taska.api.b2b.v1.SetPlatformBlockRpcRequest.newBuilder()
+            .setTenantId(tenant.toString())
+            .setPayload(
+                ru.taska.api.b2b.v1.AdminRestrictionRequest.newBuilder()
+                    .setEnabled(true)
+                    .setReason("private")
+                    .setConfirmed(true))
+            .setMutation(
+                MutationOptions.newBuilder().setIdempotencyKey(key).setExpectedVersion("1"))
+            .build();
+    assertEquals(
+        DomainStatus.PERMISSION_DENIED,
+        assertThrows(
+                DomainException.class,
+                () ->
+                    RegistryTestContext.withClaims(
+                            restrictionClaims(OWNER, tenant, "setPlatformBlock", false),
+                            restrictions().block(q))
+                        .block(WAIT))
+            .getStatus());
+    var pause =
+        ru.taska.api.b2b.v1.PauseTenantRpcRequest.newBuilder()
+            .setTenantId(tenant.toString())
+            .setPayload(ru.taska.api.b2b.v1.ConfirmedAction.newBuilder().setConfirmed(true))
+            .setMutation(
+                MutationOptions.newBuilder().setIdempotencyKey(key).setExpectedVersion("1"))
+            .build();
+    assertEquals(
+        DomainStatus.PERMISSION_DENIED,
+        assertThrows(
+                DomainException.class,
+                () ->
+                    RegistryTestContext.withClaims(
+                            restrictionClaims(OWNER, UUID.randomUUID(), "pauseTenant", false),
+                            restrictions().pause(pause))
+                        .block(WAIT))
+            .getStatus());
+    assertEquals(
+        DomainStatus.UNAUTHENTICATED,
+        assertThrows(
+                DomainException.class,
+                () ->
+                    RegistryTestContext.withClaims(
+                            restrictionClaims(OWNER, tenant, "pauseTenant", false).toBuilder()
+                                .setMembershipGeneration("99")
+                                .build(),
+                            restrictions().pause(pause))
+                        .block(WAIT))
+            .getStatus());
+    operator
+        .sql(
+            "ALTER TABLE taska.idempotency_records ADD CONSTRAINT injected_restriction_receipt"
+                + " CHECK(key<>'"
+                + key
+                + "')")
+        .then()
+        .block(WAIT);
+    try {
+      assertThrows(Exception.class, () -> pause(tenant, 1, key).block(WAIT));
+    } finally {
+      operator
+          .sql("ALTER TABLE taska.idempotency_records DROP CONSTRAINT injected_restriction_receipt")
+          .then()
+          .block(WAIT);
+    }
+    assertEquals("1", get(OWNER, tenant).block(WAIT).getVersion());
+    assertEquals(
+        0L,
+        operator
+            .sql("SELECT count(*) n FROM taska.tenant_restrictions")
+            .map((r, m) -> r.get("n", Long.class))
+            .one()
+            .block(WAIT));
+    assertEquals(
+        0L,
+        operator
+            .sql("SELECT count(*) n FROM taska.tenant_restriction_audit")
+            .map((r, m) -> r.get("n", Long.class))
+            .one()
+            .block(WAIT));
+    var paused = pause(tenant, 1, key).block(WAIT);
+    operator
+        .sql(
+            "INSERT INTO"
+                + " taska.tenant_restrictions(tenant_id,kind,source_id,active,version,reason_code,created_at)"
+                + " VALUES(:t,'NONPAYMENT',:id,true,1,'NONPAYMENT',:now)")
+        .bind("t", tenant)
+        .bind("id", UUID.randomUUID())
+        .bind("now", NOW.atOffset(ZoneOffset.UTC))
+        .then()
+        .block(WAIT);
+    var resumed =
+        resume(tenant, Long.parseLong(paused.getVersion()), UUID.randomUUID().toString())
+            .block(WAIT);
+    assertEquals(
+        List.of(RestrictionCode.RESTRICTION_CODE_PAYMENT_EXPIRED), resumed.getRestrictionsList());
+    assertEquals(
+        resumed,
+        resume(tenant, Long.parseLong(resumed.getVersion()), UUID.randomUUID().toString())
+            .block(WAIT));
+    assertEquals(
+        0L,
+        raw.sql("SELECT count(*) n FROM taska.tenant_restrictions")
+            .map((r, m) -> r.get("n", Long.class))
+            .one()
+            .block(WAIT));
   }
 }

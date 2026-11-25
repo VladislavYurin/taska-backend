@@ -1,8 +1,8 @@
 # Учёт storage (TAS-347)
 
 `StorageQuotaStore` владеет byte reservations/effects в tenant DB. `StorageQuotaOwner`
-в issue DB владеет attachment manifest и долговечным resource receipt. Это внутренний
-протокол; публичный upload/confirm добавляет TAS-365, пользовательское удаление — TAS-367.
+в issue DB владеет attachment manifest и долговечным resource receipt. Публичный upload/confirm
+подключён в [TAS-365](../issue-service/ATTACHMENT-UPLOADS.md), пользовательское удаление — TAS-367.
 Глобальные аватары и исключённый company logo в этот протокол не входят (D166/D120).
 
 1. Root резервирует положительное int64 количество под company lock. Свежая policy
@@ -62,8 +62,8 @@ pause/dispute/security/неоплату. Policy запрещает DIRECT_DELETE
 
 Tenant configuration подключает signed storage owner client при наличии stub/security;
 issue profile `tenant-storage` открывает только перечисленные verified internal RPC.
-Производственные policy providers намеренно требуют подключения актуальных источников
-доступа в задачах API/lifecycle; отсутствие источника не разрешает операцию. S3 adapter
+Производственные policy providers upload API используют актуальные primary источники
+доступа и каталог; отсутствие источника не разрешает операцию. S3 adapter
 читает настройку versioning, но не включает её в общем bucket автоматически.
 
 GetTenantQuotas выдаёт SEAT/TASK_LIFETIME/PROJECT/STORAGE_BYTES и отслеживает версии всех

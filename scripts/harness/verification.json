@@ -281,6 +281,8 @@
           "AuthSessionBoundaryTest",
           "TenantPersonalTokenStoreIntegrationTest",
           "TenantPersonalTokenBoundaryTest",
+          "TenantOAuthGrantStoreIntegrationTest",
+          "TenantOAuthGrantBoundaryTest",
           "GatewayCredentialResolverIntegrationTest",
           "AuthRpcTrustIntegrationTest",
           "RpcTrustControlBoundaryTest"
@@ -358,7 +360,8 @@
           "*",
           "TenantWorkflowStorageIntegrationTest",
           "WorkflowSortOrderMigrationTest",
-          "LegacyWorkflowScopeIntegrationTest"
+          "LegacyWorkflowScopeIntegrationTest",
+          "TenantWorkflowApiIntegrationTest"
         ],
         "noTestsReason": null
       },
@@ -395,7 +398,8 @@
         "selectors": [
           "*",
           "TenantIssueStorageIntegrationTest",
-          "TrustedIssueOutboxIntegrationTest"
+          "TrustedIssueOutboxIntegrationTest",
+          "TenantIssueMetadataIntegrationTest"
         ],
         "noTestsReason": null
       },
@@ -568,7 +572,8 @@
       "reports": {
         "directory": "oauth-server/target/surefire-reports",
         "selectors": [
-          "*"
+          "*",
+          "TenantOAuthGrantProtocolIntegrationTest"
         ],
         "noTestsReason": null
       },
@@ -614,7 +619,10 @@
           "TenantProvisioningIntegrationTest",
           "TenantProvisioningRpcIntegrationTest",
           "SeatQuotaIntegrationTest",
-          "ProjectQuotaIntegrationTest"
+          "ProjectQuotaIntegrationTest",
+          "AttachmentUploadIntegrationTest",
+          "StorageQuotaIntegrationTest",
+          "AttachmentLifecycleIntegrationTest"
         ],
         "noTestsReason": null
       },
@@ -1123,7 +1131,10 @@
           "ProviderInboxWorkerValidationTest",
           "PaymentReconciliationIntegrationTest",
           "PaymentReconciliationConfigurationTest",
-          "PaymentReconciliationRpcIntegrationTest"
+          "PaymentReconciliationRpcIntegrationTest",
+          "AutopayIntegrationTest",
+          "AutopayRpcIntegrationTest",
+          "AutopayConfigurationTest"
         ],
         "noTestsReason": null
       },
@@ -1200,6 +1211,19 @@
         "docs"
       ],
       "reason": "Harness/CI/review changes require self-tests and documentation checks."
+    },
+    {
+      "prefixes": [
+        "openspec/",
+        ".openspec-version",
+        ".agents/skills/openspec-",
+        ".agents/skills/.openspec-target"
+      ],
+      "groups": [
+        "harness",
+        "docs"
+      ],
+      "reason": "OpenSpec workflow metadata and vendored skills require harness and documentation checks."
     }
   ]
 }

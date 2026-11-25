@@ -131,7 +131,7 @@ public final class BillingCatalog {
             v -> {
               var c = RpcContextBridge.details(v).getContext();
               if (c.getCredentialKind() != CredentialKind.CREDENTIAL_KIND_SERVICE
-                  || !Set.of("tenant-service", "api-gateway").contains(c.getIssuerService())
+                  || !Set.of("tenant-service", "api-gateway", "project-service").contains(c.getIssuerService())
                   || !v.scopes().contains("catalog:resolve"))
                 return Mono.error(fail(DomainStatus.PERMISSION_DENIED, "SCOPE_DENIED"));
               UUID id;
@@ -163,7 +163,7 @@ public final class BillingCatalog {
               var c = RpcContextBridge.details(v).getContext();
               if (c.getCredentialKind() != CredentialKind.CREDENTIAL_KIND_SERVICE
                   || v.tenantId() != null
-                  || !Set.of("tenant-service", "api-gateway").contains(c.getIssuerService())
+                  || !Set.of("tenant-service", "api-gateway", "project-service", "workflow-service", "issue-service", "auth-service").contains(c.getIssuerService())
                   || !c.hasServicePurpose()
                   || !"billing".equals(c.getServicePurpose())
                   || !v.scopes().contains("catalog:read"))
@@ -502,6 +502,7 @@ public final class BillingCatalog {
             .setId(row.get("id").toString())
             .setCode(row.get("plan_code").toString())
             .setVersion(row.get("version").toString())
+            .setMaxAttachmentBytes(row.get("max_attachment_bytes").toString())
             .setName(row.get("name").toString())
             .setKind(PlanVersion.KindValue.valueOf("KIND_" + row.get("kind")))
             .setPrice(

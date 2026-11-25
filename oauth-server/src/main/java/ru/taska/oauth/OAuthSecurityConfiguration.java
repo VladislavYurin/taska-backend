@@ -89,8 +89,31 @@ public class OAuthSecurityConfiguration {
   }
 
   @Bean
-  OAuth2AuthorizationConsentService consentService(JdbcTemplate jdbc, OAuthClients clients) {
-    return new JdbcOAuth2AuthorizationConsentService(jdbc, clients);
+  OAuth2AuthorizationConsentService consentService(
+      JdbcTemplate jdbc, OAuthClients clients, TenantOAuthGrants tenants) {
+    var saved = new JdbcOAuth2AuthorizationConsentService(jdbc, clients);
+    if (!tenants.enabled()) return saved;
+    // TAS-498: consent is never remembered per client. Each approval is its own tenant grant, so
+    // consent for company A can neither be reused for nor overwritten by company B.
+    return new OAuth2AuthorizationConsentService() {
+      @Override
+      public void save(
+          org.springframework.security.oauth2.server.authorization.OAuth2AuthorizationConsent
+              consent) {}
+
+      @Override
+      public void remove(
+          org.springframework.security.oauth2.server.authorization.OAuth2AuthorizationConsent
+              consent) {
+        saved.remove(consent);
+      }
+
+      @Override
+      public org.springframework.security.oauth2.server.authorization.OAuth2AuthorizationConsent
+          findById(String client, String principal) {
+        return null;
+      }
+    };
   }
 
   @Bean
@@ -141,7 +164,8 @@ public class OAuthSecurityConfiguration {
       HttpSessionCsrfTokenRepository csrf,
       JdbcTemplate jdbc,
       TransactionTemplate transactions,
-      RequestCache cache)
+      RequestCache cache,
+      TenantOAuthGrants tenants)
       throws Exception {
     var configurer = new OAuth2AuthorizationServerConfigurer();
     http.cors(Customizer.withDefaults())
@@ -202,7 +226,7 @@ public class OAuthSecurityConfiguration {
                             endpoint
                                 .consentPage(policy.issuer() + "/consent")
                                 .authenticationProviders(
-                                    providers ->
+                                    providers -> {
                                         providers.forEach(
                                             provider -> {
                                               if (provider
@@ -269,7 +293,15 @@ public class OAuthSecurityConfiguration {
                                                     context.getAuthorizationConsent().authorities(Set::clear);
                                                 });
                                               }
-                                            }))
+                                            });
+                                        if (tenants.enabled())
+                                          providers.replaceAll(
+                                              provider ->
+                                                  provider instanceof OAuth2AuthorizationConsentAuthenticationProvider
+                                                      ? new TenantGrantConsentProvider(
+                                                          provider, grants, clients, identity)
+                                                      : provider);
+                                    })
                                 .authorizationResponseHandler(
                                     (request, response, authentication) -> {
                                       var code =
@@ -328,14 +360,14 @@ public class OAuthSecurityConfiguration {
                                     if (providers.get(i)
                                         instanceof OAuth2AuthorizationCodeAuthenticationProvider)
                                       providers.set(i, new SingleUseCodeProvider(
-                                          providers.get(i), jdbc, transactions, grants));
+                                          providers.get(i), jdbc, transactions, grants, tenants));
                                   for (int i = 0; i < providers.size(); i++)
                                     if (providers.get(i)
                                         instanceof OAuth2RefreshTokenAuthenticationProvider)
                                       providers.set(
                                           i,
                                           new RotatingRefreshProvider(
-                                              providers.get(i), jdbc, transactions, grants));
+                                              providers.get(i), jdbc, transactions, grants, tenants));
                                 }))
                     .tokenRevocationEndpoint(
                         endpoint ->

@@ -77,16 +77,23 @@ public final class GrpcProjectQuotaOwner implements Owner {
   }
 
   public Mono<Inventory> inventory(UUID tenant) {
+    return inventory(tenant, null);
+  }
+
+  public Mono<Inventory> inventory(UUID tenant, Reservation accepted) {
     return client
         .call(
             tenant,
             ProjectQuotaOwnerServiceGrpc.getInventoryMethod().getFullMethodName(),
             "projectQuotaInventory",
-            c ->
-                ProjectQuotaOwnerInventoryRequest.newBuilder()
-                    .setContext(c)
-                    .setTenantId(tenant.toString())
-                    .build(),
+            c -> {
+              var q =
+                  ProjectQuotaOwnerInventoryRequest.newBuilder()
+                      .setContext(c)
+                      .setTenantId(tenant.toString());
+              if (accepted != null) q.setAcceptedReservation(ProjectQuotaWire.encode(accepted));
+              return q.build();
+            },
             (q, auth) ->
                 stub.withDeadlineAfter(5, TimeUnit.SECONDS)
                     .withInterceptors(auth)

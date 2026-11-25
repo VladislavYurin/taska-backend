@@ -286,7 +286,7 @@ public class ProjectServiceImpl implements ProjectService {
                                     log.warn("[{}][{}] Workflow unavailable for project {} and issue type {}: status={}",
                                             requestId, nodeId, projectId, issueType,
                                             Status.fromThrowable(error).getCode());
-                                    return Mono.empty();
+                                    return Mono.error(error);
                                 })
                 )
                 .collectList();

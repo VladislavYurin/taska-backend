@@ -10,6 +10,7 @@ message Capability {
   bool allowed = 2;
   repeated ErrorCode denial_codes = 3;
   repeated RestrictionCode restrictions = 4;
+  repeated string disabled_flags = 5;
 }
 message Capabilities {
   string tenant_id = 1;

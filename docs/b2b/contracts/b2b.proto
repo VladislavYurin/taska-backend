@@ -97,6 +97,7 @@ message Problem {
   string request_id = 5;
   repeated RestrictionCode reasons = 6;
   repeated FieldViolation violations = 7;
+  map<string, string> details = 8;
 }
 
 message ConfirmedAction {
@@ -160,6 +161,8 @@ message Tenant {
   repeated RestrictionCode restrictions = 5;
   string created_at = 6;
   optional string creation_deadline = 7;
+  // Positive int64 as a decimal string. Advances on changes to name, owner,
+  // restrictions or lifecycle. GetTenant returns this version for mutations.
   string version = 8;
   string owner_version = 9;
   optional string plan_version_id = 10;
@@ -169,6 +172,15 @@ message Tenant {
   enum CreationClosureReason { CREATION_CLOSURE_REASON_UNSPECIFIED = 0; CREATION_CLOSURE_REASON_AUTO_EXPIRED = 1; CREATION_CLOSURE_REASON_OWNER_CANCELLED = 2; }
   optional CreationClosureReason creation_closure_reason = 13;
   optional string creation_closed_at = 14;
+  CallerMembership membership = 15;
+}
+
+// TAS-338: the caller's own membership in Tenant; never another member's.
+message CallerMembership {
+  Membership.RoleValue role = 1;
+  Membership.StateValue state = 2;
+  bool is_owner = 3;
+  string version = 4;
 }
 
 message TenantPage {
@@ -176,6 +188,7 @@ message TenantPage {
   optional string next_cursor = 2;
 }
 
+// Uses the TenantName validation shared with RenameTenantRequest.
 message CreateTenantRequest {
   string name = 1;
   string plan_version_id = 2;
@@ -187,6 +200,8 @@ message CreateTenantResponse {
 }
 
 message RenameTenantRequest {
+  // Required, 1 to 120 Unicode code points. Leading or trailing whitespace and
+  // ISO control characters are invalid. Report VALIDATION_FAILED on field name.
   string name = 1;
 }
 
@@ -469,6 +484,8 @@ message PersonalToken {
   string created_at = 5;
   string expires_at = 6;
   bool revoked = 7;
+  string token_prefix = 8;
+  optional string last_used_at = 9;
 }
 
 message PersonalTokenCreated {
@@ -549,6 +566,7 @@ message PlanVersion {
   StateValue state = 9;
   optional string published_at = 10;
   KindValue kind = 11;
+  optional string max_attachment_bytes = 12;
 }
 
 message PlanVersionPage {
@@ -925,6 +943,7 @@ message Capability {
   bool allowed = 2;
   repeated ErrorCode denial_codes = 3;
   repeated RestrictionCode restrictions = 4;
+  repeated string disabled_flags = 5;
 }
 
 message Capabilities {
@@ -1038,6 +1057,9 @@ message RenameTenantRpcRequest {
   RequestContext context = 1;
   string tenant_id = 2;
   RenameTenantRequest payload = 3;
+  // Requires an idempotency key and expected_version from GetTenant's Tenant.version.
+  // Missing version: FAILED_PRECONDITION. Stale version: ABORTED.
+  // Both return VERSION_CONFLICT in B2bErrorDetail.
   MutationOptions mutation = 4;
 }
 
@@ -1554,6 +1576,8 @@ service TenantService {
   rpc CreateTenant(CreateTenantRpcRequest) returns (CreateTenantResponse);
   rpc ListTenants(ListTenantsRpcRequest) returns (TenantPage);
   rpc GetTenant(GetTenantRpcRequest) returns (Tenant);
+  // Current owner or trusted GLOBAL_ADMIN only. With the current version,
+  // the same name returns the current Tenant without advancing its version.
   rpc RenameTenant(RenameTenantRpcRequest) returns (Tenant);
   rpc CancelTenantCreation(CancelTenantCreationRpcRequest) returns (Tenant);
   rpc PauseTenant(PauseTenantRpcRequest) returns (Tenant);

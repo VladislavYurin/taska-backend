@@ -363,7 +363,15 @@ public final class CapabilityEvaluator {
     }
     checkFlags(action, rule, c, f, errors);
     if (!reasons.isEmpty()) errors.add(ERROR_CODE_READ_ONLY);
-    return result(action, errors, reasons, false);
+    var decision = result(action, errors, reasons, false);
+    if (action == Action.PAT_CREATE && errors.contains(ERROR_CODE_CAPABILITY_DISABLED)) {
+      var capability = decision.capability().toBuilder();
+      if (Boolean.FALSE.equals(f.flags().get(Flag.PERSONAL_API_TOKENS))) capability.addDisabledFlags("PERSONAL_API_TOKENS");
+      if (f.planKind() == PlanKind.FREE && Boolean.FALSE.equals(f.flags().get(Flag.FREE_PERSONAL_API_TOKENS)))
+        capability.addDisabledFlags("FREE_PERSONAL_API_TOKENS");
+      return new Decision(capability.build(), decision.auditRequired(), decision.businessBypass(), decision.bypassedRestrictions());
+    }
+    return decision;
   }
 
   private static String role(Rule rule, CapabilityFacts f) {

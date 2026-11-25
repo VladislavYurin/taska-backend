@@ -24,7 +24,12 @@ public class GatewayWebExceptionHandler implements WebExceptionHandler {
 
     @Override
     public Mono<Void> handle(ServerWebExchange exchange, Throwable ex) {
+        if (exchange.getResponse().isCommitted()) return Mono.error(ex);
         String requestId = requestIdProvider.resolve(exchange);
+        if (GatewayValidationExceptionHandler.isTenantRegistryRoute(exchange)
+                || GatewayValidationExceptionHandler.isTenantTokenRoute(exchange)) {
+            exchange.getResponse().getHeaders().setCacheControl("private, no-store");
+        }
         return errorHandler.handleError(exchange, ex, requestId);
     }
 }

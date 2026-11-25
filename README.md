@@ -232,7 +232,7 @@ pgAdmin требует входа по `PGADMIN_DEFAULT_EMAIL` / `PGADMIN_DEFAUL
 
 [Tenant storage project-service — TAS-329](project-service/TENANT-STORAGE.md) доступен отдельным профилем на чистой БД с RLS и проверенным tenant context. Tenant API/ACL и включение на стенде требуют TAS-340 и согласованной активации; текущий профиль API не переносит глобальные проекты в компанию.
 
-[Tenant storage workflow-service — TAS-330](workflow-service/TENANT-STORAGE.md) отделяет опубликованный read-only шаблон от копий компаний и рабочих графов проектов. Provisioning и повторное создание графа идемпотентны; tenant RPC/ACL и capability-настройка подключаются в TAS-342.
+[Tenant storage workflow-service — TAS-330](workflow-service/TENANT-STORAGE.md) отделяет опубликованный read-only шаблон от копий компаний и рабочих графов проектов. Provisioning и повторное создание графа идемпотентны; native RPC/ACL и capability-настройки описаны в [TAS-342](workflow-service/TENANT-API.md); перенос статусов задач требует native-владельца в issue-service.
 
 [Tenant storage issue-service — TAS-332](issue-service/TENANT-STORAGE.md) изолирует keys/counters/idempotency и атомарную базовую запись issue/history/outbox. Tenant business CRUD и lifetime admission подключаются в TAS-343/TAS-460.
 

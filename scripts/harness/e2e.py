@@ -28,6 +28,12 @@ MODULES = ('auth-service', 'project-service', 'workflow-service', 'issue-service
 LABEL = 'dev.taska.harness.owner'
 RUN_PATTERN = r'[0-9a-f]{16}'
 ASSERTIONS = 0
+# This runner's local Compose fixture has no trusted tenant transport. Native
+# project writes have a separate owned runner; never synthesize a tenant here.
+LOCAL_SCENARIO_BLOCKERS = {
+    'E2E-08': 'Legacy Compose fixture lacks verified tenant context required by project outbox v2 '
+              '(TAS-545). Use python3 scripts/harness/project_outbox_e2e.py for native project/outbox acceptance.'
+}
 
 
 class Invalid(ValueError):
@@ -244,7 +250,10 @@ class NoRedirect(HTTPRedirectHandler):
 
 
 class Http:
-    def __init__(self, origin, token=None):
+    def __init__(self, origin, token=None, timeout=10):
+        if not 0 < timeout <= 120:
+            raise Invalid("HTTP timeout must be between 0 and 120 seconds")
+        self.timeout = timeout
         self.origin, self.token = origin, token
         self.operations = set()
         self.request_ids = []
@@ -262,7 +271,7 @@ class Http:
         req = Request(self.origin + path, data=None if body is None else canonical(body), headers=hdr, method=method)
         try:
             try:
-                response = self.opener.open(req, timeout=10)
+                response = self.opener.open(req, timeout=self.timeout)
             except HTTPError as exc:
                 response = exc
             with response:
@@ -279,7 +288,7 @@ class Http:
         return response
 
 
-def run_command(argv, cwd, timeout=600, input_text=None):
+def run_command(argv, cwd, timeout=600, input_text=None, diagnostic_path=None):
     # A process group bounds Maven/Docker descendants, including interrupted runs.
     try:
         child = subprocess.Popen(argv, cwd=cwd, stdin=subprocess.PIPE if input_text is not None else subprocess.DEVNULL,
@@ -287,7 +296,7 @@ def run_command(argv, cwd, timeout=600, input_text=None):
     except FileNotFoundError as exc:
         raise Blocked('Required executable unavailable') from exc
     try:
-        output, _ = child.communicate(input_text, timeout=timeout)
+        output, error_output = child.communicate(input_text, timeout=timeout)
     except (subprocess.TimeoutExpired, KeyboardInterrupt) as interrupted:
         termination_error = False
         try:
@@ -307,6 +316,8 @@ def run_command(argv, cwd, timeout=600, input_text=None):
             raise
         raise Failure('Local command timed out') from None
     if child.returncode:
+        if diagnostic_path is not None:
+            private_json(Path(diagnostic_path), {'stdout': output, 'stderr': error_output})
         raise Failure('Local command failed (%s)' % child.returncode)
     return output
 
@@ -801,9 +812,14 @@ def _handle(args, root):
     old_handler = signal.getsignal(signal.SIGTERM)
     signal.signal(signal.SIGTERM, lambda *_: (_ for _ in ()).throw(KeyboardInterrupt()))
     try:
-        runnable = [i for i in ids if i in ('E2E-01', 'E2E-08')]
+        runnable = []
         for i in ids:
-            if i not in runnable:
+            if args.tier == 'local' and i in LOCAL_SCENARIO_BLOCKERS:
+                report['results'].append({'scenarioId': i, 'checkId': i + '.backend', 'status': 'BLOCKED',
+                    'reason': LOCAL_SCENARIO_BLOCKERS[i], 'testCount': 0, 'assertionScope': []})
+            elif i in ('E2E-01', 'E2E-08'):
+                runnable.append(i)
+            else:
                 report['results'].append({'scenarioId': i, 'checkId': i + '.manual', 'status': 'BLOCKED',
                     'reason': 'Manual scenario; required actors/capabilities not automated. See e2e.md',
                     'testCount': 0, 'assertionScope': []})

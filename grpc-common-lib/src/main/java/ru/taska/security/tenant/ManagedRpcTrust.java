@@ -1,20 +1,40 @@
 package ru.taska.security.tenant;
 
 import io.grpc.Status;
-import java.nio.file.*;
-import java.security.*;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.security.GeneralSecurityException;
+import java.security.KeyFactory;
+import java.security.MessageDigest;
+import java.security.PublicKey;
+import java.security.Signature;
 import java.security.cert.X509Certificate;
-import java.security.spec.*;
-import java.time.*;
-import java.util.*;
+import java.security.spec.PKCS8EncodedKeySpec;
+import java.security.spec.X509EncodedKeySpec;
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.Arrays;
+import java.util.Base64;
+import java.util.Date;
+import java.util.HashSet;
+import java.util.HexFormat;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
-import ru.taska.api.b2b.v1.*;
+import ru.taska.api.b2b.v1.CredentialKind;
+import ru.taska.api.b2b.v1.RequestContext;
 import tools.jackson.core.StreamReadFeature;
 import tools.jackson.databind.json.JsonMapper;
 
 /** Read-only, atomically replaced operator snapshot. No last-known-good fallback after expiry. */
 public final class ManagedRpcTrust implements RpcContextSecurity.Keys {
-  public record Service(String generation, Set<String> certificates) {}
+  public record Service(String generation, Set<String> certificates) {
+    public Service {
+      certificates = Set.copyOf(certificates);
+    }
+  }
 
   public record Key(
       String issuer,
@@ -34,7 +54,14 @@ public final class ManagedRpcTrust implements RpcContextSecurity.Keys {
       String purpose,
       Set<String> serviceIdentities,
       String tenantMode,
-      Set<String> tenants) {}
+      Set<String> tenants) {
+    public Edge {
+      kinds = Set.copyOf(kinds);
+      scopes = Set.copyOf(scopes);
+      serviceIdentities = Set.copyOf(serviceIdentities);
+      tenants = Set.copyOf(tenants);
+    }
+  }
 
   public record Snapshot(
       int version,
@@ -44,7 +71,13 @@ public final class ManagedRpcTrust implements RpcContextSecurity.Keys {
       Instant validUntil,
       Map<String, Service> services,
       List<Key> keys,
-      List<Edge> edges) {}
+      List<Edge> edges) {
+    public Snapshot {
+      services = Map.copyOf(services);
+      keys = List.copyOf(keys);
+      edges = List.copyOf(edges);
+    }
+  }
 
   public record SigningMaterial(String kid, String privateKey) {
     @Override
@@ -56,12 +89,20 @@ public final class ManagedRpcTrust implements RpcContextSecurity.Keys {
   private static final JsonMapper JSON =
       JsonMapper.builder().enable(StreamReadFeature.STRICT_DUPLICATE_DETECTION).build();
   private static final Set<String> PURPOSES =
-      Set.of("provisioning", "outbox", "billing", "admin", "membership");
+      Set.of(
+          "provisioning",
+          "outbox",
+          "billing",
+          "admin",
+          "membership",
+          "NOTIFICATION_DELIVERY",
+          "STORAGE_CLEANUP");
   private final Path snapshotFile, privateKeyFile;
   private final String service, environment;
   private final Clock clock;
   private final AtomicLong generation = new AtomicLong(-1);
   private byte[] generationDigest;
+  private Snapshot validatedSnapshot;
 
   public ManagedRpcTrust(
       Path snapshotFile, Path privateKeyFile, String service, String environment, Clock clock) {
@@ -79,9 +120,13 @@ public final class ManagedRpcTrust implements RpcContextSecurity.Keys {
       if (Files.size(snapshotFile) > 1_048_576) throw new IllegalArgumentException();
       byte[] bytes = Files.readAllBytes(snapshotFile);
       if (bytes.length > 1_048_576) throw new IllegalArgumentException();
-      var s = JSON.readValue(bytes, Snapshot.class);
-      var now = clock.instant();
       byte[] digest = MessageDigest.getInstance("SHA-256").digest(bytes);
+      // Файл читается заново даже при reuse: missing/corrupt/replaced bytes не дают fallback.
+      if (validatedSnapshot != null && Arrays.equals(digest, generationDigest)) {
+        validateTime(validatedSnapshot, clock.instant());
+        return validatedSnapshot;
+      }
+      var s = JSON.readValue(bytes, Snapshot.class);
       if (s.generation() < generation.get())
         throw Status.UNAVAILABLE
             .withDescription("RPC trust snapshot rollback")
@@ -90,12 +135,9 @@ public final class ManagedRpcTrust implements RpcContextSecurity.Keys {
         throw Status.UNAVAILABLE
             .withDescription("RPC trust snapshot generation reused")
             .asRuntimeException();
+      validateTime(s, clock.instant());
       if (s.version() != 1
           || !environment.equals(s.environment())
-          || s.issuedAt().isAfter(now.plusSeconds(5))
-          || !now.isBefore(s.validUntil())
-          || !s.validUntil().isAfter(s.issuedAt())
-          || Duration.between(s.issuedAt(), s.validUntil()).compareTo(Duration.ofMinutes(2)) > 0
           || !s.services().containsKey(service)
           || s.keys() == null
           || s.edges() == null) throw new IllegalArgumentException();
@@ -127,8 +169,10 @@ public final class ManagedRpcTrust implements RpcContextSecurity.Keys {
                     || !s.services().keySet().containsAll(e.serviceIdentities()))
                 : (!"USER".equals(e.purpose()) || !e.serviceIdentities().isEmpty())))
           throw new IllegalArgumentException();
+      validateTime(s, clock.instant());
       generation.set(s.generation());
       generationDigest = digest;
+      validatedSnapshot = s;
       return s;
     } catch (Exception e) {
       if (e instanceof io.grpc.StatusRuntimeException status) throw status;
@@ -138,6 +182,14 @@ public final class ManagedRpcTrust implements RpcContextSecurity.Keys {
               : e instanceof java.io.IOException ? "unreadable" : "invalid or expired";
       throw Status.UNAVAILABLE.withDescription("RPC trust snapshot " + reason).asRuntimeException();
     }
+  }
+
+  private static void validateTime(Snapshot s, Instant now) {
+    if (s.issuedAt().isAfter(now.plusSeconds(5))
+        || !now.isBefore(s.validUntil())
+        || !s.validUntil().isAfter(s.issuedAt())
+        || Duration.between(s.issuedAt(), s.validUntil()).compareTo(Duration.ofMinutes(2)) > 0)
+      throw new IllegalArgumentException();
   }
 
   private Key key(Snapshot s, String issuer, String kid) {

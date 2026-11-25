@@ -58,6 +58,7 @@ public class ProjectMapper {
      */
     public ProjectResponseDto toRestProjectResponse (ProjectResponse protoDto){
         var restDto = new ProjectResponseDto();
+        if (protoDto.hasVersion()) restDto.setVersion(Integer.toString(protoDto.getVersion()));
         restDto.setId(protoDto.getId());
         restDto.setProjectKey(protoDto.getProjectKey());
         restDto.setName(protoDto.getName());

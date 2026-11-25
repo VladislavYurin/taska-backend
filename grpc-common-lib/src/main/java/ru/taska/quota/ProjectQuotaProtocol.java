@@ -105,6 +105,11 @@ public final class ProjectQuotaProtocol {
 
     Mono<Inventory> inventory(UUID tenant);
 
+    /** Aggregate quota reconciliation tied to an existing accepted mutation. */
+    default Mono<Inventory> inventory(UUID tenant, Reservation accepted) {
+      return inventory(tenant);
+    }
+
     /** Called only after authority transaction commits; verify primary COMMITTED before opening. */
     Mono<Receipt> open(Reservation reservation);
   }

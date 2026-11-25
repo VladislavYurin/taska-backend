@@ -36,7 +36,7 @@ public class GrpcProjectServiceClient {
     public Mono<java.util.List<ru.taska.api.project.v1.ProjectIssueTypeResponse>> getIssueTypesInternal(UUID projectId) {
         return ru.taska.security.tenant.RpcContextBridge.outbound(() -> projectServiceStub.withDeadlineAfter(5, java.util.concurrent.TimeUnit.SECONDS)
                 .getProjectInfoBatchInternal(ru.taska.api.project.v1.GetProjectInfoBatchInternalRequest.newBuilder()
-                        .setHeader(Header.newBuilder().setRequestId(UUID.randomUUID().toString()).setNodeId("workflow-service"))
+                        .setHeader(ru.taska.security.tenant.RpcContextBridge.outboundHeader("workflow-service"))
                         .setBody(ru.taska.api.project.v1.GetProjectInfoBatchInternalRequestBody.newBuilder()
                                 .addProjectIds(projectId.toString())).build()))
                 .map(response -> response.getProjectsMap().getOrDefault(projectId.toString(),

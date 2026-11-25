@@ -21,6 +21,7 @@ message PersonalAccessTokenMetadata {
   google.protobuf.Timestamp created_at = 5;
   google.protobuf.Timestamp expires_at = 6;
   google.protobuf.Timestamp last_used_at = 7;
+  optional string tenant_id = 8;
 }
 message CreatePersonalAccessTokenRequest {
   // TAS-316: untrusted until verified by the message-bound mTLS/JWS interceptor.

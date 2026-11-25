@@ -2,6 +2,7 @@ syntax = "proto3";
 package ru.taska.b2b.v1;
 import "v1/tenant-context.proto";
 import "v1/tenant-registry.proto";
+import "google/protobuf/empty.proto";
 option java_multiple_files = true;
 option java_package = "ru.taska.api.b2b.v1";
 message QuotaReservation {
@@ -21,7 +22,7 @@ message ReserveQuotaRpcRequest {RequestContext context=1;ReserveQuotaRequest pay
 message FinalizeQuotaRpcRequest {RequestContext context=1;string reservation_id=2;FinalizeQuotaRequest payload=3;MutationOptions mutation=4;string fence=5;QuotaReservation.KindValue kind=6;}
 message GetQuotaReservationRequest {RequestContext context=1;string operation_id=2;QuotaReservation.KindValue kind=3;}
 message ProjectQuotaOwnerRequest {RequestContext context=1;QuotaReservation reservation=2;}
-message ProjectQuotaOwnerInventoryRequest {RequestContext context=1;string tenant_id=2;}
+message ProjectQuotaOwnerInventoryRequest {RequestContext context=1;string tenant_id=2; QuotaReservation accepted_reservation=3;}
 message ProjectQuotaOwnerReceipt {
  enum StateValue {STATE_UNSPECIFIED=0;STATE_PROVISIONING=1;STATE_OPEN=2;STATE_CANCELLED=3;STATE_DELETED=4;}
  QuotaReservation reservation=1;StateValue state=2;
@@ -32,6 +33,8 @@ service QuotaAuthorityService {
  rpc CommitQuota(FinalizeQuotaRpcRequest) returns(QuotaReservation);
  rpc ReleaseQuota(FinalizeQuotaRpcRequest) returns(QuotaReservation);
  rpc GetQuotaReservation(GetQuotaReservationRequest) returns(QuotaReservation);
+ // Only primary DELETED receipt releases committed bytes; never client-supplied amounts.
+ rpc ReleaseStorageUsage(FinalizeQuotaRpcRequest) returns(google.protobuf.Empty);
 }
 service ProjectQuotaOwnerService {
  rpc Inspect(ProjectQuotaOwnerRequest) returns(ProjectQuotaOwnerReceipt);

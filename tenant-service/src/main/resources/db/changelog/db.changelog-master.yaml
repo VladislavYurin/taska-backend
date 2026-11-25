@@ -424,6 +424,143 @@
           }
         ]
       }
+    },
+    {
+      "changeSet": {
+        "id": "tenant-rename-0014",
+        "author": "taska",
+        "changes": [
+          {
+            "sqlFile": {
+              "path": "0014-tenant-rename.sql",
+              "relativeToChangelogFile": true,
+              "splitStatements": false
+            }
+          },
+          {
+            "sql": {
+              "sql": "SET LOCAL ROLE taska_tenant_migrator; SELECT set_config('taska.guard_service','tenant',true),set_config('taska.guard_schema','taska',true),set_config('taska.guard_table','tenant_rename_audit',true),set_config('taska.guard_column','tenant_id',true),set_config('taska.guard_app_access','append_only',true);"
+            }
+          },
+          {
+            "sqlFile": {
+              "path": "db/tenant/protect-table.sql",
+              "splitStatements": false
+            }
+          }
+        ]
+      }
+    },
+    {
+      "changeSet": {
+        "id": "tenant-list-0015",
+        "author": "taska",
+        "changes": [
+          {
+            "sqlFile": {
+              "path": "0015-tenant-list.sql",
+              "relativeToChangelogFile": true,
+              "splitStatements": false
+            }
+          }
+        ]
+      }
+    },
+    {
+      "changeSet": {
+        "id": "tenant-list-membership-0016",
+        "author": "taska",
+        "changes": [
+          {
+            "sqlFile": {
+              "path": "0016-tenant-list-membership.sql",
+              "relativeToChangelogFile": true,
+              "splitStatements": false
+            }
+          }
+        ]
+      }
+    },
+    {
+      "changeSet": {
+        "id": "tenant-membership-lifecycle-0014",
+        "author": "taska",
+        "changes": [
+          {
+            "sqlFile": {
+              "path": "0014-membership-lifecycle.sql",
+              "relativeToChangelogFile": true,
+              "splitStatements": false
+            }
+          }
+        ]
+      }
+    },
+    {
+      "changeSet": {
+        "id": "tenant-restrictions-0017",
+        "author": "taska",
+        "changes": [
+          {
+            "sqlFile": {
+              "path": "0017-tenant-restrictions.sql",
+              "relativeToChangelogFile": true,
+              "splitStatements": false
+            }
+          },
+          {
+            "sql": {
+              "sql": "SELECT set_config('taska.guard_service','tenant',true),set_config('taska.guard_schema','taska',true),set_config('taska.guard_table','tenant_restrictions',true),set_config('taska.guard_column','tenant_id',true),set_config('taska.guard_app_access','read_write',true);"
+            }
+          },
+          {
+            "sqlFile": {
+              "path": "db/tenant/protect-table.sql",
+              "splitStatements": false
+            }
+          },
+          {
+            "sql": {
+              "sql": "SELECT set_config('taska.audit_service','tenant',true),set_config('taska.audit_schema','taska',true),set_config('taska.audit_table','tenant_restrictions',true),set_config('taska.audit_column','tenant_id',true),set_config('taska.audit_app_access','read_write',true);"
+            }
+          },
+          {
+            "sqlFile": {
+              "path": "db/tenant/audit.sql",
+              "splitStatements": false
+            }
+          },
+          {
+            "sql": {
+              "sql": "SELECT set_config('taska.guard_service','tenant',true),set_config('taska.guard_schema','taska',true),set_config('taska.guard_table','tenant_restriction_audit',true),set_config('taska.guard_column','tenant_id',true),set_config('taska.guard_app_access','append_only',true);"
+            }
+          },
+          {
+            "sqlFile": {
+              "path": "db/tenant/protect-table.sql",
+              "splitStatements": false
+            }
+          },
+          {
+            "sql": {
+              "sql": "SELECT set_config('taska.audit_service','tenant',true),set_config('taska.audit_schema','taska',true),set_config('taska.audit_table','tenant_restriction_audit',true),set_config('taska.audit_column','tenant_id',true),set_config('taska.audit_app_access','append_only',true);"
+            }
+          },
+          {
+            "sqlFile": {
+              "path": "db/tenant/audit.sql",
+              "splitStatements": false
+            }
+          },
+          {
+            "sqlFile": {
+              "path": "0018-tenant-restriction-list.sql",
+              "relativeToChangelogFile": true,
+              "splitStatements": false
+            }
+          }
+        ]
+      }
     }
   ]
 }

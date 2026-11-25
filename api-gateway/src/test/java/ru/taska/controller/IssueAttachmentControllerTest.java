@@ -92,6 +92,7 @@ class IssueAttachmentControllerTest {
         response.setItems(List.of(issueAttachmentDto()));
 
         Mockito.when(attachmentClient.listAttachments(
+                        Mockito.eq(PROJECT_ID.toString()),
                         Mockito.eq(ISSUE_ID.toString()),
                         Mockito.any(GatewayContext.class)))
                 .thenReturn(Mono.just(response));
@@ -107,7 +108,8 @@ class IssueAttachmentControllerTest {
                 .isEqualTo(response);
 
         Mockito.verify(attachmentClient).listAttachments(
-                Mockito.eq(ISSUE_ID.toString()),
+                Mockito.eq(PROJECT_ID.toString()),
+                        Mockito.eq(ISSUE_ID.toString()),
                 Mockito.any(GatewayContext.class));
     }
 
@@ -117,6 +119,7 @@ class IssueAttachmentControllerTest {
         mockAuthenticatedUser();
 
         Mockito.when(attachmentClient.listAttachments(
+                        Mockito.eq(PROJECT_ID.toString()),
                         Mockito.eq(ISSUE_ID.toString()),
                         Mockito.any(GatewayContext.class)))
                 .thenReturn(Mono.error(Status.PERMISSION_DENIED.asRuntimeException()));
@@ -138,6 +141,7 @@ class IssueAttachmentControllerTest {
         mockAuthenticatedUser();
 
         Mockito.when(attachmentClient.listAttachments(
+                        Mockito.eq(PROJECT_ID.toString()),
                         Mockito.eq(ISSUE_ID.toString()),
                         Mockito.any(GatewayContext.class)))
                 .thenReturn(Mono.error(Status.NOT_FOUND.asRuntimeException()));
@@ -176,9 +180,9 @@ class IssueAttachmentControllerTest {
         response.setObjectKey("issues/" + ISSUE_ID + "/generated-key");
 
         Mockito.when(attachmentClient.createAttachmentUploadUrl(
-                        Mockito.eq(ISSUE_ID.toString()),
+                        Mockito.eq(PROJECT_ID.toString()), Mockito.eq(ISSUE_ID.toString()),
                         Mockito.any(Mono.class),
-                        Mockito.any(GatewayContext.class)))
+                        Mockito.any(GatewayContext.class), Mockito.nullable(String.class)))
                 .thenReturn(Mono.just(response));
 
         webTestClient.post()
@@ -194,9 +198,43 @@ class IssueAttachmentControllerTest {
                 .isEqualTo(response);
 
         Mockito.verify(attachmentClient).createAttachmentUploadUrl(
-                Mockito.eq(ISSUE_ID.toString()),
+                Mockito.eq(PROJECT_ID.toString()), Mockito.eq(ISSUE_ID.toString()),
                 Mockito.any(Mono.class),
-                Mockito.any(GatewayContext.class));
+                Mockito.any(GatewayContext.class), Mockito.nullable(String.class));
+    }
+
+    @Test
+    @DisplayName("Явный ключ повтора передаётся из заголовка без изменения")
+    void uploadForwardsExplicitIdempotencyKey() {
+        mockAuthenticatedUser();
+        var response = new CreateAttachmentUploadUrlResponseDto();
+        response.setUploadUrl(URI.create("https://storage.invalid/owned"));
+        response.setObjectKey("owned/key");
+        Mockito.when(attachmentClient.createAttachmentUploadUrl(
+                Mockito.eq(PROJECT_ID.toString()), Mockito.eq(ISSUE_ID.toString()),
+                Mockito.any(Mono.class), Mockito.any(GatewayContext.class), Mockito.eq("owned-repeat")))
+                .thenReturn(Mono.just(response));
+        webTestClient.post()
+                .uri("/api/v1/projects/{projectId}/issues/{issueId}/attachments/upload-url", PROJECT_ID, ISSUE_ID)
+                .header(HttpHeaders.AUTHORIZATION, TOKEN)
+                .header("Idempotency-Key", "owned-repeat")
+                .contentType(MediaType.APPLICATION_JSON).bodyValue(createUploadUrlRequest())
+                .exchange().expectStatus().isOk();
+        Mockito.verify(attachmentClient).createAttachmentUploadUrl(
+                Mockito.eq(PROJECT_ID.toString()), Mockito.eq(ISSUE_ID.toString()),
+                Mockito.any(Mono.class), Mockito.any(GatewayContext.class), Mockito.eq("owned-repeat"));
+    }
+
+    @Test
+    @DisplayName("Несколько ключей повтора отклоняются до вызова загрузки")
+    void uploadRejectsDuplicateIdempotencyHeaders() {
+        webTestClient.post()
+                .uri("/api/v1/projects/{projectId}/issues/{issueId}/attachments/upload-url", PROJECT_ID, ISSUE_ID)
+                .header(HttpHeaders.AUTHORIZATION, TOKEN)
+                .header("Idempotency-Key", "one", "two")
+                .contentType(MediaType.APPLICATION_JSON).bodyValue(createUploadUrlRequest())
+                .exchange().expectStatus().isBadRequest();
+        Mockito.verifyNoInteractions(attachmentClient);
     }
 
     @Test
@@ -205,11 +243,11 @@ class IssueAttachmentControllerTest {
         mockAuthenticatedUser();
 
         Mockito.when(attachmentClient.createAttachmentUploadUrl(
-                        Mockito.eq(ISSUE_ID.toString()),
+                        Mockito.eq(PROJECT_ID.toString()), Mockito.eq(ISSUE_ID.toString()),
                         Mockito.any(Mono.class),
-                        Mockito.any(GatewayContext.class)))
+                        Mockito.any(GatewayContext.class), Mockito.nullable(String.class)))
                 .thenAnswer(inv -> {
-                    Mono<CreateAttachmentUploadUrlRequestDto> body = inv.getArgument(1);
+                    Mono<CreateAttachmentUploadUrlRequestDto> body = inv.getArgument(2);
                     return body.map(dto -> {
                         var response = new CreateAttachmentUploadUrlResponseDto();
                         response.setUploadUrl(URI.create("https://s3.example.com/should-not-be-reached"));
@@ -232,11 +270,11 @@ class IssueAttachmentControllerTest {
         mockAuthenticatedUser();
 
         Mockito.when(attachmentClient.createAttachmentUploadUrl(
-                        Mockito.eq(ISSUE_ID.toString()),
+                        Mockito.eq(PROJECT_ID.toString()), Mockito.eq(ISSUE_ID.toString()),
                         Mockito.any(Mono.class),
-                        Mockito.any(GatewayContext.class)))
+                        Mockito.any(GatewayContext.class), Mockito.nullable(String.class)))
                 .thenAnswer(inv -> {
-                    Mono<CreateAttachmentUploadUrlRequestDto> body = inv.getArgument(1);
+                    Mono<CreateAttachmentUploadUrlRequestDto> body = inv.getArgument(2);
                     return body.map(dto -> {
                         var response = new CreateAttachmentUploadUrlResponseDto();
                         response.setUploadUrl(URI.create("https://s3.example.com/should-not-be-reached"));
@@ -263,7 +301,7 @@ class IssueAttachmentControllerTest {
         var response = issueAttachmentDto();
 
         Mockito.when(attachmentClient.confirmAttachmentUpload(
-                        Mockito.eq(ISSUE_ID.toString()),
+                        Mockito.eq(PROJECT_ID.toString()), Mockito.eq(ISSUE_ID.toString()),
                         Mockito.any(Mono.class),
                         Mockito.any(GatewayContext.class)))
                 .thenReturn(Mono.just(response));
@@ -281,7 +319,7 @@ class IssueAttachmentControllerTest {
                 .isEqualTo(response);
 
         Mockito.verify(attachmentClient).confirmAttachmentUpload(
-                Mockito.eq(ISSUE_ID.toString()),
+                Mockito.eq(PROJECT_ID.toString()), Mockito.eq(ISSUE_ID.toString()),
                 Mockito.any(Mono.class),
                 Mockito.any(GatewayContext.class));
     }
@@ -294,7 +332,7 @@ class IssueAttachmentControllerTest {
         var request = confirmUploadRequest();
 
         Mockito.when(attachmentClient.confirmAttachmentUpload(
-                        Mockito.eq(ISSUE_ID.toString()),
+                        Mockito.eq(PROJECT_ID.toString()), Mockito.eq(ISSUE_ID.toString()),
                         Mockito.any(Mono.class),
                         Mockito.any(GatewayContext.class)))
                 .thenReturn(Mono.error(Status.NOT_FOUND.asRuntimeException()));
@@ -319,6 +357,7 @@ class IssueAttachmentControllerTest {
         response.setChecksum("sha256:abc123");
 
         Mockito.when(attachmentClient.getAttachmentDownloadUrl(
+                        Mockito.eq(PROJECT_ID.toString()), Mockito.eq(ISSUE_ID.toString()),
                         Mockito.eq(ATTACHMENT_ID.toString()),
                         Mockito.any(GatewayContext.class)))
                 .thenReturn(Mono.just(response));
@@ -335,7 +374,8 @@ class IssueAttachmentControllerTest {
                 .isEqualTo(response);
 
         Mockito.verify(attachmentClient).getAttachmentDownloadUrl(
-                Mockito.eq(ATTACHMENT_ID.toString()),
+                Mockito.eq(PROJECT_ID.toString()), Mockito.eq(ISSUE_ID.toString()),
+                        Mockito.eq(ATTACHMENT_ID.toString()),
                 Mockito.any(GatewayContext.class));
     }
 
@@ -345,6 +385,7 @@ class IssueAttachmentControllerTest {
         mockAuthenticatedUser();
 
         Mockito.when(attachmentClient.getAttachmentDownloadUrl(
+                        Mockito.eq(PROJECT_ID.toString()), Mockito.eq(ISSUE_ID.toString()),
                         Mockito.eq(ATTACHMENT_ID.toString()),
                         Mockito.any(GatewayContext.class)))
                 .thenReturn(Mono.error(Status.NOT_FOUND.asRuntimeException()));
@@ -364,6 +405,7 @@ class IssueAttachmentControllerTest {
         mockAuthenticatedUser();
 
         Mockito.when(attachmentClient.getAttachmentDownloadUrl(
+                        Mockito.eq(PROJECT_ID.toString()), Mockito.eq(ISSUE_ID.toString()),
                         Mockito.eq(ATTACHMENT_ID.toString()),
                         Mockito.any(GatewayContext.class)))
                 .thenReturn(Mono.error(Status.PERMISSION_DENIED.asRuntimeException()));
@@ -383,6 +425,7 @@ class IssueAttachmentControllerTest {
         mockAuthenticatedUser();
 
         Mockito.when(attachmentClient.deleteAttachment(
+                        Mockito.eq(PROJECT_ID.toString()), Mockito.eq(ISSUE_ID.toString()),
                         Mockito.eq(ATTACHMENT_ID.toString()),
                         Mockito.any(GatewayContext.class)))
                 .thenReturn(Mono.empty());
@@ -396,7 +439,8 @@ class IssueAttachmentControllerTest {
                 .expectHeader().exists("X-Request-Id");
 
         Mockito.verify(attachmentClient).deleteAttachment(
-                Mockito.eq(ATTACHMENT_ID.toString()),
+                Mockito.eq(PROJECT_ID.toString()), Mockito.eq(ISSUE_ID.toString()),
+                        Mockito.eq(ATTACHMENT_ID.toString()),
                 Mockito.any(GatewayContext.class));
     }
 
@@ -406,6 +450,7 @@ class IssueAttachmentControllerTest {
         mockAuthenticatedUser();
 
         Mockito.when(attachmentClient.deleteAttachment(
+                        Mockito.eq(PROJECT_ID.toString()), Mockito.eq(ISSUE_ID.toString()),
                         Mockito.eq(ATTACHMENT_ID.toString()),
                         Mockito.any(GatewayContext.class)))
                 .thenReturn(Mono.error(Status.PERMISSION_DENIED.asRuntimeException()));
@@ -419,7 +464,8 @@ class IssueAttachmentControllerTest {
                 .expectHeader().exists("X-Request-Id");
 
         Mockito.verify(attachmentClient).deleteAttachment(
-                Mockito.eq(ATTACHMENT_ID.toString()),
+                Mockito.eq(PROJECT_ID.toString()), Mockito.eq(ISSUE_ID.toString()),
+                        Mockito.eq(ATTACHMENT_ID.toString()),
                 Mockito.any(GatewayContext.class));
     }
 
@@ -445,11 +491,11 @@ class IssueAttachmentControllerTest {
         request.setSizeBytes(2_097_153L); // 2 MB + 1 byte
 
         Mockito.when(attachmentClient.createAttachmentUploadUrl(
-                        Mockito.eq(ISSUE_ID.toString()),
+                        Mockito.eq(PROJECT_ID.toString()), Mockito.eq(ISSUE_ID.toString()),
                         Mockito.any(Mono.class),
-                        Mockito.any(GatewayContext.class)))
+                        Mockito.any(GatewayContext.class), Mockito.nullable(String.class)))
                 .thenAnswer(inv -> {
-                    Mono<CreateAttachmentUploadUrlRequestDto> body = inv.getArgument(1);
+                    Mono<CreateAttachmentUploadUrlRequestDto> body = inv.getArgument(2);
                     return body.flatMap(dto -> {
                         // Если дошло до сервиса и валидация размера происходит внутри gRPC-клиента/домена
                         if (dto.getSizeBytes() > 2_097_152L) {
@@ -481,9 +527,9 @@ class IssueAttachmentControllerTest {
         var request = createUploadUrlRequest();
 
         Mockito.when(attachmentClient.createAttachmentUploadUrl(
-                        Mockito.eq(ISSUE_ID.toString()),
+                        Mockito.eq(PROJECT_ID.toString()), Mockito.eq(ISSUE_ID.toString()),
                         Mockito.any(Mono.class),
-                        Mockito.any(GatewayContext.class)))
+                        Mockito.any(GatewayContext.class), Mockito.nullable(String.class)))
                 .thenReturn(Mono.error(Status.OUT_OF_RANGE.asRuntimeException()));
 
         webTestClient.post()

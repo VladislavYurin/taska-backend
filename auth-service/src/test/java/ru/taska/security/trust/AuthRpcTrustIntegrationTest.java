@@ -39,6 +39,10 @@ class AuthRpcTrustIntegrationTest {
   volatile boolean offline;
   static final Duration WAIT = Duration.ofSeconds(15);
   static final String RPC = "owned.Projects/Create", ACTION = "createProject";
+  static final String TENANT_SERVICE = "ru.taska.b2b.v1.TenantService/";
+  static final String GET_TENANT = TENANT_SERVICE + "GetTenant";
+  static final String LIST_TENANTS = TENANT_SERVICE + "ListTenants";
+  static final String RENAME_TENANT = TENANT_SERVICE + "RenameTenant";
   static final RpcContextSecurity.Policy POLICY = new RpcContextSecurity.Policy(true, true);
 
   @BeforeAll
@@ -97,8 +101,68 @@ class AuthRpcTrustIntegrationTest {
             + "',2,now(),now()+interval '1 hour')");
     fixture =
         new ManagedTrustFixture(
-            directory, List.of("auth-service", "api-gateway", "project-service"));
+            directory, List.of("auth-service", "api-gateway", "project-service", "tenant-service"));
     fixture.userEdge("api-gateway", "project-service", RPC, ACTION);
+    fixture.edges.add(
+        new ManagedRpcTrust.Edge(
+            "api-gateway",
+            "api-gateway",
+            "gatewayRequest",
+            "gatewayRequest",
+            Set.of("WEB_GLOBAL"),
+            Set.of("read", "write"),
+            "USER",
+            Set.of(),
+            "BOUND",
+            Set.of()));
+    fixture.edges.add(
+        new ManagedRpcTrust.Edge(
+            "api-gateway",
+            "tenant-service",
+            GET_TENANT,
+            "getTenant",
+            Set.of("WEB_GLOBAL"),
+            Set.of("read", "write"),
+            "USER",
+            Set.of(),
+            "BOUND",
+            Set.of()));
+    fixture.edges.add(
+        new ManagedRpcTrust.Edge(
+            "api-gateway",
+            "tenant-service",
+            RENAME_TENANT,
+            "renameTenant",
+            Set.of("WEB_GLOBAL"),
+            Set.of("read", "write"),
+            "USER",
+            Set.of(),
+            "BOUND",
+            Set.of()));
+    fixture.edges.add(
+        new ManagedRpcTrust.Edge(
+            "api-gateway",
+            "tenant-service",
+            LIST_TENANTS,
+            "listTenants",
+            Set.of("WEB_GLOBAL"),
+            Set.of("tenants:select"),
+            "USER",
+            Set.of(),
+            "NONE",
+            Set.of()));
+    fixture.edges.add(
+        new ManagedRpcTrust.Edge(
+            "api-gateway",
+            "project-service",
+            RPC,
+            ACTION,
+            Set.of("WEB_GLOBAL"),
+            Set.of("read", "write"),
+            "USER",
+            Set.of(),
+            "BOUND",
+            Set.of()));
     fixture.write();
     backend = backend();
     replica = backend();
@@ -138,6 +202,59 @@ class AuthRpcTrustIntegrationTest {
                 .setIssuerService("api-gateway")
                 .setAudienceService("project-service")
                 .setAction(ACTION)
+                .setIssuedAt(now.toString())
+                .setExpiresAt(now.plusSeconds(30).toString())
+                .setAssertionId(UUID.randomUUID().toString())
+                .setContextVersion(1))
+        .build();
+  }
+
+  RequestContext webAdminTargetContext(
+      String audience, String action, AdminGrant.LevelValue level, String... scopes) {
+    var now = Instant.now();
+    var adminScope =
+        AdminScope.newBuilder()
+            .setKind(AdminScope.KindValue.KIND_TENANT_SET)
+            .addTenantIds(tenant.toString())
+            .build();
+    return RequestContext.newBuilder()
+        .setHeader(Header.newBuilder().setRequestId(UUID.randomUUID().toString()))
+        .setContext(
+            TrustedTenantContext.newBuilder()
+                .setActorUserId(actor.toString())
+                .setTenantId(tenant.toString())
+                .setSessionId(web.toString())
+                .setCredentialId(web.toString())
+                .setCredentialKind(CredentialKind.CREDENTIAL_KIND_WEB_GLOBAL)
+                .setAdministrativeScope(adminScope)
+                .setAdministrativeLevel(level)
+                .setActorGeneration("1")
+                .addAllScopes(List.of(scopes))
+                .setIssuerService("api-gateway")
+                .setAudienceService(audience)
+                .setAction(action)
+                .setIssuedAt(now.toString())
+                .setExpiresAt(now.plusSeconds(30).toString())
+                .setAssertionId(UUID.randomUUID().toString())
+                .setContextVersion(1))
+        .build();
+  }
+
+  RequestContext globalListContext() {
+    var now = Instant.now();
+    return RequestContext.newBuilder()
+        .setHeader(Header.newBuilder().setRequestId(UUID.randomUUID().toString()))
+        .setContext(
+            TrustedTenantContext.newBuilder()
+                .setActorUserId(actor.toString())
+                .setSessionId(web.toString())
+                .setCredentialId(web.toString())
+                .setCredentialKind(CredentialKind.CREDENTIAL_KIND_WEB_GLOBAL)
+                .setActorGeneration("1")
+                .addScopes("tenants:select")
+                .setIssuerService("api-gateway")
+                .setAudienceService("tenant-service")
+                .setAction("listTenants")
                 .setIssuedAt(now.toString())
                 .setExpiresAt(now.plusSeconds(30).toString())
                 .setAssertionId(UUID.randomUUID().toString())
@@ -255,6 +372,69 @@ class AuthRpcTrustIntegrationTest {
                 RPC,
                 POLICY)
             .block(WAIT));
+  }
+
+  @Test
+  void globalAdminMfaTargetIsOnlineScopedAndSkipsMembership() {
+    sql("UPDATE taska.users SET global_role='GLOBAL_ADMIN' WHERE id='" + actor + "'");
+    sql("UPDATE taska.web_sessions SET assurance='ADMIN_EMAIL_MFA' WHERE id='" + web + "'");
+    member = 0;
+    var read =
+        webAdminTargetContext(
+            "tenant-service", "getTenant", AdminGrant.LevelValue.LEVEL_READ, "read");
+    assertTrue(backend.allowed(read, GET_TENANT, new RpcContextSecurity.Policy(true, false)).block(WAIT));
+    var modify =
+        webAdminTargetContext(
+            "tenant-service",
+            "renameTenant",
+            AdminGrant.LevelValue.LEVEL_MODIFY,
+            "read",
+            "write");
+    assertTrue(backend.allowed(modify, RENAME_TENANT, POLICY).block(WAIT));
+
+    var bootstrap =
+        webAdminTargetContext(
+            "api-gateway", "gatewayRequest", AdminGrant.LevelValue.LEVEL_MODIFY, "read", "write");
+    assertTrue(backend.allowed(bootstrap, "gatewayRequest", POLICY).block(WAIT));
+    var genericAdminCall =
+        modify.toBuilder()
+            .setContext(
+                modify.getContext().toBuilder()
+                    .setAudienceService("project-service")
+                    .setAction(ACTION))
+            .build();
+    assertFalse(
+        backend
+            .allowed(genericAdminCall, RPC, POLICY)
+            .block(WAIT));
+    assertFalse(
+        backend
+            .allowed(
+                modify.toBuilder()
+                    .setContext(
+                        modify.getContext().toBuilder()
+                            .setAdministrativeScope(
+                                AdminScope.newBuilder()
+                                    .setKind(AdminScope.KindValue.KIND_TENANT_SET)
+                                    .addTenantIds(tenant.toString())
+                                    .addTenantIds(UUID.randomUUID().toString())))
+                    .build(),
+                RENAME_TENANT,
+                POLICY)
+            .block(WAIT));
+    assertTrue(
+        backend
+            .allowed(
+                globalListContext(),
+                LIST_TENANTS,
+                new RpcContextSecurity.Policy(false, false))
+            .block(WAIT));
+
+    sql("UPDATE taska.web_sessions SET assurance='PASSWORD' WHERE id='" + web + "'");
+    assertFalse(backend.allowed(read, GET_TENANT, new RpcContextSecurity.Policy(true, false)).block(WAIT));
+    sql("UPDATE taska.web_sessions SET assurance='ADMIN_EMAIL_MFA' WHERE id='" + web + "'");
+    sql("UPDATE taska.users SET global_role='USER' WHERE id='" + actor + "'");
+    assertFalse(backend.allowed(read, GET_TENANT, new RpcContextSecurity.Policy(true, false)).block(WAIT));
   }
 
   @Test

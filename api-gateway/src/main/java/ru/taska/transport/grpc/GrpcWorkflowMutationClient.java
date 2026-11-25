@@ -48,7 +48,7 @@ public class GrpcWorkflowMutationClient {
                             : Mono.error(GrpcBindingRejection.from(result.getRejectionStatus(),
                                     result.getRejectionMessage(), result.getRejectionDetailsMap())));
         }
-        return (switch (op) {
+        return ru.taska.security.tenant.RpcContextBridge.outbound(() -> switch (op) {
             case UPDATE_WORKFLOW -> rpc.updateWorkflow(built);
             case UPDATE_STATUS -> rpc.updateWorkflowStatus(built);
             case DELETE_STATUS -> rpc.deleteWorkflowStatus(built);

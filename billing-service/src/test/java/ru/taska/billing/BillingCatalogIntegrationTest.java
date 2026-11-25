@@ -254,6 +254,9 @@ class BillingCatalogIntegrationTest {
     assertEquals(0, count("global_outbox_events"));
     var free = before.getItems(0);
     var paid = before.getItems(1);
+    assertTrue(free.hasMaxAttachmentBytes());
+    assertEquals("20000000", free.getMaxAttachmentBytes());
+    assertEquals("20000000", paid.getMaxAttachmentBytes());
     assertEquals("0", free.getPrice().getAmountMinor());
     assertEquals("2000", paid.getPrice().getAmountMinor());
     assertEquals(PlanVersion.KindValue.KIND_FREE, free.getKind());
@@ -359,6 +362,32 @@ class BillingCatalogIntegrationTest {
                 ResolvePublishedPlanRpcRequest.newBuilder()
                     .setPlanVersionId(two.getId())
                     .build())));
+  }
+
+  @Test
+  void domainConsumersCanReadReferencedKindButCannotResolveANewOffer() {
+    String free = "00000000-0000-8000-8000-000000000001";
+    var request = ResolvePublishedPlanRpcRequest.newBuilder().setPlanVersionId(free).build();
+    for (String issuer : List.of("workflow-service", "issue-service", "auth-service")) {
+    var service = TrustedTenantContext.newBuilder()
+        .setAction("readReferencedPlanVersion")
+        .setCredentialKind(CredentialKind.CREDENTIAL_KIND_SERVICE)
+        .setIssuerService(issuer).setServiceIdentity(issuer)
+        .setAudienceService("billing-service").setServicePurpose("billing")
+        .addScopes("read").addScopes("catalog:read").build();
+    assertEquals(PlanVersion.KindValue.KIND_FREE,
+        RegistryTestContext.withClaims(service, catalog.referenced(request)).block(WAIT).getKind());
+    for (var denied : List.of(service.toBuilder().setIssuerService("notification-service").build(),
+        service.toBuilder().setServicePurpose("membership").build(),
+        service.toBuilder().clearScopes().addScopes("read").build(),
+        service.toBuilder().setTenantId(A.toString()).build())) {
+      rejects(DomainStatus.PERMISSION_DENIED, "SCOPE_DENIED",
+          RegistryTestContext.withClaims(denied, catalog.referenced(request)));
+    }
+    rejects(DomainStatus.PERMISSION_DENIED, "SCOPE_DENIED", RegistryTestContext.withClaims(
+        service.toBuilder().setAction("resolvePublishedPlan").addScopes("catalog:resolve").build(),
+        catalog.resolve(request)));
+    }
   }
 
   @Test

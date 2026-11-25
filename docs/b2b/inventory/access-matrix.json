@@ -1160,7 +1160,7 @@
     {
       "action": "issue.search",
       "effect": "READ",
-      "resourceScope": "ISSUE",
+      "resourceScope": "PROJECT",
       "roles": {
         "OWNER": "ALLOW",
         "TENANT_ADMIN": "ALLOW",
@@ -1196,7 +1196,7 @@
     {
       "action": "issue.board",
       "effect": "READ",
-      "resourceScope": "ISSUE",
+      "resourceScope": "PROJECT",
       "roles": {
         "OWNER": "ALLOW",
         "TENANT_ADMIN": "ALLOW",
@@ -1268,7 +1268,7 @@
     {
       "action": "issue.create",
       "effect": "MODIFY",
-      "resourceScope": "ISSUE",
+      "resourceScope": "PROJECT",
       "roles": {
         "OWNER": "ALLOW",
         "TENANT_ADMIN": "ALLOW",

@@ -422,7 +422,7 @@ class ProjectQuotaIntegrationTest {
     rootAdmin
         .sql(
             "TRUNCATE"
-                + " taska.quota_effects,taska.quota_reservations,taska.quota_counters,taska.tenant_creation_receipts,taska.tenant_provisioning_dispatch,taska.tenant_operations,taska.free_admission_subjects,taska.free_plan_admissions,taska.tenants,taska.tenant_memberships,taska.idempotency_records,taska.outbox_events")
+                + " taska.quota_effects,taska.quota_reservations,taska.quota_counters,taska.tenant_creation_receipts,taska.tenant_provisioning_dispatch,taska.tenant_operations,taska.free_admission_subjects,taska.free_plan_admissions,taska.tenant_restrictions,taska.tenant_restriction_audit,taska.tenants,taska.tenant_memberships,taska.idempotency_records,taska.outbox_events")
         .then()
         .block(WAIT);
     ownerAdmin
@@ -582,6 +582,23 @@ class ProjectQuotaIntegrationTest {
     assertEquals("0", usage(A).getReserved());
     assertEquals(0, rows(ownerAdmin, "projects"));
     assertEquals(1, rows(ownerAdmin, "resource_operation_receipts"));
+  }
+
+  @Test
+  void cancellationRemovesInitializedSettingsAndTypesAtomically() {
+    var reservation=reserve(A,UUID.randomUUID(),UUID.randomUUID());
+    as(A,owner.provision(reservation,command("INITIALIZED"))).block(WAIT);
+    var projects=new TenantProjectStore(ownerTx,new tools.jackson.databind.ObjectMapper());
+    as(A,projects.execute(session->session.types().seedDefaults(reservation.resource())
+        .then(session.settings(reservation.resource(),"{\"allowedIssueTypes\":[\"TASK\",\"BUG\",\"STORY\"]}",ACTOR)))).block(WAIT);
+    assertEquals(3,rows(ownerAdmin,"project_issue_types"));
+    assertEquals(1,rows(ownerAdmin,"project_settings"));
+    var released=as(A,authorityClient.release(reservation)).block(WAIT);
+    assertEquals(State.RELEASED,released.state());
+    assertEquals("0",usage(A).getReserved());
+    for(var table:List.of("projects","project_members","project_settings","project_issue_types"))assertEquals(0,rows(ownerAdmin,table));
+    assertEquals(OwnerState.CANCELLED,as(A,owner.inspect(reservation)).block(WAIT).state());
+    assertEquals(State.RELEASED,as(A,authorityClient.release(reservation)).block(WAIT).state());
   }
 
   @Test

@@ -185,6 +185,16 @@ public class GrpcLabelServiceClient {
             Mono<AddIssueLabelRequestDto> request,
             GatewayContext context
     ) {
+        return addIssueLabel("", issueId, request, context);
+    }
+
+    /** Передаёт projectId исходного REST-пути для проверки владельцем задачи. */
+    public Mono<AddIssueLabelResponseDto> addIssueLabel(
+            String projectId,
+            String issueId,
+            Mono<AddIssueLabelRequestDto> request,
+            GatewayContext context
+    ) {
         log.info("[{}] Calling addIssueLabel", context.requestId());
 
         return request
@@ -194,7 +204,8 @@ public class GrpcLabelServiceClient {
                                         .setHeader(buildGrpcHeader(context))
                                         .setBody(
                                                 AddIssueLabelRequestBody.newBuilder()
-                                                        .setIssueId(issueId)
+                                                        .setProjectId(projectId)
+                                        .setIssueId(issueId)
                                                         .setLabelId(requestDto.getLabelId().toString())
                                                         .setActorUserId(context.userContext().userId())
                                                         .build()
@@ -217,6 +228,16 @@ public class GrpcLabelServiceClient {
             String labelId,
             GatewayContext context
     ) {
+        return removeIssueLabel("", issueId, labelId, context);
+    }
+
+    /** Передаёт projectId исходного REST-пути для проверки владельцем задачи. */
+    public Mono<Void> removeIssueLabel(
+            String projectId,
+            String issueId,
+            String labelId,
+            GatewayContext context
+    ) {
         log.info("[{}] Calling removeIssueLabel", context.requestId());
 
         return ru.taska.security.tenant.RpcContextBridge.outbound(() -> dynamicStub().removeIssueLabel(
@@ -224,6 +245,7 @@ public class GrpcLabelServiceClient {
                         .setHeader(buildGrpcHeader(context))
                         .setBody(
                                 RemoveIssueLabelRequestBody.newBuilder()
+                                        .setProjectId(projectId)
                                         .setIssueId(issueId)
                                         .setLabelId(labelId)
                                         .setActorUserId(context.userContext().userId())
@@ -243,6 +265,15 @@ public class GrpcLabelServiceClient {
             String issueId,
             GatewayContext context
     ) {
+        return listIssueLabels("", issueId, context);
+    }
+
+    /** Передаёт projectId исходного REST-пути для проверки владельцем задачи. */
+    public Mono<ListIssueLabelsResponseDto> listIssueLabels(
+            String projectId,
+            String issueId,
+            GatewayContext context
+    ) {
         log.debug("[{}] Calling listIssueLabels", context.requestId());
 
         return ru.taska.security.tenant.RpcContextBridge.outbound(() -> dynamicStub().listIssueLabels(
@@ -250,6 +281,7 @@ public class GrpcLabelServiceClient {
                         .setHeader(buildGrpcHeader(context))
                         .setBody(
                                 ListIssueLabelsRequestBody.newBuilder()
+                                        .setProjectId(projectId)
                                         .setIssueId(issueId)
                                         .setActorUserId(context.userContext().userId())
                                         .build()

@@ -80,11 +80,34 @@ message Tenant {
   enum CreationClosureReason { CREATION_CLOSURE_REASON_UNSPECIFIED = 0; CREATION_CLOSURE_REASON_AUTO_EXPIRED = 1; CREATION_CLOSURE_REASON_OWNER_CANCELLED = 2; }
   optional CreationClosureReason creation_closure_reason = 13;
   optional string creation_closed_at = 14;
+  // TAS-338: the caller's own membership. Set by ListTenants and member GetTenant;
+  // absent on administrative reads and on create/cancel/rename responses.
+  CallerMembership membership = 15;
+}
+
+// TAS-338: never describes another member and carries no directory data.
+message CallerMembership {
+  Membership.RoleValue role = 1;
+  Membership.StateValue state = 2;
+  bool is_owner = 3;
+  string version = 4;
+}
+
+message TenantPage {
+  repeated Tenant items = 1;
+  optional string next_cursor = 2;
 }
 
 message CreateTenantRequest {
   string name = 1;
   string plan_version_id = 2;
+}
+
+// TAS-333: same validation as CreateTenantRequest.name.
+message RenameTenantRequest {
+  // Required, 1 to 120 Unicode code points. Leading or trailing whitespace and
+  // ISO control characters are invalid. Report VALIDATION_FAILED on field name.
+  string name = 1;
 }
 
 message CreateTenantResponse {
@@ -102,10 +125,27 @@ message CreateTenantRpcRequest {
   MutationOptions mutation = 3;
 }
 
+message ListTenantsRpcRequest {
+  RequestContext context = 1;
+  PageRequest page = 2;
+}
+
 message GetTenantRpcRequest {
   RequestContext context = 1;
   string tenant_id = 2;
 }
+// Field numbers match the B2B blueprint.
+message RenameTenantRpcRequest {
+  RequestContext context = 1;
+  string tenant_id = 2;
+  RenameTenantRequest payload = 3;
+  // Requires a canonical UUID idempotency_key and expected_version from GetTenant.
+  // expected_version is the positive decimal Tenant.version, without HTTP quotes.
+  // Missing version: FAILED_PRECONDITION. Stale version: ABORTED.
+  // Both use VERSION_CONFLICT; malformed input uses INVALID_ARGUMENT/VALIDATION_FAILED.
+  MutationOptions mutation = 4;
+}
+
 message PageRequest { optional string cursor = 1; uint32 limit = 2; }
 
 message Membership {
@@ -142,6 +182,18 @@ message CancelTenantCreationRpcRequest {
   MutationOptions mutation = 4;
 }
 
+message PauseTenantRpcRequest {
+  RequestContext context = 1;
+  string tenant_id = 2;
+  ConfirmedAction payload = 3;
+  MutationOptions mutation = 4;
+}
+message ResumeTenantRpcRequest {
+  RequestContext context = 1;
+  string tenant_id = 2;
+  MutationOptions mutation = 3;
+}
+
 message GetTenantOperationRpcRequest {
   RequestContext context = 1;
   string tenant_id = 2;
@@ -152,12 +204,29 @@ message ChangeMemberRoleRequest {
   enum RoleValue { ROLE_UNSPECIFIED = 0; ROLE_MEMBER = 1; ROLE_TENANT_ADMIN = 2; }
   RoleValue role = 1;
 }
+message ChangeMemberStateRequest {
+  enum StateValue { STATE_UNSPECIFIED = 0; STATE_ACTIVE = 1; STATE_SUSPENDED = 2; }
+  StateValue state = 1;
+}
 message SetTenantMemberRoleRpcRequest {
   RequestContext context = 1;
   string tenant_id = 2;
   string user_id = 3;
   ChangeMemberRoleRequest payload = 4;
   MutationOptions mutation = 5;
+}
+message SetTenantMemberStateRpcRequest {
+  RequestContext context = 1;
+  string tenant_id = 2;
+  string user_id = 3;
+  ChangeMemberStateRequest payload = 4;
+  MutationOptions mutation = 5;
+}
+message RemoveTenantMemberRpcRequest {
+  RequestContext context = 1;
+  string tenant_id = 2;
+  string user_id = 3;
+  MutationOptions mutation = 4;
 }
 message LeaveTenantRpcRequest {
   RequestContext context = 1;
@@ -168,12 +237,20 @@ message LeaveTenantRpcRequest {
 
 service TenantService {
   rpc SetTenantMemberRole(SetTenantMemberRoleRpcRequest) returns (Membership);
+  rpc SetTenantMemberState(SetTenantMemberStateRpcRequest) returns (Membership);
+  rpc RemoveTenantMember(RemoveTenantMemberRpcRequest) returns (Operation);
   rpc LeaveTenant(LeaveTenantRpcRequest) returns (Operation);
   rpc GetTenantQuotas(GetTenantQuotasRpcRequest) returns (QuotaSnapshot);
   rpc CancelTenantCreation(CancelTenantCreationRpcRequest) returns (Tenant);
   rpc GetTenantOperation(GetTenantOperationRpcRequest) returns (Operation);
   rpc CreateTenant(CreateTenantRpcRequest) returns (CreateTenantResponse);
+  rpc ListTenants(ListTenantsRpcRequest) returns (TenantPage);
   rpc GetTenant(GetTenantRpcRequest) returns (Tenant);
+  // Current owner or trusted GLOBAL_ADMIN only. With the current version,
+  // the same name returns the current Tenant without advancing its version.
+  rpc RenameTenant(RenameTenantRpcRequest) returns (Tenant);
+  rpc PauseTenant(PauseTenantRpcRequest) returns (Tenant);
+  rpc ResumeTenant(ResumeTenantRpcRequest) returns (Tenant);
   rpc ListTenantMembers(ListTenantMembersRpcRequest) returns (MembershipPage);
 }
 
@@ -187,6 +264,8 @@ message MembershipSnapshot {
   string tenant_membership_version = 6;
   bool is_owner = 7;
   string joined_at = 8;
+  repeated RestrictionCode independent_restrictions = 9;
+  string restriction_version = 10;
 }
 message GetMembershipRpcRequest {
   RequestContext context = 1;
@@ -208,6 +287,8 @@ message MembershipValidationBatch {
   string tenant_membership_version = 2;
   repeated MembershipValidation items = 3; // Same order as requested user_ids.
   Tenant.LifecycleValue tenant_lifecycle = 4;
+  repeated RestrictionCode independent_restrictions = 5;
+  string restriction_version = 6;
 }
 service TenantMembershipService {
   rpc GetMembership(GetMembershipRpcRequest) returns (MembershipSnapshot);

@@ -41,6 +41,14 @@ jobs:
       - uses: actions/checkout@v4
       - name: Documentation and manifest consistency
         run: python3 scripts/harness.py docs-check
+      - name: Validate OpenSpec with the pinned CLI
+        env:
+          OPENSPEC_TELEMETRY: "0"
+        run: |
+          curl -fsSL --retry 3 https://raw.githubusercontent.com/Fission-AI/OpenSpec/8bd4b3557b5bf1d231cd2f165b28f24e2d90a2a0/scripts/binary/install.sh -o "$RUNNER_TEMP/openspec-install.sh"
+          OPENSPEC_VERSION="$(cat .openspec-version)" OPENSPEC_INSTALL_DIR="$RUNNER_TEMP/openspec" sh "$RUNNER_TEMP/openspec-install.sh"
+          "$RUNNER_TEMP/openspec/openspec" validate --all --strict --no-interactive
+          "$RUNNER_TEMP/openspec/openspec" validate --archived --no-interactive
       - name: Harness and review regression tests
         run: python3 scripts/harness.py check --group harness
       - name: Read Java matrix from manifest

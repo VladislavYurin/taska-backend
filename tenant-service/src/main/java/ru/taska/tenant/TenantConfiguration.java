@@ -156,13 +156,17 @@ public class TenantConfiguration {
   @Bean
   @DependsOn("safeRuntimeRole")
   TenantRegistryService tenantRegistry(
-      TenantTransactionExecutor transactions, PublishedPlans plans, FreeAdmission admission) {
+      TenantTransactionExecutor transactions,
+      PublishedPlans plans,
+      FreeAdmission admission,
+      TenantListService tenantLists) {
     return new TenantRegistryService(
         transactions,
         plans,
         admission,
         Clock.systemUTC(),
-        db -> PlatformFlags.duration(db, "UNPAID_CREATION_WINDOW_SECONDS"));
+        db -> PlatformFlags.duration(db, "UNPAID_CREATION_WINDOW_SECONDS"),
+        tenantLists);
   }
 
   @Bean
@@ -193,11 +197,21 @@ public class TenantConfiguration {
 
   @Bean
   @DependsOn("safeRuntimeRole")
+  TenantListService tenantListService(ConnectionFactory factory, MembershipCursor cursors) {
+    return new TenantListService(
+        org.springframework.r2dbc.core.DatabaseClient.create(factory),
+        org.springframework.transaction.reactive.TransactionalOperator.create(
+            new org.springframework.r2dbc.connection.R2dbcTransactionManager(factory)),
+        cursors);
+  }
+
+  @Bean
+  @DependsOn("safeRuntimeRole")
   TenantMembershipService tenantMemberships(
       TenantTransactionExecutor transactions,
       MembershipCursor cursor,
       @Value(
-              "${taska.tenant.membership-readers:auth-service,api-gateway,project-service,workflow-service,issue-service}")
+              "${taska.tenant.membership-readers:auth-service,api-gateway,project-service,workflow-service,issue-service,tenant-service}")
           java.util.Set<String> readers) {
     return new TenantMembershipService(transactions, cursor, readers);
   }
@@ -332,7 +346,10 @@ public class TenantConfiguration {
       ObjectProvider<
               ru.taska.api.b2b.v1.ReactorEntitlementServiceGrpc.ReactorEntitlementServiceStub>
           stubs,
-      ObjectProvider<RpcContextSecurity> security) {
+      ObjectProvider<RpcContextSecurity> security,
+      ObjectProvider<ru.taska.capability.ManagedDomainReads> sources) {
+    var reads = sources.getIfAvailable();
+    if (reads != null) return reads::entitlement;
     var stub = stubs.getIfAvailable();
     var trust = security.getIfAvailable();
     if (stub != null && trust != null)
@@ -361,7 +378,16 @@ public class TenantConfiguration {
 
   @Bean
   @ConditionalOnMissingBean
-  ProjectQuotaStore.Policy projectQuotaPolicy() {
+  ProjectQuotaStore.Policy projectQuotaPolicy(
+      TenantTransactionExecutor tx,
+      ObjectProvider<ru.taska.capability.ManagedDomainReads> sources,
+      ObjectProvider<ru.taska.security.tenant.RpcTrustBackend> identities,
+      ObjectProvider<RpcContextSecurity> trust) {
+    var reads = sources.getIfAvailable();
+    var backend = identities.getIfAvailable();
+    var security = trust.getIfAvailable();
+    if (reads != null && backend != null && security != null)
+      return new NativeProjectAdmission(tx, reads, backend, security);
     return (c, command, operation) ->
         Mono.error(
             TenantRegistryService.fail(DomainStatus.UNAVAILABLE, "PROJECT_POLICY_NOT_CONFIGURED"));
@@ -374,9 +400,15 @@ public class TenantConfiguration {
               ru.taska.api.b2b.v1.ReactorProjectQuotaOwnerServiceGrpc
                   .ReactorProjectQuotaOwnerServiceStub>
           stubs,
-      ObjectProvider<RpcContextSecurity> security) {
+      ObjectProvider<RpcContextSecurity> security,
+      ObjectProvider<ru.taska.capability.ManagedDomainReads> sources) {
     var stub = stubs.getIfAvailable();
     var trust = security.getIfAvailable();
+    var reads = sources.getIfAvailable();
+    if (stub == null && reads != null)
+      stub =
+          ru.taska.api.b2b.v1.ReactorProjectQuotaOwnerServiceGrpc.newReactorStub(
+              reads.channel("project-service"));
     if (stub != null && trust != null)
       return new ru.taska.quota.GrpcProjectQuotaOwner(
           stub, trust, Clock.systemUTC(), "tenant-service");
@@ -418,11 +450,17 @@ public class TenantConfiguration {
 
   @Bean
   @org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
-  StorageQuotaStore.Policy storageQuotaPolicy() {
-    return (c, command, target) ->
+  StorageQuotaStore.Policy storageQuotaPolicy(org.springframework.beans.factory.ObjectProvider<ru.taska.capability.ManagedDomainReads> sources,
+      org.springframework.beans.factory.ObjectProvider<ru.taska.security.tenant.RpcContextSecurity> securities) {
+    return (c,command,target) -> {
+      var reads=sources.getIfAvailable();var security=securities.getIfAvailable();
+      if(reads!=null && security!=null && (target!=null || command==StorageQuotaStore.Command.READ))
+        return new StorageUploadPolicyClient(reads,security).current(c,command,target);
+      return
         Mono.error(
             new ru.taska.exception.DomainException(
                 ru.taska.exception.DomainStatus.UNAVAILABLE, "STORAGE_POLICY_UNAVAILABLE"));
+    };
   }
 
   @Bean
@@ -433,9 +471,11 @@ public class TenantConfiguration {
                   .ReactorStorageQuotaOwnerServiceStub>
           stubs,
       org.springframework.beans.factory.ObjectProvider<ru.taska.security.tenant.RpcContextSecurity>
-          security) {
+          security, org.springframework.beans.factory.ObjectProvider<ru.taska.capability.ManagedDomainReads> sources) {
     var stub = stubs.getIfAvailable();
     var trust = security.getIfAvailable();
+    if(stub==null && sources.getIfAvailable()!=null)
+      stub=ru.taska.api.b2b.v1.ReactorStorageQuotaOwnerServiceGrpc.newReactorStub(sources.getIfAvailable().channel("issue-service"));
     if (stub != null && trust != null)
       return new ru.taska.quota.GrpcStorageQuotaOwner(
           stub, trust, Clock.systemUTC(), "tenant-service");
@@ -498,6 +538,11 @@ public class TenantConfiguration {
   }
 
   @Bean
+  TenantRestrictionService tenantRestrictions(TenantTransactionExecutor transactions) {
+    return new TenantRestrictionService(transactions, Clock.systemUTC());
+  }
+
+  @Bean
   @GlobalServerInterceptor
   ServerInterceptor registrySecurity(
       ObjectProvider<RpcContextSecurity> provider,
@@ -513,6 +558,12 @@ public class TenantConfiguration {
                   new RpcContextSecurity.Policy(true, false)),
               java.util.Map.entry(
                   TenantServiceGrpc.getSetTenantMemberRoleMethod().getFullMethodName(),
+                  new RpcContextSecurity.Policy(true, false)),
+              java.util.Map.entry(
+                  TenantServiceGrpc.getSetTenantMemberStateMethod().getFullMethodName(),
+                  new RpcContextSecurity.Policy(true, false)),
+              java.util.Map.entry(
+                  TenantServiceGrpc.getRemoveTenantMemberMethod().getFullMethodName(),
                   new RpcContextSecurity.Policy(true, false)),
               java.util.Map.entry(
                   TenantServiceGrpc.getLeaveTenantMethod().getFullMethodName(),
@@ -533,6 +584,9 @@ public class TenantConfiguration {
                   ru.taska.api.b2b.v1.QuotaAuthorityServiceGrpc.getGetQuotaReservationMethod()
                       .getFullMethodName(),
                   new RpcContextSecurity.Policy(true, false)),
+              java.util.Map.entry(
+                  ru.taska.api.b2b.v1.QuotaAuthorityServiceGrpc.getReleaseStorageUsageMethod().getFullMethodName(),
+                  new RpcContextSecurity.Policy(true,false)),
               java.util.Map.entry(
                   ru.taska.api.b2b.v1.TenantPaymentStateServiceGrpc.getGetTenantPaymentStateMethod()
                       .getFullMethodName(),
@@ -586,6 +640,21 @@ public class TenantConfiguration {
               java.util.Map.entry(
                   TenantServiceGrpc.getCreateTenantMethod().getFullMethodName(),
                   new RpcContextSecurity.Policy(false, true)),
+              java.util.Map.entry(
+                  TenantServiceGrpc.getListTenantsMethod().getFullMethodName(),
+                  new RpcContextSecurity.Policy(false, false)),
+              java.util.Map.entry(
+                  TenantServiceGrpc.getPauseTenantMethod().getFullMethodName(),
+                  new RpcContextSecurity.Policy(true, true)),
+              java.util.Map.entry(
+                  TenantServiceGrpc.getResumeTenantMethod().getFullMethodName(),
+                  new RpcContextSecurity.Policy(true, true)),
+              java.util.Map.entry(
+                  PlatformServiceGrpc.getSetPlatformBlockMethod().getFullMethodName(),
+                  new RpcContextSecurity.Policy(true, true)),
+              java.util.Map.entry(
+                  TenantServiceGrpc.getRenameTenantMethod().getFullMethodName(),
+                  new RpcContextSecurity.Policy(true, true)),
               java.util.Map.entry(
                   TenantServiceGrpc.getGetTenantMethod().getFullMethodName(),
                   new RpcContextSecurity.Policy(true, false)),

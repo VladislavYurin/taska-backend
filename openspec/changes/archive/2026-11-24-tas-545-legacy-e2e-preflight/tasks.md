@@ -1,0 +1,17 @@
+# Tasks
+
+## 1. Preflight локальной legacy-фикстуры
+
+- [x] 1.1 Добавить ранний BLOCKED для local E2E-08; регрессионными тестами подтвердить отсутствие provisioning/HTTP и пустые ресурсы/pending writes, сохранение mixed E2E-01 и stage dispatch; обновить документацию runner и сценария.
+
+- [x] 1.2 Добавить отдельный воспроизводимый native project/outbox runner на существующей owned fixture; проверить tenant provenance, один event, replay/conflict, отказ без мутации и компенсацию без ProjectCreated/утечки проекта или квоты с сохранением provisioning history; документировать фактический scope и ограничение полного ACL runner (TAS-546).
+
+## 2. Проверка интеграции
+
+- [x] 2.1 Выполнить harness/docs/OpenSpec проверки и реальные local E2E-08, mixed E2E-01+08 и отдельный native project ACL runner; проверить статусы, фактический scope и cleanup.
+- [x] 2.2 Создать PR, разобрать актуальное нейроревью и CI, повторить затронутые E2E после финальных исправлений; подтвердить отсутствие открытых блокирующих замечаний.
+
+## Workflow follow-up
+
+- Синхронизировать и архивировать завершённый change перед merge; проверить архив и итоговый PR head.
+- Merge/deployment требует разрешения пользователя согласно правилам проекта.
