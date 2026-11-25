@@ -24,6 +24,8 @@ import ru.taska.security.tenant.RpcContextSecurity;
 @ConditionalOnExpression(
     "${taska.rpc.context.enabled:false} && '${taska.rpc.trust.snapshot:}' != ''")
 public final class ProjectDeletionRecovery {
+  private static final org.slf4j.Logger LOG =
+      org.slf4j.LoggerFactory.getLogger(ProjectDeletionRecovery.class);
   private final ProjectDeletions deletions;
   private final ManagedServiceContexts contexts;
   private final List<UUID> tenants;
@@ -73,9 +75,24 @@ public final class ProjectDeletionRecovery {
                                 .concatMap(
                                     id ->
                                         authorized(t, () -> deletions.recover(id))
-                                            .onErrorResume(e -> Mono.empty())))
-                    .onErrorResume(e -> Flux.empty()))
+                                            .onErrorResume(e -> failed(t, id, e))))
+                    .onErrorResume(e -> failed(t, null, e).flux()))
         .doFinally(s -> running.set(false))
         .subscribe();
   }
+
+  /** В диагностике только идентификаторы и ограниченный код, без текста исключения. */
+  private static Mono<ru.taska.api.b2b.v1.Operation> failed(
+      UUID tenant, UUID operation, Throwable error) {
+    String code =
+        error instanceof ru.taska.exception.DomainException d
+            ? d.getStatus().name()
+            : io.grpc.Status.fromThrowable(error).getCode().name();
+    LOG.warn(
+        "Ошибка восстановления удаления проекта: tenant={}, operation={}, code={}",
+        tenant,
+        operation,
+        code);
+    return Mono.empty();
+}
 }

@@ -53,7 +53,8 @@ class ProjectDeletionLocal(AttachmentLifecycleLocal):
         claims = json.loads(base64.urlsafe_b64decode(encoded + '=' * (-len(encoded) % 4)))
         e.require(claims['iss'] == 'taska-auth' and claims['kind'] == 'WEB_TENANT'
                   and claims['tenant_id'] in self.cleanup_tenants, 'Only owned fixture access may be renewed')
-        claims.update(iat=int(time.time()), exp=int(time.time()) + 600)
+        issued = int(time.time())
+        claims.update(iat=issued, exp=issued + 600)
         b64 = lambda b: base64.urlsafe_b64encode(b).rstrip(b'=')
         data = b64(e.canonical({'alg': 'EdDSA', 'kid': 'owned-access', 'typ': 'JWT'})) + b'.' + b64(e.canonical(claims))
         source, signature = self.material / 'jwt-input', self.material / 'jwt-signature'

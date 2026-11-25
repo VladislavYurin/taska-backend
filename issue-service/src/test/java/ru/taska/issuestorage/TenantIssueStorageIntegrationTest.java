@@ -1946,6 +1946,7 @@ class TenantIssueStorageIntegrationTest {
   void projectCleanupRetiresLifetimeAndPreservesForeignRowsWithoutBilling() {
     var own = create(A, "delete-own");
     var other = create(B, "delete-other");
+    assertEquals(2L, count("issue_history"));
     UUID operation = UUID.randomUUID();
     retirement.set(true);
     online.set(false);
@@ -1967,6 +1968,7 @@ class TenantIssueStorageIntegrationTest {
         as(A, ACTOR, "cleanupProjectResources", cleanup.cleanup(PROJECT, operation))
             .block(WAIT)
             .getComplete());
+    assertEquals(1L, count("issue_history"));
     assertNull(as(A, ACTOR, "read", store.execute(s -> s.findActive(own.id()))).block(WAIT));
     assertNotNull(as(B, ACTOR, "read", store.execute(s -> s.findActive(other.id()))).block(WAIT));
     assertTrue(

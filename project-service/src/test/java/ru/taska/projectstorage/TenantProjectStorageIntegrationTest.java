@@ -564,6 +564,83 @@ class TenantProjectStorageIntegrationTest {
   }
 
   @Test
+  void deletionFailureProjectionDistinguishesIntegrityMissingAndTransientFailures() {
+    var p = create(A, "ERRORS");
+    var deletion =
+        new ProjectDeletions(
+            store,
+            lifecycleApi(true, true),
+            org.mockito.Mockito.mock(ProjectDeletions.Owners.class));
+    var op =
+        as(A, ACTOR, deletion.start(deleteRequest(p, UUID.randomUUID(), p.getVersion(), "ERRORS")))
+            .block(WAIT);
+    var codes =
+        Map.of(
+            "DATA_LOSS",
+            "INVALID_STATE",
+            "NOT_FOUND",
+            "RESOURCE_NOT_FOUND",
+            "UNAVAILABLE",
+            "DEPENDENCY_UNAVAILABLE",
+            "PERMISSION_DENIED",
+            "SCOPE_DENIED");
+    for (var code : codes.entrySet()) {
+      boolean manual = Set.of("DATA_LOSS", "NOT_FOUND").contains(code.getKey());
+      operator
+          .sql(
+              "UPDATE taska.project_deletion_operations SET last_code=:c,manual_review=:m WHERE"
+                  + " id=:id")
+          .bind("c", code.getKey())
+          .bind("m", manual)
+          .bind("id", UUID.fromString(op.getId()))
+          .then()
+          .block(WAIT);
+      var projected = as(A, ACTOR, deletion.get(UUID.fromString(op.getId()))).block(WAIT);
+      assertEquals("ERROR_CODE_" + code.getValue(), projected.getFailureCode().name());
+      assertEquals(manual ? "STATE_MANUAL_REVIEW" : "STATE_RUNNING", projected.getState().name());
+    }
+  }
+
+  @Test
+  void deletionRecoveryRetainsIssueAckWhileWorkflowIsPending() {
+    var p = create(A, "RESUME");
+    var owners = org.mockito.Mockito.mock(ProjectDeletions.Owners.class);
+    var deletion = new ProjectDeletions(store, lifecycleApi(true, true), owners);
+    var op =
+        as(A, ACTOR, deletion.start(deleteRequest(p, UUID.randomUUID(), p.getVersion(), "RESUME")))
+            .block(WAIT);
+    UUID id = UUID.fromString(op.getId());
+    operator
+        .sql("UPDATE taska.project_deletion_operations SET issue_done=true WHERE id=:id")
+        .bind("id", id)
+        .then()
+        .block(WAIT);
+    org.mockito.Mockito.when(owners.workflows(A, p.getId(), id))
+        .thenReturn(Mono.just(false), Mono.just(true));
+    org.mockito.Mockito.when(owners.removeProject(A, p.getId(), id)).thenReturn(Mono.empty());
+    org.mockito.Mockito.when(owners.releaseQuota(A, p.getId(), id)).thenReturn(Mono.empty());
+    var pending =
+        assertThrows(
+            DomainException.class,
+            () ->
+                ru.taska.security.tenant.ProjectTestContext.cleanup(A, deletion.recover(id))
+                    .block(WAIT));
+    assertEquals(DomainStatus.UNAVAILABLE, pending.getStatus());
+    assertEquals("STATE_RUNNING", as(A, ACTOR, deletion.get(id)).block(WAIT).getState().name());
+    assertEquals(
+        "STATE_SUCCEEDED",
+        ru.taska.security.tenant.ProjectTestContext.cleanup(A, deletion.recover(id))
+            .block(WAIT)
+            .getState()
+            .name());
+    ru.taska.security.tenant.ProjectTestContext.cleanup(A, deletion.recover(id)).block(WAIT);
+    org.mockito.Mockito.verify(owners, org.mockito.Mockito.never()).issues(A, p.getId(), id);
+    org.mockito.Mockito.verify(owners, org.mockito.Mockito.times(2)).workflows(A, p.getId(), id);
+    org.mockito.Mockito.verify(owners).removeProject(A, p.getId(), id);
+    org.mockito.Mockito.verify(owners).releaseQuota(A, p.getId(), id);
+  }
+
+  @Test
   void deletionReceiptFailureRollsBackAdmissionAndAudit() {
     var p = create(A, "ROLLBACK");
     var key = UUID.randomUUID();

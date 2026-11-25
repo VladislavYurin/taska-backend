@@ -65,6 +65,10 @@ receipts сериализуют повторы. Identity-таблицы сохр
 SQL proof guard по принятому intent и terminal object receipt, без UPDATE/TRUNCATE.
 
 Ошибка сохраняется ограниченным кодом, без текста исключения и object keys.
+В `Operation.failureCode` временная недоступность отображается как
+`DEPENDENCY_UNAVAILABLE`, отсутствующий ресурс — `RESOURCE_NOT_FOUND`,
+нарушение целостности или исходного receipt — `INVALID_STATE`. Необходимость
+ручного разбора отдельно задаёт состояние `MANUAL_REVIEW`.
 Неизвестный primary receipt или DATA_LOSS требуют ручного разбора
 (MANUAL_REVIEW); ни timeout, ни отсутствие receipt не освобождают квоту.
 Исправленный dependency может быть повторно проверен worker; нельзя подменять

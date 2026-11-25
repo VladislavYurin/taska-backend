@@ -8,6 +8,7 @@ import java.util.function.Function;
 import org.springframework.r2dbc.core.DatabaseClient;
 import reactor.core.publisher.Mono;
 import ru.taska.api.b2b.v1.DeleteProjectRpcRequest;
+import ru.taska.api.b2b.v1.ErrorCode;
 import ru.taska.api.b2b.v1.Operation;
 import ru.taska.api.b2b.v1.ProjectDeletionProof;
 import ru.taska.exception.DomainException;
@@ -422,8 +423,21 @@ public final class ProjectDeletions {
                         ? Operation.StateValue.STATE_MANUAL_REVIEW
                         : Operation.StateValue.STATE_RUNNING);
     if (row.get("last_code") != null)
-      result.setFailureCode(ru.taska.api.b2b.v1.ErrorCode.ERROR_CODE_DEPENDENCY_UNAVAILABLE);
+      result.setFailureCode(failureCode(row.get("last_code").toString()));
     return result.build();
+  }
+
+  private static ErrorCode failureCode(String code) {
+    return switch (code) {
+      case "NOT_FOUND" -> ErrorCode.ERROR_CODE_RESOURCE_NOT_FOUND;
+      case "DATA_LOSS", "FAILED_PRECONDITION", "ABORTED", "ALREADY_EXISTS" ->
+          ErrorCode.ERROR_CODE_INVALID_STATE;
+      case "PERMISSION_DENIED" -> ErrorCode.ERROR_CODE_SCOPE_DENIED;
+      case "UNAUTHENTICATED" -> ErrorCode.ERROR_CODE_AUTHENTICATION_REQUIRED;
+      case "INVALID_ARGUMENT" -> ErrorCode.ERROR_CODE_VALIDATION_FAILED;
+      case "RESOURCE_EXHAUSTED" -> ErrorCode.ERROR_CODE_RATE_LIMITED;
+      default ->ErrorCode.ERROR_CODE_DEPENDENCY_UNAVAILABLE;
+    };
   }
 
   static DomainException problem(DomainStatus s, String code) {

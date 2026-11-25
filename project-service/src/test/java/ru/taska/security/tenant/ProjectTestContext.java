@@ -13,4 +13,25 @@ public final class ProjectTestContext {
             .build().toByteArray());
     return work.contextWrite(context::install);
   }
+  /** Только тестовая SERVICE authority для восстановления принятого удаления. */
+  public static <T> Mono<T> cleanup(UUID tenant, Mono<T> work) {
+    var claims =
+        ru.taska.api.b2b.v1.TrustedTenantContext.newBuilder()
+            .setCredentialKind(ru.taska.api.b2b.v1.CredentialKind.CREDENTIAL_KIND_SERVICE)
+            .setIssuerService("project-service")
+            .setServiceIdentity("project-service")
+            .setServicePurpose("PROJECT_CLEANUP");
+    var context =
+        new VerifiedTenantContext(
+            null,
+            tenant.toString(),
+            UUID.randomUUID().toString(),
+            "recoverProjectDeletion",
+            Set.of("write", "project:delete"),
+            ru.taska.api.b2b.v1.RequestContext.newBuilder()
+                .setContext(claims)
+                .build()
+                .toByteArray());
+    return work.contextWrite(context::install);
+}
 }
